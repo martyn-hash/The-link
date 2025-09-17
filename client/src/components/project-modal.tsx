@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
-import type { ProjectWithRelations, User } from "@shared/schema";
+import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@shared/schema";
 
 interface ProjectModalProps {
   project: ProjectWithRelations;
@@ -31,21 +31,30 @@ interface ProjectModalProps {
   onClose: () => void;
 }
 
-const STATUS_OPTIONS = [
-  { value: "no_latest_action", label: "No Latest Action", assignedTo: "Client Manager" },
-  { value: "bookkeeping_work_required", label: "Bookkeeping Work Required", assignedTo: "Bookkeeper" },
-  { value: "in_review", label: "In Review", assignedTo: "Client Manager" },
-  { value: "needs_client_input", label: "Needs Input from Client", assignedTo: "Client Manager" },
-  { value: "completed", label: "Completed", assignedTo: "Project Status" },
-];
+// Helper function to format stage names for display
+const formatStageName = (stageName: string): string => {
+  return stageName
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
 
-const CHANGE_REASONS = [
-  { value: "first_allocation_of_work", label: "First Allocation of Work" },
-  { value: "errors_identified_from_bookkeeper", label: "Errors identified from Bookkeeper" },
-  { value: "queries_answered", label: "Queries Answered" },
-  { value: "work_completed_successfully", label: "Work Completed Successfully" },
-  { value: "clarifications_needed", label: "Clarifications Needed" },
-];
+// Helper function to format role names for display
+const formatRoleName = (roleName: string | null): string => {
+  if (!roleName) return "System";
+  return roleName
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// Helper function to format change reason for display
+const formatChangeReason = (reason: string): string => {
+  return reason
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
 
 export default function ProjectModal({ project, user, isOpen, onClose }: ProjectModalProps) {
   const [newStatus, setNewStatus] = useState("");
@@ -53,6 +62,18 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
   const [notes, setNotes] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch kanban stages
+  const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
+    queryKey: ['/api/config/stages'],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch change reasons
+  const { data: changeReasons = [], isLoading: reasonsLoading } = useQuery<ChangeReason[]>({
+    queryKey: ['/api/config/reasons'],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   const updateStatusMutation = useMutation({
     mutationFn: async (data: { newStatus: string; changeReason: string; notes?: string }) => {
@@ -91,24 +112,42 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
   };
 
   const getAvailableStatuses = () => {
+    if (stagesLoading || stages.length === 0) {
+      return [];
+    }
+    
     // Filter statuses based on current status and user role
     const currentStatus = project.currentStatus;
+    const currentStage = stages.find((s: KanbanStage) => s.name === currentStatus);
+    
+    // Convert stages to status options format
+    const statusOptions = stages.map((stage) => ({
+      value: stage.name,
+      label: formatStageName(stage.name),
+      assignedTo: formatRoleName(stage.assignedRole),
+      stage: stage
+    }));
     
     if (user.role === 'admin' || user.role === 'manager') {
-      return STATUS_OPTIONS.filter(option => option.value !== currentStatus);
+      return statusOptions.filter(option => option.value !== currentStatus);
+    }
+    
+    // Terminal stages - can't move from these
+    const terminalStages = ['completed', 'not_completed_in_time'];
+    if (terminalStages.includes(currentStatus)) {
+      return []; // Can't move from terminal stages
     }
     
     // Regular users can only move between certain statuses
     const allowedTransitions: Record<string, string[]> = {
       no_latest_action: ["bookkeeping_work_required", "in_review", "needs_client_input"],
       bookkeeping_work_required: ["in_review", "needs_client_input"],
-      in_review: ["bookkeeping_work_required", "needs_client_input", "completed"],
+      in_review: ["bookkeeping_work_required", "needs_client_input", "completed", "not_completed_in_time"],
       needs_client_input: ["bookkeeping_work_required", "in_review"],
-      completed: [], // Can't move from completed
     };
     
     const allowed = allowedTransitions[currentStatus] || [];
-    return STATUS_OPTIONS.filter(option => allowed.includes(option.value));
+    return statusOptions.filter(option => allowed.includes(option.value));
   };
 
   const handleUpdateStatus = () => {
@@ -188,7 +227,7 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current Status:</span>
                   <Badge variant="outline" data-testid="text-current-status">
-                    {STATUS_OPTIONS.find(s => s.value === project.currentStatus)?.label}
+                    {formatStageName(project.currentStatus)}
                   </Badge>
                 </div>
                 <div className="flex justify-between">
@@ -234,9 +273,9 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
                         <SelectValue placeholder="Select reason..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {CHANGE_REASONS.map((reason) => (
-                          <SelectItem key={reason.value} value={reason.value}>
-                            {reason.label}
+                        {changeReasons.map((reason) => (
+                          <SelectItem key={reason.reason} value={reason.reason}>
+                            {formatChangeReason(reason.reason)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -289,16 +328,16 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
                           {entry.fromStatus ? (
                             <div className="flex items-center space-x-2 text-sm">
                               <Badge variant="outline" className="text-xs">
-                                {STATUS_OPTIONS.find(s => s.value === entry.fromStatus)?.label}
+                                {formatStageName(entry.fromStatus || '')}
                               </Badge>
                               <span className="text-muted-foreground">→</span>
                               <Badge variant="default" className="text-xs">
-                                {STATUS_OPTIONS.find(s => s.value === entry.toStatus)?.label}
+                                {formatStageName(entry.toStatus)}
                               </Badge>
                             </div>
                           ) : (
                             <Badge variant="default" className="text-xs">
-                              {STATUS_OPTIONS.find(s => s.value === entry.toStatus)?.label}
+                              {formatStageName(entry.toStatus)}
                             </Badge>
                           )}
                         </div>
@@ -312,7 +351,7 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
                         <div className="flex items-center space-x-2">
                           <span className="text-xs text-muted-foreground font-medium">Reason:</span>
                           <Badge variant="secondary" className="text-xs">
-                            {CHANGE_REASONS.find(r => r.value === entry.changeReason)?.label || entry.changeReason || 'Not specified'}
+                            {entry.changeReason ? formatChangeReason(entry.changeReason) : 'Not specified'}
                           </Badge>
                         </div>
                         
