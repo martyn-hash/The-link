@@ -11,6 +11,8 @@ import Admin from "@/pages/admin";
 import Users from "@/pages/users";
 import Upload from "@/pages/upload";
 import Team from "@/pages/team";
+import AllProjects from "@/pages/all-projects";
+import Projects from "@/pages/projects";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -33,6 +35,8 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Dashboard} />
+          <Route path="/projects" component={Projects} />
+          <Route path="/all-projects" component={AllProjects} />
           <Route path="/admin" component={Admin} />
           <Route path="/users" component={Users} />
           <Route path="/upload" component={Upload} />
