@@ -196,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Development password reset route (remove in production)
-  app.post("/api/dev/reset-password", async (req, res) => {
+  app.post("/api/dev/reset-password", async (req: any, res: any) => {
     try {
       // Only allow in development environment
       if (process.env.NODE_ENV === 'production') {
