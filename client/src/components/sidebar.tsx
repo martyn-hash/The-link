@@ -86,7 +86,7 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   const canAccess = (roles: string[]) => {
-    return roles.includes(user.role);
+    return user?.role ? roles.includes(user.role) : false;
   };
 
   const handleLogout = () => {
@@ -94,12 +94,14 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   const getUserInitials = () => {
+    if (!user) return "U";
     const firstName = user.firstName || "";
     const lastName = user.lastName || "";
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || "U";
   };
 
   const getRoleLabel = () => {
+    if (!user?.role) return "Loading...";
     return user.role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
   };
 
@@ -122,16 +124,16 @@ export default function Sidebar({ user }: SidebarProps) {
       <div className="p-4 border-b border-border">
         <div className="flex items-center space-x-3">
           <Avatar className="w-10 h-10">
-            <AvatarImage src={user.profileImageUrl || ""} alt={`${user.firstName} ${user.lastName}`} />
+            <AvatarImage src={user?.profileImageUrl || ""} alt={`${user?.firstName || ''} ${user?.lastName || ''}`} />
             <AvatarFallback className="bg-accent text-accent-foreground">
               {getUserInitials()}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate" data-testid="text-user-name">
-              {user.firstName && user.lastName 
+              {user?.firstName && user?.lastName 
                 ? `${user.firstName} ${user.lastName}` 
-                : user.email}
+                : user?.email || 'Loading...'}
             </p>
             <p className="text-xs text-muted-foreground" data-testid="text-user-role">
               {getRoleLabel()}
