@@ -58,8 +58,8 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const adminItems = [
     {
-      label: "Administration",
-      href: "/admin",
+      label: "Settings",
+      href: "/settings",
       icon: Settings,
       roles: ["admin"],
     },

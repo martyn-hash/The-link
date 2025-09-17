@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
-import Admin from "@/pages/admin";
+import Settings from "@/pages/settings";
 import Users from "@/pages/users";
 import Upload from "@/pages/upload";
 import AllProjects from "@/pages/all-projects";
@@ -36,7 +36,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/projects" component={Projects} />
           <Route path="/all-projects" component={AllProjects} />
-          <Route path="/admin" component={Admin} />
+          <Route path="/settings" component={Settings} />
           <Route path="/users" component={Users} />
           <Route path="/upload" component={Upload} />
         </>
