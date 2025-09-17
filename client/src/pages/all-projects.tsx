@@ -7,7 +7,7 @@ import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { Button } from "@/components/ui/button";
-import { Columns3, List, Filter, Users } from "lucide-react";
+import { Columns3, List, Filter, Users, Clock, User as UserIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { formatDistanceToNow } from "date-fns";
 
 type ViewMode = "kanban" | "list";
 
@@ -221,7 +227,7 @@ export default function AllProjects() {
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-hidden">
           {projectsLoading || usersLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -232,12 +238,82 @@ export default function AllProjects() {
           ) : viewMode === "kanban" ? (
             <KanbanBoard projects={filteredProjects} user={user} />
           ) : (
-            <TaskList 
-              projects={filteredProjects} 
-              user={user} 
-              selectedProjectId={selectedProjectId}
-              onSelectProject={setSelectedProjectId}
-            />
+            <ResizablePanelGroup direction="horizontal" className="h-full">
+              <ResizablePanel defaultSize={60} minSize={40} data-testid="pane-left">
+                <TaskList 
+                  projects={filteredProjects} 
+                  user={user} 
+                  selectedProjectId={selectedProjectId}
+                  onSelectProject={setSelectedProjectId}
+                />
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={40} minSize={30} data-testid="pane-right">
+                <div className="h-full p-6 bg-muted/20" data-testid="chronology-panel">
+                  {selectedProject ? (
+                    <div className="h-full flex flex-col">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold">{selectedProject.client.name}</h3>
+                        <p className="text-sm text-muted-foreground">{selectedProject.description}</p>
+                      </div>
+                      
+                      <div className="flex-1 overflow-auto">
+                        <h4 className="text-sm font-medium mb-3 flex items-center">
+                          <Clock className="w-4 h-4 mr-2" />
+                          Project Timeline
+                        </h4>
+                        
+                        {selectedProject.chronology && selectedProject.chronology.length > 0 ? (
+                          <div className="space-y-3">
+                            {[...selectedProject.chronology]
+                              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                              .map((entry, index) => (
+                                <div key={index} className="border-l-2 border-primary/20 pl-4 pb-3">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <div className="w-2 h-2 bg-primary rounded-full -ml-5 border-2 border-background"></div>
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm">
+                                    <span className="font-medium">Status: </span>
+                                    {entry.status || entry.action || 'Status changed'}
+                                  </div>
+                                  {entry.notes && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {entry.notes}
+                                    </div>
+                                  )}
+                                  {entry.assignedTo && (
+                                    <div className="flex items-center text-xs text-muted-foreground mt-1">
+                                      <UserIcon className="w-3 h-3 mr-1" />
+                                      {entry.assignedTo}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            }
+                          </div>
+                        ) : (
+                          <div className="text-center text-muted-foreground py-8">
+                            <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p>No timeline entries yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full flex items-center justify-center" data-testid="chronology-empty-state">
+                      <div className="text-center text-muted-foreground">
+                        <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-medium mb-2">Select a project</h3>
+                        <p className="text-sm">Click on any project row to view its chronology and timeline</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
           )}
         </main>
       </div>
