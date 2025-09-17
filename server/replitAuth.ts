@@ -114,7 +114,25 @@ function extractAndValidateRole(claims: any): ValidRole {
 async function upsertUser(
   claims: any,
 ) {
-  const role = extractAndValidateRole(claims);
+  const newRole = extractAndValidateRole(claims);
+  
+  // Check if user already exists and has admin role
+  let finalRole = newRole;
+  try {
+    const existingUser = await storage.getUser(claims["sub"]);
+    if (existingUser && existingUser.role === 'admin' && newRole !== 'admin') {
+      // Preserve existing admin role unless explicitly overridden by auth system
+      finalRole = 'admin';
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("🔍 [DEBUG] Preserving existing admin role for user:", existingUser.email);
+      }
+    }
+  } catch (error) {
+    // User doesn't exist yet, continue with new role
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("🔍 [DEBUG] User doesn't exist yet, will create with role:", newRole);
+    }
+  }
   
   const userData = {
     id: claims["sub"],
@@ -122,7 +140,7 @@ async function upsertUser(
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
-    role,
+    role: finalRole,
   };
   
   // Only log in development
