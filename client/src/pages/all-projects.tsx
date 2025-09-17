@@ -8,7 +8,7 @@ import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Columns3, List, Filter, Users, Folder } from "lucide-react";
+import { Columns3, List, Filter, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -131,17 +131,6 @@ export default function AllProjects() {
     return statusMatch && userMatch;
   }) : [];
 
-  const projectStats = projects ? {
-    total: projects.length,
-    urgent: projects.filter((p: any) => p.priority === "urgent").length,
-    overdue: projects.filter((p: any) => {
-      const lastChronology = p.chronology?.[0];
-      if (!lastChronology) return false;
-      const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-      return daysSinceLastChange > 7;
-    }).length,
-    active: projects.filter((p: any) => !p.currentStatus.toLowerCase().includes("completed")).length,
-  } : null;
 
   return (
     <div className="flex h-screen bg-background">
@@ -223,63 +212,6 @@ export default function AllProjects() {
             </div>
           </div>
 
-          {/* Project Stats */}
-          {projectStats && (
-            <div className="grid grid-cols-4 gap-4 mt-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center">
-                    <Folder className="w-4 h-4 mr-2 text-primary" />
-                    Total Projects
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-total-projects">
-                    {filteredProjects.length} / {projectStats.total}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Urgent Priority
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-600" data-testid="text-urgent-projects">
-                    {projectStats.urgent}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Overdue
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-600" data-testid="text-overdue-projects">
-                    {projectStats.overdue}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Active
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600" data-testid="text-active-projects">
-                    {projectStats.active}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
         </header>
         
         {/* Main Content */}
