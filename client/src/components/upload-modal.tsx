@@ -42,18 +42,50 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       return response.json();
     },
     onSuccess: (data) => {
+      const { created = 0, archived = 0, existing = 0 } = data.results || {};
+      const totalProcessed = created + archived + existing;
+      
+      let description;
+      if (totalProcessed === 0) {
+        description = "No projects were processed from the uploaded file";
+      } else {
+        const parts = [];
+        if (created > 0) parts.push(`${created} new project${created > 1 ? 's' : ''} created`);
+        if (archived > 0) parts.push(`${archived} project${archived > 1 ? 's' : ''} archived`);
+        if (existing > 0) parts.push(`${existing} project${existing > 1 ? 's' : ''} already existed`);
+        description = `Successfully uploaded: ${parts.join(', ')}`;
+      }
+      
       toast({
-        title: "Success",
-        description: `Successfully uploaded ${data.projects?.length || 0} projects`,
+        title: "Upload Complete",
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setSelectedFile(null);
       onClose();
     },
     onError: (error: any) => {
+      let title = "Upload Failed";
+      let description = error.message || "Failed to upload CSV file";
+      
+      // Handle specific validation errors
+      if (error.message?.includes('Invalid project month format')) {
+        title = "Invalid Date Format";
+        description = "Project Month must be in DD/MM/YYYY format (e.g., 15/01/2025). Please check your CSV file and try again.";
+      } else if (error.message?.includes('duplicate client names')) {
+        title = "Duplicate Clients";
+        description = "Your CSV contains duplicate client names. Please ensure each client appears only once and try again.";
+      } else if (error.message?.includes('Invalid project description')) {
+        title = "Invalid Project Description";
+        description = "Some project descriptions in your CSV are not configured in the system. Please add them in Settings > Project Descriptions first.";
+      } else if (error.message?.includes('Missing required columns')) {
+        title = "Missing Columns";
+        description = "Your CSV file is missing required columns. Please download the template and ensure all required fields are included.";
+      }
+      
       toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload CSV file",
+        title,
+        description,
         variant: "destructive",
       });
     },
@@ -110,9 +142,10 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
   };
 
   const downloadTemplate = () => {
-    const csvContent = `Client Name,Project Description,Bookkeeper Email,Client Manager Email,Priority,Due Date
-Acme Corp Ltd,Monthly bookkeeping reconciliation,bookkeeper@example.com,manager@example.com,medium,2024-01-31
-TechStart Inc,Quarterly VAT return preparation,bookkeeper@example.com,manager@example.com,high,2024-02-15`;
+    const csvContent = `Client Name,Project Description,Bookkeeper Email,Client Manager Email,Priority,Due Date,Project Month
+Acme Corp Ltd,Monthly bookkeeping reconciliation,bookkeeper@example.com,manager@example.com,medium,2024-01-31,15/01/2025
+TechStart Inc,Quarterly VAT return preparation,bookkeeper@example.com,manager@example.com,high,2024-02-15,28/02/2025
+Global Solutions,Annual accounts preparation,bookkeeper@example.com,manager@example.com,urgent,2024-03-31,31/03/2025`;
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -148,12 +181,19 @@ TechStart Inc,Quarterly VAT return preparation,bookkeeper@example.com,manager@ex
                 <p className="mb-2">Your CSV file should contain the following columns:</p>
                 <ul className="list-disc list-inside space-y-1">
                   <li>Client Name (required)</li>
-                  <li>Project Description (required)</li>
+                  <li>Project Description (required - must be configured in Settings first)</li>
                   <li>Bookkeeper Email (required)</li>
                   <li>Client Manager Email (required)</li>
                   <li>Priority (optional: low, medium, high, urgent)</li>
                   <li>Due Date (optional: YYYY-MM-DD format)</li>
+                  <li>Project Month (required: DD/MM/YYYY format, e.g., 15/01/2025)</li>
                 </ul>
+                <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
+                  <p className="text-blue-800 dark:text-blue-200 text-xs">
+                    <strong>Note:</strong> Project Month uses UK date format (DD/MM/YYYY). 
+                    Each client can only appear once per upload.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
