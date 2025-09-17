@@ -126,6 +126,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // One-time admin creation route (for production bootstrap)
+  app.post("/api/bootstrap-admin", async (req, res) => {
+    try {
+      const { email, password, firstName, lastName } = req.body;
+
+      // Basic input validation
+      if (!email || !password || !firstName || !lastName) {
+        return res.status(400).json({ 
+          message: "Email, password, first name, and last name are required" 
+        });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ 
+          message: "Password must be at least 6 characters" 
+        });
+      }
+
+      // Check if any admin users already exist
+      const allUsers = await storage.getAllUsers();
+      const adminExists = allUsers.some(user => user.role === 'admin');
+
+      if (adminExists) {
+        return res.status(403).json({ 
+          message: "Admin user already exists. This route can only be used once." 
+        });
+      }
+
+      // Check if user with this email already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ 
+          message: "User with this email already exists" 
+        });
+      }
+
+      // Hash password securely
+      const bcrypt = await import('bcrypt');
+      const passwordHash = await bcrypt.hash(password.trim(), 10);
+
+      // Create admin user
+      const adminUser = await storage.createUser({
+        email: email.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        role: 'admin',
+        passwordHash,
+      });
+
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = adminUser;
+      
+      res.json({ 
+        message: "Admin user created successfully",
+        user: userResponse 
+      });
+    } catch (error) {
+      console.error("Error creating bootstrap admin:", error);
+      res.status(500).json({ message: "Failed to create admin user" });
+    }
+  });
+
   // User management routes
   app.get("/api/users", isAuthenticated, resolveEffectiveUser, requireManager, async (req, res) => {
     try {
