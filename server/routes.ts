@@ -291,8 +291,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updateData = updateProjectStatusSchema.parse({
-        projectId: req.params.id,
         ...req.body,
+        projectId: req.params.id,
       });
 
       // Verify user has permission to update this project
@@ -333,7 +333,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedProject);
     } catch (error) {
       console.error("Error updating project status:", error);
-      res.status(400).json({ message: "Failed to update project status" });
+      if (error.name === 'ZodError') {
+        console.error("Validation errors:", error.issues);
+        res.status(400).json({ message: "Validation failed", errors: error.issues });
+      } else {
+        res.status(400).json({ message: "Failed to update project status" });
+      }
     }
   });
 
