@@ -22,7 +22,7 @@ type ViewMode = "kanban" | "list";
 export default function AllProjects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
 
@@ -97,9 +97,6 @@ export default function AllProjects() {
     // Status filter
     let statusMatch = true;
     switch (statusFilter) {
-      case "urgent":
-        statusMatch = project.priority === "urgent";
-        break;
       case "overdue":
         // Simple overdue check - projects in same stage for more than 7 days
         const lastChronology = project.chronology?.[0];
@@ -159,7 +156,6 @@ export default function AllProjects() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
                     <SelectItem value="overdue">Overdue</SelectItem>
                     <SelectItem value="in-review">In Review</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
