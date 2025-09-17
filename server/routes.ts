@@ -195,6 +195,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Development password reset route (remove in production)
+  app.post("/api/dev/reset-password", async (req, res) => {
+    try {
+      // Only allow in development environment
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ 
+          message: "Password reset not available in production" 
+        });
+      }
+
+      const { email, newPassword } = req.body;
+
+      if (!email || !newPassword) {
+        return res.status(400).json({ 
+          message: "Email and new password are required" 
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ 
+          message: "Password must be at least 6 characters" 
+        });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ 
+          message: "User not found" 
+        });
+      }
+
+      // Hash new password
+      const bcrypt = await import('bcrypt');
+      const passwordHash = await bcrypt.hash(newPassword.trim(), 10);
+
+      // Update user password
+      await storage.updateUser(user.id, { passwordHash });
+
+      res.json({ 
+        message: "Password reset successfully",
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      console.error("Error resetting password:", error);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
   // User management routes
   app.get("/api/users", isAuthenticated, resolveEffectiveUser, requireManager, async (req, res) => {
     try {
