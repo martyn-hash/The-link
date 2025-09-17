@@ -33,16 +33,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Middleware to resolve effective user (for impersonation)
+  const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
+      if (req.user && req.user.claims && req.user.claims.sub) {
+        const originalUserId = req.user.claims.sub;
+        const originalUser = await storage.getUser(originalUserId);
+        
+        if (originalUser && originalUser.role === 'admin') {
+          const effectiveUser = await storage.getEffectiveUser(originalUserId);
+          if (effectiveUser && effectiveUser.id !== originalUserId) {
+            // Replace user context with impersonated user
+            req.user.effectiveUser = effectiveUser;
+            req.user.effectiveUserId = effectiveUser.id;
+            req.user.effectiveRole = effectiveUser.role;
+            req.user.isImpersonating = true;
+          } else {
+            // No impersonation, use original user
+            req.user.effectiveUser = originalUser;
+            req.user.effectiveUserId = originalUserId;
+            req.user.effectiveRole = originalUser.role;
+            req.user.isImpersonating = false;
+          }
+        } else if (originalUser) {
+          // Non-admin user, no impersonation possible
+          req.user.effectiveUser = originalUser;
+          req.user.effectiveUserId = originalUserId;
+          req.user.effectiveRole = originalUser.role;
+          req.user.isImpersonating = false;
+        }
+      }
+      next();
+    } catch (error) {
+      console.error("Error resolving effective user:", error);
+      next();
+    }
+  };
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const originalUserId = req.user.claims.sub;
+      const effectiveUser = req.user.effectiveUser;
+      
+      if (!effectiveUser) {
         return res.status(404).json({ message: "User not found" });
       }
+
       // Strip password hash from response for security
-      const { passwordHash, ...sanitizedUser } = user;
+      const { passwordHash, ...sanitizedUser } = effectiveUser;
+
+      // Include impersonation metadata if admin is impersonating
+      if (req.user.isImpersonating) {
+        const impersonationState = await storage.getImpersonationState(originalUserId);
+        return res.json({
+          ...sanitizedUser,
+          _impersonationState: impersonationState
+        });
+      }
+
       res.json(sanitizedUser);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -50,12 +99,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper function to check admin role
+  // Helper function to check admin role (must be real admin, not impersonated)
   const requireAdmin = async (req: any, res: any, next: any) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user || user.role !== 'admin') {
+      const originalUserId = req.user.claims.sub;
+      const originalUser = await storage.getUser(originalUserId);
+      if (!originalUser || originalUser.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
       }
       next();
@@ -64,12 +113,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Helper function to check manager+ role
+  // Helper function to check manager+ role (uses effective user for proper testing)
   const requireManager = async (req: any, res: any, next: any) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user || !['admin', 'manager'].includes(user.role)) {
+      const effectiveRole = req.user.effectiveRole;
+      if (!effectiveRole || !['admin', 'manager'].includes(effectiveRole)) {
         return res.status(403).json({ message: "Manager access required" });
       }
       next();
@@ -79,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // User management routes
-  app.get("/api/users", isAuthenticated, requireManager, async (req, res) => {
+  app.get("/api/users", isAuthenticated, resolveEffectiveUser, requireManager, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       // Strip password hash from response for security
@@ -91,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", isAuthenticated, requireAdmin, async (req, res) => {
+  app.post("/api/users", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req, res) => {
     try {
       const { password, ...userData } = req.body;
       
@@ -125,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/users/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.patch("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req, res) => {
     try {
       const { password, ...userData } = req.body;
       
@@ -156,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.delete("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req, res) => {
     try {
       await storage.deleteUser(req.params.id);
       res.json({ message: "User deleted successfully" });
@@ -166,16 +214,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Project routes
-  app.get("/api/projects", isAuthenticated, async (req: any, res) => {
+  // User impersonation routes (admin only)
+  app.post("/api/auth/impersonate/:userId", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
+      const adminUserId = req.user.claims.sub;
+      const targetUserId = req.params.userId;
+
+      await storage.startImpersonation(adminUserId, targetUserId);
+      res.json({ message: "Impersonation started successfully" });
+    } catch (error) {
+      console.error("Error starting impersonation:", error);
+      res.status(400).json({ message: error.message || "Failed to start impersonation" });
+    }
+  });
+
+  app.delete("/api/auth/impersonate", isAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const adminUserId = req.user.claims.sub;
+      await storage.stopImpersonation(adminUserId);
+      res.json({ message: "Impersonation stopped successfully" });
+    } catch (error) {
+      console.error("Error stopping impersonation:", error);
+      res.status(400).json({ message: "Failed to stop impersonation" });
+    }
+  });
+
+  app.get("/api/auth/impersonation-state", isAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const adminUserId = req.user.claims.sub;
+      const state = await storage.getImpersonationState(adminUserId);
+      res.json(state);
+    } catch (error) {
+      console.error("Error getting impersonation state:", error);
+      res.status(500).json({ message: "Failed to get impersonation state" });
+    }
+  });
+
+  // Project routes
+  app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const effectiveUserId = req.user.effectiveUserId;
+      const effectiveRole = req.user.effectiveRole;
+      
+      if (!effectiveUserId || !effectiveRole) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const projects = await storage.getProjectsByUser(userId, user.role);
+      const projects = await storage.getProjectsByUser(effectiveUserId, effectiveRole);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -183,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/projects/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/projects/:id", isAuthenticated, resolveEffectiveUser, async (req, res) => {
     try {
       const project = await storage.getProject(req.params.id);
       if (!project) {
@@ -196,11 +281,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/projects/:id/status", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
+      const effectiveUserId = req.user.effectiveUserId;
+      const effectiveRole = req.user.effectiveRole;
+      
+      if (!effectiveUserId || !effectiveRole) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -215,23 +301,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project not found" });
       }
 
-      // Check if user is authorized to move this project
+      // Check if effective user is authorized to move this project
       const canUpdate = 
-        user.role === 'admin' ||
-        user.role === 'manager' ||
-        project.currentAssigneeId === userId ||
-        (user.role === 'client_manager' && project.clientManagerId === userId) ||
-        (user.role === 'bookkeeper' && project.bookkeeperId === userId);
+        effectiveRole === 'admin' ||
+        effectiveRole === 'manager' ||
+        project.currentAssigneeId === effectiveUserId ||
+        (effectiveRole === 'client_manager' && project.clientManagerId === effectiveUserId) ||
+        (effectiveRole === 'bookkeeper' && project.bookkeeperId === effectiveUserId);
 
       if (!canUpdate) {
         return res.status(403).json({ message: "Not authorized to update this project" });
       }
 
-      const updatedProject = await storage.updateProjectStatus(updateData, userId);
+      const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
 
       // Send email notification to new assignee
       const newAssigneeId = updatedProject.currentAssigneeId;
-      if (newAssigneeId && newAssigneeId !== userId) {
+      if (newAssigneeId && newAssigneeId !== effectiveUserId) {
         const assignee = await storage.getUser(newAssigneeId);
         if (assignee?.email) {
           await sendTaskAssignmentEmail(

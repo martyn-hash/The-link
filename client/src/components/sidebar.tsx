@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { 
   BarChart3, 
   Columns3, 
@@ -10,8 +11,11 @@ import {
   Settings, 
   Upload, 
   Users, 
-  LogOut 
+  LogOut,
+  UserX
 } from "lucide-react";
+import ImpersonationPanel from "@/components/impersonation-panel";
+import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
 
 interface SidebarProps {
@@ -20,6 +24,7 @@ interface SidebarProps {
 
 export default function Sidebar({ user }: SidebarProps) {
   const [location] = useLocation();
+  const { isImpersonating } = useAuth();
 
   const navigationItems = [
     {
@@ -121,7 +126,15 @@ export default function Sidebar({ user }: SidebarProps) {
       </div>
 
       {/* User Info */}
-      <div className="p-4 border-b border-border">
+      <div className={`p-4 border-b border-border ${isImpersonating ? 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800' : ''}`}>
+        {isImpersonating && (
+          <div className="mb-2">
+            <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" data-testid="impersonation-indicator">
+              <UserX className="w-3 h-3 mr-1" />
+              Testing Mode
+            </Badge>
+          </div>
+        )}
         <div className="flex items-center space-x-3">
           <Avatar className="w-10 h-10">
             <AvatarImage src={user?.profileImageUrl || ""} alt={`${user?.firstName || ''} ${user?.lastName || ''}`} />
@@ -134,6 +147,9 @@ export default function Sidebar({ user }: SidebarProps) {
               {user?.firstName && user?.lastName 
                 ? `${user.firstName} ${user.lastName}` 
                 : user?.email || 'Loading...'}
+              {isImpersonating && (
+                <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
+              )}
             </p>
             <p className="text-xs text-muted-foreground" data-testid="text-user-role">
               {getRoleLabel()}
@@ -218,6 +234,9 @@ export default function Sidebar({ user }: SidebarProps) {
           </>
         )}
       </nav>
+
+      {/* Impersonation Panel (Admin Only) */}
+      <ImpersonationPanel />
 
       {/* Footer */}
       <div className="p-4 border-t border-border">

@@ -34,6 +34,12 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
   getAllUsers(): Promise<User[]>;
   
+  // User impersonation operations (for admin testing)
+  startImpersonation(adminUserId: string, targetUserId: string): Promise<void>;
+  stopImpersonation(adminUserId: string): Promise<void>;
+  getImpersonationState(adminUserId: string): Promise<{ isImpersonating: boolean; originalUserId?: string; impersonatedUserId?: string }>;
+  getEffectiveUser(adminUserId: string): Promise<User | undefined>;
+  
   // Client operations
   createClient(client: InsertClient): Promise<Client>;
   getClientByName(name: string): Promise<Client | undefined>;
@@ -66,6 +72,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // In-memory storage for impersonation state (dev/testing only)
+  private impersonationStates = new Map<string, { originalUserId: string; impersonatedUserId: string }>();
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -137,6 +145,53 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  // User impersonation operations (for admin testing)
+  async startImpersonation(adminUserId: string, targetUserId: string): Promise<void> {
+    // Verify admin user exists and has admin role
+    const adminUser = await this.getUser(adminUserId);
+    if (!adminUser || adminUser.role !== 'admin') {
+      throw new Error("Only admin users can impersonate others");
+    }
+
+    // Verify target user exists
+    const targetUser = await this.getUser(targetUserId);
+    if (!targetUser) {
+      throw new Error("Target user not found");
+    }
+
+    // Store impersonation state
+    this.impersonationStates.set(adminUserId, {
+      originalUserId: adminUserId,
+      impersonatedUserId: targetUserId
+    });
+  }
+
+  async stopImpersonation(adminUserId: string): Promise<void> {
+    this.impersonationStates.delete(adminUserId);
+  }
+
+  async getImpersonationState(adminUserId: string): Promise<{ isImpersonating: boolean; originalUserId?: string; impersonatedUserId?: string }> {
+    const state = this.impersonationStates.get(adminUserId);
+    if (state) {
+      return {
+        isImpersonating: true,
+        originalUserId: state.originalUserId,
+        impersonatedUserId: state.impersonatedUserId
+      };
+    }
+    return { isImpersonating: false };
+  }
+
+  async getEffectiveUser(adminUserId: string): Promise<User | undefined> {
+    const state = this.impersonationStates.get(adminUserId);
+    if (state) {
+      // Return the impersonated user
+      return await this.getUser(state.impersonatedUserId);
+    }
+    // Return the original user
+    return await this.getUser(adminUserId);
   }
 
   // Client operations

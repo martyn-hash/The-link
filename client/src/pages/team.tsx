@@ -61,7 +61,7 @@ export default function TeamOverview() {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <Sidebar />
+      <Sidebar user={user} />
       
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
