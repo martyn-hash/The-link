@@ -1,8 +1,67 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, Clock, CheckCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { BarChart3, Users, Clock, CheckCircle, Settings } from "lucide-react";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Landing() {
+  const [adminFormOpen, setAdminFormOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAdminCreation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/bootstrap-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Admin user created successfully! You can now sign in.",
+        });
+        setAdminFormOpen(false);
+        setFormData({ email: '', password: '', firstName: '', lastName: '' });
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to create admin user",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create admin user. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent">
       <div className="container mx-auto px-4 py-16">
@@ -124,6 +183,97 @@ export default function Landing() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Discreet admin creation link at bottom */}
+        <div className="text-center mt-16 pt-8 border-t border-muted">
+          <Dialog open={adminFormOpen} onOpenChange={setAdminFormOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-muted-foreground hover:text-foreground text-xs"
+                data-testid="button-create-admin"
+              >
+                <Settings className="w-3 h-3 mr-1" />
+                First time setup
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Create Initial Admin User</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdminCreation} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    value={formData.firstName}
+                    onChange={(e) => handleInputChange('firstName', e.target.value)}
+                    required
+                    data-testid="input-first-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange('lastName', e.target.value)}
+                    required
+                    data-testid="input-last-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    required
+                    data-testid="input-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    required
+                    minLength={6}
+                    data-testid="input-password"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Minimum 6 characters
+                  </p>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAdminFormOpen(false)}
+                    className="flex-1"
+                    data-testid="button-cancel"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1"
+                    data-testid="button-submit"
+                  >
+                    {isSubmitting ? "Creating..." : "Create Admin"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>
