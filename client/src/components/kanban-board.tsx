@@ -1,49 +1,71 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
 import ProjectModal from "./project-modal";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
-import type { ProjectWithRelations, User } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, AlertCircle, RefreshCw } from "lucide-react";
+import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 
 interface KanbanBoardProps {
   projects: ProjectWithRelations[];
   user: User;
 }
 
-const STAGE_CONFIG = {
-  no_latest_action: {
-    title: "No Latest Action",
-    color: "bg-amber-500",
-    assignedTo: "Client Manager",
-  },
-  bookkeeping_work_required: {
-    title: "Bookkeeping Work Required",
-    color: "bg-blue-500",
-    assignedTo: "Bookkeeper",
-  },
-  in_review: {
-    title: "In Review",
-    color: "bg-purple-500",
-    assignedTo: "Client Manager",
-  },
-  needs_client_input: {
-    title: "Needs Input from Client",
-    color: "bg-orange-500",
-    assignedTo: "Client Manager",
-  },
-  completed: {
-    title: "Completed",
-    color: "bg-green-500",
-    assignedTo: "Project Status",
-  },
+// Transform user role enum values to display names
+const getRoleDisplayName = (role: string | null): string => {
+  switch (role) {
+    case "admin":
+      return "Admin";
+    case "manager":
+      return "Manager";
+    case "client_manager":
+      return "Client Manager";
+    case "bookkeeper":
+      return "Bookkeeper";
+    default:
+      return "Unassigned";
+  }
+};
+
+// Get color style object for status dots - preserves exact hex colors
+const getColorStyle = (hexColor: string): { backgroundColor: string } => {
+  return { backgroundColor: hexColor || "#6b7280" };
 };
 
 export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const [selectedProject, setSelectedProject] = useState<ProjectWithRelations | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Fetch kanban stages from API
+  const { 
+    data: stages, 
+    isLoading: stagesLoading, 
+    isError: stagesError, 
+    error, 
+    refetch: refetchStages 
+  } = useQuery<KanbanStage[]>({
+    queryKey: ["/api/config/stages"],
+    retry: 3,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+
+  // Transform stages to match expected structure
+  const stageConfig = stages?.reduce((acc, stage, index) => {
+    acc[stage.name] = {
+      title: stage.name.split('_').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' '),
+      color: stage.color ?? "#6b7280",
+      assignedTo: getRoleDisplayName(stage.assignedRole ?? ""),
+      order: stage.order ?? index,
+    };
+    return acc;
+  }, {} as Record<string, { title: string; color: string; assignedTo: string; order: number }>);
 
   // Group projects by status
   const projectsByStatus = projects.reduce((acc, project) => {
@@ -80,6 +102,69 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
 
   const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
 
+  // Show error state if stages query failed
+  if (stagesError) {
+    return (
+      <div className="p-6" data-testid="kanban-board-error">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Failed to Load Stages</h3>
+            <p className="text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : "Unable to load kanban stages. Please try again."}
+            </p>
+            <Button 
+              onClick={() => refetchStages()} 
+              data-testid="button-retry-stages"
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show loading state while stages are being fetched
+  if (stagesLoading || !stageConfig) {
+    return (
+      <div className="p-6" data-testid="kanban-board-loading">
+        <div className="flex space-x-6 h-full overflow-x-auto">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="flex-1 min-w-80">
+              <Card className="h-full">
+                <CardHeader className="sticky top-0 bg-card border-b border-border rounded-t-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Skeleton className="w-3 h-3 rounded-full" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-6" />
+                    </div>
+                    <Skeleton className="w-4 h-4" />
+                  </div>
+                  <Skeleton className="h-3 w-24 mt-1" />
+                </CardHeader>
+                <CardContent className="p-4 space-y-3 min-h-96">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Sort stages by order with deterministic fallback and get ordered entries
+  const orderedStages = Object.entries(stageConfig).sort(([, a], [, b]) => {
+    const orderA = a.order ?? 0;
+    const orderB = b.order ?? 0;
+    return orderA - orderB;
+  });
+
   return (
     <div className="p-6" data-testid="kanban-board">
       <DndContext
@@ -88,7 +173,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         onDragEnd={handleDragEnd}
       >
         <div className="flex space-x-6 h-full overflow-x-auto">
-          {Object.entries(STAGE_CONFIG).map(([status, config]) => {
+          {orderedStages.map(([status, config]) => {
             const stageProjects = projectsByStatus[status] || [];
             
             return (
@@ -97,7 +182,10 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                   <CardHeader className="sticky top-0 bg-card border-b border-border rounded-t-lg">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <div className={`w-3 h-3 ${config.color} rounded-full`} />
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={getColorStyle(config.color)}
+                        />
                         <h3 className="font-semibold text-foreground text-sm">
                           {config.title}
                         </h3>
