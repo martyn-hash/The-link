@@ -385,7 +385,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const projects = await storage.getProjectsByUser(effectiveUserId, effectiveRole);
+      // Extract query parameters for filtering
+      const filters = {
+        month: req.query.month as string | undefined,
+        archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
+      };
+
+      const projects = await storage.getProjectsByUser(effectiveUserId, effectiveRole, filters);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);

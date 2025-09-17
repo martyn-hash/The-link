@@ -8,7 +8,10 @@ import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Columns3, List, Filter, Folder, Clock, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Columns3, List, Filter, Folder, Clock, AlertTriangle, Calendar, Archive } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -19,14 +22,25 @@ import {
 
 type ViewMode = "kanban" | "list";
 
+// Helper function to get current month in DD/MM/YYYY format
+const getCurrentMonth = () => {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [filter, setFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonth());
+  const [showArchived, setShowArchived] = useState<boolean>(false);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", { month: monthFilter, archived: showArchived }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -86,6 +100,7 @@ export default function Projects() {
     );
   }
 
+  // Apply client-side filters (month and archived are handled server-side)
   const filteredProjects = projects ? projects.filter((project: any) => {
     switch (filter) {
       case "urgent":
@@ -160,7 +175,40 @@ export default function Projects() {
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* Filter */}
+              {/* Month Filter */}
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <div className="flex flex-col">
+                  <Label htmlFor="month-filter" className="text-xs text-muted-foreground mb-1">Month</Label>
+                  <Input
+                    id="month-filter"
+                    type="text"
+                    placeholder="DD/MM/YYYY"
+                    value={monthFilter}
+                    onChange={(e) => setMonthFilter(e.target.value)}
+                    className="w-32 h-9"
+                    data-testid="input-month-filter"
+                  />
+                </div>
+              </div>
+
+              {/* Archived Toggle */}
+              <div className="flex items-center space-x-2">
+                <Archive className="w-4 h-4 text-muted-foreground" />
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="show-archived"
+                    checked={showArchived}
+                    onCheckedChange={setShowArchived}
+                    data-testid="switch-show-archived"
+                  />
+                  <Label htmlFor="show-archived" className="text-sm">
+                    Show archived
+                  </Label>
+                </div>
+              </div>
+              
+              {/* Status Filter */}
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-muted-foreground" />
                 <Select value={filter} onValueChange={setFilter}>

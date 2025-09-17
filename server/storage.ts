@@ -300,8 +300,21 @@ export class DatabaseStorage implements IStorage {
     return project;
   }
 
-  async getAllProjects(): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean }): Promise<ProjectWithRelations[]> {
+    let whereConditions = [];
+    
+    if (filters?.month) {
+      whereConditions.push(eq(projects.projectMonth, filters.month));
+    }
+    
+    if (filters?.archived !== undefined) {
+      whereConditions.push(eq(projects.archived, filters.archived));
+    }
+    
+    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    
     return await db.query.projects.findMany({
+      where: whereClause,
       with: {
         client: true,
         bookkeeper: true,
@@ -317,26 +330,39 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getProjectsByUser(userId: string, role: string): Promise<ProjectWithRelations[]> {
-    let whereCondition;
+  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean }): Promise<ProjectWithRelations[]> {
+    let userWhereCondition;
     
     switch (role) {
       case "admin":
       case "manager":
         // Admin and Manager can see all projects
-        return this.getAllProjects();
+        return this.getAllProjects(filters);
       case "client_manager":
-        whereCondition = eq(projects.clientManagerId, userId);
+        userWhereCondition = eq(projects.clientManagerId, userId);
         break;
       case "bookkeeper":
-        whereCondition = eq(projects.bookkeeperId, userId);
+        userWhereCondition = eq(projects.bookkeeperId, userId);
         break;
       default:
-        whereCondition = eq(projects.currentAssigneeId, userId);
+        userWhereCondition = eq(projects.currentAssigneeId, userId);
     }
 
+    // Build combined where conditions
+    let whereConditions = [userWhereCondition];
+    
+    if (filters?.month) {
+      whereConditions.push(eq(projects.projectMonth, filters.month));
+    }
+    
+    if (filters?.archived !== undefined) {
+      whereConditions.push(eq(projects.archived, filters.archived));
+    }
+    
+    const whereClause = and(...whereConditions);
+
     return await db.query.projects.findMany({
-      where: whereCondition,
+      where: whereClause,
       with: {
         client: true,
         bookkeeper: true,
