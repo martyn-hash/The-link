@@ -6,6 +6,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import Sidebar from "@/components/sidebar";
 import UploadModal from "@/components/upload-modal";
 import SettingsModal from "@/components/settings-modal";
+import UserManagementModal from "@/components/user-management-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ export default function Admin() {
   const { toast } = useToast();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/projects"],
@@ -210,16 +212,28 @@ export default function Admin() {
                   Upload CSV
                 </Button>
                 {user.role === 'admin' && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full justify-start"
-                    onClick={() => setShowSettingsModal(true)}
-                    data-testid="button-quick-settings"
-                  >
-                    <Settings className="w-3 h-3 mr-2" />
-                    Configure
-                  </Button>
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => setShowUserModal(true)}
+                      data-testid="button-quick-users"
+                    >
+                      <Users className="w-3 h-3 mr-2" />
+                      Manage Users
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => setShowSettingsModal(true)}
+                      data-testid="button-quick-settings"
+                    >
+                      <Settings className="w-3 h-3 mr-2" />
+                      Configure
+                    </Button>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -317,10 +331,16 @@ export default function Admin() {
       />
       
       {user.role === 'admin' && (
-        <SettingsModal 
-          isOpen={showSettingsModal} 
-          onClose={() => setShowSettingsModal(false)} 
-        />
+        <>
+          <UserManagementModal 
+            isOpen={showUserModal} 
+            onClose={() => setShowUserModal(false)} 
+          />
+          <SettingsModal 
+            isOpen={showSettingsModal} 
+            onClose={() => setShowSettingsModal(false)} 
+          />
+        </>
       )}
     </div>
   );

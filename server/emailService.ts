@@ -11,7 +11,7 @@ if (process.env.SENDGRID_API_KEY) {
 
 interface EmailParams {
   to: string;
-  from: string;
+  from?: string;
   subject: string;
   text?: string;
   html?: string;
@@ -23,14 +23,23 @@ export async function sendEmail(params: EmailParams): Promise<boolean> {
     return false;
   }
 
+  const fromEmail = params.from || process.env.FROM_EMAIL || "noreply@bookflow.com";
+  
   try {
-    await mailService.send({
+    const emailData: any = {
       to: params.to,
-      from: params.from || process.env.FROM_EMAIL || "noreply@bookflow.com",
+      from: fromEmail,
       subject: params.subject,
-      text: params.text,
-      html: params.html,
-    });
+    };
+    
+    if (params.html) {
+      emailData.html = params.html;
+    }
+    if (params.text) {
+      emailData.text = params.text;
+    }
+    
+    await mailService.send(emailData);
     return true;
   } catch (error) {
     console.error('SendGrid email error:', error);

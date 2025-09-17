@@ -95,6 +95,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/users/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const userData = insertUserSchema.partial().parse(req.body);
+      const user = await storage.updateUser(req.params.id, userData);
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(400).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/users/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteUser(req.params.id);
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(400).json({ message: "Failed to delete user" });
+    }
+  });
+
   // Project routes
   app.get("/api/projects", isAuthenticated, async (req: any, res) => {
     try {
@@ -322,6 +343,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: "Failed to delete change reason" });
     }
   });
+
+  // Test email endpoint (development only)
+  if (process.env.NODE_ENV === 'development') {
+    app.post("/api/test-email", isAuthenticated, requireAdmin, async (req: any, res) => {
+      try {
+        const { to, subject, message } = req.body;
+        
+        if (!to || !subject || !message) {
+          return res.status(400).json({ message: "Missing required fields: to, subject, message" });
+        }
+
+        const success = await sendTaskAssignmentEmail(
+          to,
+          "Test User",
+          message,
+          "Test Client", 
+          "bookkeeping_work_required"
+        );
+
+        if (success) {
+          res.json({ message: "Test email sent successfully" });
+        } else {
+          res.status(500).json({ message: "Failed to send test email" });
+        }
+      } catch (error) {
+        console.error("Error sending test email:", error);
+        res.status(500).json({ message: "Failed to send test email" });
+      }
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;
