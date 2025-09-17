@@ -7,6 +7,7 @@ import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Columns3, List, Filter, Users, Clock, User as UserIcon } from "lucide-react";
 import {
   Select,
@@ -20,9 +21,25 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 type ViewMode = "kanban" | "list";
+
+const STATUS_OPTIONS = [
+  { value: "no_latest_action", label: "No Latest Action", assignedTo: "Client Manager" },
+  { value: "bookkeeping_work_required", label: "Bookkeeping Work Required", assignedTo: "Bookkeeper" },
+  { value: "in_review", label: "In Review", assignedTo: "Client Manager" },
+  { value: "needs_client_input", label: "Needs Input from Client", assignedTo: "Client Manager" },
+  { value: "completed", label: "Completed", assignedTo: "Project Status" },
+];
+
+const CHANGE_REASONS = [
+  { value: "first_allocation_of_work", label: "First Allocation of Work" },
+  { value: "errors_identified_from_bookkeeper", label: "Errors identified from Bookkeeper" },
+  { value: "queries_answered", label: "Queries Answered" },
+  { value: "work_completed_successfully", label: "Work Completed Successfully" },
+  { value: "clarifications_needed", label: "Clarifications Needed" },
+];
 
 export default function AllProjects() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -264,34 +281,92 @@ export default function AllProjects() {
                         </h4>
                         
                         {selectedProject.chronology && selectedProject.chronology.length > 0 ? (
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             {[...selectedProject.chronology]
                               .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                              .map((entry, index) => (
-                                <div key={index} className="border-l-2 border-primary/20 pl-4 pb-3">
-                                  <div className="flex items-center space-x-2 mb-1">
-                                    <div className="w-2 h-2 bg-primary rounded-full -ml-5 border-2 border-background"></div>
-                                    <span className="text-xs text-muted-foreground">
-                                      {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
-                                    </span>
-                                  </div>
-                                  <div className="text-sm">
-                                    <span className="font-medium">Status: </span>
-                                    {entry.status || entry.action || 'Status changed'}
-                                  </div>
-                                  {entry.notes && (
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      {entry.notes}
+                              .map((entry, index) => {
+                                // Helper function to format time duration
+                                const formatDuration = (minutes: number | null) => {
+                                  if (!minutes || minutes === 0) return "0 days, 0 hours";
+                                  const days = Math.floor(minutes / (60 * 24));
+                                  const hours = Math.floor((minutes % (60 * 24)) / 60);
+                                  return `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''}`;
+                                };
+
+                                return (
+                                  <div key={entry.id} className="border-l-2 border-primary pl-3 pb-4">
+                                    <div className="w-2 h-2 bg-primary rounded-full -ml-4 mb-2 border-2 border-background"></div>
+                                    
+                                    {/* Status Transition */}
+                                    <div className="flex items-center space-x-2 mb-2">
+                                      {entry.fromStatus ? (
+                                        <div className="flex items-center space-x-2 text-sm">
+                                          <Badge variant="outline" className="text-xs">
+                                            {STATUS_OPTIONS.find(s => s.value === entry.fromStatus)?.label}
+                                          </Badge>
+                                          <span className="text-muted-foreground">→</span>
+                                          <Badge variant="default" className="text-xs">
+                                            {STATUS_OPTIONS.find(s => s.value === entry.toStatus)?.label}
+                                          </Badge>
+                                        </div>
+                                      ) : (
+                                        <Badge variant="default" className="text-xs">
+                                          {STATUS_OPTIONS.find(s => s.value === entry.toStatus)?.label}
+                                        </Badge>
+                                      )}
                                     </div>
-                                  )}
-                                  {entry.assignedTo && (
-                                    <div className="flex items-center text-xs text-muted-foreground mt-1">
-                                      <UserIcon className="w-3 h-3 mr-1" />
-                                      {entry.assignedTo}
+                                    
+                                    {/* Timestamp */}
+                                    <div className="flex flex-col space-y-1 mb-2">
+                                      <span className="text-xs text-muted-foreground">
+                                        {format(new Date(entry.timestamp), 'PPp')}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        ({formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })})
+                                      </span>
                                     </div>
-                                  )}
-                                </div>
-                              ))
+
+                                    <div className="space-y-2">
+                                      {/* Change Reason */}
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-xs text-muted-foreground font-medium">Reason:</span>
+                                        <Badge variant="secondary" className="text-xs">
+                                          {CHANGE_REASONS.find(r => r.value === entry.changeReason)?.label || entry.changeReason || 'Not specified'}
+                                        </Badge>
+                                      </div>
+                                      
+                                      {/* Time in Previous Stage */}
+                                      {entry.fromStatus && entry.timeInPreviousStage !== null && (
+                                        <div className="flex items-center space-x-2">
+                                          <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
+                                          <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                                            {formatDuration(entry.timeInPreviousStage)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Assignee Information */}
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-xs text-muted-foreground font-medium">
+                                          {entry.fromStatus ? "Assigned to:" : "Project created - Assigned to:"}
+                                        </span>
+                                        <div className="flex items-center text-xs text-foreground">
+                                          <UserIcon className="w-3 h-3 mr-1" />
+                                          {entry.assignee 
+                                            ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
+                                            : "System"}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {entry.notes && (
+                                      <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded text-xs text-muted-foreground italic">
+                                        "{entry.notes}"
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })
                             }
                           </div>
                         ) : (
