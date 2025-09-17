@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit2, Trash2, Save, X, Settings } from "lucide-react";
-import type { KanbanStage, ChangeReason } from "@shared/schema";
+import type { KanbanStage, ChangeReason, ProjectDescription } from "@shared/schema";
 
 interface EditingStage {
   id?: string;
@@ -28,6 +28,13 @@ interface EditingReason {
   description: string;
 }
 
+interface EditingDescription {
+  id?: string;
+  name: string;
+  active: boolean;
+  order: number;
+}
+
 const DEFAULT_STAGE: EditingStage = {
   name: "",
   assignedRole: "client_manager",
@@ -38,6 +45,12 @@ const DEFAULT_STAGE: EditingStage = {
 const DEFAULT_REASON: EditingReason = {
   reason: "",
   description: "",
+};
+
+const DEFAULT_DESCRIPTION: EditingDescription = {
+  name: "",
+  active: true,
+  order: 0,
 };
 
 const ROLE_OPTIONS = [
@@ -64,8 +77,10 @@ export default function SettingsPage() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [editingStage, setEditingStage] = useState<EditingStage | null>(null);
   const [editingReason, setEditingReason] = useState<EditingReason | null>(null);
+  const [editingDescription, setEditingDescription] = useState<EditingDescription | null>(null);
   const [isAddingStage, setIsAddingStage] = useState(false);
   const [isAddingReason, setIsAddingReason] = useState(false);
+  const [isAddingDescription, setIsAddingDescription] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -78,6 +93,11 @@ export default function SettingsPage() {
   // Fetch change reasons
   const { data: reasons, isLoading: reasonsLoading } = useQuery<ChangeReason[]>({
     queryKey: ["/api/config/reasons"],
+  });
+
+  // Fetch project descriptions
+  const { data: descriptions, isLoading: descriptionsLoading } = useQuery<ProjectDescription[]>({
+    queryKey: ["/api/config/project-descriptions"],
   });
 
   // Stage mutations
@@ -158,6 +178,61 @@ export default function SettingsPage() {
       toast({
         title: errorTitle,
         description: errorDescription,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Description mutations
+  const createDescriptionMutation = useMutation({
+    mutationFn: async (description: Omit<EditingDescription, 'id'>) => {
+      return await apiRequest("POST", "/api/config/project-descriptions", description);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Description created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-descriptions"] });
+      setIsAddingDescription(false);
+      setEditingDescription(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create description",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateDescriptionMutation = useMutation({
+    mutationFn: async ({ id, ...description }: EditingDescription) => {
+      return await apiRequest("PATCH", `/api/config/project-descriptions/${id}`, description);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Description updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-descriptions"] });
+      setEditingDescription(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update description",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteDescriptionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/project-descriptions/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Description deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-descriptions"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete description",
         variant: "destructive",
       });
     },
@@ -291,6 +366,43 @@ export default function SettingsPage() {
     setIsAddingReason(true);
   };
 
+  // Handle description operations
+  const handleSaveDescription = () => {
+    if (!editingDescription) return;
+
+    if (!editingDescription.name) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a description name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editingDescription.id) {
+      updateDescriptionMutation.mutate(editingDescription);
+    } else {
+      const { id, ...descriptionData } = editingDescription;
+      createDescriptionMutation.mutate(descriptionData);
+    }
+  };
+
+  const handleEditDescription = (description: ProjectDescription) => {
+    setEditingDescription({
+      id: description.id,
+      name: description.name,
+      active: description.active ?? true,
+      order: description.order,
+    });
+    setIsAddingDescription(false);
+  };
+
+  const handleAddDescription = () => {
+    const nextOrder = Math.max(0, ...(descriptions?.map(d => d.order) || [])) + 1;
+    setEditingDescription({ ...DEFAULT_DESCRIPTION, order: nextOrder });
+    setIsAddingDescription(true);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -326,15 +438,16 @@ export default function SettingsPage() {
                 Settings
               </h1>
               <p className="text-muted-foreground mt-2">
-                Configure kanban stages and change reasons for your workflow.
+                Configure kanban stages, change reasons, and project descriptions for your workflow.
               </p>
             </div>
           </div>
 
           <Tabs defaultValue="stages" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="stages">Kanban Stages</TabsTrigger>
               <TabsTrigger value="reasons">Change Reasons</TabsTrigger>
+              <TabsTrigger value="descriptions">Project Descriptions</TabsTrigger>
             </TabsList>
             
             <TabsContent value="stages" className="space-y-6">
@@ -781,6 +894,217 @@ export default function SettingsPage() {
                               setIsAddingReason(false);
                             }}
                             data-testid="button-cancel-new-reason"
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="descriptions" className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">Project Descriptions</h2>
+                  <p className="text-muted-foreground">Manage the project description options for your workflow.</p>
+                </div>
+                <Button
+                  onClick={handleAddDescription}
+                  data-testid="button-add-description"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Description
+                </Button>
+              </div>
+
+              <div className="grid gap-4">
+                {descriptionsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  </div>
+                ) : (
+                  descriptions?.map((description) => (
+                    <Card key={description.id} className="bg-background">
+                      <CardContent className="p-6">
+                        {editingDescription?.id === description.id ? (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label htmlFor="description-name">Description Name</Label>
+                                <Input
+                                  id="description-name"
+                                  value={editingDescription.name}
+                                  onChange={(e) => setEditingDescription({
+                                    ...editingDescription,
+                                    name: e.target.value
+                                  })}
+                                  data-testid="input-description-name"
+                                />
+                              </div>
+                              
+                              <div>
+                                <Label htmlFor="description-order">Order</Label>
+                                <Input
+                                  id="description-order"
+                                  type="number"
+                                  value={editingDescription.order}
+                                  onChange={(e) => setEditingDescription({
+                                    ...editingDescription,
+                                    order: parseInt(e.target.value) || 0
+                                  })}
+                                  data-testid="input-description-order"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id="description-active"
+                                  checked={editingDescription.active}
+                                  onChange={(e) => setEditingDescription({
+                                    ...editingDescription,
+                                    active: e.target.checked
+                                  })}
+                                  className="rounded border-input"
+                                  data-testid="checkbox-description-active"
+                                />
+                                <Label htmlFor="description-active">Active</Label>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={handleSaveDescription}
+                                disabled={createDescriptionMutation.isPending || updateDescriptionMutation.isPending}
+                                data-testid="button-save-description"
+                              >
+                                <Save className="w-4 h-4 mr-2" />
+                                Save
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingDescription(null);
+                                  setIsAddingDescription(false);
+                                }}
+                                data-testid="button-cancel-description"
+                              >
+                                <X className="w-4 h-4 mr-2" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-medium">{description.name}</h3>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Badge variant={description.active ? "default" : "secondary"}>
+                                  {description.active ? "Active" : "Inactive"}
+                                </Badge>
+                                <span>Order: {description.order}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditDescription(description)}
+                                data-testid={`button-edit-description-${description.id}`}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteDescriptionMutation.mutate(description.id)}
+                                className="text-destructive hover:text-destructive"
+                                data-testid={`button-delete-description-${description.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+
+                {/* Add new description form */}
+                {isAddingDescription && editingDescription && !editingDescription.id && (
+                  <Card className="bg-background border-dashed">
+                    <CardContent className="p-6">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="new-description-name">Description Name</Label>
+                            <Input
+                              id="new-description-name"
+                              value={editingDescription.name}
+                              onChange={(e) => setEditingDescription({
+                                ...editingDescription,
+                                name: e.target.value
+                              })}
+                              data-testid="input-new-description-name"
+                              placeholder="Enter description name"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="new-description-order">Order</Label>
+                            <Input
+                              id="new-description-order"
+                              type="number"
+                              value={editingDescription.order}
+                              onChange={(e) => setEditingDescription({
+                                ...editingDescription,
+                                order: parseInt(e.target.value) || 0
+                              })}
+                              data-testid="input-new-description-order"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="new-description-active"
+                              checked={editingDescription.active}
+                              onChange={(e) => setEditingDescription({
+                                ...editingDescription,
+                                active: e.target.checked
+                              })}
+                              className="rounded border-input"
+                              data-testid="checkbox-new-description-active"
+                            />
+                            <Label htmlFor="new-description-active">Active</Label>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveDescription}
+                            disabled={createDescriptionMutation.isPending}
+                            data-testid="button-create-description"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            Create Description
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setEditingDescription(null);
+                              setIsAddingDescription(false);
+                            }}
+                            data-testid="button-cancel-new-description"
                           >
                             <X className="w-4 h-4 mr-2" />
                             Cancel
