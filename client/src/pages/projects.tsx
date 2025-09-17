@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { getCurrentMonthForFiltering } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
@@ -22,21 +23,14 @@ import {
 
 type ViewMode = "kanban" | "list";
 
-// Helper function to get current month in DD/MM/YYYY format
-const getCurrentMonth = () => {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  return `${day}/${month}/${year}`;
-};
+// Note: Using shared month normalization utility for consistent filtering
 
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [filter, setFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonth());
+  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
   const [showArchived, setShowArchived] = useState<boolean>(false);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery({

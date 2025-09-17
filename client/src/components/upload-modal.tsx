@@ -42,7 +42,10 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       return response.json();
     },
     onSuccess: (data) => {
-      const { created = 0, archived = 0, existing = 0 } = data.results || {};
+      // Parse actual backend response format
+      const created = data.details?.newProjectsCreated || 0;
+      const archived = data.details?.existingProjectsArchived || 0;
+      const existing = data.details?.alreadyExistsCount || 0;
       const totalProcessed = created + archived + existing;
       
       let description;

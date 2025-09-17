@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { getCurrentMonthForFiltering } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
@@ -28,14 +29,7 @@ import { formatDistanceToNow, format } from "date-fns";
 
 type ViewMode = "kanban" | "list";
 
-// Helper function to get current month in DD/MM/YYYY format
-const getCurrentMonth = () => {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  return `${day}/${month}/${year}`;
-};
+// Note: Using shared month normalization utility for consistent filtering
 
 const STATUS_OPTIONS = [
   { value: "no_latest_action", label: "No Latest Action", assignedTo: "Client Manager" },
@@ -59,7 +53,7 @@ export default function AllProjects() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonth());
+  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
   const [showArchived, setShowArchived] = useState<boolean>(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
