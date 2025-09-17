@@ -9,6 +9,7 @@ import {
   insertUserSchema,
   insertKanbanStageSchema,
   insertChangeReasonSchema,
+  insertProjectDescriptionSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
   type User,
@@ -531,10 +532,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         summary: result.summary,
         createdProjects: result.createdProjects,
         archivedProjects: result.archivedProjects,
+        alreadyExistsCount: result.summary.alreadyExistsCount,
         details: {
           totalRows: result.summary.totalRows,
           newProjectsCreated: result.summary.newProjectsCreated,
           existingProjectsArchived: result.summary.existingProjectsArchived,
+          alreadyExistsCount: result.summary.alreadyExistsCount,
           clientsProcessed: result.summary.clientsProcessed
         }
       });
@@ -650,6 +653,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting change reason:", error);
       res.status(400).json({ message: "Failed to delete change reason" });
+    }
+  });
+
+  // Project descriptions configuration routes
+  app.get("/api/config/project-descriptions", isAuthenticated, async (req, res) => {
+    try {
+      const descriptions = await storage.getAllProjectDescriptions();
+      res.json(descriptions);
+    } catch (error) {
+      console.error("Error fetching project descriptions:", error);
+      res.status(500).json({ message: "Failed to fetch project descriptions" });
+    }
+  });
+
+  app.post("/api/config/project-descriptions", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const descriptionData = insertProjectDescriptionSchema.parse(req.body);
+      const description = await storage.createProjectDescription(descriptionData);
+      res.json(description);
+    } catch (error) {
+      console.error("Error creating project description:", error);
+      res.status(400).json({ message: "Failed to create project description" });
+    }
+  });
+
+  app.patch("/api/config/project-descriptions/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const description = await storage.updateProjectDescription(req.params.id, req.body);
+      res.json(description);
+    } catch (error) {
+      console.error("Error updating project description:", error);
+      
+      if (error instanceof Error && error.message.includes("Project description not found")) {
+        return res.status(404).json({ message: "Project description not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to update project description" });
+    }
+  });
+
+  app.delete("/api/config/project-descriptions/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteProjectDescription(req.params.id);
+      res.json({ message: "Project description deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting project description:", error);
+      
+      if (error instanceof Error && error.message.includes("Project description not found")) {
+        return res.status(404).json({ message: "Project description not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to delete project description" });
     }
   });
 
