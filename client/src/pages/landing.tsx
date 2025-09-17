@@ -9,9 +9,14 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Landing() {
   const [adminFormOpen, setAdminFormOpen] = useState(false);
+  const [resetFormOpen, setResetFormOpen] = useState(false);
   const [loginFormData, setLoginFormData] = useState({
     email: '',
     password: ''
+  });
+  const [resetFormData, setResetFormData] = useState({
+    email: '',
+    newPassword: ''
   });
   const [adminFormData, setAdminFormData] = useState({
     email: '',
@@ -20,11 +25,16 @@ export default function Landing() {
     lastName: ''
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const handleLoginInputChange = (field: string, value: string) => {
     setLoginFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleResetInputChange = (field: string, value: string) => {
+    setResetFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleAdminInputChange = (field: string, value: string) => {
@@ -68,6 +78,46 @@ export default function Landing() {
       });
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsResetting(true);
+
+    try {
+      const response = await fetch('/api/dev/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(resetFormData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Password reset successfully! You can now log in with your new password.",
+        });
+        setResetFormOpen(false);
+        setResetFormData({ email: '', newPassword: '' });
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to reset password",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to reset password. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -171,6 +221,19 @@ export default function Landing() {
                 >
                   {isLoggingIn ? "Signing In..." : "Sign In"}
                 </Button>
+                
+                <div className="text-center mt-4">
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    onClick={() => setResetFormOpen(true)}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                    data-testid="button-forgot-password"
+                  >
+                    Forgot Password?
+                  </Button>
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -269,6 +332,64 @@ export default function Landing() {
             </div>
           </div>
         </div>
+
+        {/* Password Reset Dialog */}
+        <Dialog open={resetFormOpen} onOpenChange={setResetFormOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reset Password</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handlePasswordReset} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  value={resetFormData.email}
+                  onChange={(e) => handleResetInputChange('email', e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                  data-testid="input-reset-email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reset-password">New Password</Label>
+                <Input
+                  id="reset-password"
+                  type="password"
+                  value={resetFormData.newPassword}
+                  onChange={(e) => handleResetInputChange('newPassword', e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="Enter new password"
+                  data-testid="input-reset-password"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Minimum 6 characters
+                </p>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setResetFormOpen(false)}
+                  className="flex-1"
+                  data-testid="button-reset-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isResetting}
+                  className="flex-1"
+                  data-testid="button-reset-submit"
+                >
+                  {isResetting ? "Resetting..." : "Reset Password"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Discreet admin creation link at bottom */}
         <div className="text-center mt-16 pt-8 border-t border-muted">
