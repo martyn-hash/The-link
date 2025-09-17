@@ -460,8 +460,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error.name === 'ZodError') {
         console.error("Validation errors:", error.issues);
         res.status(400).json({ message: "Validation failed", errors: error.issues });
+      } else if (error.message && (error.message.includes("Invalid project status") || error.message.includes("not found"))) {
+        // Handle validation errors from validateProjectStatus and stage lookup errors
+        res.status(400).json({ message: error.message });
       } else {
-        res.status(400).json({ message: "Failed to update project status" });
+        res.status(500).json({ message: "Failed to update project status" });
       }
     }
   });
@@ -554,6 +557,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stage);
     } catch (error) {
       console.error("Error updating stage:", error);
+      
+      // Check if this is a validation error about projects using the stage
+      if (error instanceof Error && error.message.includes("Cannot rename stage")) {
+        return res.status(409).json({ 
+          message: error.message,
+          code: "STAGE_IN_USE"
+        });
+      }
+      
+      if (error instanceof Error && error.message.includes("Stage not found")) {
+        return res.status(404).json({ message: "Stage not found" });
+      }
+      
       res.status(400).json({ message: "Failed to update stage" });
     }
   });
@@ -564,6 +580,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Stage deleted successfully" });
     } catch (error) {
       console.error("Error deleting stage:", error);
+      
+      // Check if this is a validation error about projects using the stage
+      if (error instanceof Error && error.message.includes("Cannot delete stage")) {
+        return res.status(409).json({ 
+          message: error.message,
+          code: "STAGE_IN_USE"
+        });
+      }
+      
+      if (error instanceof Error && error.message.includes("Stage not found")) {
+        return res.status(404).json({ message: "Stage not found" });
+      }
+      
       res.status(400).json({ message: "Failed to delete stage" });
     }
   });

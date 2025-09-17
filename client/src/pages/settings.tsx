@@ -110,9 +110,23 @@ export default function SettingsPage() {
       setEditingStage(null);
     },
     onError: (error: any) => {
+      let errorTitle = "Error";
+      let errorDescription = "Failed to update stage";
+      
+      // Handle specific error cases
+      if (error.status === 409 || error.code === "STAGE_IN_USE") {
+        errorTitle = "Cannot Rename Stage";
+        errorDescription = error.message || "This stage cannot be renamed because it has projects assigned to it. Move all projects to other stages first.";
+      } else if (error.status === 404) {
+        errorTitle = "Stage Not Found";
+        errorDescription = "The stage you're trying to update no longer exists.";
+      } else if (error.message) {
+        errorDescription = error.message;
+      }
+      
       toast({
-        title: "Error",
-        description: error.message || "Failed to update stage",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       });
     },
@@ -127,9 +141,23 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/config/stages"] });
     },
     onError: (error: any) => {
+      let errorTitle = "Error";
+      let errorDescription = "Failed to delete stage";
+      
+      // Handle specific error cases
+      if (error.status === 409 || error.code === "STAGE_IN_USE") {
+        errorTitle = "Cannot Delete Stage";
+        errorDescription = error.message || "This stage cannot be deleted because it has projects assigned to it. Move all projects to other stages first.";
+      } else if (error.status === 404) {
+        errorTitle = "Stage Not Found";
+        errorDescription = "The stage you're trying to delete no longer exists.";
+      } else if (error.message) {
+        errorDescription = error.message;
+      }
+      
       toast({
-        title: "Error",
-        description: error.message || "Failed to delete stage",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       });
     },

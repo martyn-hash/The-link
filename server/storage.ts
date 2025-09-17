@@ -65,6 +65,14 @@ export interface IStorage {
   updateKanbanStage(id: string, stage: Partial<InsertKanbanStage>): Promise<KanbanStage>;
   deleteKanbanStage(id: string): Promise<void>;
   
+  // Stage validation operations
+  isStageNameInUse(stageName: string): Promise<boolean>;
+  getStageById(id: string): Promise<KanbanStage | undefined>;
+  validateStageCanBeDeleted(id: string): Promise<{ canDelete: boolean; reason?: string; projectCount?: number }>;
+  validateStageCanBeRenamed(id: string, newName: string): Promise<{ canRename: boolean; reason?: string; projectCount?: number }>;
+  validateProjectStatus(status: string): Promise<{ isValid: boolean; reason?: string }>;
+  getDefaultStage(): Promise<KanbanStage | undefined>;
+  
   getAllChangeReasons(): Promise<ChangeReason[]>;
   createChangeReason(reason: InsertChangeReason): Promise<ChangeReason>;
   updateChangeReason(id: string, reason: Partial<InsertChangeReason>): Promise<ChangeReason>;
@@ -248,7 +256,25 @@ export class DatabaseStorage implements IStorage {
 
   // Project operations
   async createProject(projectData: InsertProject): Promise<Project> {
-    const [project] = await db.insert(projects).values(projectData).returning();
+    // Ensure we have a valid status
+    let finalProjectData = { ...projectData };
+    
+    if (!finalProjectData.currentStatus) {
+      // Use default stage when no status is provided
+      const defaultStage = await this.getDefaultStage();
+      if (!defaultStage) {
+        throw new Error("No kanban stages found. Please create at least one stage before creating projects.");
+      }
+      finalProjectData.currentStatus = defaultStage.name;
+    }
+    
+    // Validate that the currentStatus matches an existing stage
+    const validation = await this.validateProjectStatus(finalProjectData.currentStatus);
+    if (!validation.isValid) {
+      throw new Error(validation.reason || "Invalid project status");
+    }
+    
+    const [project] = await db.insert(projects).values(finalProjectData).returning();
     return project;
   }
 
@@ -326,6 +352,12 @@ export class DatabaseStorage implements IStorage {
     const project = await this.getProject(update.projectId);
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    // Validate the new status using the centralized validation method
+    const validation = await this.validateProjectStatus(update.newStatus);
+    if (!validation.isValid) {
+      throw new Error(validation.reason || "Invalid project status");
     }
 
     // Look up the kanban stage to get the assigned role
@@ -410,16 +442,110 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateKanbanStage(id: string, stage: Partial<InsertKanbanStage>): Promise<KanbanStage> {
+    // If name is being changed, validate that the stage can be renamed
+    if (stage.name) {
+      const validation = await this.validateStageCanBeRenamed(id, stage.name);
+      if (!validation.canRename) {
+        throw new Error(validation.reason || "Stage cannot be renamed");
+      }
+    }
+    
     const [updatedStage] = await db
       .update(kanbanStages)
       .set(stage)
       .where(eq(kanbanStages.id, id))
       .returning();
+      
+    if (!updatedStage) {
+      throw new Error("Stage not found");
+    }
+    
     return updatedStage;
   }
 
   async deleteKanbanStage(id: string): Promise<void> {
+    // Validate that the stage can be deleted
+    const validation = await this.validateStageCanBeDeleted(id);
+    if (!validation.canDelete) {
+      throw new Error(validation.reason || "Stage cannot be deleted");
+    }
+    
     await db.delete(kanbanStages).where(eq(kanbanStages.id, id));
+  }
+  
+  // Stage validation operations
+  async isStageNameInUse(stageName: string): Promise<boolean> {
+    const [project] = await db.select().from(projects).where(eq(projects.currentStatus, stageName)).limit(1);
+    return !!project;
+  }
+  
+  async validateProjectStatus(status: string): Promise<{ isValid: boolean; reason?: string }> {
+    // Check if the status matches an existing stage
+    const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.name, status));
+    if (!stage) {
+      return { isValid: false, reason: `Invalid project status '${status}'. Status must match an existing kanban stage.` };
+    }
+    return { isValid: true };
+  }
+  
+  async getStageById(id: string): Promise<KanbanStage | undefined> {
+    const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.id, id));
+    return stage;
+  }
+  
+  async validateStageCanBeDeleted(id: string): Promise<{ canDelete: boolean; reason?: string; projectCount?: number }> {
+    // First check if the stage exists
+    const stage = await this.getStageById(id);
+    if (!stage) {
+      return { canDelete: false, reason: "Stage not found" };
+    }
+    
+    // Check if any projects are using this stage
+    const projectsUsingStage = await db.select().from(projects).where(eq(projects.currentStatus, stage.name));
+    const projectCount = projectsUsingStage.length;
+    
+    if (projectCount > 0) {
+      return { 
+        canDelete: false, 
+        reason: `Cannot delete stage '${stage.name}' because ${projectCount} project${projectCount > 1 ? 's' : ''} ${projectCount > 1 ? 'are' : 'is'} currently assigned to this stage`, 
+        projectCount 
+      };
+    }
+    
+    return { canDelete: true };
+  }
+  
+  async validateStageCanBeRenamed(id: string, newName: string): Promise<{ canRename: boolean; reason?: string; projectCount?: number }> {
+    // First check if the stage exists
+    const stage = await this.getStageById(id);
+    if (!stage) {
+      return { canRename: false, reason: "Stage not found" };
+    }
+    
+    // If the name isn't actually changing, allow it
+    if (stage.name === newName) {
+      return { canRename: true };
+    }
+    
+    // Check if any projects are using this stage
+    const projectsUsingStage = await db.select().from(projects).where(eq(projects.currentStatus, stage.name));
+    const projectCount = projectsUsingStage.length;
+    
+    if (projectCount > 0) {
+      return { 
+        canRename: false, 
+        reason: `Cannot rename stage '${stage.name}' because ${projectCount} project${projectCount > 1 ? 's' : ''} ${projectCount > 1 ? 'are' : 'is'} currently assigned to this stage. Renaming would orphan these projects.`, 
+        projectCount 
+      };
+    }
+    
+    return { canRename: true };
+  }
+  
+  async getDefaultStage(): Promise<KanbanStage | undefined> {
+    // Get the first stage by order (lowest order number)
+    const [defaultStage] = await db.select().from(kanbanStages).orderBy(kanbanStages.order).limit(1);
+    return defaultStage;
   }
 
   async getAllChangeReasons(): Promise<ChangeReason[]> {
@@ -447,6 +573,12 @@ export class DatabaseStorage implements IStorage {
   // Bulk operations
   async createProjectsFromCSV(projectsData: any[]): Promise<Project[]> {
     const createdProjects: Project[] = [];
+    
+    // Get the default stage for new projects
+    const defaultStage = await this.getDefaultStage();
+    if (!defaultStage) {
+      throw new Error("No kanban stages found. Please create at least one stage before importing projects.");
+    }
 
     for (const data of projectsData) {
       // Find or create client
@@ -467,14 +599,14 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
-      // Create project
+      // Create project with default stage
       const project = await this.createProject({
         clientId: client.id,
         bookkeeperId: bookkeeper.id,
         clientManagerId: clientManager.id,
         currentAssigneeId: clientManager.id,
         description: data.projectDescription,
-        currentStatus: "no_latest_action",
+        currentStatus: defaultStage.name,
         priority: data.priority || "medium",
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
       });
@@ -483,7 +615,7 @@ export class DatabaseStorage implements IStorage {
       await this.createChronologyEntry({
         projectId: project.id,
         fromStatus: null,
-        toStatus: "no_latest_action",
+        toStatus: defaultStage.name,
         assigneeId: clientManager.id,
         changeReason: "first_allocation_of_work",
         notes: "Project created and assigned to client manager",
