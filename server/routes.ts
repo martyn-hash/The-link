@@ -517,11 +517,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const createdProjects = await storage.createProjectsFromCSV(validatedProjects);
+      const result = await storage.createProjectsFromCSV(validatedProjects);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Failed to process CSV upload",
+          errors: result.errors
+        });
+      }
       
       res.json({ 
-        message: `Successfully created ${createdProjects.length} projects`,
-        projects: createdProjects 
+        message: `Successfully processed CSV upload`,
+        summary: result.summary,
+        createdProjects: result.createdProjects,
+        archivedProjects: result.archivedProjects,
+        details: {
+          totalRows: result.summary.totalRows,
+          newProjectsCreated: result.summary.newProjectsCreated,
+          existingProjectsArchived: result.summary.existingProjectsArchived,
+          clientsProcessed: result.summary.clientsProcessed
+        }
       });
     } catch (error) {
       console.error("Error uploading CSV:", error);

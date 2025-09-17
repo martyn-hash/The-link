@@ -220,6 +220,40 @@ export const updateProjectStatusSchema = z.object({
   notes: z.string().optional(),
 });
 
+// Month normalization helper function
+export function normalizeProjectMonth(input: string): string {
+  // Handle various date formats and normalize to DD/MM/YYYY
+  const cleaned = input.trim();
+  
+  // Check if already in DD/MM/YYYY format with leading zeros
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleaned)) {
+    return cleaned;
+  }
+  
+  // Handle D/M/YYYY or DD/M/YYYY or D/MM/YYYY formats
+  const match = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    const paddedDay = day.padStart(2, '0');
+    const paddedMonth = month.padStart(2, '0');
+    
+    // Validate day and month ranges
+    const dayNum = parseInt(day, 10);
+    const monthNum = parseInt(month, 10);
+    
+    if (dayNum < 1 || dayNum > 31) {
+      throw new Error(`Invalid day: ${day}. Day must be between 01 and 31.`);
+    }
+    if (monthNum < 1 || monthNum > 12) {
+      throw new Error(`Invalid month: ${month}. Month must be between 01 and 12.`);
+    }
+    
+    return `${paddedDay}/${paddedMonth}/${year}`;
+  }
+  
+  throw new Error(`Invalid project month format: ${cleaned}. Expected DD/MM/YYYY format.`);
+}
+
 // CSV upload schema
 export const csvProjectSchema = z.object({
   clientName: z.string().min(1),
@@ -228,7 +262,19 @@ export const csvProjectSchema = z.object({
   clientManagerEmail: z.string().email(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional().default("medium"),
   dueDate: z.string().optional(),
-  projectMonth: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Project month must be in DD/MM/YYYY format").optional(),
+  projectMonth: z.string().min(1, "Project month is required").refine(
+    (val) => {
+      try {
+        normalizeProjectMonth(val);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    {
+      message: "Project month must be in DD/MM/YYYY format (e.g., 01/12/2024)"
+    }
+  ),
 });
 
 // Types

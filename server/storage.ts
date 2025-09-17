@@ -6,6 +6,7 @@ import {
   kanbanStages,
   changeReasons,
   projectDescriptions,
+  normalizeProjectMonth,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -25,7 +26,7 @@ import {
   type UpdateProjectStatus,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -89,7 +90,18 @@ export interface IStorage {
   getProjectDescriptionByName(name: string): Promise<ProjectDescription | undefined>;
   
   // Bulk operations
-  createProjectsFromCSV(projectsData: any[]): Promise<Project[]>;
+  createProjectsFromCSV(projectsData: any[]): Promise<{
+    success: boolean;
+    createdProjects: Project[];
+    archivedProjects: Project[];
+    errors: string[];
+    summary: {
+      totalRows: number;
+      newProjectsCreated: number;
+      existingProjectsArchived: number;
+      clientsProcessed: string[];
+    };
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -617,75 +629,283 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Bulk operations
-  async createProjectsFromCSV(projectsData: any[]): Promise<Project[]> {
-    const createdProjects: Project[] = [];
-    
-    // Get the default stage for new projects
-    const defaultStage = await this.getDefaultStage();
-    if (!defaultStage) {
-      throw new Error("No kanban stages found. Please create at least one stage before importing projects.");
+  async createProjectsFromCSV(projectsData: any[]): Promise<{
+    success: boolean;
+    createdProjects: Project[];
+    archivedProjects: Project[];
+    errors: string[];
+    summary: {
+      totalRows: number;
+      newProjectsCreated: number;
+      existingProjectsArchived: number;
+      alreadyExistsCount: number;
+      clientsProcessed: string[];
+    };
+  }> {
+    const result = {
+      success: false,
+      createdProjects: [] as Project[],
+      archivedProjects: [] as Project[],
+      errors: [] as string[],
+      summary: {
+        totalRows: projectsData.length,
+        newProjectsCreated: 0,
+        existingProjectsArchived: 0,
+        alreadyExistsCount: 0,
+        clientsProcessed: [] as string[],
+      },
+    };
+
+    try {
+      // Validate CSV data format and duplicates first
+      const validationResult = await this.validateCSVData(projectsData);
+      if (!validationResult.isValid) {
+        result.errors = validationResult.errors;
+        return result;
+      }
+
+      // Use transaction for atomic monthly workflow
+      const transactionResult = await db.transaction(async (tx) => {
+        const createdProjects: Project[] = [];
+        const archivedProjects: Project[] = [];
+        const processedClients = new Set<string>();
+        let alreadyExistsCount = 0;
+
+        // Get required configuration data
+        const defaultStage = await this.getDefaultStage();
+        if (!defaultStage) {
+          throw new Error("No kanban stages found. Please create at least one stage before importing projects.");
+        }
+
+        // Find "Not Completed in Time" stage or create it if needed
+        let notCompletedStage = await tx.select().from(kanbanStages).where(eq(kanbanStages.name, "Not Completed in Time"));
+        if (notCompletedStage.length === 0) {
+          // Create the stage if it doesn't exist
+          const maxOrder = await tx.select({ maxOrder: sql<number>`COALESCE(MAX(${kanbanStages.order}), 0)` }).from(kanbanStages);
+          const [newStage] = await tx.insert(kanbanStages).values({
+            name: "Not Completed in Time",
+            assignedRole: "admin",
+            order: (maxOrder[0]?.maxOrder || 0) + 1,
+            color: "#ef4444", // Red color for overdue items
+          }).returning();
+          notCompletedStage = [newStage];
+        }
+
+        // Process each CSV row
+        for (const data of projectsData) {
+          try {
+            // Find or create client
+            let client = await this.getClientByName(data.clientName);
+            if (!client) {
+              const [newClient] = await tx.insert(clients).values({
+                name: data.clientName,
+                email: data.clientEmail,
+              }).returning();
+              client = newClient;
+            }
+
+            // Find bookkeeper and client manager
+            const bookkeeper = await this.getUserByEmail(data.bookkeeperEmail);
+            const clientManager = await this.getUserByEmail(data.clientManagerEmail);
+
+            if (!bookkeeper || !clientManager) {
+              throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
+            }
+
+            // CRITICAL: Check for existing project with same (client, description, projectMonth) triplet
+            const normalizedProjectMonth = normalizeProjectMonth(data.projectMonth);
+            const existingProjectForMonth = await tx.query.projects.findFirst({
+              where: and(
+                eq(projects.clientId, client.id),
+                eq(projects.description, data.projectDescription),
+                eq(projects.projectMonth, normalizedProjectMonth),
+                eq(projects.archived, false)
+              ),
+            });
+
+            // Skip if project already exists for this month (IDEMPOTENCY)
+            if (existingProjectForMonth) {
+              console.log(`Skipping duplicate project for ${data.clientName} - ${data.projectDescription} - ${normalizedProjectMonth}`);
+              alreadyExistsCount++;
+              processedClients.add(data.clientName);
+              continue;
+            }
+
+            // Handle monthly workflow for existing projects (different months only)
+            const existingProjects = await tx.query.projects.findMany({
+              where: and(
+                eq(projects.clientId, client.id),
+                eq(projects.description, data.projectDescription),
+                eq(projects.archived, false) // ARCHIVAL SAFETY: only get non-archived projects
+              ),
+              with: {
+                chronology: {
+                  orderBy: desc(projectChronology.timestamp),
+                  limit: 1,
+                },
+              },
+            });
+
+            // Process existing active projects
+            for (const existingProject of existingProjects) {
+              if (existingProject.currentStatus !== "Completed") {
+                // Calculate time in current stage
+                const lastChronology = existingProject.chronology[0];
+                const timeInPreviousStage = lastChronology && lastChronology.timestamp
+                  ? Math.floor((Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60))
+                  : 0;
+
+                // Create chronology entry for status change
+                await tx.insert(projectChronology).values({
+                  projectId: existingProject.id,
+                  fromStatus: existingProject.currentStatus,
+                  toStatus: "Not Completed in Time",
+                  assigneeId: existingProject.currentAssigneeId || clientManager.id,
+                  changeReason: "clarifications_needed",
+                  notes: `Project moved to 'Not Completed in Time' due to new monthly cycle. Previous status: ${existingProject.currentStatus}`,
+                  timeInPreviousStage,
+                });
+
+                // Update project status and archive it
+                const [updatedProject] = await tx.update(projects)
+                  .set({
+                    currentStatus: "Not Completed in Time",
+                    currentAssigneeId: existingProject.currentAssigneeId || clientManager.id,
+                    archived: true,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(projects.id, existingProject.id))
+                  .returning();
+
+                archivedProjects.push(updatedProject);
+              }
+            }
+
+            // Create new project for this month
+            const [newProject] = await tx.insert(projects).values({
+              clientId: client.id,
+              bookkeeperId: bookkeeper.id,
+              clientManagerId: clientManager.id,
+              currentAssigneeId: clientManager.id,
+              description: data.projectDescription,
+              currentStatus: defaultStage.name,
+              priority: data.priority || "medium",
+              dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+              projectMonth: normalizedProjectMonth, // Use normalized format
+              archived: false,
+            }).returning();
+
+            // Create initial chronology entry for new project
+            await tx.insert(projectChronology).values({
+              projectId: newProject.id,
+              fromStatus: null,
+              toStatus: defaultStage.name,
+              assigneeId: clientManager.id,
+              changeReason: "first_allocation_of_work",
+              notes: `New project created for month ${normalizedProjectMonth} and assigned to client manager`,
+              timeInPreviousStage: 0,
+            });
+
+            createdProjects.push(newProject);
+            processedClients.add(data.clientName);
+
+          } catch (error) {
+            console.error(`Error processing project for ${data.clientName}:`, error);
+            throw new Error(`Failed to process project for ${data.clientName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+
+        return {
+          createdProjects,
+          archivedProjects,
+          processedClients: Array.from(processedClients),
+          alreadyExistsCount,
+        };
+      });
+
+      // Update result with transaction outcome
+      result.success = true;
+      result.createdProjects = transactionResult.createdProjects;
+      result.archivedProjects = transactionResult.archivedProjects;
+      result.summary.newProjectsCreated = transactionResult.createdProjects.length;
+      result.summary.existingProjectsArchived = transactionResult.archivedProjects.length;
+      result.summary.alreadyExistsCount = transactionResult.alreadyExistsCount;
+      result.summary.clientsProcessed = transactionResult.processedClients;
+
+      return result;
+
+    } catch (error) {
+      console.error("Error in createProjectsFromCSV:", error);
+      result.errors.push(error instanceof Error ? error.message : "Unknown error occurred");
+      return result;
+    }
+  }
+
+  private async validateCSVData(projectsData: any[]): Promise<{ isValid: boolean; errors: string[] }> {
+    const errors: string[] = [];
+
+    if (!projectsData || projectsData.length === 0) {
+      errors.push("CSV data is empty or invalid");
+      return { isValid: false, errors };
     }
 
-    // Get all active project descriptions for validation
+    // Check for duplicate client names in CSV
+    const clientNames = projectsData.map(data => data.clientName).filter(Boolean);
+    const duplicateClients = clientNames.filter((name, index) => clientNames.indexOf(name) !== index);
+    if (duplicateClients.length > 0) {
+      errors.push(`Duplicate client names found in CSV: ${Array.from(new Set(duplicateClients)).join(', ')}. Each client can only appear once per upload.`);
+    }
+
+    // Validate project descriptions against configured ones
     const activeDescriptions = await db.select().from(projectDescriptions).where(eq(projectDescriptions.active, true));
     if (activeDescriptions.length === 0) {
-      throw new Error("No active project descriptions found. Please configure project descriptions in the admin area before importing projects.");
+      errors.push("No active project descriptions found. Please configure project descriptions in the admin area before importing projects.");
+      return { isValid: false, errors };
     }
 
     const validDescriptionNames = new Set(activeDescriptions.map(desc => desc.name));
+    const invalidDescriptions = projectsData
+      .map(data => data.projectDescription)
+      .filter(desc => desc && !validDescriptionNames.has(desc));
 
-    for (const data of projectsData) {
-      // Validate project description against configured ones
-      if (!validDescriptionNames.has(data.projectDescription)) {
-        console.error(`Skipping project for ${data.clientName}: project description '${data.projectDescription}' is not configured in the system. Please add this description in the admin area first.`);
-        continue;
-      }
-
-      // Find or create client
-      let client = await this.getClientByName(data.clientName);
-      if (!client) {
-        client = await this.createClient({
-          name: data.clientName,
-          email: data.clientEmail,
-        });
-      }
-
-      // Find bookkeeper and client manager
-      const bookkeeper = await this.getUserByEmail(data.bookkeeperEmail);
-      const clientManager = await this.getUserByEmail(data.clientManagerEmail);
-
-      if (!bookkeeper || !clientManager) {
-        console.error(`Skipping project for ${data.clientName}: bookkeeper or client manager not found`);
-        continue;
-      }
-
-      // Create project with default stage
-      const project = await this.createProject({
-        clientId: client.id,
-        bookkeeperId: bookkeeper.id,
-        clientManagerId: clientManager.id,
-        currentAssigneeId: clientManager.id,
-        description: data.projectDescription,
-        currentStatus: defaultStage.name,
-        priority: data.priority || "medium",
-        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-      });
-
-      // Create initial chronology entry
-      await this.createChronologyEntry({
-        projectId: project.id,
-        fromStatus: null,
-        toStatus: defaultStage.name,
-        assigneeId: clientManager.id,
-        changeReason: "first_allocation_of_work",
-        notes: "Project created and assigned to client manager",
-        timeInPreviousStage: 0,
-      });
-
-      createdProjects.push(project);
+    if (invalidDescriptions.length > 0) {
+      const uniqueInvalid = Array.from(new Set(invalidDescriptions));
+      errors.push(`Invalid project descriptions found: ${uniqueInvalid.join(', ')}. All project descriptions must be configured in the admin area before use.`);
+      errors.push(`Valid descriptions are: ${Array.from(validDescriptionNames).join(', ')}`);
     }
 
-    return createdProjects;
+    // Validate required fields and normalize project months
+    for (let i = 0; i < projectsData.length; i++) {
+      const data = projectsData[i];
+      const rowNumber = i + 1;
+
+      if (!data.clientName) {
+        errors.push(`Row ${rowNumber}: Client name is required`);
+      }
+      if (!data.projectDescription) {
+        errors.push(`Row ${rowNumber}: Project description is required`);
+      }
+      if (!data.bookkeeperEmail) {
+        errors.push(`Row ${rowNumber}: Bookkeeper email is required`);
+      }
+      if (!data.clientManagerEmail) {
+        errors.push(`Row ${rowNumber}: Client manager email is required`);
+      }
+
+      // Validate and normalize projectMonth (now required)
+      if (!data.projectMonth) {
+        errors.push(`Row ${rowNumber}: Project month is required`);
+      } else {
+        try {
+          // Normalize the project month format
+          data.projectMonth = normalizeProjectMonth(data.projectMonth);
+        } catch (error) {
+          errors.push(`Row ${rowNumber}: ${error instanceof Error ? error.message : 'Invalid project month format'}`);
+        }
+      }
+    }
+
+    return { isValid: errors.length === 0, errors };
   }
 }
 
