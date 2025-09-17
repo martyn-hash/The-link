@@ -1,0 +1,32 @@
+I want to introduce an important extra concept to the system. I’d like you to evaluate it, review the codebase and make a plan for it’s introduction, 
+
+You could even print your findings to ‘client_details.md’ as well. 
+
+Currently the ‘Project’ is “top” level of data and it has the kanban stages etc underneath it. 
+
+I’d like to introduce the concept of ‘Clients’ - A ‘client’ has a ‘project’ under it. 
+
+How does this impact the system architecture? 
+
+1. The admin user still uploads projects. 
+2. The upload template actually can stay almost the same, as we already have ‘client name’ in it. 
+3. Project Descriptions should be a definable field, in the same way as kanban stages & change reasons are. 
+4. When the admin user uploads the projects, the system should check if the ‘client’ exists. If it doesn’t, the system should create the client and the project. 
+5. If the client already exists in the system, the system should check if the client has an ‘project’ on the go that matches the ‘project’ in the upload spreadsheet. 
+6. If the client already has a project (like if there’s already a ‘bookkeeping’ project on the go, and then we upload another one), then the system should check which kanban stage it is at. If the project is already at ‘Completed’ stage, it should remain there. If it is at any other stage, then it should be moved to ‘Not Completed in Time’ (a new kanban stage). 
+7. Those projects that already existed that have a match in the newly uploaded spreadsheet, should be archived (still viewable from the client, but no longer active on the kanban board) 
+
+
+Context: 
+The purpose of the app is so that at the start of each month, we can upload all the clients that need bookkeeping. 
+If we did not get to the end of their bookkeeping in the previous month, then the time has finished to complete it, so we move those projects to ‘Not Completed in Time’ kanban stage and we move on. 
+Each month at the start of the month, we’ll upload the new data and reset all the projects back to ‘no latest action’
+So the act of uploading a new spreadsheet will effectively end the existing projects and move them all to an archived status. 
+
+Additional Info: 
+It may make sense to have a field in the upload sheet that is ‘Project Month’. This will be useful for understanding the current data, but more importantly it will help when analysing historic data as it builds up.
+
+We will later report on how many projects were completed by each client manager, and we’ll probably want to filter month by user & by month - so these steps are important to help build that structure. 
+
+You can ask me any questions you need help with before building it.  
+
