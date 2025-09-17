@@ -129,36 +129,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // One-time admin creation route (for production bootstrap)
   app.post("/api/bootstrap-admin", async (req, res) => {
     try {
-      const { email, password, firstName, lastName } = req.body;
+      const { email, password, firstName, lastName, bootstrapSecret } = req.body;
 
-      // Basic input validation
-      if (!email || !password || !firstName || !lastName) {
+      // Security: Check bootstrap secret if configured in production
+      if (process.env.NODE_ENV === 'production' && process.env.BOOTSTRAP_SECRET) {
+        if (!bootstrapSecret || bootstrapSecret !== process.env.BOOTSTRAP_SECRET) {
+          return res.status(403).json({ 
+            message: "Invalid bootstrap secret" 
+          });
+        }
+      }
+
+      // Use proper validation with insertUserSchema
+      const adminUserSchema = insertUserSchema.extend({
+        password: insertUserSchema.shape.passwordHash.optional()
+      }).omit({ passwordHash: true });
+
+      const validationResult = adminUserSchema.safeParse({
+        email: email?.trim(),
+        firstName: firstName?.trim(),
+        lastName: lastName?.trim(),
+        role: 'admin'
+      });
+
+      if (!validationResult.success) {
         return res.status(400).json({ 
-          message: "Email, password, first name, and last name are required" 
+          message: "Invalid input data",
+          errors: validationResult.error.issues 
         });
       }
 
-      if (password.length < 6) {
+      // Additional password validation
+      if (!password || typeof password !== 'string' || password.trim().length < 6) {
         return res.status(400).json({ 
-          message: "Password must be at least 6 characters" 
-        });
-      }
-
-      // Check if any admin users already exist
-      const allUsers = await storage.getAllUsers();
-      const adminExists = allUsers.some(user => user.role === 'admin');
-
-      if (adminExists) {
-        return res.status(403).json({ 
-          message: "Admin user already exists. This route can only be used once." 
-        });
-      }
-
-      // Check if user with this email already exists
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ 
-          message: "User with this email already exists" 
+          message: "Password is required and must be at least 6 characters" 
         });
       }
 
@@ -166,17 +170,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bcrypt = await import('bcrypt');
       const passwordHash = await bcrypt.hash(password.trim(), 10);
 
-      // Create admin user
-      const adminUser = await storage.createUser({
-        email: email.trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        role: 'admin',
+      // Use atomic admin creation to prevent race conditions
+      const result = await storage.createAdminIfNone({
+        ...validationResult.data,
         passwordHash,
       });
 
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: result.error 
+        });
+      }
+
       // Remove password hash from response
-      const { passwordHash: _, ...userResponse } = adminUser;
+      const { passwordHash: _, ...userResponse } = result.user!;
       
       res.json({ 
         message: "Admin user created successfully",

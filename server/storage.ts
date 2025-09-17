@@ -34,6 +34,9 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
   getAllUsers(): Promise<User[]>;
   
+  // Atomic admin creation (for bootstrap)
+  createAdminIfNone(user: InsertUser): Promise<{ success: boolean; user?: User; error?: string }>;
+  
   // User impersonation operations (for admin testing)
   startImpersonation(adminUserId: string, targetUserId: string): Promise<void>;
   stopImpersonation(adminUserId: string): Promise<void>;
@@ -145,6 +148,40 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  // Atomic admin creation to prevent race conditions
+  async createAdminIfNone(userData: InsertUser): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      // Use a transaction to ensure atomicity
+      const result = await db.transaction(async (tx) => {
+        // Check if any admin users exist within the transaction
+        const adminUsers = await tx.select().from(users).where(eq(users.role, 'admin'));
+        
+        if (adminUsers.length > 0) {
+          return { success: false, error: "Admin user already exists. This operation can only be performed once." };
+        }
+
+        // Check if user with this email already exists
+        const existingUser = await tx.select().from(users).where(eq(users.email, userData.email || ''));
+        if (existingUser.length > 0) {
+          return { success: false, error: "User with this email already exists" };
+        }
+
+        // Create the admin user within the transaction
+        const [newUser] = await tx.insert(users).values({
+          ...userData,
+          role: 'admin' // Ensure role is admin
+        }).returning();
+
+        return { success: true, user: newUser };
+      });
+
+      return result;
+    } catch (error) {
+      console.error("Error in atomic admin creation:", error);
+      return { success: false, error: "Failed to create admin user" };
+    }
   }
 
   // User impersonation operations (for admin testing)
