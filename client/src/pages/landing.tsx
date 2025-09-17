@@ -3,23 +3,72 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BarChart3, Users, Clock, CheckCircle, Settings } from "lucide-react";
+import { BarChart3, Users, Clock, CheckCircle, Settings, LogIn } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Landing() {
   const [adminFormOpen, setAdminFormOpen] = useState(false);
-  const [formData, setFormData] = useState({
+  const [loginFormData, setLoginFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [adminFormData, setAdminFormData] = useState({
     email: '',
     password: '',
     firstName: '',
     lastName: ''
   });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleLoginInputChange = (field: string, value: string) => {
+    setLoginFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAdminInputChange = (field: string, value: string) => {
+    setAdminFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(loginFormData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Logged in successfully!",
+        });
+        // Refresh the page to trigger auth state update
+        window.location.reload();
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Invalid email or password",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log in. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const handleAdminCreation = async (e: React.FormEvent) => {
@@ -32,7 +81,7 @@ export default function Landing() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(adminFormData),
       });
 
       const data = await response.json();
@@ -43,7 +92,7 @@ export default function Landing() {
           description: "Admin user created successfully! You can now sign in.",
         });
         setAdminFormOpen(false);
-        setFormData({ email: '', password: '', firstName: '', lastName: '' });
+        setAdminFormData({ email: '', password: '', firstName: '', lastName: '' });
       } else {
         toast({
           title: "Error",
@@ -81,14 +130,50 @@ export default function Landing() {
             task tracking, and automated notifications.
           </p>
           
-          <Button 
-            size="lg" 
-            className="px-8 py-4 text-lg"
-            onClick={() => window.location.href = '/api/login'}
-            data-testid="button-login"
-          >
-            Sign In to Get Started
-          </Button>
+          <Card className="w-full max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle className="text-center flex items-center justify-center space-x-2">
+                <LogIn className="w-5 h-5" />
+                <span>Sign In</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    value={loginFormData.email}
+                    onChange={(e) => handleLoginInputChange('email', e.target.value)}
+                    required
+                    placeholder="Enter your email"
+                    data-testid="input-login-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Password</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    value={loginFormData.password}
+                    onChange={(e) => handleLoginInputChange('password', e.target.value)}
+                    required
+                    placeholder="Enter your password"
+                    data-testid="input-login-password"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full"
+                  data-testid="button-login"
+                >
+                  {isLoggingIn ? "Signing In..." : "Sign In"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Features */}
@@ -209,8 +294,8 @@ export default function Landing() {
                   <Input
                     id="firstName"
                     type="text"
-                    value={formData.firstName}
-                    onChange={(e) => handleInputChange('firstName', e.target.value)}
+                    value={adminFormData.firstName}
+                    onChange={(e) => handleAdminInputChange('firstName', e.target.value)}
                     required
                     data-testid="input-first-name"
                   />
@@ -220,8 +305,8 @@ export default function Landing() {
                   <Input
                     id="lastName"
                     type="text"
-                    value={formData.lastName}
-                    onChange={(e) => handleInputChange('lastName', e.target.value)}
+                    value={adminFormData.lastName}
+                    onChange={(e) => handleAdminInputChange('lastName', e.target.value)}
                     required
                     data-testid="input-last-name"
                   />
@@ -231,8 +316,8 @@ export default function Landing() {
                   <Input
                     id="email"
                     type="email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    value={adminFormData.email}
+                    onChange={(e) => handleAdminInputChange('email', e.target.value)}
                     required
                     data-testid="input-email"
                   />
@@ -242,8 +327,8 @@ export default function Landing() {
                   <Input
                     id="password"
                     type="password"
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    value={adminFormData.password}
+                    onChange={(e) => handleAdminInputChange('password', e.target.value)}
                     required
                     minLength={6}
                     data-testid="input-password"
