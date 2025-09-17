@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import Papa from "papaparse";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
 import {
   insertUserSchema,
@@ -34,10 +34,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Middleware to resolve effective user (for impersonation)
-  const resolveEffectiveUser = async (req: any, res: any, next: any) => {
+  const resolveEffectiveUser = async (req: AuthenticatedRequest, res: any, next: any) => {
     try {
-      if (req.user && req.user.claims && req.user.claims.sub) {
-        const originalUserId = req.user.claims.sub;
+      if (req.user && req.user.id) {
+        const originalUserId = req.user.id;
         const originalUser = await storage.getUser(originalUserId);
         
         if (originalUser && originalUser.role === 'admin') {
@@ -71,10 +71,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+  app.get('/api/auth/user', isAuthenticated, resolveEffectiveUser, async (req: AuthenticatedRequest, res) => {
     try {
-      const originalUserId = req.user.claims.sub;
-      const effectiveUser = req.user.effectiveUser;
+      const originalUserId = req.user!.id;
+      const effectiveUser = req.user!.effectiveUser;
       
       if (!effectiveUser) {
         return res.status(404).json({ message: "User not found" });
@@ -84,7 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { passwordHash, ...sanitizedUser } = effectiveUser;
 
       // Include impersonation metadata if admin is impersonating
-      if (req.user.isImpersonating) {
+      if (req.user!.isImpersonating) {
         const impersonationState = await storage.getImpersonationState(originalUserId);
         return res.json({
           ...sanitizedUser,
@@ -100,9 +100,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Helper function to check admin role (must be real admin, not impersonated)
-  const requireAdmin = async (req: any, res: any, next: any) => {
+  const requireAdmin = async (req: AuthenticatedRequest, res: any, next: any) => {
     try {
-      const originalUserId = req.user.claims.sub;
+      const originalUserId = req.user!.id;
       const originalUser = await storage.getUser(originalUserId);
       if (!originalUser || originalUser.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -114,9 +114,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Helper function to check manager+ role (uses effective user for proper testing)
-  const requireManager = async (req: any, res: any, next: any) => {
+  const requireManager = async (req: AuthenticatedRequest, res: any, next: any) => {
     try {
-      const effectiveRole = req.user.effectiveRole;
+      const effectiveRole = req.user!.effectiveRole;
       if (!effectiveRole || !['admin', 'manager'].includes(effectiveRole)) {
         return res.status(403).json({ message: "Manager access required" });
       }
@@ -284,9 +284,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User impersonation routes (admin only)
-  app.post("/api/auth/impersonate/:userId", isAuthenticated, requireAdmin, async (req: any, res) => {
+  app.post("/api/auth/impersonate/:userId", isAuthenticated, requireAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const adminUserId = req.user.claims.sub;
+      const adminUserId = req.user!.id;
       const targetUserId = req.params.userId;
 
       await storage.startImpersonation(adminUserId, targetUserId);
@@ -297,9 +297,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/auth/impersonate", isAuthenticated, requireAdmin, async (req: any, res) => {
+  app.delete("/api/auth/impersonate", isAuthenticated, requireAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const adminUserId = req.user.claims.sub;
+      const adminUserId = req.user!.id;
       await storage.stopImpersonation(adminUserId);
       res.json({ message: "Impersonation stopped successfully" });
     } catch (error) {
@@ -308,9 +308,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/auth/impersonation-state", isAuthenticated, requireAdmin, async (req: any, res) => {
+  app.get("/api/auth/impersonation-state", isAuthenticated, requireAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const adminUserId = req.user.claims.sub;
+      const adminUserId = req.user!.id;
       const state = await storage.getImpersonationState(adminUserId);
       res.json(state);
     } catch (error) {
@@ -320,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project routes
-  app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+  app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: AuthenticatedRequest, res) => {
     try {
       const effectiveUserId = req.user.effectiveUserId;
       const effectiveRole = req.user.effectiveRole;
@@ -350,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+  app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: AuthenticatedRequest, res) => {
     try {
       const effectiveUserId = req.user.effectiveUserId;
       const effectiveRole = req.user.effectiveRole;
@@ -412,7 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CSV upload route
-  app.post("/api/projects/upload", isAuthenticated, requireAdmin, upload.single('csvFile'), async (req: any, res) => {
+  app.post("/api/projects/upload", isAuthenticated, requireAdmin, upload.single('csvFile'), async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No CSV file uploaded" });
