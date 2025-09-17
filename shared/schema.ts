@@ -77,6 +77,8 @@ export const projects = pgTable("projects", {
   currentAssigneeId: varchar("current_assignee_id").references(() => users.id),
   priority: varchar("priority").default("medium"), // low, medium, high, urgent
   dueDate: timestamp("due_date"),
+  archived: boolean("archived").default(false), // to hide completed monthly cycles
+  projectMonth: varchar("project_month"), // DD/MM/YYYY format to track which month each project belongs to
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -109,6 +111,15 @@ export const changeReasons = pgTable("change_reasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reason: changeReasonEnum("reason").notNull().unique(),
   description: varchar("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Project descriptions configuration table
+export const projectDescriptions = pgTable("project_descriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(), // description name
+  active: boolean("active").default(true), // to enable/disable descriptions
+  order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -196,6 +207,11 @@ export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({
   createdAt: true,
 });
 
+export const insertProjectDescriptionSchema = createInsertSchema(projectDescriptions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
@@ -212,6 +228,7 @@ export const csvProjectSchema = z.object({
   clientManagerEmail: z.string().email(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional().default("medium"),
   dueDate: z.string().optional(),
+  projectMonth: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Project month must be in DD/MM/YYYY format").optional(),
 });
 
 // Types
@@ -228,6 +245,8 @@ export type KanbanStage = typeof kanbanStages.$inferSelect;
 export type InsertKanbanStage = z.infer<typeof insertKanbanStageSchema>;
 export type ChangeReason = typeof changeReasons.$inferSelect;
 export type InsertChangeReason = z.infer<typeof insertChangeReasonSchema>;
+export type ProjectDescription = typeof projectDescriptions.$inferSelect;
+export type InsertProjectDescription = z.infer<typeof insertProjectDescriptionSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 
