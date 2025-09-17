@@ -17,9 +17,11 @@ import type { ProjectWithRelations, User } from "@shared/schema";
 interface TaskListProps {
   projects: ProjectWithRelations[];
   user: User;
+  selectedProjectId?: string | null;
+  onSelectProject?: (projectId: string | null) => void;
 }
 
-export default function TaskList({ projects, user }: TaskListProps) {
+export default function TaskList({ projects, user, selectedProjectId, onSelectProject }: TaskListProps) {
   const [selectedProject, setSelectedProject] = useState<ProjectWithRelations | null>(null);
   const [sortBy, setSortBy] = useState<"client" | "status" | "time">("time");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -150,8 +152,14 @@ export default function TaskList({ projects, user }: TaskListProps) {
                 {visibleProjects.map((project) => (
                   <TableRow 
                     key={project.id} 
-                    className="hover:bg-muted/50"
+                    className={`cursor-pointer transition-colors hover:bg-muted/50 ${
+                      selectedProjectId === project.id 
+                        ? 'bg-primary/10 border-l-2 border-primary' 
+                        : ''
+                    }`}
+                    onClick={() => onSelectProject?.(project.id)}
                     data-testid={`task-row-${project.id}`}
+                    aria-selected={selectedProjectId === project.id}
                   >
                     <TableCell className="font-medium">
                       <span>{project.client.name}</span>
@@ -183,7 +191,10 @@ export default function TaskList({ projects, user }: TaskListProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedProject(project)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProject(project);
+                        }}
                         data-testid={`button-view-project-${project.id}`}
                       >
                         <Eye className="w-4 h-4 mr-2" />

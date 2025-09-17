@@ -24,6 +24,7 @@ export default function AllProjects() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery({
     queryKey: ["/api/projects"],
@@ -127,6 +128,16 @@ export default function AllProjects() {
     return statusMatch && userMatch;
   }) : [];
 
+  // Find selected project from filtered projects
+  const selectedProject = selectedProjectId ? filteredProjects.find(p => p.id === selectedProjectId) : null;
+
+  // Clear selection if project is no longer in filtered results
+  useEffect(() => {
+    if (selectedProjectId && !filteredProjects.some(p => p.id === selectedProjectId)) {
+      setSelectedProjectId(null);
+    }
+  }, [selectedProjectId, filteredProjects]);
+
 
   return (
     <div className="flex h-screen bg-background">
@@ -221,7 +232,12 @@ export default function AllProjects() {
           ) : viewMode === "kanban" ? (
             <KanbanBoard projects={filteredProjects} user={user} />
           ) : (
-            <TaskList projects={filteredProjects} user={user} />
+            <TaskList 
+              projects={filteredProjects} 
+              user={user} 
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+            />
           )}
         </main>
       </div>
