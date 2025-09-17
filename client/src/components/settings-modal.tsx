@@ -26,7 +26,6 @@ interface SettingsModalProps {
 interface EditingStage {
   id?: string;
   name: string;
-  status: string;
   assignedRole: string;
   order: number;
   color: string;
@@ -40,7 +39,6 @@ interface EditingReason {
 
 const DEFAULT_STAGE: EditingStage = {
   name: "",
-  status: "",
   assignedRole: "client_manager",
   order: 0,
   color: "#6b7280",
@@ -58,13 +56,6 @@ const ROLE_OPTIONS = [
   { value: "bookkeeper", label: "Bookkeeper" },
 ];
 
-const STATUS_OPTIONS = [
-  { value: "no_latest_action", label: "No Latest Action" },
-  { value: "bookkeeping_work_required", label: "Bookkeeping Work Required" },
-  { value: "in_review", label: "In Review" },
-  { value: "needs_client_input", label: "Needs Input from Client" },
-  { value: "completed", label: "Completed" },
-];
 
 const REASON_OPTIONS = [
   { value: "first_allocation_of_work", label: "First Allocation of Work" },
@@ -214,10 +205,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const handleSaveStage = () => {
     if (!editingStage) return;
 
-    if (!editingStage.name || !editingStage.status) {
+    if (!editingStage.name) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please enter a stage name",
         variant: "destructive",
       });
       return;
@@ -235,7 +226,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setEditingStage({
       id: stage.id,
       name: stage.name,
-      status: stage.status,
       assignedRole: stage.assignedRole || "client_manager",
       order: stage.order,
       color: stage.color || "#6b7280",
@@ -341,26 +331,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               />
                             </div>
                             
-                            <div>
-                              <Label htmlFor="stage-status">Status Value</Label>
-                              <select
-                                id="stage-status"
-                                value={editingStage.status}
-                                onChange={(e) => setEditingStage({
-                                  ...editingStage,
-                                  status: e.target.value
-                                })}
-                                className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                                data-testid="select-stage-status"
-                              >
-                                <option value="">Select status...</option>
-                                {STATUS_OPTIONS.map(option => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
 
                             <div>
                               <Label htmlFor="stage-role">Assigned Role</Label>
@@ -486,26 +456,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           />
                         </div>
                         
-                        <div>
-                          <Label htmlFor="new-stage-status">Status Value</Label>
-                          <select
-                            id="new-stage-status"
-                            value={editingStage.status}
-                            onChange={(e) => setEditingStage({
-                              ...editingStage,
-                              status: e.target.value
-                            })}
-                            className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                            data-testid="select-new-stage-status"
-                          >
-                            <option value="">Select status...</option>
-                            {STATUS_OPTIONS.map(option => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
 
                         <div className="flex space-x-2">
                           <Button

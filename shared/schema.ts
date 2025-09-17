@@ -73,7 +73,7 @@ export const projects = pgTable("projects", {
   bookkeeperId: varchar("bookkeeper_id").notNull().references(() => users.id),
   clientManagerId: varchar("client_manager_id").notNull().references(() => users.id),
   description: text("description").notNull(),
-  currentStatus: projectStatusEnum("current_status").notNull().default("no_latest_action"),
+  currentStatus: varchar("current_status").notNull().default("No Latest Action"),
   currentAssigneeId: varchar("current_assignee_id").references(() => users.id),
   priority: varchar("priority").default("medium"), // low, medium, high, urgent
   dueDate: timestamp("due_date"),
@@ -97,8 +97,7 @@ export const projectChronology = pgTable("project_chronology", {
 // Kanban stages configuration table
 export const kanbanStages = pgTable("kanban_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull(),
-  status: projectStatusEnum("status").notNull().unique(),
+  name: varchar("name").notNull().unique(),
   assignedRole: userRoleEnum("assigned_role"),
   order: integer("order").notNull(),
   color: varchar("color").default("#6b7280"),
@@ -197,10 +196,10 @@ export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({
   createdAt: true,
 });
 
-// Project update schema
+// Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
-  newStatus: z.enum(["no_latest_action", "bookkeeping_work_required", "in_review", "needs_client_input", "completed"]),
+  newStatus: z.string(), // Now accepts any kanban stage name
   changeReason: z.enum(["errors_identified_from_bookkeeper", "first_allocation_of_work", "queries_answered", "work_completed_successfully", "clarifications_needed"]),
   notes: z.string().optional(),
 });
