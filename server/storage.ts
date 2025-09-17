@@ -291,19 +291,25 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Project not found");
     }
 
-    // Determine new assignee based on status
+    // Look up the kanban stage to get the assigned role
+    const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.name, update.newStatus));
+    if (!stage) {
+      throw new Error(`Kanban stage '${update.newStatus}' not found`);
+    }
+
+    // Determine new assignee based on the stage's assigned role
     let newAssigneeId: string;
-    switch (update.newStatus) {
-      case "no_latest_action":
-      case "in_review":
-      case "needs_client_input":
-        newAssigneeId = project.clientManagerId;
-        break;
-      case "bookkeeping_work_required":
+    switch (stage.assignedRole) {
+      case "bookkeeper":
         newAssigneeId = project.bookkeeperId;
         break;
-      case "completed":
-        newAssigneeId = project.clientManagerId; // Completed projects stay with client manager
+      case "client_manager":
+        newAssigneeId = project.clientManagerId;
+        break;
+      case "admin":
+      case "manager":
+        // For admin/manager roles, keep current assignee or default to client manager
+        newAssigneeId = project.currentAssigneeId || project.clientManagerId;
         break;
       default:
         newAssigneeId = project.currentAssigneeId || project.clientManagerId;
