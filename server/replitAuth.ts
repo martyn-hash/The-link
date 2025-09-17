@@ -71,6 +71,8 @@ function extractAndValidateRole(claims: any): ValidRole {
   // Only log in development
   if (process.env.NODE_ENV !== 'production') {
     console.log("🔍 [DEBUG] OIDC Claims received:", JSON.stringify(claims, null, 2));
+    console.log("🔍 [DEBUG] ADMIN_EMAILS array:", ADMIN_EMAILS);
+    console.log("🔍 [DEBUG] ADMIN_BOOTSTRAP_ENABLED:", process.env.ADMIN_BOOTSTRAP_ENABLED);
   }
   
   // Try multiple claim paths for role
@@ -90,6 +92,11 @@ function extractAndValidateRole(claims: any): ValidRole {
   
   // Check if email is in admin bootstrap list (development only)
   const email = claims["email"];
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("🔍 [DEBUG] Checking email for admin access:", email);
+    console.log("🔍 [DEBUG] Is email in ADMIN_EMAILS?", ADMIN_EMAILS.includes(email));
+  }
+  
   if (email && ADMIN_EMAILS.includes(email)) {
     if (process.env.NODE_ENV !== 'production') {
       console.log("🔍 [DEBUG] Admin email detected, assigning admin role:", email);
