@@ -128,10 +128,7 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
     mutationFn: async (userData: UserFormData) => {
       // Strip confirmPassword before sending to API
       const { confirmPassword, ...dataToSend } = userData;
-      return await apiRequest("/api/users", {
-        method: "POST",
-        body: dataToSend,
-      });
+      return await apiRequest("POST", "/api/users", dataToSend);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -163,10 +160,7 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
         ...(password && password.trim() ? { password } : {}) // Only include password if not empty
       };
       
-      return await apiRequest(`/api/users/${selectedUser.id}`, {
-        method: "PATCH",
-        body: dataToSend,
-      });
+      return await apiRequest("PATCH", `/api/users/${selectedUser.id}`, dataToSend);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -189,9 +183,7 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
 
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      return await apiRequest(`/api/users/${userId}`, {
-        method: "DELETE",
-      });
+      return await apiRequest("DELETE", `/api/users/${userId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
