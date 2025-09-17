@@ -54,12 +54,6 @@ export default function Sidebar({ user }: SidebarProps) {
       icon: Folder,
       roles: ["admin", "manager"],
     },
-    {
-      label: "Team Overview",
-      href: "/team",
-      icon: Users,
-      roles: ["admin", "manager"],
-    },
   ];
 
   const adminItems = [

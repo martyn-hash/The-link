@@ -10,7 +10,6 @@ import Dashboard from "@/pages/dashboard";
 import Admin from "@/pages/admin";
 import Users from "@/pages/users";
 import Upload from "@/pages/upload";
-import Team from "@/pages/team";
 import AllProjects from "@/pages/all-projects";
 import Projects from "@/pages/projects";
 
@@ -40,7 +39,6 @@ function Router() {
           <Route path="/admin" component={Admin} />
           <Route path="/users" component={Users} />
           <Route path="/upload" component={Upload} />
-          <Route path="/team" component={Team} />
         </>
       )}
       <Route component={NotFound} />
