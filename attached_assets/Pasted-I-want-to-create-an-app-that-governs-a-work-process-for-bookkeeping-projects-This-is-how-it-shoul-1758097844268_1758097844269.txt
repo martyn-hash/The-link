@@ -1,0 +1,80 @@
+I want to create an app that governs a work process for bookkeeping projects. 
+
+This is how it should work: 
+
+4 Access levels / roles / user types in the system:
+
+- Admin (system configuration, can go anywhere, can see anything)
+- Manager - can view all work for all user types, but does not have the admin privileges to perform system set up functions) 
+- Client Manager - this is one of the key roles, and a client manager will have a connection to a bookkeeping client. 
+- Bookkeeper - a similar role to the client manager from a system perspective, they also have a connection to a bookkeeping client. 
+
+
+Core features: 
+
+1. The admin user uploads a csv to the system that has a list of clients, the bookkeeper, and the client manager.
+2. All records (projects / rows of data on the upload spreadsheet), default to being a task for respective client manager, with the task of ‘Assign work’
+3. There is a task list view of the system for client managers and bookkeepers, and a kanban view. 
+4. Each time a project is moved to a different kanban stage, it involves the system completing the stage task that was assigned to the user, and creating a new stage task for the next user. 
+
+
+Objectives: 
+
+1. The objective is to get every row of data (project) that has been uploaded, from the initial task assigned to the client manager, with the status of ‘no latest action’, through all the stages of the task flow, until they reach the ‘completed’ status. 
+
+
+Kanban Stages: 
+
+a) No Latest Action (Always assigned to client manager) 
+b) With Bookkeeper - Bookkeeping Work Required (always assigned to bookkeeper)
+c) With Client Manager - In Review (always assigned to client manager) 
+d) With Client Manger - Needs Input from Client (always assigned to client manager) 
+e) Completed (Project Status, not assigned) 
+
+
+Rules: 
+1. The user (bookkeeper or client manager) can move any task that is assigned to them between the middle statuses (‘Bookkeeping Work Required’, ‘In Review’, ‘Need Input from Client’) 
+
+2. The client manager can move the project to the ‘complete’ status. 
+
+3. When moving a project back and forth to a new status, the user (bookkeeper or client manager) must select a ‘Change Reason’ from a drop down list of these options: 
+
+- Errors identified from Bookkeeper
+- First Allocation of Work
+- Queries Answered
+- Work Completed Successfully
+- Clarifications Needed
+
+
+ They must also add notes to explain why the task is being moved. 
+
+4. The system should keep a running timer for how long each project has been at which stage. For example, if the bookkeeper moves to the project to ‘With Client Manager - In Review’. The system should create timer for how long the project has been at this status. 
+
+5. The system should create a chronology for each ‘Project’. The first entry on the chronology will always be ‘Project Created - Set to No Latest Action - Assigned to <Client Manager> <Length of Time at Stage>
+
+Then each time a project is moved to a new stage, a new entry on the chronology for the project should be created, showing the stage change, who it is assigned to, the reason it was changed, and a live count of how long the project has been at that stage. 
+
+6. Projects can be at the same stage more than once. For example, the project could be set to ‘With Bookkeeper - Bookkeeping Work Required’, but the first time it’s set to that stage, it may have the stage status of ‘First Allocation of Work’, and the next time it’s moved to that stage, it may have the stage status of ‘Queries Answered’. The system should track how many times a project has been at any given status, and what is the total time it has been at it. This would involve a count of the times a stage has been invoked, along with combining the time counts it has been at that stage for each instance the project was at that stage. 
+
+Notifications: 
+
+1. When a project has it’s status changed, an email notification should be sent to the user (client manager or bookkeeper) that they have been assigned a new task
+
+
+System Views: 
+
+1. Bookkeeper / Client Manager View - they view their own tasks, a kanban view of all their project and the stages they are at, and can view the chronologies for their own projects. 
+
+2. Manager - can view all projects, tasks & kanban and can filter the system by user to reduce the data to narrow in on individual members of staff.
+
+3. Admin - Same as manager, but can perform system config, such as user creation etc. 
+
+
+Admin settings: 
+
+1. User creation 
+2. Project upload (clients, the related bookkeeping user & the related client manager user) 
+3. Kanban Project Stages & the order in which they are shown
+4. Change Reasons (the drop down list when moving a project from one stage to another) 
+
+
