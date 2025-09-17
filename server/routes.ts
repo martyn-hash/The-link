@@ -38,7 +38,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-      res.json(user);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -77,7 +82,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users", isAuthenticated, requireManager, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      res.json(users);
+      // Strip password hash from response for security
+      const sanitizedUsers = users.map(({ passwordHash, ...user }) => user);
+      res.json(sanitizedUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
@@ -86,9 +93,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/users", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(userData);
-      res.json(user);
+      const { password, ...userData } = req.body;
+      
+      // SECURITY: Explicitly remove passwordHash from request to prevent injection
+      delete userData.passwordHash;
+      
+      // Validate password is provided and meets requirements
+      if (!password || typeof password !== 'string' || password.trim().length < 6) {
+        return res.status(400).json({ message: "Password is required and must be at least 6 characters" });
+      }
+      
+      // Create safe schema that excludes passwordHash
+      const safeUserSchema = insertUserSchema.omit({ passwordHash: true });
+      const validUserData = safeUserSchema.parse(userData);
+      
+      // Hash password securely
+      const bcrypt = await import('bcrypt');
+      const passwordHash = await bcrypt.hash(password.trim(), 10);
+      
+      const user = await storage.createUser({
+        ...validUserData,
+        passwordHash,
+      });
+      
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = user;
+      res.json(userResponse);
     } catch (error) {
       console.error("Error creating user:", error);
       res.status(400).json({ message: "Failed to create user" });
@@ -97,9 +127,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/users/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const userData = insertUserSchema.partial().parse(req.body);
-      const user = await storage.updateUser(req.params.id, userData);
-      res.json(user);
+      const { password, ...userData } = req.body;
+      
+      // SECURITY: Explicitly remove passwordHash from request to prevent injection
+      delete userData.passwordHash;
+      
+      // Create safe schema that excludes passwordHash
+      const safeUserSchema = insertUserSchema.omit({ passwordHash: true }).partial();
+      const validUserData = safeUserSchema.parse(userData);
+      
+      let updateData = { ...validUserData };
+      
+      // Hash password only if provided and valid
+      if (password && typeof password === 'string' && password.trim().length >= 6) {
+        const bcrypt = await import('bcrypt');
+        const passwordHash = await bcrypt.hash(password.trim(), 10);
+        updateData.passwordHash = passwordHash;
+      }
+      
+      const user = await storage.updateUser(req.params.id, updateData);
+      
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = user;
+      res.json(userResponse);
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(400).json({ message: "Failed to update user" });

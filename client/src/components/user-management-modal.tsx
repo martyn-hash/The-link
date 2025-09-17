@@ -46,14 +46,38 @@ interface UserManagementModalProps {
   onClose: () => void;
 }
 
-const userFormSchema = z.object({
+const createUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   role: z.enum(["admin", "manager", "client_manager", "bookkeeper"]),
+  password: z.string().min(6, "Password must be at least 6 characters long"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
-type UserFormData = z.infer<typeof userFormSchema>;
+const editUserFormSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  role: z.enum(["admin", "manager", "client_manager", "bookkeeper"]),
+  password: z.string().min(6, "Password must be at least 6 characters long").optional().or(z.literal("")),
+  confirmPassword: z.string().optional(),
+}).refine((data) => {
+  if (data.password && data.password !== data.confirmPassword) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+type CreateUserFormData = z.infer<typeof createUserFormSchema>;
+type EditUserFormData = z.infer<typeof editUserFormSchema>;
+type UserFormData = CreateUserFormData | EditUserFormData;
 
 export default function UserManagementModal({ isOpen, onClose }: UserManagementModalProps) {
   const { toast } = useToast();
@@ -66,12 +90,14 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
   });
 
   const form = useForm<UserFormData>({
-    resolver: zodResolver(userFormSchema),
+    resolver: zodResolver(selectedUser ? editUserFormSchema : createUserFormSchema),
     defaultValues: {
       email: "",
       firstName: "",
       lastName: "",
       role: "bookkeeper",
+      password: "",
+      confirmPassword: "",
     },
   });
 
@@ -83,6 +109,8 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
         firstName: selectedUser.firstName || "",
         lastName: selectedUser.lastName || "",
         role: selectedUser.role,
+        password: "",
+        confirmPassword: "",
       });
     } else {
       form.reset({
@@ -90,15 +118,19 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
         firstName: "",
         lastName: "",
         role: "bookkeeper",
+        password: "",
+        confirmPassword: "",
       });
     }
   }, [selectedUser, form]);
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
+      // Strip confirmPassword before sending to API
+      const { confirmPassword, ...dataToSend } = userData;
       return await apiRequest("/api/users", {
         method: "POST",
-        body: userData,
+        body: dataToSend,
       });
     },
     onSuccess: () => {
@@ -123,9 +155,17 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
   const updateUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       if (!selectedUser) throw new Error("No user selected");
+      
+      // Strip confirmPassword and empty password before sending to API
+      const { confirmPassword, password, ...baseData } = userData;
+      const dataToSend = {
+        ...baseData,
+        ...(password && password.trim() ? { password } : {}) // Only include password if not empty
+      };
+      
       return await apiRequest(`/api/users/${selectedUser.id}`, {
         method: "PATCH",
-        body: userData,
+        body: dataToSend,
       });
     },
     onSuccess: () => {
@@ -394,6 +434,48 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
                               <SelectItem value="bookkeeper">Bookkeeper</SelectItem>
                             </SelectContent>
                           </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {selectedUser ? "New Password (optional)" : "Password"}
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="password" 
+                              placeholder={selectedUser ? "Leave blank to keep current password" : "Enter password"}
+                              data-testid="input-user-password"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {selectedUser ? "Confirm New Password" : "Confirm Password"}
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="password" 
+                              placeholder="Confirm password"
+                              data-testid="input-user-confirm-password"
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

@@ -53,6 +53,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").notNull().default("bookkeeper"),
+  passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
