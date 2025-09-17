@@ -5,6 +5,7 @@ import {
   projectChronology,
   kanbanStages,
   changeReasons,
+  projectDescriptions,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -18,6 +19,8 @@ import {
   type InsertKanbanStage,
   type ChangeReason,
   type InsertChangeReason,
+  type ProjectDescription,
+  type InsertProjectDescription,
   type ProjectWithRelations,
   type UpdateProjectStatus,
 } from "@shared/schema";
@@ -77,6 +80,13 @@ export interface IStorage {
   createChangeReason(reason: InsertChangeReason): Promise<ChangeReason>;
   updateChangeReason(id: string, reason: Partial<InsertChangeReason>): Promise<ChangeReason>;
   deleteChangeReason(id: string): Promise<void>;
+  
+  // Project description operations
+  getAllProjectDescriptions(): Promise<ProjectDescription[]>;
+  createProjectDescription(description: InsertProjectDescription): Promise<ProjectDescription>;
+  updateProjectDescription(id: string, description: Partial<InsertProjectDescription>): Promise<ProjectDescription>;
+  deleteProjectDescription(id: string): Promise<void>;
+  getProjectDescriptionByName(name: string): Promise<ProjectDescription | undefined>;
   
   // Bulk operations
   createProjectsFromCSV(projectsData: any[]): Promise<Project[]>;
@@ -570,6 +580,42 @@ export class DatabaseStorage implements IStorage {
     await db.delete(changeReasons).where(eq(changeReasons.id, id));
   }
 
+  // Project description operations
+  async getAllProjectDescriptions(): Promise<ProjectDescription[]> {
+    return await db.select().from(projectDescriptions).orderBy(projectDescriptions.order);
+  }
+
+  async createProjectDescription(description: InsertProjectDescription): Promise<ProjectDescription> {
+    const [newDescription] = await db.insert(projectDescriptions).values(description).returning();
+    return newDescription;
+  }
+
+  async updateProjectDescription(id: string, description: Partial<InsertProjectDescription>): Promise<ProjectDescription> {
+    const [updatedDescription] = await db
+      .update(projectDescriptions)
+      .set(description)
+      .where(eq(projectDescriptions.id, id))
+      .returning();
+      
+    if (!updatedDescription) {
+      throw new Error("Project description not found");
+    }
+    
+    return updatedDescription;
+  }
+
+  async deleteProjectDescription(id: string): Promise<void> {
+    const result = await db.delete(projectDescriptions).where(eq(projectDescriptions.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Project description not found");
+    }
+  }
+
+  async getProjectDescriptionByName(name: string): Promise<ProjectDescription | undefined> {
+    const [description] = await db.select().from(projectDescriptions).where(eq(projectDescriptions.name, name));
+    return description;
+  }
+
   // Bulk operations
   async createProjectsFromCSV(projectsData: any[]): Promise<Project[]> {
     const createdProjects: Project[] = [];
@@ -580,7 +626,21 @@ export class DatabaseStorage implements IStorage {
       throw new Error("No kanban stages found. Please create at least one stage before importing projects.");
     }
 
+    // Get all active project descriptions for validation
+    const activeDescriptions = await db.select().from(projectDescriptions).where(eq(projectDescriptions.active, true));
+    if (activeDescriptions.length === 0) {
+      throw new Error("No active project descriptions found. Please configure project descriptions in the admin area before importing projects.");
+    }
+
+    const validDescriptionNames = new Set(activeDescriptions.map(desc => desc.name));
+
     for (const data of projectsData) {
+      // Validate project description against configured ones
+      if (!validDescriptionNames.has(data.projectDescription)) {
+        console.error(`Skipping project for ${data.clientName}: project description '${data.projectDescription}' is not configured in the system. Please add this description in the admin area first.`);
+        continue;
+      }
+
       // Find or create client
       let client = await this.getClientByName(data.clientName);
       if (!client) {
