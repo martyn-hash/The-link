@@ -54,16 +54,84 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
+// Valid user roles from schema
+const VALID_ROLES = ["admin", "manager", "client_manager", "bookkeeper"] as const;
+type ValidRole = typeof VALID_ROLES[number];
+
+// Admin bootstrap emails (for environments without role claims)
+// SECURITY: Only enabled in development with explicit opt-in
+const ADMIN_EMAILS = process.env.NODE_ENV === 'production' 
+  ? (process.env.ADMIN_EMAILS || "").split(",").map(email => email.trim()).filter(Boolean)
+  : [
+      ...(process.env.ADMIN_EMAILS || "").split(",").map(email => email.trim()).filter(Boolean),
+      ...(process.env.ADMIN_BOOTSTRAP_ENABLED === 'true' ? ["admin@bookflow.com"] : [])
+    ];
+
+function extractAndValidateRole(claims: any): ValidRole {
+  // Only log in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("🔍 [DEBUG] OIDC Claims received:", JSON.stringify(claims, null, 2));
+  }
+  
+  // Try multiple claim paths for role
+  const roleValue = claims["role"] || claims["user_role"] || claims["custom:role"] || claims["https://bookflow.com/role"];
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("🔍 [DEBUG] Extracted raw role:", roleValue);
+  }
+  
+  // Validate against allowed roles
+  if (roleValue && VALID_ROLES.includes(roleValue)) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("🔍 [DEBUG] Valid role found:", roleValue);
+    }
+    return roleValue;
+  }
+  
+  // Check if email is in admin bootstrap list (development only)
+  const email = claims["email"];
+  if (email && ADMIN_EMAILS.includes(email)) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("🔍 [DEBUG] Admin email detected, assigning admin role:", email);
+    }
+    return "admin";
+  }
+  
+  // Default fallback
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("🔍 [DEBUG] No valid role found, defaulting to bookkeeper");
+  }
+  return "bookkeeper";
+}
+
 async function upsertUser(
   claims: any,
 ) {
-  await storage.upsertUser({
+  const role = extractAndValidateRole(claims);
+  
+  const userData = {
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
-  });
+    role,
+  };
+  
+  // Only log in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("🔍 [DEBUG] User data to upsert:", JSON.stringify(userData, null, 2));
+  }
+  
+  try {
+    await storage.upsertUser(userData);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("🔍 [DEBUG] User upsert successful");
+    }
+  } catch (error) {
+    console.error("🚨 [ERROR] User upsert failed:", error);
+    throw error;
+  }
 }
 
 export async function setupAuth(app: Express) {

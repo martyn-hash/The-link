@@ -25,7 +25,7 @@ export default function Admin() {
 
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
-    enabled: isAuthenticated && !!user && ['admin', 'manager'].includes(user?.role || ''),
+    enabled: isAuthenticated && !!user && user?.role === 'admin',
     retry: false,
   });
 
@@ -46,7 +46,7 @@ export default function Admin() {
 
   // Check admin access
   useEffect(() => {
-    if (user && !['admin', 'manager'].includes(user.role)) {
+    if (user && user.role !== 'admin') {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
@@ -70,7 +70,7 @@ export default function Admin() {
     );
   }
 
-  if (!['admin', 'manager'].includes(user.role)) {
+  if (user.role !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

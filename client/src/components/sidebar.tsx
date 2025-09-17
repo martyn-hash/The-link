@@ -62,7 +62,7 @@ export default function Sidebar({ user }: SidebarProps) {
       label: "Administration",
       href: "/admin",
       icon: Settings,
-      roles: ["admin", "manager"],
+      roles: ["admin"],
     },
     {
       label: "Upload Projects",
