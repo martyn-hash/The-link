@@ -327,8 +327,23 @@ export class DatabaseStorage implements IStorage {
       throw new Error(validation.reason || "Invalid project status");
     }
     
-    const [project] = await db.insert(projects).values(finalProjectData).returning();
-    return project;
+    // Use a database transaction to ensure both project and chronology entry are created atomically
+    return await db.transaction(async (tx) => {
+      // Create the project
+      const [project] = await tx.insert(projects).values(finalProjectData).returning();
+      
+      // Create initial chronology entry
+      await tx.insert(projectChronology).values({
+        projectId: project.id,
+        fromStatus: null, // Initial entry has no previous status
+        toStatus: project.currentStatus,
+        assigneeId: project.currentAssigneeId,
+        changeReason: "Project Created",
+        timeInPreviousStage: null, // No previous stage for initial entry
+      });
+      
+      return project;
+    });
   }
 
   async getAllProjects(filters?: { month?: string; archived?: boolean }): Promise<ProjectWithRelations[]> {
@@ -529,9 +544,21 @@ export class DatabaseStorage implements IStorage {
 
     // Calculate time in previous stage
     const lastChronology = project.chronology[0];
-    const timeInPreviousStage = lastChronology && lastChronology.timestamp
-      ? Math.floor((Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60))
-      : 0;
+    let timeInPreviousStage: number;
+    
+    if (lastChronology && lastChronology.timestamp) {
+      // If there's a previous chronology entry, calculate from its timestamp
+      timeInPreviousStage = Math.floor((Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60));
+    } else {
+      // If no previous chronology entry exists, calculate from project.createdAt
+      // Handle case where project.createdAt could be null
+      if (project.createdAt) {
+        timeInPreviousStage = Math.floor((Date.now() - new Date(project.createdAt).getTime()) / (1000 * 60));
+      } else {
+        // Fallback to 0 minutes if createdAt is null
+        timeInPreviousStage = 0;
+      }
+    }
 
     // Use a transaction to ensure chronology and field responses are created atomically
     return await db.transaction(async (tx) => {
