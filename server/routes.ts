@@ -498,6 +498,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // SECURITY: Stage approval validation before allowing status change
+      if (targetStage.stageApprovalId) {
+        // This stage requires approval - validate approval responses exist and are valid
+        const existingResponses = await storage.getStageApprovalResponsesByProjectId(updateData.projectId);
+        
+        // Get the stage approval fields to understand what's required
+        const approvalFields = await storage.getStageApprovalFieldsByApprovalId(targetStage.stageApprovalId);
+
+        // Filter responses that belong to this specific stage approval by fieldId
+        const fieldIds = new Set(approvalFields.map(f => f.id));
+        const stageApprovalResponses = existingResponses.filter(r => fieldIds.has(r.fieldId));
+        
+        if (approvalFields.length === 0) {
+          // No fields configured for this approval, proceed normally
+        } else {
+          // Convert to format expected by validation method
+          const responsesForValidation = stageApprovalResponses.map(response => ({
+            fieldId: response.fieldId,
+            projectId: response.projectId,
+            valueBoolean: response.valueBoolean,
+            valueNumber: response.valueNumber,
+            valueLongText: response.valueLongText,
+          }));
+
+          // Validate the approval responses
+          const approvalValidation = await storage.validateStageApprovalResponses(
+            targetStage.stageApprovalId,
+            responsesForValidation
+          );
+
+          if (!approvalValidation.isValid) {
+            return res.status(400).json({
+              message: `Stage approval validation failed: ${approvalValidation.reason}`,
+              failedFields: approvalValidation.failedFields,
+              stageApprovalRequired: true
+            });
+          }
+        }
+      }
+
       const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
 
       // Send email notification to new assignee
