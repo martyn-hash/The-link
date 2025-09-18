@@ -1,7 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
-import type { ProjectWithRelations } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -24,6 +25,26 @@ const formatChangeReason = (reason: string): string => {
 };
 
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
+  // Fetch kanban stages to get colors
+  const { data: stages } = useQuery<KanbanStage[]>({
+    queryKey: ["/api/config/stages"],
+  });
+
+  // Create a mapping of stage names to colors
+  const stageColors = stages?.reduce((acc, stage) => {
+    acc[stage.name] = stage.color || "#6b7280";
+    return acc;
+  }, {} as Record<string, string>) || {};
+
+  // Helper function to get stage color style
+  const getStageColorStyle = (stageName: string): React.CSSProperties => {
+    const color = stageColors[stageName] || "#6b7280";
+    return {
+      backgroundColor: color,
+      color: "white",
+      borderColor: color,
+    };
+  };
   // Helper function to format time duration
   const formatDuration = (totalMinutes: number | null) => {
     if (!totalMinutes || totalMinutes === 0) return "0 minutes";
@@ -113,16 +134,28 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     <div className="flex items-center space-x-2">
                       {entry.fromStatus ? (
                         <div className="flex items-center space-x-2 text-sm">
-                          <Badge variant="outline" className="text-xs">
+                          <Badge 
+                            className="text-xs border-0" 
+                            style={getStageColorStyle(entry.fromStatus || '')}
+                            data-testid={`badge-from-status-${entry.id}`}
+                          >
                             {formatStageName(entry.fromStatus || '')}
                           </Badge>
                           <span className="text-muted-foreground">→</span>
-                          <Badge variant="default" className="text-xs">
+                          <Badge 
+                            className="text-xs border-0" 
+                            style={getStageColorStyle(entry.toStatus)}
+                            data-testid={`badge-to-status-${entry.id}`}
+                          >
                             {formatStageName(entry.toStatus)}
                           </Badge>
                         </div>
                       ) : (
-                        <Badge variant="default" className="text-xs">
+                        <Badge 
+                          className="text-xs border-0" 
+                          style={getStageColorStyle(entry.toStatus)}
+                          data-testid={`badge-initial-status-${entry.id}`}
+                        >
                           {formatStageName(entry.toStatus)}
                         </Badge>
                       )}
