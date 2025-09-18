@@ -9,6 +9,7 @@ import {
   insertUserSchema,
   insertKanbanStageSchema,
   insertChangeReasonSchema,
+  updateChangeReasonSchema,
   insertProjectDescriptionSchema,
   insertStageReasonMapSchema,
   insertReasonCustomFieldSchema,
@@ -678,6 +679,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating change reason:", error);
       
+      // Check for Zod validation errors
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      }
+      
       // Check for unique constraint violation
       if (error instanceof Error && (error as any).code === '23505' && (error as any).constraint_name === 'unique_reason') {
         return res.status(409).json({ 
@@ -702,7 +708,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/config/reasons/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const reason = await storage.updateChangeReason(req.params.id, req.body);
+      const reasonData = updateChangeReasonSchema.parse(req.body);
+      const reason = await storage.updateChangeReason(req.params.id, reasonData);
       res.json(reason);
     } catch (error) {
       console.error("Error updating change reason:", error);

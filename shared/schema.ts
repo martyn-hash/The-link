@@ -309,6 +309,8 @@ export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({
   createdAt: true,
 });
 
+export const updateChangeReasonSchema = insertChangeReasonSchema.partial();
+
 export const insertProjectDescriptionSchema = createInsertSchema(projectDescriptions).omit({
   id: true,
   createdAt: true,
