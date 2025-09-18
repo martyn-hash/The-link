@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocation } from "wouter";
@@ -123,10 +124,11 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
       notes?: string;
       fieldResponses?: Array<{
         customFieldId: string;
-        fieldType: 'number' | 'short_text' | 'long_text';
+        fieldType: 'number' | 'short_text' | 'long_text' | 'multi_select';
         valueNumber?: number;
         valueShortText?: string;
         valueLongText?: string;
+        valueMultiSelect?: string[];
       }>;
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
@@ -210,10 +212,25 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
     
     for (const field of requiredFields) {
       const response = customFieldResponses[field.id];
-      if (!response || response === '' || response === null || response === undefined) {
-        errors.push(`${field.fieldName} is required`);
-      } else if (field.fieldType === 'number' && isNaN(Number(response))) {
-        errors.push(`${field.fieldName} must be a valid number`);
+      
+      if (field.fieldType === 'multi_select') {
+        // For multi-select, check if array exists and has at least one item
+        if (!Array.isArray(response) || response.length === 0) {
+          errors.push(`${field.fieldName} is required`);
+        }
+      } else if (field.fieldType === 'number') {
+        // For number fields, explicitly check for null, undefined, or empty string
+        // Allow 0 as a valid value
+        if (response === null || response === undefined || response === '') {
+          errors.push(`${field.fieldName} is required`);
+        } else if (isNaN(Number(response))) {
+          errors.push(`${field.fieldName} must be a valid number`);
+        }
+      } else {
+        // For other field types (text), check for empty values
+        if (!response || response === '' || response === null || response === undefined) {
+          errors.push(`${field.fieldName} is required`);
+        }
       }
     }
     
@@ -231,21 +248,46 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
     }));
   };
 
+  // Helper function to handle multi-select checkbox changes
+  const handleMultiSelectChange = (fieldId: string, optionValue: string, checked: boolean) => {
+    setCustomFieldResponses(prev => {
+      const currentValues = Array.isArray(prev[fieldId]) ? prev[fieldId] : [];
+      
+      if (checked) {
+        // Add the option if not already present
+        return {
+          ...prev,
+          [fieldId]: currentValues.includes(optionValue) 
+            ? currentValues 
+            : [...currentValues, optionValue]
+        };
+      } else {
+        // Remove the option
+        return {
+          ...prev,
+          [fieldId]: currentValues.filter((value: string) => value !== optionValue)
+        };
+      }
+    });
+  };
+
   // Convert custom field responses to API format
   const formatFieldResponses = () => {
     return customFields.map(field => {
       const value = customFieldResponses[field.id];
       const baseResponse = {
         customFieldId: field.id,
-        fieldType: field.fieldType as 'number' | 'short_text' | 'long_text',
+        fieldType: field.fieldType as 'number' | 'short_text' | 'long_text' | 'multi_select',
       };
 
       if (field.fieldType === 'number') {
-        return { ...baseResponse, valueNumber: value ? Number(value) : undefined };
+        return { ...baseResponse, valueNumber: (value !== null && value !== undefined && value !== '') ? Number(value) : undefined };
       } else if (field.fieldType === 'short_text') {
         return { ...baseResponse, valueShortText: value || undefined };
       } else if (field.fieldType === 'long_text') {
         return { ...baseResponse, valueLongText: value || undefined };
+      } else if (field.fieldType === 'multi_select') {
+        return { ...baseResponse, valueMultiSelect: Array.isArray(value) && value.length > 0 ? value : undefined };
       }
 
       return baseResponse;
@@ -254,6 +296,7 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
       if ('valueNumber' in response && response.valueNumber !== undefined) return true;
       if ('valueShortText' in response && response.valueShortText !== undefined) return true;
       if ('valueLongText' in response && response.valueLongText !== undefined) return true;
+      if ('valueMultiSelect' in response && response.valueMultiSelect !== undefined) return true;
       return false;
     });
   };
@@ -509,6 +552,44 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
                                     className={`h-20 ${field.isRequired && (!customFieldResponses[field.id] || customFieldResponses[field.id] === '') 
                                       ? 'border-destructive' : ''}`}
                                   />
+                                ) : field.fieldType === 'multi_select' ? (
+                                  <div className={`space-y-3 p-3 border rounded-md ${field.isRequired && (!Array.isArray(customFieldResponses[field.id]) || customFieldResponses[field.id].length === 0) 
+                                    ? 'border-destructive' : 'border-input'}`} data-testid={`multiselect-custom-field-${field.id}`}>
+                                    {field.options && field.options.length > 0 ? (
+                                      field.options.map((option, optionIndex) => {
+                                        const selectedValues = Array.isArray(customFieldResponses[field.id]) ? customFieldResponses[field.id] : [];
+                                        const isChecked = selectedValues.includes(option);
+                                        
+                                        return (
+                                          <div key={optionIndex} className="flex items-center space-x-2">
+                                            <Checkbox
+                                              id={`custom-field-${field.id}-option-${optionIndex}`}
+                                              checked={isChecked}
+                                              onCheckedChange={(checked) => 
+                                                handleMultiSelectChange(field.id, option, !!checked)
+                                              }
+                                              data-testid={`checkbox-custom-field-${field.id}-option-${optionIndex}`}
+                                            />
+                                            <Label 
+                                              htmlFor={`custom-field-${field.id}-option-${optionIndex}`}
+                                              className="text-sm font-normal cursor-pointer"
+                                            >
+                                              {option}
+                                            </Label>
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      <div className="text-sm text-muted-foreground">
+                                        No options available
+                                      </div>
+                                    )}
+                                    {field.isRequired && (!Array.isArray(customFieldResponses[field.id]) || customFieldResponses[field.id].length === 0) && (
+                                      <div className="text-sm text-destructive mt-1">
+                                        Please select at least one option
+                                      </div>
+                                    )}
+                                  </div>
                                 ) : null}
                               </div>
                             ))}
