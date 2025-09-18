@@ -522,16 +522,49 @@ export class DatabaseStorage implements IStorage {
       throw new Error(stageReasonValidation.reason || "Invalid stage-reason mapping");
     }
 
-    // Validate required fields if field responses are provided
+    // Validate field responses if provided
     if (update.fieldResponses && update.fieldResponses.length > 0) {
-      // Validate that all custom fields exist and field types match
+      // Server-side field validation - load custom fields and validate against actual field configuration
       for (const fieldResponse of update.fieldResponses) {
         const [customField] = await db.select().from(reasonCustomFields).where(eq(reasonCustomFields.id, fieldResponse.customFieldId));
         if (!customField) {
           throw new Error(`Custom field with ID '${fieldResponse.customFieldId}' not found`);
         }
-        if (customField.fieldType !== fieldResponse.fieldType) {
-          throw new Error(`Field type mismatch for custom field '${customField.fieldName}': expected '${customField.fieldType}', got '${fieldResponse.fieldType}'`);
+
+        // Validate that field response matches the server-side field type and constraints
+        const { fieldType, options } = customField;
+        
+        // Check that exactly one value field is populated based on server field type
+        const hasNumber = fieldResponse.valueNumber !== undefined && fieldResponse.valueNumber !== null;
+        const hasShortText = fieldResponse.valueShortText !== undefined && fieldResponse.valueShortText !== null && fieldResponse.valueShortText !== '';
+        const hasLongText = fieldResponse.valueLongText !== undefined && fieldResponse.valueLongText !== null && fieldResponse.valueLongText !== '';
+        const hasMultiSelect = fieldResponse.valueMultiSelect !== undefined && fieldResponse.valueMultiSelect !== null && fieldResponse.valueMultiSelect.length > 0;
+        
+        let validFieldMatch = false;
+        if (fieldType === 'number') {
+          validFieldMatch = hasNumber && !hasShortText && !hasLongText && !hasMultiSelect;
+        } else if (fieldType === 'short_text') {
+          validFieldMatch = !hasNumber && hasShortText && !hasLongText && !hasMultiSelect;
+        } else if (fieldType === 'long_text') {
+          validFieldMatch = !hasNumber && !hasShortText && hasLongText && !hasMultiSelect;
+        } else if (fieldType === 'multi_select') {
+          validFieldMatch = !hasNumber && !hasShortText && !hasLongText && hasMultiSelect;
+          
+          // Additional validation for multi_select: check that all values exist in options
+          if (validFieldMatch && fieldResponse.valueMultiSelect) {
+            if (!options || options.length === 0) {
+              throw new Error(`Multi-select field '${customField.fieldName}' has no configured options`);
+            }
+            
+            const invalidOptions = fieldResponse.valueMultiSelect.filter(value => !options.includes(value));
+            if (invalidOptions.length > 0) {
+              throw new Error(`Invalid options for multi-select field '${customField.fieldName}': ${invalidOptions.join(', ')}. Valid options are: ${options.join(', ')}`);
+            }
+          }
+        }
+        
+        if (!validFieldMatch) {
+          throw new Error(`Invalid field data for '${customField.fieldName}': field type '${fieldType}' requires exactly one matching value field`);
         }
       }
     }
@@ -594,13 +627,20 @@ export class DatabaseStorage implements IStorage {
       // Create field responses if provided
       if (update.fieldResponses && update.fieldResponses.length > 0) {
         for (const fieldResponse of update.fieldResponses) {
+          // Get the custom field to obtain the server-side fieldType
+          const [customField] = await tx.select().from(reasonCustomFields).where(eq(reasonCustomFields.id, fieldResponse.customFieldId));
+          if (!customField) {
+            throw new Error(`Custom field with ID '${fieldResponse.customFieldId}' not found`);
+          }
+          
           await tx.insert(reasonFieldResponses).values({
             chronologyId: chronologyEntry.id,
             customFieldId: fieldResponse.customFieldId,
-            fieldType: fieldResponse.fieldType,
+            fieldType: customField.fieldType, // Use server-side fieldType
             valueNumber: fieldResponse.valueNumber,
             valueShortText: fieldResponse.valueShortText,
             valueLongText: fieldResponse.valueLongText,
+            valueMultiSelect: fieldResponse.valueMultiSelect,
           });
         }
       }
@@ -1243,7 +1283,7 @@ export class DatabaseStorage implements IStorage {
 
   async validateRequiredFields(
     reasonId: string, 
-    fieldResponses?: { customFieldId: string; fieldType: string; valueNumber?: number; valueShortText?: string; valueLongText?: string }[]
+    fieldResponses?: { customFieldId: string; valueNumber?: number; valueShortText?: string; valueLongText?: string; valueMultiSelect?: string[] }[]
   ): Promise<{ isValid: boolean; reason?: string; missingFields?: string[] }> {
     // Get all required custom fields for this reason
     const requiredFields = await db.query.reasonCustomFields.findMany({
@@ -1275,21 +1315,14 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
-      // Validate field type and value consistency
+      // Check if the required field has a value (server-side validation using actual field type)
       const response = fieldResponses.find(fr => fr.customFieldId === requiredField.id);
-      if (response && response.fieldType !== requiredField.fieldType) {
-        return {
-          isValid: false,
-          reason: `Field type mismatch for '${requiredField.fieldName}': expected '${requiredField.fieldType}', got '${response.fieldType}'`,
-        };
-      }
-
-      // Check if the required field has a value
       if (response) {
         const hasValue = (
           (requiredField.fieldType === 'number' && response.valueNumber !== undefined && response.valueNumber !== null) ||
           (requiredField.fieldType === 'short_text' && response.valueShortText !== undefined && response.valueShortText !== null && response.valueShortText !== '') ||
-          (requiredField.fieldType === 'long_text' && response.valueLongText !== undefined && response.valueLongText !== null && response.valueLongText !== '')
+          (requiredField.fieldType === 'long_text' && response.valueLongText !== undefined && response.valueLongText !== null && response.valueLongText !== '') ||
+          (requiredField.fieldType === 'multi_select' && response.valueMultiSelect !== undefined && response.valueMultiSelect !== null && response.valueMultiSelect.length > 0)
         );
 
         if (!hasValue) {

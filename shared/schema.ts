@@ -48,7 +48,7 @@ export const projectStatusEnum = pgEnum("project_status", [
 // ]);
 
 // Custom field type enum
-export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text"]);
+export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text", "multi_select"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -148,10 +148,15 @@ export const reasonCustomFields = pgTable("reason_custom_fields", {
   fieldType: customFieldTypeEnum("field_type").notNull(),
   isRequired: boolean("is_required").default(false),
   placeholder: varchar("placeholder"),
+  options: text("options").array(), // For multi-select field options
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_reason_custom_fields_reason_id").on(table.reasonId),
+  // CHECK constraint to ensure options is non-empty when field_type = 'multi_select'
+  check("check_multi_select_options", sql`
+    (field_type != 'multi_select' OR (options IS NOT NULL AND array_length(options, 1) > 0))
+  `),
 ]);
 
 // Field responses tied to project chronology
@@ -163,6 +168,7 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
   valueNumber: integer("value_number"), // For number field types
   valueShortText: varchar("value_short_text", { length: 255 }), // For short_text field types
   valueLongText: text("value_long_text"), // For long_text field types
+  valueMultiSelect: text("value_multi_select").array(), // For multi_select field types
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_reason_field_responses_chronology_id").on(table.chronologyId),
@@ -170,9 +176,10 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
   unique("unique_chronology_custom_field").on(table.chronologyId, table.customFieldId),
   // CHECK constraint to ensure only one value column is populated based on fieldType
   check("check_single_value_column", sql`
-    (field_type = 'number' AND value_number IS NOT NULL AND value_short_text IS NULL AND value_long_text IS NULL) OR
-    (field_type = 'short_text' AND value_number IS NULL AND value_short_text IS NOT NULL AND value_long_text IS NULL) OR
-    (field_type = 'long_text' AND value_number IS NULL AND value_short_text IS NULL AND value_long_text IS NOT NULL)
+    (field_type = 'number' AND value_number IS NOT NULL AND value_short_text IS NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
+    (field_type = 'short_text' AND value_number IS NULL AND value_short_text IS NOT NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
+    (field_type = 'long_text' AND value_number IS NULL AND value_short_text IS NULL AND value_long_text IS NOT NULL AND value_multi_select IS NULL) OR
+    (field_type = 'multi_select' AND value_number IS NULL AND value_short_text IS NULL AND value_long_text IS NULL AND value_multi_select IS NOT NULL AND array_length(value_multi_select, 1) > 0)
   `),
 ]);
 
@@ -328,27 +335,11 @@ export const updateProjectStatusSchema = z.object({
   notes: z.string().optional(),
   fieldResponses: z.array(z.object({
     customFieldId: z.string(),
-    fieldType: z.enum(["number", "short_text", "long_text"]),
+    // fieldType removed - will be derived server-side from the custom field definition
     valueNumber: z.number().int().optional(),
     valueShortText: z.string().max(255).optional(),
     valueLongText: z.string().optional(),
-  }).refine((data) => {
-    // Ensure only one value field is populated based on fieldType
-    const hasNumber = data.valueNumber !== undefined && data.valueNumber !== null;
-    const hasShortText = data.valueShortText !== undefined && data.valueShortText !== null && data.valueShortText !== "";
-    const hasLongText = data.valueLongText !== undefined && data.valueLongText !== null && data.valueLongText !== "";
-    
-    if (data.fieldType === "number") {
-      return hasNumber && !hasShortText && !hasLongText;
-    } else if (data.fieldType === "short_text") {
-      return !hasNumber && hasShortText && !hasLongText;
-    } else if (data.fieldType === "long_text") {
-      return !hasNumber && !hasShortText && hasLongText;
-    }
-    
-    return false;
-  }, {
-    message: "Exactly one value field must be populated based on fieldType"
+    valueMultiSelect: z.array(z.string()).optional(),
   })).optional(),
 });
 
