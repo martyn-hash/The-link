@@ -57,13 +57,7 @@ const ROLE_OPTIONS = [
 ];
 
 
-const REASON_OPTIONS = [
-  { value: "first_allocation_of_work", label: "First Allocation of Work" },
-  { value: "errors_identified_from_bookkeeper", label: "Errors identified from Bookkeeper" },
-  { value: "queries_answered", label: "Queries Answered" },
-  { value: "work_completed_successfully", label: "Work Completed Successfully" },
-  { value: "clarifications_needed", label: "Clarifications Needed" },
-];
+// Note: REASON_OPTIONS removed - now using custom text input like kanban stages
 
 const STAGE_COLORS = [
   "#6b7280", "#ef4444", "#f97316", "#eab308", 
@@ -515,24 +509,18 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         {editingReason?.id === reason.id ? (
                           <div className="space-y-3">
                             <div>
-                              <Label htmlFor="reason-value">Reason Value</Label>
-                              <select
-                                id="reason-value"
+                              <Label htmlFor="reason-name">Reason Name</Label>
+                              <Input
+                                id="reason-name"
                                 value={editingReason.reason}
                                 onChange={(e) => setEditingReason({
                                   ...editingReason,
                                   reason: e.target.value
                                 })}
-                                className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                                data-testid="select-reason-value"
-                              >
-                                <option value="">Select reason...</option>
-                                {REASON_OPTIONS.map(option => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                                data-testid="input-reason-name"
+                                placeholder="Enter reason name (e.g., 'Document Review Required')"
+                                className="w-full"
+                              />
                             </div>
                             
                             <div>
@@ -574,7 +562,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           <div>
                             <div className="flex items-center justify-between">
                               <span className="font-medium">
-                                {REASON_OPTIONS.find(r => r.value === reason.reason)?.label || reason.reason}
+                                {reason.reason}
                               </span>
                               <div className="flex items-center space-x-2">
                                 <Button
@@ -614,24 +602,18 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <CardContent className="p-4">
                       <div className="space-y-3">
                         <div>
-                          <Label htmlFor="new-reason-value">Reason Value</Label>
-                          <select
-                            id="new-reason-value"
+                          <Label htmlFor="new-reason-name">Reason Name</Label>
+                          <Input
+                            id="new-reason-name"
                             value={editingReason.reason}
                             onChange={(e) => setEditingReason({
                               ...editingReason,
                               reason: e.target.value
                             })}
-                            className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                            data-testid="select-new-reason-value"
-                          >
-                            <option value="">Select reason...</option>
-                            {REASON_OPTIONS.map(option => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                            data-testid="input-new-reason-name"
+                            placeholder="Enter reason name (e.g., 'Document Review Required')"
+                            className="w-full"
+                          />
                         </div>
                         
                         <div>

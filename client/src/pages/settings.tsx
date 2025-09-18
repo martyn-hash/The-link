@@ -88,13 +88,7 @@ const ROLE_OPTIONS = [
   { value: "bookkeeper", label: "Bookkeeper" },
 ];
 
-const REASON_OPTIONS = [
-  { value: "first_allocation_of_work", label: "First Allocation of Work" },
-  { value: "errors_identified_from_bookkeeper", label: "Errors identified from Bookkeeper" },
-  { value: "queries_answered", label: "Queries Answered" },
-  { value: "work_completed_successfully", label: "Work Completed Successfully" },
-  { value: "clarifications_needed", label: "Clarifications Needed" },
-];
+// Note: REASON_OPTIONS removed - now using custom text input like kanban stages
 
 const STAGE_COLORS = [
   "#6b7280", "#ef4444", "#f97316", "#eab308", 
@@ -764,7 +758,7 @@ export default function SettingsPage() {
                                     const isChecked = stageReasonMaps?.some(
                                       map => map.stageId === stage.id && map.reasonId === reason.id
                                     );
-                                    const reasonLabel = REASON_OPTIONS.find(r => r.value === reason.reason)?.label || reason.reason;
+                                    const reasonLabel = reason.reason;
                                     
                                     return (
                                       <div key={reason.id} className="flex items-center space-x-2">
@@ -829,7 +823,7 @@ export default function SettingsPage() {
                                   {getStageReasons(stage.id).map(mapping => {
                                     const reason = reasons?.find(r => r.id === mapping.reasonId);
                                     if (!reason) return null;
-                                    const reasonLabel = REASON_OPTIONS.find(r => r.value === reason.reason)?.label || reason.reason;
+                                    const reasonLabel = reason.reason;
                                     return (
                                       <Badge key={mapping.id} variant="secondary" className="text-xs">
                                         <Link className="w-3 h-3 mr-1" />
@@ -999,24 +993,18 @@ export default function SettingsPage() {
                         {editingReason?.id === reason.id ? (
                           <div className="space-y-4">
                             <div>
-                              <Label htmlFor="reason-value">Reason Value</Label>
-                              <select
-                                id="reason-value"
+                              <Label htmlFor="reason-name">Reason Name</Label>
+                              <Input
+                                id="reason-name"
                                 value={editingReason.reason}
                                 onChange={(e) => setEditingReason({
                                   ...editingReason,
                                   reason: e.target.value
                                 })}
-                                className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                                data-testid="select-reason-value"
-                              >
-                                <option value="">Select reason...</option>
-                                {REASON_OPTIONS.map(option => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                                data-testid="input-reason-name"
+                                placeholder="Enter reason name (e.g., 'Document Review Required')"
+                                className="w-full"
+                              />
                             </div>
                             
                             <div>
@@ -1255,7 +1243,7 @@ export default function SettingsPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <h3 className="font-medium">
-                                {REASON_OPTIONS.find(r => r.value === reason.reason)?.label || reason.reason}
+                                {reason.reason}
                               </h3>
                               {reason.description && (
                                 <p className="text-sm text-muted-foreground mt-1">{reason.description}</p>
@@ -1301,24 +1289,18 @@ export default function SettingsPage() {
                     <CardContent className="p-6">
                       <div className="space-y-4">
                         <div>
-                          <Label htmlFor="new-reason-value">Reason Value</Label>
-                          <select
-                            id="new-reason-value"
+                          <Label htmlFor="new-reason-name">Reason Name</Label>
+                          <Input
+                            id="new-reason-name"
                             value={editingReason.reason}
                             onChange={(e) => setEditingReason({
                               ...editingReason,
                               reason: e.target.value
                             })}
-                            className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                            data-testid="select-new-reason-value"
-                          >
-                            <option value="">Select reason...</option>
-                            {REASON_OPTIONS.map(option => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                            data-testid="input-new-reason-name"
+                            placeholder="Enter reason name (e.g., 'Document Review Required')"
+                            className="w-full"
+                          />
                         </div>
                         
                         <div>

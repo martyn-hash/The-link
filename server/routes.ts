@@ -473,17 +473,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project status" });
       }
 
-      // Validate stage-reason mapping exists
-      const mappingValidation = await storage.validateStageReasonMapping(targetStage.id, updateData.changeReason);
-      if (!mappingValidation.isValid) {
-        return res.status(400).json({ message: mappingValidation.reason || "Invalid change reason for this stage" });
-      }
-
-      // Get the change reason ID for field validation
+      // Get the change reason by name first
       const reasons = await storage.getAllChangeReasons();
       const changeReason = reasons.find(reason => reason.reason === updateData.changeReason);
       if (!changeReason) {
         return res.status(400).json({ message: "Invalid change reason" });
+      }
+
+      // Validate stage-reason mapping using reasonId
+      const mappingValidation = await storage.validateStageReasonMapping(targetStage.id, changeReason.id);
+      if (!mappingValidation.isValid) {
+        return res.status(400).json({ message: mappingValidation.reason || "Invalid change reason for this stage" });
       }
 
       // Validate required fields for this change reason
@@ -689,6 +689,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(reason);
     } catch (error) {
       console.error("Error creating change reason:", error);
+      
+      // Check for unique constraint violation
+      if (error instanceof Error && (error as any).code === '23505' && (error as any).constraint_name === 'unique_reason') {
+        return res.status(409).json({ 
+          message: `A reason with the name "${req.body.reason}" already exists. Please choose a different name.`,
+          code: "DUPLICATE_REASON_NAME"
+        });
+      }
+      
+      // Check for duplicate key error (alternative constraint format)
+      if (error instanceof Error && error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        if (error.message.includes('unique_reason') || error.message.includes('reason_unique')) {
+          return res.status(409).json({ 
+            message: `A reason with the name "${req.body.reason}" already exists. Please choose a different name.`,
+            code: "DUPLICATE_REASON_NAME"
+          });
+        }
+      }
+      
       res.status(400).json({ message: "Failed to create change reason" });
     }
   });
@@ -699,6 +718,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(reason);
     } catch (error) {
       console.error("Error updating change reason:", error);
+      
+      // Check for unique constraint violation
+      if (error instanceof Error && (error as any).code === '23505' && (error as any).constraint_name === 'unique_reason') {
+        return res.status(409).json({ 
+          message: `A reason with the name "${req.body.reason}" already exists. Please choose a different name.`,
+          code: "DUPLICATE_REASON_NAME"
+        });
+      }
+      
+      // Check for duplicate key error (alternative constraint format)
+      if (error instanceof Error && error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        if (error.message.includes('unique_reason') || error.message.includes('reason_unique')) {
+          return res.status(409).json({ 
+            message: `A reason with the name "${req.body.reason}" already exists. Please choose a different name.`,
+            code: "DUPLICATE_REASON_NAME"
+          });
+        }
+      }
+      
+      // Check for not found error
+      if (error instanceof Error && error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Change reason not found" });
+      }
+      
       res.status(400).json({ message: "Failed to update change reason" });
     }
   });

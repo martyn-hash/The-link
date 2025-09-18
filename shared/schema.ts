@@ -38,14 +38,14 @@ export const projectStatusEnum = pgEnum("project_status", [
   "completed"
 ]);
 
-// Change reason enum
-export const changeReasonEnum = pgEnum("change_reason", [
-  "errors_identified_from_bookkeeper",
-  "first_allocation_of_work",
-  "queries_answered", 
-  "work_completed_successfully",
-  "clarifications_needed"
-]);
+// Note: Change reason enum removed - now using varchar for custom text input like kanban stages
+// export const changeReasonEnum = pgEnum("change_reason", [
+//   "errors_identified_from_bookkeeper",
+//   "first_allocation_of_work", 
+//   "queries_answered",
+//   "work_completed_successfully",
+//   "clarifications_needed"
+// ]);
 
 // Custom field type enum
 export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text"]);
@@ -95,7 +95,7 @@ export const projectChronology = pgTable("project_chronology", {
   fromStatus: varchar("from_status"),
   toStatus: varchar("to_status").notNull(),
   assigneeId: varchar("assignee_id").references(() => users.id),
-  changeReason: changeReasonEnum("change_reason"),
+  changeReason: varchar("change_reason"),
   notes: text("notes"),
   timestamp: timestamp("timestamp").defaultNow(),
   timeInPreviousStage: integer("time_in_previous_stage"), // in minutes
@@ -114,7 +114,7 @@ export const kanbanStages = pgTable("kanban_stages", {
 // Change reasons configuration table
 export const changeReasons = pgTable("change_reasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  reason: changeReasonEnum("reason").notNull().unique(),
+  reason: varchar("reason").notNull().unique(),
   description: varchar("description"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -324,7 +324,7 @@ export const insertReasonFieldResponseSchema = createInsertSchema(reasonFieldRes
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
   newStatus: z.string(), // Now accepts any kanban stage name
-  changeReason: z.enum(["errors_identified_from_bookkeeper", "first_allocation_of_work", "queries_answered", "work_completed_successfully", "clarifications_needed"]),
+  changeReason: z.string().min(1, "Change reason is required").max(255, "Change reason too long"),
   notes: z.string().optional(),
   fieldResponses: z.array(z.object({
     customFieldId: z.string(),
