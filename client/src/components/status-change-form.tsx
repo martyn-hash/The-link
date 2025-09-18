@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Loader2 } from "lucide-react";
 import type { ProjectWithRelations, User, KanbanStage, ChangeReason, ReasonCustomField } from "@shared/schema";
 
@@ -105,10 +106,11 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       notes?: string;
       fieldResponses?: Array<{
         customFieldId: string;
-        fieldType: 'number' | 'short_text' | 'long_text';
+        fieldType: 'number' | 'short_text' | 'long_text' | 'multi_select';
         valueNumber?: number;
         valueShortText?: string;
         valueLongText?: string;
+        valueMultiSelect?: string[];
       }>;
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
@@ -192,7 +194,11 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     
     for (const field of requiredFields) {
       const response = customFieldResponses[field.id];
-      if (!response || response === '' || response === null || response === undefined) {
+      if (field.fieldType === 'multi_select') {
+        if (!response || !Array.isArray(response) || response.length === 0) {
+          errors.push(`${field.fieldName} is required - please select at least one option`);
+        }
+      } else if (!response || response === '' || response === null || response === undefined) {
         errors.push(`${field.fieldName} is required`);
       } else if (field.fieldType === 'number' && isNaN(Number(response))) {
         errors.push(`${field.fieldName} must be a valid number`);
@@ -213,13 +219,27 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     }));
   };
 
+  // Helper function to handle multi-select changes
+  const handleMultiSelectChange = (fieldId: string, option: string, checked: boolean) => {
+    setCustomFieldResponses(prev => {
+      const currentValues = prev[fieldId] || [];
+      const updatedValues = checked 
+        ? [...currentValues, option]
+        : currentValues.filter((item: string) => item !== option);
+      return {
+        ...prev,
+        [fieldId]: updatedValues
+      };
+    });
+  };
+
   // Convert custom field responses to API format
   const formatFieldResponses = () => {
     return customFields.map(field => {
       const value = customFieldResponses[field.id];
       const baseResponse = {
         customFieldId: field.id,
-        fieldType: field.fieldType as 'number' | 'short_text' | 'long_text',
+        fieldType: field.fieldType as 'number' | 'short_text' | 'long_text' | 'multi_select',
       };
 
       if (field.fieldType === 'number') {
@@ -228,6 +248,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
         return { ...baseResponse, valueShortText: value || undefined };
       } else if (field.fieldType === 'long_text') {
         return { ...baseResponse, valueLongText: value || undefined };
+      } else if (field.fieldType === 'multi_select') {
+        return { ...baseResponse, valueMultiSelect: Array.isArray(value) && value.length > 0 ? value : undefined };
       }
 
       return baseResponse;
@@ -236,6 +258,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       if ('valueNumber' in response && response.valueNumber !== undefined) return true;
       if ('valueShortText' in response && response.valueShortText !== undefined) return true;
       if ('valueLongText' in response && response.valueLongText !== undefined) return true;
+      if ('valueMultiSelect' in response && response.valueMultiSelect !== undefined) return true;
       return false;
     });
   };
@@ -411,6 +434,36 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
                             className={`h-20 ${field.isRequired && (!customFieldResponses[field.id] || customFieldResponses[field.id] === '') 
                               ? 'border-destructive' : ''}`}
                           />
+                        ) : field.fieldType === 'multi_select' ? (
+                          <div className={`space-y-2 p-3 border rounded-md ${field.isRequired && (!customFieldResponses[field.id] || !Array.isArray(customFieldResponses[field.id]) || customFieldResponses[field.id].length === 0) 
+                            ? 'border-destructive' : 'border-input'}`}>
+                            {field.options && field.options.length > 0 ? (
+                              field.options.map((option, index) => {
+                                const selectedOptions = customFieldResponses[field.id] || [];
+                                const isChecked = Array.isArray(selectedOptions) && selectedOptions.includes(option);
+                                return (
+                                  <div key={`${field.id}-${index}`} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`${field.id}-${index}`}
+                                      checked={isChecked}
+                                      onCheckedChange={(checked) => handleMultiSelectChange(field.id, option, checked === true)}
+                                      data-testid={`checkbox-${field.id}-${index}`}
+                                    />
+                                    <Label 
+                                      htmlFor={`${field.id}-${index}`} 
+                                      className="text-sm font-normal cursor-pointer"
+                                    >
+                                      {option}
+                                    </Label>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-sm text-muted-foreground">
+                                No options available
+                              </div>
+                            )}
+                          </div>
                         ) : null}
                       </div>
                     ))}
