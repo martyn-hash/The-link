@@ -1040,6 +1040,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Stage approval responses endpoint
+  app.post("/api/projects/:id/stage-approval-responses", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = req.params.id;
+      const { responses } = req.body;
+      
+      // Validate request body structure
+      if (!responses || !Array.isArray(responses)) {
+        return res.status(400).json({ message: "Invalid request: responses array required" });
+      }
+      
+      // Validate each response with Zod schema
+      const validatedResponses = responses.map(response => 
+        insertStageApprovalResponseSchema.parse({
+          ...response,
+          projectId // Ensure projectId is set
+        })
+      );
+      
+      // Save responses to database using storage interface
+      const savedResponses = [];
+      for (const response of validatedResponses) {
+        const saved = await storage.createStageApprovalResponse(response);
+        savedResponses.push(saved);
+      }
+      
+      res.status(200).json({ 
+        message: "Stage approval responses saved successfully",
+        responses: savedResponses 
+      });
+    } catch (error) {
+      console.error("Error saving stage approval responses:", error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to save stage approval responses" });
+    }
+  });
+
   // Project descriptions configuration routes
   app.get("/api/config/project-descriptions", isAuthenticated, async (req, res) => {
     try {
