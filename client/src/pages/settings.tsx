@@ -48,9 +48,11 @@ interface EditingCustomField {
   id?: string;
   reasonId: string;
   fieldName: string;
-  fieldType: 'number' | 'short_text' | 'long_text';
+  fieldType: 'number' | 'short_text' | 'long_text' | 'multi_select';
   isRequired: boolean;
   placeholder: string;
+  options: string[];
+  newOption?: string;
   order: number;
 }
 
@@ -78,6 +80,7 @@ const DEFAULT_CUSTOM_FIELD: EditingCustomField = {
   fieldType: "short_text",
   isRequired: false,
   placeholder: "",
+  options: [],
   order: 0,
 };
 
@@ -99,6 +102,7 @@ const FIELD_TYPE_OPTIONS = [
   { value: "number", label: "Number" },
   { value: "short_text", label: "Short Text" },
   { value: "long_text", label: "Long Text" },
+  { value: "multi_select", label: "Multi Select" },
 ];
 
 export default function SettingsPage() {
@@ -564,10 +568,21 @@ export default function SettingsPage() {
       return;
     }
 
+    if (editingCustomField.fieldType === 'multi_select' && (!editingCustomField.options || editingCustomField.options.length === 0)) {
+      toast({
+        title: "Validation Error",
+        description: "Multi-select fields must have at least one option",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Destructure and send only whitelisted fields that match the API schema
+    const { id, newOption, ...fieldData } = editingCustomField;
+    
     if (editingCustomField.id) {
-      updateCustomFieldMutation.mutate(editingCustomField);
+      updateCustomFieldMutation.mutate({ id: editingCustomField.id, ...fieldData });
     } else {
-      const { id, ...fieldData } = editingCustomField;
       createCustomFieldMutation.mutate(fieldData);
     }
   };
@@ -580,6 +595,7 @@ export default function SettingsPage() {
       fieldType: field.fieldType,
       isRequired: field.isRequired || false,
       placeholder: field.placeholder || "",
+      options: field.options || [],
       order: field.order,
     });
     setIsAddingCustomField(false);
@@ -1127,10 +1143,11 @@ export default function SettingsPage() {
                                         <Label htmlFor="custom-field-type">Field Type</Label>
                                         <Select
                                           value={editingCustomField.fieldType}
-                                          onValueChange={(value: 'number' | 'short_text' | 'long_text') => 
+                                          onValueChange={(value: 'number' | 'short_text' | 'long_text' | 'multi_select') => 
                                             setEditingCustomField({
                                               ...editingCustomField,
-                                              fieldType: value
+                                              fieldType: value,
+                                              options: value === 'multi_select' ? editingCustomField.options : []
                                             })
                                           }
                                         >
@@ -1161,6 +1178,95 @@ export default function SettingsPage() {
                                         data-testid="input-custom-field-placeholder"
                                       />
                                     </div>
+                                    
+                                    {/* Multi-select options management */}
+                                    {editingCustomField.fieldType === 'multi_select' && (
+                                      <div>
+                                        <Label>Multi-select Options</Label>
+                                        <p className="text-sm text-muted-foreground mb-3">
+                                          Add the available options for this multi-select field
+                                        </p>
+                                        
+                                        {/* Current options list */}
+                                        <div className="space-y-2 mb-3">
+                                          {editingCustomField.options.map((option, index) => (
+                                            <div key={index} className="flex items-center gap-2">
+                                              <div className="flex-1 p-2 bg-muted rounded text-sm">
+                                                {option}
+                                              </div>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                  const newOptions = [...editingCustomField.options];
+                                                  newOptions.splice(index, 1);
+                                                  setEditingCustomField({
+                                                    ...editingCustomField,
+                                                    options: newOptions
+                                                  });
+                                                }}
+                                                className="text-destructive hover:text-destructive"
+                                                data-testid={`button-delete-option-${index}`}
+                                              >
+                                                <Trash2 className="w-4 h-4" />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                          
+                                          {editingCustomField.options.length === 0 && (
+                                            <p className="text-sm text-muted-foreground text-center py-2">
+                                              No options added yet
+                                            </p>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Add new option */}
+                                        <div className="flex gap-2">
+                                          <Input
+                                            placeholder="Enter new option"
+                                            value={editingCustomField.newOption || ''}
+                                            onChange={(e) => setEditingCustomField({
+                                              ...editingCustomField,
+                                              newOption: e.target.value
+                                            })}
+                                            onKeyPress={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const newOptionValue = (editingCustomField.newOption || '').trim();
+                                                if (newOptionValue && !editingCustomField.options.includes(newOptionValue)) {
+                                                  setEditingCustomField({
+                                                    ...editingCustomField,
+                                                    options: [...editingCustomField.options, newOptionValue],
+                                                    newOption: ''
+                                                  });
+                                                }
+                                              }
+                                            }}
+                                            data-testid="input-new-option"
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                              const newOptionValue = (editingCustomField.newOption || '').trim();
+                                              if (newOptionValue && !editingCustomField.options.includes(newOptionValue)) {
+                                                setEditingCustomField({
+                                                  ...editingCustomField,
+                                                  options: [...editingCustomField.options, newOptionValue],
+                                                  newOption: ''
+                                                });
+                                              }
+                                            }}
+                                            disabled={!(editingCustomField.newOption || '').trim() || editingCustomField.options.includes((editingCustomField.newOption || '').trim())}
+                                            data-testid="button-add-option"
+                                          >
+                                            <Plus className="w-4 h-4 mr-1" />
+                                            Add
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
                                     
                                     <div className="grid grid-cols-2 gap-4">
                                       <div className="flex items-center space-x-2">
