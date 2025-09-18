@@ -9,6 +9,9 @@ import {
   stageReasonMaps,
   reasonCustomFields,
   reasonFieldResponses,
+  stageApprovals,
+  stageApprovalFields,
+  stageApprovalResponses,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -31,6 +34,12 @@ import {
   type InsertReasonCustomField,
   type ReasonFieldResponse,
   type InsertReasonFieldResponse,
+  type StageApproval,
+  type InsertStageApproval,
+  type StageApprovalField,
+  type InsertStageApprovalField,
+  type StageApprovalResponse,
+  type InsertStageApprovalResponse,
   type ProjectWithRelations,
   type UpdateProjectStatus,
 } from "@shared/schema";
@@ -137,6 +146,27 @@ export interface IStorage {
 
   // Project progress metrics
   getProjectProgressMetrics(projectId: string): Promise<{ reasonId: string; label: string; total: number }[]>;
+  
+  // Stage approval operations
+  getAllStageApprovals(): Promise<StageApproval[]>;
+  createStageApproval(approval: InsertStageApproval): Promise<StageApproval>;
+  updateStageApproval(id: string, approval: Partial<InsertStageApproval>): Promise<StageApproval>;
+  deleteStageApproval(id: string): Promise<void>;
+  getStageApprovalById(id: string): Promise<StageApproval | undefined>;
+  
+  // Stage approval fields operations
+  getAllStageApprovalFields(): Promise<StageApprovalField[]>;
+  getStageApprovalFieldsByApprovalId(approvalId: string): Promise<StageApprovalField[]>;
+  createStageApprovalField(field: InsertStageApprovalField): Promise<StageApprovalField>;
+  updateStageApprovalField(id: string, field: Partial<InsertStageApprovalField>): Promise<StageApprovalField>;
+  deleteStageApprovalField(id: string): Promise<void>;
+  
+  // Stage approval responses operations  
+  createStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse>;
+  getStageApprovalResponsesByProjectId(projectId: string): Promise<StageApprovalResponse[]>;
+  
+  // Stage approval validation
+  validateStageApprovalResponses(approvalId: string, responses: InsertStageApprovalResponse[]): Promise<{ isValid: boolean; reason?: string; failedFields?: string[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1418,6 +1448,220 @@ export class DatabaseStorage implements IStorage {
       label: result.label || result.reason,
       total: Number(result.total) || 0,
     }));
+  }
+
+  // Stage approval operations
+  async getAllStageApprovals(): Promise<StageApproval[]> {
+    return await db.select().from(stageApprovals);
+  }
+
+  async createStageApproval(approval: InsertStageApproval): Promise<StageApproval> {
+    try {
+      const [newApproval] = await db.insert(stageApprovals).values(approval).returning();
+      return newApproval;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('unique constraint')) {
+        throw new Error(`Stage approval with name '${approval.name}' already exists`);
+      }
+      throw error;
+    }
+  }
+
+  async updateStageApproval(id: string, approval: Partial<InsertStageApproval>): Promise<StageApproval> {
+    const [updatedApproval] = await db
+      .update(stageApprovals)
+      .set(approval)
+      .where(eq(stageApprovals.id, id))
+      .returning();
+      
+    if (!updatedApproval) {
+      throw new Error("Stage approval not found");
+    }
+    
+    return updatedApproval;
+  }
+
+  async deleteStageApproval(id: string): Promise<void> {
+    const result = await db.delete(stageApprovals).where(eq(stageApprovals.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Stage approval not found");
+    }
+  }
+
+  async getStageApprovalById(id: string): Promise<StageApproval | undefined> {
+    const [approval] = await db.select().from(stageApprovals).where(eq(stageApprovals.id, id));
+    return approval;
+  }
+
+  // Stage approval fields operations
+  async getAllStageApprovalFields(): Promise<StageApprovalField[]> {
+    return await db.select().from(stageApprovalFields).orderBy(stageApprovalFields.stageApprovalId, stageApprovalFields.order);
+  }
+
+  async getStageApprovalFieldsByApprovalId(approvalId: string): Promise<StageApprovalField[]> {
+    return await db.query.stageApprovalFields.findMany({
+      where: eq(stageApprovalFields.stageApprovalId, approvalId),
+      orderBy: stageApprovalFields.order,
+    });
+  }
+
+  async createStageApprovalField(field: InsertStageApprovalField): Promise<StageApprovalField> {
+    const [newField] = await db.insert(stageApprovalFields).values(field).returning();
+    return newField;
+  }
+
+  async updateStageApprovalField(id: string, field: Partial<InsertStageApprovalField>): Promise<StageApprovalField> {
+    const [updatedField] = await db
+      .update(stageApprovalFields)
+      .set(field)
+      .where(eq(stageApprovalFields.id, id))
+      .returning();
+      
+    if (!updatedField) {
+      throw new Error("Stage approval field not found");
+    }
+    
+    return updatedField;
+  }
+
+  async deleteStageApprovalField(id: string): Promise<void> {
+    const result = await db.delete(stageApprovalFields).where(eq(stageApprovalFields.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Stage approval field not found");
+    }
+  }
+
+  // Stage approval responses operations  
+  async createStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse> {
+    try {
+      const [newResponse] = await db.insert(stageApprovalResponses).values(response).returning();
+      return newResponse;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('unique constraint')) {
+        throw new Error(`Stage approval response already exists for this field and project`);
+      }
+      if (error instanceof Error && error.message.includes('check_single_value_column')) {
+        throw new Error(`Invalid field value: only one value column should be populated based on field type`);
+      }
+      throw error;
+    }
+  }
+
+  async getStageApprovalResponsesByProjectId(projectId: string): Promise<StageApprovalResponse[]> {
+    return await db.query.stageApprovalResponses.findMany({
+      where: eq(stageApprovalResponses.projectId, projectId),
+      with: {
+        field: {
+          with: {
+            stageApproval: true,
+          },
+        },
+      },
+    });
+  }
+
+  // Stage approval validation
+  async validateStageApprovalResponses(approvalId: string, responses: InsertStageApprovalResponse[]): Promise<{ isValid: boolean; reason?: string; failedFields?: string[] }> {
+    // Load all fields for the approval
+    const fields = await this.getStageApprovalFieldsByApprovalId(approvalId);
+    
+    if (fields.length === 0) {
+      return { isValid: true }; // No fields to validate
+    }
+
+    // Get all required fields for the approval (where isRequired = true)
+    const requiredFields = fields.filter(field => field.isRequired);
+    
+    // Create maps for easy lookup
+    const responseMap = new Map<string, InsertStageApprovalResponse>();
+    responses.forEach(response => {
+      responseMap.set(response.fieldId, response);
+    });
+
+    const failedFields: string[] = [];
+
+    // CRITICAL FIX 1: Check that each required field has a corresponding response
+    for (const requiredField of requiredFields) {
+      if (!responseMap.has(requiredField.id)) {
+        failedFields.push(requiredField.fieldName);
+      }
+    }
+
+    // Validate each provided response
+    for (const response of responses) {
+      const field = fields.find(f => f.id === response.fieldId);
+      if (!field) {
+        failedFields.push(`Field ID ${response.fieldId} not found`);
+        continue;
+      }
+
+      // CRITICAL FIX 2: Ensure exactly one value field is populated based on fieldType
+      const hasBoolean = response.valueBoolean !== undefined && response.valueBoolean !== null;
+      const hasNumber = response.valueNumber !== undefined && response.valueNumber !== null;
+      const hasLongText = response.valueLongText !== undefined && response.valueLongText !== null && response.valueLongText !== '';
+      
+      let validFieldMatch = false;
+      if (field.fieldType === 'boolean') {
+        validFieldMatch = hasBoolean && !hasNumber && !hasLongText;
+      } else if (field.fieldType === 'number') {
+        validFieldMatch = !hasBoolean && hasNumber && !hasLongText;
+      } else if (field.fieldType === 'long_text') {
+        validFieldMatch = !hasBoolean && !hasNumber && hasLongText;
+      }
+      
+      if (!validFieldMatch) {
+        failedFields.push(`${field.fieldName}: field type '${field.fieldType}' requires exactly one matching value field`);
+        continue;
+      }
+
+      // Validate field values against expected criteria
+      if (field.fieldType === 'boolean') {
+        // For boolean fields: check response.valueBoolean matches field.expectedValueBoolean
+        if (field.expectedValueBoolean !== null && response.valueBoolean !== field.expectedValueBoolean) {
+          failedFields.push(field.fieldName);
+        }
+      } else if (field.fieldType === 'number') {
+        // For number fields: check response.valueNumber against field.expectedValueNumber using field.comparisonType
+        if (field.expectedValueNumber !== null && field.comparisonType && response.valueNumber !== null) {
+          const responseValue = response.valueNumber;
+          const expectedValue = field.expectedValueNumber;
+          let isValid = false;
+
+          switch (field.comparisonType) {
+            case 'equal_to':
+              isValid = responseValue === expectedValue;
+              break;
+            case 'less_than':
+              isValid = responseValue !== undefined && responseValue < expectedValue;
+              break;
+            case 'greater_than':
+              isValid = responseValue !== undefined && responseValue > expectedValue;
+              break;
+          }
+
+          if (!isValid) {
+            failedFields.push(field.fieldName);
+          }
+        } else if (field.isRequired && (response.valueNumber === null || response.valueNumber === undefined)) {
+          failedFields.push(field.fieldName);
+        }
+      } else if (field.fieldType === 'long_text') {
+        // For long_text fields: just check not empty if required
+        if (field.isRequired && (!response.valueLongText || response.valueLongText.trim() === '')) {
+          failedFields.push(field.fieldName);
+        }
+      }
+    }
+
+    if (failedFields.length > 0) {
+      return {
+        isValid: false,
+        reason: `Validation failed for fields: ${failedFields.join(', ')}`,
+        failedFields,
+      };
+    }
+
+    return { isValid: true };
   }
 }
 
