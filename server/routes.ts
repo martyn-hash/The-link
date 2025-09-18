@@ -424,21 +424,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // First, convert reason ID to enum value if needed
-      let changeReasonValue = req.body.changeReason;
-      if (changeReasonValue && !["errors_identified_from_bookkeeper", "first_allocation_of_work", "queries_answered", "work_completed_successfully", "clarifications_needed"].includes(changeReasonValue)) {
-        // This looks like a reason ID, convert it to enum value
-        const reasons = await storage.getAllChangeReasons();
-        const reason = reasons.find(r => r.id === changeReasonValue);
-        if (!reason) {
-          return res.status(400).json({ message: "Invalid change reason ID" });
-        }
-        changeReasonValue = reason.reason;
-      }
-
       const updateData = updateProjectStatusSchema.parse({
         ...req.body,
-        changeReason: changeReasonValue,
         projectId: req.params.id,
       });
 
