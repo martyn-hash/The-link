@@ -8,6 +8,7 @@ import { sendTaskAssignmentEmail } from "./emailService";
 import {
   insertUserSchema,
   insertKanbanStageSchema,
+  updateKanbanStageSchema,
   insertChangeReasonSchema,
   updateChangeReasonSchema,
   insertProjectDescriptionSchema,
@@ -619,13 +620,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stage);
     } catch (error) {
       console.error("Error creating stage:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      
+      // Handle Zod validation errors with proper error details
+      if (error instanceof Error && error.name === 'ZodError') {
+        console.error("Validation errors:", (error as any).issues);
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
       res.status(400).json({ message: "Failed to create stage" });
     }
   });
 
   app.patch("/api/config/stages/:id", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
-      const stage = await storage.updateKanbanStage(req.params.id, req.body);
+      const updateData = updateKanbanStageSchema.parse(req.body);
+      const stage = await storage.updateKanbanStage(req.params.id, updateData);
       res.json(stage);
     } catch (error) {
       console.error("Error updating stage:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);

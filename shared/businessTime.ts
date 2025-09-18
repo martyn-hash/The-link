@@ -102,3 +102,75 @@ export function getNextBusinessDay(date: Date): Date {
   
   return nextDay;
 }
+
+/**
+ * Calculate current instance time for a project in a specific stage (hours)
+ * @param chronology - Project chronology entries (will be sorted internally by timestamp DESC)
+ * @param currentStage - Current stage name 
+ * @param projectCreatedAt - Project creation timestamp (fallback if no chronology)
+ * @returns Current instance time in hours
+ */
+export function calculateCurrentInstanceTime(
+  chronology: Array<{ toStatus: string; timestamp: string }>, 
+  currentStage: string,
+  projectCreatedAt?: string
+): number {
+  // Sort chronology by timestamp DESC to ensure we get the most recent entries first
+  const sortedChronology = [...chronology].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  
+  // Find the most recent entry that moved TO the current stage
+  const lastEntry = sortedChronology.find(entry => entry.toStatus === currentStage);
+  
+  let startTime: string;
+  if (lastEntry) {
+    startTime = lastEntry.timestamp;
+  } else if (projectCreatedAt) {
+    // If no chronology entry exists for this stage, use project creation time
+    startTime = projectCreatedAt;
+  } else {
+    return 0;
+  }
+  
+  try {
+    return calculateBusinessHours(startTime, new Date().toISOString());
+  } catch (error) {
+    console.error("Error calculating current instance time:", error);
+    return 0;
+  }
+}
+
+/**
+ * Calculate total time spent in a specific stage across all visits (hours)
+ * @param chronology - Project chronology entries (will be sorted internally by timestamp DESC)
+ * @param stageName - Stage name to calculate total time for
+ * @param projectCreatedAt - Project creation timestamp
+ * @param currentStage - Current stage name (to handle ongoing time)
+ * @returns Total time spent in the stage across all visits in hours
+ */
+export function calculateTotalTimeInStage(
+  chronology: Array<{ fromStatus: string | null; toStatus: string; timestamp: string; businessHoursInPreviousStage?: number }>,
+  stageName: string,
+  projectCreatedAt?: string,
+  currentStage?: string
+): number {
+  // Sort chronology by timestamp DESC to ensure consistent processing
+  const sortedChronology = [...chronology].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  
+  let totalHours = 0;
+  
+  // If currently in the target stage, add current instance time
+  if (currentStage === stageName) {
+    totalHours += calculateCurrentInstanceTime(sortedChronology, stageName, projectCreatedAt);
+  }
+  
+  // Add time from completed visits to this stage
+  // Look for entries where the project moved FROM the target stage (completed visits)
+  sortedChronology.forEach(entry => {
+    if (entry.fromStatus === stageName && entry.businessHoursInPreviousStage) {
+      // Convert from business minutes to hours
+      totalHours += entry.businessHoursInPreviousStage / 60;
+    }
+  });
+  
+  return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
+}

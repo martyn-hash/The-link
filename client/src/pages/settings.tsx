@@ -29,6 +29,8 @@ interface EditingStage {
   assignedRole: string;
   order: number;
   color: string;
+  maxInstanceTime?: number;
+  maxTotalTime?: number;
 }
 
 interface EditingReason {
@@ -63,6 +65,8 @@ const DEFAULT_STAGE: EditingStage = {
   assignedRole: "client_manager",
   order: 0,
   color: "#6b7280",
+  maxInstanceTime: undefined,
+  maxTotalTime: undefined,
 };
 
 const DEFAULT_REASON: EditingReason = {
@@ -460,6 +464,8 @@ export default function SettingsPage() {
       assignedRole: stage.assignedRole || "client_manager",
       order: stage.order,
       color: stage.color || "#6b7280",
+      maxInstanceTime: stage.maxInstanceTime || undefined,
+      maxTotalTime: stage.maxTotalTime || undefined,
     });
     setIsAddingStage(false);
   };
@@ -780,6 +786,40 @@ export default function SettingsPage() {
                               </div>
                             </div>
 
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label htmlFor="stage-max-instance">Max Instance Time (hours)</Label>
+                                <Input
+                                  id="stage-max-instance"
+                                  type="number"
+                                  min="1"
+                                  value={editingStage.maxInstanceTime || ''}
+                                  onChange={(e) => setEditingStage({
+                                    ...editingStage,
+                                    maxInstanceTime: e.target.value ? parseInt(e.target.value) || undefined : undefined
+                                  })}
+                                  data-testid="input-stage-max-instance"
+                                  placeholder="Optional"
+                                />
+                              </div>
+                              
+                              <div>
+                                <Label htmlFor="stage-max-total">Max Total Time (hours)</Label>
+                                <Input
+                                  id="stage-max-total"
+                                  type="number"
+                                  min="1"
+                                  value={editingStage.maxTotalTime || ''}
+                                  onChange={(e) => setEditingStage({
+                                    ...editingStage,
+                                    maxTotalTime: e.target.value ? parseInt(e.target.value) || undefined : undefined
+                                  })}
+                                  data-testid="input-stage-max-total"
+                                  placeholder="Optional"
+                                />
+                              </div>
+                            </div>
+
                             {/* Mapped Reasons Section */}
                             <div>
                               <Label>Mapped Reasons</Label>
@@ -973,6 +1013,40 @@ export default function SettingsPage() {
                                 />
                               ))}
                             </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="new-stage-max-instance">Max Instance Time (hours)</Label>
+                            <Input
+                              id="new-stage-max-instance"
+                              type="number"
+                              min="1"
+                              value={editingStage.maxInstanceTime || ''}
+                              onChange={(e) => setEditingStage({
+                                ...editingStage,
+                                maxInstanceTime: e.target.value ? parseInt(e.target.value) || undefined : undefined
+                              })}
+                              data-testid="input-new-stage-max-instance"
+                              placeholder="Optional"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="new-stage-max-total">Max Total Time (hours)</Label>
+                            <Input
+                              id="new-stage-max-total"
+                              type="number"
+                              min="1"
+                              value={editingStage.maxTotalTime || ''}
+                              onChange={(e) => setEditingStage({
+                                ...editingStage,
+                                maxTotalTime: e.target.value ? parseInt(e.target.value) || undefined : undefined
+                              })}
+                              data-testid="input-new-stage-max-total"
+                              placeholder="Optional"
+                            />
                           </div>
                         </div>
 

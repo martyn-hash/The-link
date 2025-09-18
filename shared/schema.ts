@@ -109,6 +109,8 @@ export const kanbanStages = pgTable("kanban_stages", {
   assignedRole: userRoleEnum("assigned_role"),
   order: integer("order").notNull(),
   color: varchar("color").default("#6b7280"),
+  maxInstanceTime: integer("max_instance_time"), // Maximum hours for a single visit to this stage (optional)
+  maxTotalTime: integer("max_total_time"), // Maximum cumulative hours across all visits to this stage (optional)
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -300,9 +302,38 @@ export const insertProjectChronologySchema = createInsertSchema(projectChronolog
   timestamp: true,
 });
 
-export const insertKanbanStageSchema = createInsertSchema(kanbanStages).omit({
+// Base schema without refinements (for use with .partial())
+const baseKanbanStageSchema = createInsertSchema(kanbanStages).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertKanbanStageSchema = baseKanbanStageSchema.refine((data) => {
+  // Validate maxInstanceTime is positive if provided
+  if (data.maxInstanceTime !== undefined && data.maxInstanceTime !== null && data.maxInstanceTime <= 0) {
+    return false;
+  }
+  // Validate maxTotalTime is positive if provided  
+  if (data.maxTotalTime !== undefined && data.maxTotalTime !== null && data.maxTotalTime <= 0) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Time limits must be positive numbers when specified",
+});
+
+export const updateKanbanStageSchema = baseKanbanStageSchema.partial().refine((data) => {
+  // Validate maxInstanceTime is positive if provided
+  if (data.maxInstanceTime !== undefined && data.maxInstanceTime !== null && data.maxInstanceTime <= 0) {
+    return false;
+  }
+  // Validate maxTotalTime is positive if provided  
+  if (data.maxTotalTime !== undefined && data.maxTotalTime !== null && data.maxTotalTime <= 0) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Time limits must be positive numbers when specified",
 });
 
 export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({
