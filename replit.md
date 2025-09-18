@@ -2,7 +2,16 @@
 
 BookFlow is a comprehensive bookkeeping project workflow management system designed to streamline the collaboration between client managers, bookkeepers, and administrative staff. The application provides role-based access control with four distinct user types (Admin, Manager, Client Manager, and Bookkeeper) and implements a kanban-style workflow to track bookkeeping projects through five defined stages: "No Latest Action," "Bookkeeping Work Required," "In Review," "Needs Input from Client," and "Completed."
 
-The system facilitates project assignment, task tracking, status updates with mandatory change reasons, and automated email notifications. Administrators can bulk-upload client data via CSV files, which automatically creates initial tasks for client managers. The application features both kanban board and task list views, comprehensive project chronology tracking, and a responsive design built with modern web technologies.
+The system facilitates project assignment, task tracking, status updates with mandatory change reasons, and automated email notifications. Administrators can bulk-upload client data via CSV files, which automatically creates initial tasks for client managers. The application features both kanban board and task list views, comprehensive project chronology tracking, time governance for SLA compliance monitoring, and a responsive design built with modern web technologies.
+
+## Time Governance System
+The application includes a comprehensive time governance system to monitor project efficiency and ensure SLA compliance:
+
+- **Stage Time Limits**: Each kanban stage can be configured with two optional time limits:
+  - **Max Instance Time**: Maximum hours a project should remain in a stage during any single visit
+  - **Max Total Time**: Maximum cumulative hours a project should spend in a stage across all visits
+- **Time Calculation**: Automated calculation of current instance time and total time spent using business hours logic
+- **SLA Monitoring**: Helper functions enable identification of projects exceeding stage time limits for management intervention
 
 # User Preferences
 
