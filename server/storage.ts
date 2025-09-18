@@ -6,6 +6,9 @@ import {
   kanbanStages,
   changeReasons,
   projectDescriptions,
+  stageReasonMaps,
+  reasonCustomFields,
+  reasonFieldResponses,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -22,6 +25,12 @@ import {
   type InsertChangeReason,
   type ProjectDescription,
   type InsertProjectDescription,
+  type StageReasonMap,
+  type InsertStageReasonMap,
+  type ReasonCustomField,
+  type InsertReasonCustomField,
+  type ReasonFieldResponse,
+  type InsertReasonFieldResponse,
   type ProjectWithRelations,
   type UpdateProjectStatus,
 } from "@shared/schema";
@@ -102,6 +111,28 @@ export interface IStorage {
       clientsProcessed: string[];
     };
   }>;
+
+  // Stage-reason mapping CRUD operations
+  getAllStageReasonMaps(): Promise<StageReasonMap[]>;
+  createStageReasonMap(mapping: InsertStageReasonMap): Promise<StageReasonMap>;
+  getStageReasonMapsByStageId(stageId: string): Promise<StageReasonMap[]>;
+  deleteStageReasonMap(id: string): Promise<void>;
+
+  // Custom fields CRUD operations
+  getAllReasonCustomFields(): Promise<ReasonCustomField[]>;
+  getReasonCustomFieldsByReasonId(reasonId: string): Promise<ReasonCustomField[]>;
+  createReasonCustomField(field: InsertReasonCustomField): Promise<ReasonCustomField>;
+  updateReasonCustomField(id: string, field: Partial<InsertReasonCustomField>): Promise<ReasonCustomField>;
+  deleteReasonCustomField(id: string): Promise<void>;
+
+  // Field responses operations
+  createReasonFieldResponse(response: InsertReasonFieldResponse): Promise<ReasonFieldResponse>;
+  getReasonFieldResponsesByChronologyId(chronologyId: string): Promise<ReasonFieldResponse[]>;
+
+  // Helper validation methods
+  validateStageReasonMapping(stageId: string, reasonId: string): Promise<{ isValid: boolean; reason?: string }>;
+  validateRequiredFields(reasonId: string, fieldResponses?: { customFieldId: string; fieldType: string; valueNumber?: number; valueShortText?: string; valueLongText?: string }[]): Promise<{ isValid: boolean; reason?: string; missingFields?: string[] }>;
+  getValidChangeReasonsForStage(stageId: string): Promise<ChangeReason[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -313,7 +344,7 @@ export class DatabaseStorage implements IStorage {
     
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
     
-    return await db.query.projects.findMany({
+    const results = await db.query.projects.findMany({
       where: whereClause,
       with: {
         client: true,
@@ -328,6 +359,16 @@ export class DatabaseStorage implements IStorage {
         },
       },
     });
+    
+    // Convert null relations to undefined to match TypeScript expectations
+    return results.map(project => ({
+      ...project,
+      currentAssignee: project.currentAssignee || undefined,
+      chronology: project.chronology.map(c => ({
+        ...c,
+        assignee: c.assignee || undefined,
+      })),
+    }));
   }
 
   async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean }): Promise<ProjectWithRelations[]> {
@@ -361,7 +402,7 @@ export class DatabaseStorage implements IStorage {
     
     const whereClause = and(...whereConditions);
 
-    return await db.query.projects.findMany({
+    const results = await db.query.projects.findMany({
       where: whereClause,
       with: {
         client: true,
@@ -376,10 +417,20 @@ export class DatabaseStorage implements IStorage {
         },
       },
     });
+    
+    // Convert null relations to undefined to match TypeScript expectations
+    return results.map(project => ({
+      ...project,
+      currentAssignee: project.currentAssignee || undefined,
+      chronology: project.chronology.map(c => ({
+        ...c,
+        assignee: c.assignee || undefined,
+      })),
+    }));
   }
 
   async getProject(id: string): Promise<ProjectWithRelations | undefined> {
-    return await db.query.projects.findFirst({
+    const result = await db.query.projects.findFirst({
       where: eq(projects.id, id),
       with: {
         client: true,
@@ -394,6 +445,18 @@ export class DatabaseStorage implements IStorage {
         },
       },
     });
+    
+    if (!result) return undefined;
+    
+    // Convert null relations to undefined to match TypeScript expectations
+    return {
+      ...result,
+      currentAssignee: result.currentAssignee || undefined,
+      chronology: result.chronology.map(c => ({
+        ...c,
+        assignee: c.assignee || undefined,
+      })),
+    };
   }
 
   async updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project> {
@@ -412,6 +475,38 @@ export class DatabaseStorage implements IStorage {
     const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.name, update.newStatus));
     if (!stage) {
       throw new Error(`Kanban stage '${update.newStatus}' not found`);
+    }
+
+    // Look up the change reason to get the reason ID for validation
+    const [reason] = await db.select().from(changeReasons).where(eq(changeReasons.reason, update.changeReason));
+    if (!reason) {
+      throw new Error(`Change reason '${update.changeReason}' not found`);
+    }
+
+    // Validate that the submitted reason is mapped to the target stage
+    const stageReasonValidation = await this.validateStageReasonMapping(stage.id, reason.id);
+    if (!stageReasonValidation.isValid) {
+      throw new Error(stageReasonValidation.reason || "Invalid stage-reason mapping");
+    }
+
+    // Validate required fields if field responses are provided
+    if (update.fieldResponses && update.fieldResponses.length > 0) {
+      // Validate that all custom fields exist and field types match
+      for (const fieldResponse of update.fieldResponses) {
+        const [customField] = await db.select().from(reasonCustomFields).where(eq(reasonCustomFields.id, fieldResponse.customFieldId));
+        if (!customField) {
+          throw new Error(`Custom field with ID '${fieldResponse.customFieldId}' not found`);
+        }
+        if (customField.fieldType !== fieldResponse.fieldType) {
+          throw new Error(`Field type mismatch for custom field '${customField.fieldName}': expected '${customField.fieldType}', got '${fieldResponse.fieldType}'`);
+        }
+      }
+    }
+
+    // Validate required fields for this reason
+    const requiredFieldsValidation = await this.validateRequiredFields(reason.id, update.fieldResponses);
+    if (!requiredFieldsValidation.isValid) {
+      throw new Error(requiredFieldsValidation.reason || "Required fields validation failed");
     }
 
     // Determine new assignee based on the stage's assigned role
@@ -438,29 +533,46 @@ export class DatabaseStorage implements IStorage {
       ? Math.floor((Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60))
       : 0;
 
-    // Create chronology entry
-    await this.createChronologyEntry({
-      projectId: update.projectId,
-      fromStatus: project.currentStatus,
-      toStatus: update.newStatus,
-      assigneeId: newAssigneeId,
-      changeReason: update.changeReason,
-      notes: update.notes,
-      timeInPreviousStage,
+    // Use a transaction to ensure chronology and field responses are created atomically
+    return await db.transaction(async (tx) => {
+      // Create chronology entry
+      const [chronologyEntry] = await tx.insert(projectChronology).values({
+        projectId: update.projectId,
+        fromStatus: project.currentStatus,
+        toStatus: update.newStatus,
+        assigneeId: newAssigneeId,
+        changeReason: update.changeReason,
+        notes: update.notes,
+        timeInPreviousStage,
+      }).returning();
+
+      // Create field responses if provided
+      if (update.fieldResponses && update.fieldResponses.length > 0) {
+        for (const fieldResponse of update.fieldResponses) {
+          await tx.insert(reasonFieldResponses).values({
+            chronologyId: chronologyEntry.id,
+            customFieldId: fieldResponse.customFieldId,
+            fieldType: fieldResponse.fieldType,
+            valueNumber: fieldResponse.valueNumber,
+            valueShortText: fieldResponse.valueShortText,
+            valueLongText: fieldResponse.valueLongText,
+          });
+        }
+      }
+
+      // Update project
+      const [updatedProject] = await tx
+        .update(projects)
+        .set({
+          currentStatus: update.newStatus,
+          currentAssigneeId: newAssigneeId,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, update.projectId))
+        .returning();
+
+      return updatedProject;
     });
-
-    // Update project
-    const [updatedProject] = await db
-      .update(projects)
-      .set({
-        currentStatus: update.newStatus,
-        currentAssigneeId: newAssigneeId,
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, update.projectId))
-      .returning();
-
-    return updatedProject;
   }
 
   // Chronology operations
@@ -470,13 +582,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User })[]> {
-    return await db.query.projectChronology.findMany({
+    const results = await db.query.projectChronology.findMany({
       where: eq(projectChronology.projectId, projectId),
       with: {
         assignee: true,
       },
       orderBy: desc(projectChronology.timestamp),
     });
+    
+    // Convert null relations to undefined to match TypeScript expectations
+    return results.map(c => ({
+      ...c,
+      assignee: c.assignee || undefined,
+    }));
   }
 
   // Configuration operations
@@ -932,6 +1050,223 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { isValid: errors.length === 0, errors };
+  }
+
+  // Stage-reason mapping CRUD operations
+  async getAllStageReasonMaps(): Promise<StageReasonMap[]> {
+    return await db.query.stageReasonMaps.findMany({
+      with: {
+        stage: true,
+        reason: true,
+      },
+    });
+  }
+
+  async createStageReasonMap(mapping: InsertStageReasonMap): Promise<StageReasonMap> {
+    try {
+      const [newMapping] = await db.insert(stageReasonMaps).values(mapping).returning();
+      return newMapping;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('unique constraint')) {
+        throw new Error(`Stage-reason mapping already exists for this stage and reason`);
+      }
+      throw error;
+    }
+  }
+
+  async getStageReasonMapsByStageId(stageId: string): Promise<StageReasonMap[]> {
+    return await db.query.stageReasonMaps.findMany({
+      where: eq(stageReasonMaps.stageId, stageId),
+      with: {
+        reason: true,
+      },
+    });
+  }
+
+  async deleteStageReasonMap(id: string): Promise<void> {
+    const result = await db.delete(stageReasonMaps).where(eq(stageReasonMaps.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Stage-reason mapping not found");
+    }
+  }
+
+  // Custom fields CRUD operations
+  async getAllReasonCustomFields(): Promise<ReasonCustomField[]> {
+    return await db.query.reasonCustomFields.findMany({
+      with: {
+        reason: true,
+      },
+      orderBy: [reasonCustomFields.reasonId, reasonCustomFields.order],
+    });
+  }
+
+  async getReasonCustomFieldsByReasonId(reasonId: string): Promise<ReasonCustomField[]> {
+    return await db.query.reasonCustomFields.findMany({
+      where: eq(reasonCustomFields.reasonId, reasonId),
+      orderBy: reasonCustomFields.order,
+    });
+  }
+
+  async createReasonCustomField(field: InsertReasonCustomField): Promise<ReasonCustomField> {
+    const [newField] = await db.insert(reasonCustomFields).values(field).returning();
+    return newField;
+  }
+
+  async updateReasonCustomField(id: string, field: Partial<InsertReasonCustomField>): Promise<ReasonCustomField> {
+    const [updatedField] = await db
+      .update(reasonCustomFields)
+      .set(field)
+      .where(eq(reasonCustomFields.id, id))
+      .returning();
+      
+    if (!updatedField) {
+      throw new Error("Custom field not found");
+    }
+    
+    return updatedField;
+  }
+
+  async deleteReasonCustomField(id: string): Promise<void> {
+    const result = await db.delete(reasonCustomFields).where(eq(reasonCustomFields.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Custom field not found");
+    }
+  }
+
+  // Field responses operations
+  async createReasonFieldResponse(response: InsertReasonFieldResponse): Promise<ReasonFieldResponse> {
+    try {
+      const [newResponse] = await db.insert(reasonFieldResponses).values(response).returning();
+      return newResponse;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('unique constraint')) {
+        throw new Error(`Field response already exists for this chronology and custom field`);
+      }
+      if (error instanceof Error && error.message.includes('check_single_value_column')) {
+        throw new Error(`Invalid field value: only one value column should be populated based on field type`);
+      }
+      throw error;
+    }
+  }
+
+  async getReasonFieldResponsesByChronologyId(chronologyId: string): Promise<ReasonFieldResponse[]> {
+    return await db.query.reasonFieldResponses.findMany({
+      where: eq(reasonFieldResponses.chronologyId, chronologyId),
+      with: {
+        customField: true,
+      },
+    });
+  }
+
+  // Helper validation methods
+  async validateStageReasonMapping(stageId: string, reasonId: string): Promise<{ isValid: boolean; reason?: string }> {
+    // Check if the stage exists
+    const stage = await this.getStageById(stageId);
+    if (!stage) {
+      return { isValid: false, reason: "Stage not found" };
+    }
+
+    // Check if the reason exists
+    const [reason] = await db.select().from(changeReasons).where(eq(changeReasons.id, reasonId));
+    if (!reason) {
+      return { isValid: false, reason: "Change reason not found" };
+    }
+
+    // Check if the mapping exists
+    const mapping = await db.query.stageReasonMaps.findFirst({
+      where: and(
+        eq(stageReasonMaps.stageId, stageId),
+        eq(stageReasonMaps.reasonId, reasonId)
+      ),
+    });
+
+    if (!mapping) {
+      return { 
+        isValid: false, 
+        reason: `Change reason '${reason.reason}' is not valid for stage '${stage.name}'. Please check the stage-reason mappings.` 
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  async validateRequiredFields(
+    reasonId: string, 
+    fieldResponses?: { customFieldId: string; fieldType: string; valueNumber?: number; valueShortText?: string; valueLongText?: string }[]
+  ): Promise<{ isValid: boolean; reason?: string; missingFields?: string[] }> {
+    // Get all required custom fields for this reason
+    const requiredFields = await db.query.reasonCustomFields.findMany({
+      where: and(
+        eq(reasonCustomFields.reasonId, reasonId),
+        eq(reasonCustomFields.isRequired, true)
+      ),
+    });
+
+    if (requiredFields.length === 0) {
+      return { isValid: true }; // No required fields, validation passes
+    }
+
+    if (!fieldResponses) {
+      return {
+        isValid: false,
+        reason: "Required fields are missing",
+        missingFields: requiredFields.map(f => f.fieldName),
+      };
+    }
+
+    // Check if all required fields have responses
+    const providedFieldIds = new Set(fieldResponses.map(fr => fr.customFieldId));
+    const missingFields: string[] = [];
+
+    for (const requiredField of requiredFields) {
+      if (!providedFieldIds.has(requiredField.id)) {
+        missingFields.push(requiredField.fieldName);
+        continue;
+      }
+
+      // Validate field type and value consistency
+      const response = fieldResponses.find(fr => fr.customFieldId === requiredField.id);
+      if (response && response.fieldType !== requiredField.fieldType) {
+        return {
+          isValid: false,
+          reason: `Field type mismatch for '${requiredField.fieldName}': expected '${requiredField.fieldType}', got '${response.fieldType}'`,
+        };
+      }
+
+      // Check if the required field has a value
+      if (response) {
+        const hasValue = (
+          (requiredField.fieldType === 'number' && response.valueNumber !== undefined && response.valueNumber !== null) ||
+          (requiredField.fieldType === 'short_text' && response.valueShortText !== undefined && response.valueShortText !== null && response.valueShortText !== '') ||
+          (requiredField.fieldType === 'long_text' && response.valueLongText !== undefined && response.valueLongText !== null && response.valueLongText !== '')
+        );
+
+        if (!hasValue) {
+          missingFields.push(requiredField.fieldName);
+        }
+      }
+    }
+
+    if (missingFields.length > 0) {
+      return {
+        isValid: false,
+        reason: `Required fields are missing values: ${missingFields.join(', ')}`,
+        missingFields,
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  async getValidChangeReasonsForStage(stageId: string): Promise<ChangeReason[]> {
+    const mappings = await db.query.stageReasonMaps.findMany({
+      where: eq(stageReasonMaps.stageId, stageId),
+      with: {
+        reason: true,
+      },
+    });
+
+    return mappings.map(mapping => mapping.reason);
   }
 }
 
