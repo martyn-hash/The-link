@@ -116,6 +116,8 @@ export const changeReasons = pgTable("change_reasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reason: varchar("reason").notNull().unique(),
   description: varchar("description"),
+  showCountInProject: boolean("show_count_in_project").default(false),
+  countLabel: varchar("count_label"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
