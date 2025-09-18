@@ -25,11 +25,63 @@ const formatChangeReason = (reason: string): string => {
 
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
   // Helper function to format time duration
-  const formatDuration = (minutes: number | null) => {
-    if (!minutes || minutes === 0) return "0 days, 0 hours";
-    const days = Math.floor(minutes / (60 * 24));
-    const hours = Math.floor((minutes % (60 * 24)) / 60);
-    return `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''}`;
+  const formatDuration = (totalMinutes: number | null) => {
+    if (!totalMinutes || totalMinutes === 0) return "0 minutes";
+    
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+    
+    // For very short durations (less than 1 hour), show just minutes
+    if (totalMinutes < 60) {
+      return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''}`;
+    }
+    
+    // For durations less than 1 day, show hours and minutes
+    if (totalMinutes < 60 * 24) {
+      if (minutes === 0) {
+        return `${hours} hour${hours !== 1 ? 's' : ''}`;
+      }
+      return `${hours} hour${hours !== 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    }
+    
+    // For longer durations, show days, hours, and minutes (but omit zero values)
+    const parts = [];
+    if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+    if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+    if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+    
+    return parts.join(', ');
+  };
+
+  // Function to calculate duration dynamically from timestamps
+  const calculateDurationInMinutes = (entry: any, index: number, chronologyArray: any[]): number => {
+    // If this is the first entry (no fromStatus), no duration to show
+    if (!entry.fromStatus || !entry.timestamp) {
+      return 0;
+    }
+
+    let previousTimestamp: string | null = null;
+
+    // For entries that are not the last in array (not the oldest chronologically)
+    if (index < chronologyArray.length - 1) {
+      // Get the previous entry (next in array since array is newest to oldest)
+      const previousEntry = chronologyArray[index + 1];
+      previousTimestamp = previousEntry?.timestamp;
+    } else {
+      // This is the oldest chronology entry, calculate from project creation
+      previousTimestamp = project.createdAt ? new Date(project.createdAt).toISOString() : null;
+    }
+
+    // Calculate duration if we have both timestamps
+    if (previousTimestamp && entry.timestamp) {
+      const currentTime = new Date(entry.timestamp);
+      const previousTime = new Date(previousTimestamp);
+      const diffMs = currentTime.getTime() - previousTime.getTime();
+      return Math.max(0, Math.floor(diffMs / (1000 * 60))); // Convert to minutes
+    }
+
+    return 0; // Default fallback for missing timestamps
   };
 
   return (
@@ -37,7 +89,12 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       <h4 className="font-semibold text-foreground mb-4">Project Chronology</h4>
       <ScrollArea className="h-96">
         <div className="space-y-4">
-          {project.chronology?.map((entry, index) => {
+          {project.chronology?.sort((a, b) => {
+            // Sort by timestamp in descending order (newest first)
+            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return timeB - timeA;
+          }).map((entry, index) => {
             return (
               <div key={entry.id} className="border-l-2 border-primary pl-4 pb-4">
                 <div className="flex items-center justify-between mb-2">
@@ -73,11 +130,11 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                   </div>
                   
                   {/* Time in Previous Stage */}
-                  {entry.fromStatus && entry.timeInPreviousStage !== null && (
+                  {entry.fromStatus && (
                     <div className="flex items-center space-x-2">
                       <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
                       <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                        {formatDuration(entry.timeInPreviousStage)}
+                        {formatDuration(calculateDurationInMinutes(entry, index, project.chronology || []))}
                       </span>
                     </div>
                   )}
