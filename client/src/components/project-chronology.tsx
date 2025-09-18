@@ -3,6 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
+import { calculateBusinessHours } from "@shared/businessTime";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -105,6 +106,75 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     return 0; // Default fallback for missing timestamps
   };
 
+  // Function to get business hours for a chronology entry
+  const getBusinessHoursForEntry = (entry: any, index: number, chronologyArray: any[]): string => {
+    // If this is the first entry (no fromStatus), no business hours to show
+    if (!entry.fromStatus) {
+      return "";
+    }
+
+    // First, try to use the stored businessHoursInPreviousStage value (stored in minutes, convert to hours)
+    if (entry.businessHoursInPreviousStage !== null && entry.businessHoursInPreviousStage !== undefined) {
+      const businessHours = entry.businessHoursInPreviousStage / 60; // Convert minutes to hours
+      return formatBusinessHours(businessHours);
+    }
+
+    // Fallback: calculate business hours if stored value is not available
+    if (!entry.timestamp) {
+      return "0 business hours";
+    }
+
+    let previousTimestamp: string | null = null;
+
+    // For entries that are not the last in array (not the oldest chronologically)
+    if (index < chronologyArray.length - 1) {
+      // Get the previous entry (next in array since array is newest to oldest)
+      const previousEntry = chronologyArray[index + 1];
+      previousTimestamp = previousEntry?.timestamp;
+    } else {
+      // This is the oldest chronology entry, calculate from project creation
+      previousTimestamp = project.createdAt ? new Date(project.createdAt).toISOString() : null;
+    }
+
+    // Calculate business hours if we have both timestamps
+    if (previousTimestamp && entry.timestamp) {
+      try {
+        const businessHours = calculateBusinessHours(previousTimestamp, entry.timestamp);
+        return formatBusinessHours(businessHours);
+      } catch (error) {
+        console.error('Error calculating business hours:', error);
+        return "0 business hours";
+      }
+    }
+
+    return "0 business hours";
+  };
+
+  // Format business hours for display
+  const formatBusinessHours = (hours: number): string => {
+    if (hours === 0) return "0 business hours";
+    if (hours < 1) return "< 1 business hour";
+    
+    const roundedHours = Math.round(hours * 10) / 10; // Round to 1 decimal place
+    
+    if (roundedHours === 1) {
+      return "1 business hour";
+    } else if (roundedHours < 24) {
+      return `${roundedHours} business hours`;
+    } else {
+      const days = Math.floor(roundedHours / 24);
+      const remainingHours = Math.round((roundedHours % 24) * 10) / 10;
+      
+      if (remainingHours === 0) {
+        return days === 1 ? "1 business day" : `${days} business days`;
+      } else {
+        const dayText = days === 1 ? "day" : "days";
+        const hourText = remainingHours === 1 ? "hour" : "hours";
+        return `${days} business ${dayText}, ${remainingHours} ${hourText}`;
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h4 className="font-semibold text-foreground mb-4">Project Chronology</h4>
@@ -171,11 +241,19 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     
                     {/* Time in Previous Stage */}
                     {entry.fromStatus && (
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
-                        <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                          {formatDuration(calculateDurationInMinutes(entry, index, project.chronology || []))}
-                        </span>
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
+                          <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                            {formatDuration(calculateDurationInMinutes(entry, index, project.chronology || []))}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-muted-foreground font-medium">Business hours in previous stage:</span>
+                          <span className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded" data-testid={`business-hours-${entry.id}`}>
+                            {getBusinessHoursForEntry(entry, index, project.chronology || [])}
+                          </span>
+                        </div>
                       </div>
                     )}
                     

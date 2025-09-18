@@ -34,6 +34,7 @@ import {
   type ProjectWithRelations,
   type UpdateProjectStatus,
 } from "@shared/schema";
+import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { eq, desc, and, inArray, sql, sum } from "drizzle-orm";
 
@@ -343,6 +344,7 @@ export class DatabaseStorage implements IStorage {
         assigneeId: project.currentAssigneeId,
         changeReason: "Project Created",
         timeInPreviousStage: null, // No previous stage for initial entry
+        businessHoursInPreviousStage: null, // No previous stage for initial entry
       });
       
       return project;
@@ -599,18 +601,46 @@ export class DatabaseStorage implements IStorage {
     // Calculate time in previous stage
     const lastChronology = project.chronology[0];
     let timeInPreviousStage: number;
+    let businessHoursInPreviousStage: number;
     
     if (lastChronology && lastChronology.timestamp) {
       // If there's a previous chronology entry, calculate from its timestamp
       timeInPreviousStage = Math.floor((Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60));
+      
+      // Calculate business hours using the same timestamps
+      try {
+        const businessHours = calculateBusinessHours(
+          new Date(lastChronology.timestamp).toISOString(), 
+          new Date().toISOString()
+        );
+        // Store in minutes for precision (multiply by 60 and round)
+        businessHoursInPreviousStage = Math.round(businessHours * 60);
+      } catch (error) {
+        console.error("Error calculating business hours:", error);
+        businessHoursInPreviousStage = 0;
+      }
     } else {
       // If no previous chronology entry exists, calculate from project.createdAt
       // Handle case where project.createdAt could be null
       if (project.createdAt) {
         timeInPreviousStage = Math.floor((Date.now() - new Date(project.createdAt).getTime()) / (1000 * 60));
+        
+        // Calculate business hours from project creation
+        try {
+          const businessHours = calculateBusinessHours(
+            new Date(project.createdAt).toISOString(), 
+            new Date().toISOString()
+          );
+          // Store in minutes for precision (multiply by 60 and round)
+          businessHoursInPreviousStage = Math.round(businessHours * 60);
+        } catch (error) {
+          console.error("Error calculating business hours from project creation:", error);
+          businessHoursInPreviousStage = 0;
+        }
       } else {
-        // Fallback to 0 minutes if createdAt is null
+        // Fallback to 0 minutes and 0 business hours if createdAt is null
         timeInPreviousStage = 0;
+        businessHoursInPreviousStage = 0;
       }
     }
 
@@ -625,6 +655,7 @@ export class DatabaseStorage implements IStorage {
         changeReason: update.changeReason,
         notes: update.notes,
         timeInPreviousStage,
+        businessHoursInPreviousStage,
       }).returning();
 
       // Create field responses if provided

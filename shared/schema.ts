@@ -99,7 +99,7 @@ export const projectChronology = pgTable("project_chronology", {
   notes: text("notes"),
   timestamp: timestamp("timestamp").defaultNow(),
   timeInPreviousStage: integer("time_in_previous_stage"), // in minutes
-  businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business hours
+  businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business minutes (for precision)
 });
 
 // Kanban stages configuration table
