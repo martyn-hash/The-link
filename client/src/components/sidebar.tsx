@@ -34,12 +34,6 @@ export default function Sidebar({ user }: SidebarProps) {
       roles: ["admin", "manager", "client_manager", "bookkeeper"],
     },
     {
-      label: "Task List",
-      href: "/tasks",
-      icon: List,
-      roles: ["admin", "manager", "client_manager", "bookkeeper"],
-    },
-    {
       label: "My Projects",
       href: "/projects",
       icon: Folder,

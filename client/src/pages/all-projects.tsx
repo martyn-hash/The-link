@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { getCurrentMonthForFiltering } from "@shared/schema";
+import { getCurrentMonthForFiltering, type ProjectWithRelations, type User } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
@@ -53,17 +53,17 @@ export default function AllProjects() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
+  const [monthFilter, setMonthFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState<boolean>(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  const { data: projects, isLoading: projectsLoading, error } = useQuery({
-    queryKey: ["/api/projects", { month: monthFilter, archived: showArchived }],
+  const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/projects", { month: monthFilter || undefined, archived: showArchived }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
 
-  const { data: users, isLoading: usersLoading } = useQuery({
+  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
     enabled: isAuthenticated && !!user && (user.role === 'admin' || user.role === 'manager'),
     retry: false,
@@ -124,14 +124,14 @@ export default function AllProjects() {
     );
   }
 
-  const filteredProjects = projects ? projects.filter((project: any) => {
+  const filteredProjects = (projects || []).filter((project: ProjectWithRelations) => {
     // Status filter
     let statusMatch = true;
     switch (statusFilter) {
       case "overdue":
         // Simple overdue check - projects in same stage for more than 7 days
         const lastChronology = project.chronology?.[0];
-        if (!lastChronology) {
+        if (!lastChronology || !lastChronology.timestamp) {
           statusMatch = false;
           break;
         }
@@ -157,14 +157,14 @@ export default function AllProjects() {
     }
 
     return statusMatch && userMatch;
-  }) : [];
+  });
 
   // Find selected project from filtered projects
-  const selectedProject = selectedProjectId ? filteredProjects.find(p => p.id === selectedProjectId) : null;
+  const selectedProject = selectedProjectId ? filteredProjects.find((p: ProjectWithRelations) => p.id === selectedProjectId) : null;
 
   // Clear selection if project is no longer in filtered results
   useEffect(() => {
-    if (selectedProjectId && !filteredProjects.some(p => p.id === selectedProjectId)) {
+    if (selectedProjectId && !filteredProjects.some((p: ProjectWithRelations) => p.id === selectedProjectId)) {
       setSelectedProjectId(null);
     }
   }, [selectedProjectId, filteredProjects]);
@@ -246,7 +246,7 @@ export default function AllProjects() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Users</SelectItem>
-                    {users && users.map((u: any) => (
+                    {(users || []).map((u: User) => (
                       <SelectItem key={u.id} value={u.id}>
                         {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email} 
                         ({u.role.replace('_', ' ')})
@@ -324,7 +324,11 @@ export default function AllProjects() {
                         {selectedProject.chronology && selectedProject.chronology.length > 0 ? (
                           <div className="space-y-4">
                             {[...selectedProject.chronology]
-                              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                              .sort((a, b) => {
+                                const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                                const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                                return bTime - aTime;
+                              })
                               .map((entry, index) => {
                                 // Helper function to format time duration
                                 const formatDuration = (minutes: number | null) => {
@@ -360,10 +364,10 @@ export default function AllProjects() {
                                     {/* Timestamp */}
                                     <div className="flex flex-col space-y-1 mb-2">
                                       <span className="text-xs text-muted-foreground">
-                                        {format(new Date(entry.timestamp), 'PPp')}
+                                        {entry.timestamp ? format(new Date(entry.timestamp), 'PPp') : 'No timestamp'}
                                       </span>
                                       <span className="text-xs text-muted-foreground">
-                                        ({formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })})
+                                        ({entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true }) : 'Unknown time'})
                                       </span>
                                     </div>
 
