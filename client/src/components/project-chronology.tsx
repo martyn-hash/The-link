@@ -95,67 +95,82 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
             const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
             return timeB - timeA;
           }).map((entry, index) => {
+            const hasFields = entry.fieldResponses && entry.fieldResponses.length > 0;
             return (
               <div key={entry.id} className="border-l-2 border-primary pl-4 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    {entry.fromStatus ? (
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Badge variant="outline" className="text-xs">
-                          {formatStageName(entry.fromStatus || '')}
-                        </Badge>
-                        <span className="text-muted-foreground">→</span>
-                        <Badge variant="default" className="text-xs">
-                          {formatStageName(entry.toStatus)}
-                        </Badge>
-                      </div>
-                    ) : (
-                      <Badge variant="default" className="text-xs">
-                        {formatStageName(entry.toStatus)}
-                      </Badge>
-                    )}
-                  </div>
+                {/* Timestamp header */}
+                <div className="flex justify-end mb-2">
                   <span className="text-xs text-muted-foreground">
                     {entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true }) : 'Unknown'}
                   </span>
                 </div>
                 
-                <div className="space-y-2">
-                  {/* Change Reason */}
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-muted-foreground font-medium">Reason:</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {entry.changeReason ? formatChangeReason(entry.changeReason) : 'Not specified'}
-                    </Badge>
-                  </div>
-                  
-                  {/* Time in Previous Stage */}
-                  {entry.fromStatus && (
+                {/* Conditional grid layout - full width if no custom fields, two columns if fields exist */}
+                <div className={`grid grid-cols-1 ${hasFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-4`}>
+                  {/* Left Column: Main chronology information */}
+                  <div className="space-y-2">
+                    {/* Status Change */}
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
-                      <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                        {formatDuration(calculateDurationInMinutes(entry, index, project.chronology || []))}
+                      {entry.fromStatus ? (
+                        <div className="flex items-center space-x-2 text-sm">
+                          <Badge variant="outline" className="text-xs">
+                            {formatStageName(entry.fromStatus || '')}
+                          </Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="default" className="text-xs">
+                            {formatStageName(entry.toStatus)}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <Badge variant="default" className="text-xs">
+                          {formatStageName(entry.toStatus)}
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {/* Change Reason */}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-muted-foreground font-medium">Reason:</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {entry.changeReason ? formatChangeReason(entry.changeReason) : 'Not specified'}
+                      </Badge>
+                    </div>
+                    
+                    {/* Time in Previous Stage */}
+                    {entry.fromStatus && (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
+                        <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                          {formatDuration(calculateDurationInMinutes(entry, index, project.chronology || []))}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Assignee Information */}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {entry.fromStatus ? "Assigned to:" : "Project created - Assigned to:"}
+                      </span>
+                      <span className="text-xs text-foreground">
+                        {entry.assignee 
+                          ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
+                          : "System"}
                       </span>
                     </div>
-                  )}
-                  
-                  {/* Assignee Information */}
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-muted-foreground font-medium">
-                      {entry.fromStatus ? "Assigned to:" : "Project created - Assigned to:"}
-                    </span>
-                    <span className="text-xs text-foreground">
-                      {entry.assignee 
-                        ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
-                        : "System"}
-                    </span>
+
+                    {/* Notes */}
+                    {entry.notes && (
+                      <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded text-xs text-muted-foreground italic">
+                        "{entry.notes}"
+                      </div>
+                    )}
                   </div>
 
-                  {/* Custom Field Responses */}
+                  {/* Right Column: Custom Fields */}
                   {entry.fieldResponses && entry.fieldResponses.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <span className="text-xs text-muted-foreground font-medium">Additional Information:</span>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-md p-3 space-y-2" data-testid={`field-responses-${entry.id}`}>
+                    <div className="space-y-2">
+                      <span className="text-xs text-muted-foreground font-medium">Additional Information</span>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-md p-3 space-y-3" data-testid={`field-responses-${entry.id}`}>
                         {entry.fieldResponses.map((response) => {
                           // Get the appropriate value based on field type
                           const getFieldValue = () => {
@@ -172,22 +187,17 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                           };
 
                           return (
-                            <div key={response.id} className="flex flex-col space-y-1" data-testid={`field-response-${response.id}`}>
-                              <div className="flex items-center space-x-2">
-                                <span className="text-xs font-medium text-foreground">
-                                  {response.customField.fieldName}:
-                                </span>
-                                <Badge variant="outline" className="text-xs">
-                                  {response.fieldType.replace('_', ' ')}
-                                </Badge>
-                              </div>
-                              <div className="ml-2">
+                            <div key={response.id} className="space-y-1" data-testid={`field-response-${response.id}`}>
+                              <span className="text-xs font-medium text-foreground block">
+                                {response.customField.fieldName}
+                              </span>
+                              <div className="ml-1">
                                 {response.fieldType === 'long_text' ? (
                                   <div className="text-xs text-foreground bg-white dark:bg-slate-700 p-2 rounded border">
                                     {getFieldValue()}
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-foreground font-mono">
+                                  <span className="text-xs text-foreground">
                                     {getFieldValue()}
                                   </span>
                                 )}
@@ -199,12 +209,6 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     </div>
                   )}
                 </div>
-
-                {entry.notes && (
-                  <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded text-xs text-muted-foreground italic">
-                    "{entry.notes}"
-                  </div>
-                )}
               </div>
             );
           })}
