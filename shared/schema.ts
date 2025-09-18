@@ -108,6 +108,63 @@ export const projectChronology = pgTable("project_chronology", {
   businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business minutes (for precision)
 });
 
+// Stage approvals configuration table
+export const stageApprovals = pgTable("stage_approvals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Stage approval fields table - questions/fields for each stage approval
+export const stageApprovalFields = pgTable("stage_approval_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stageApprovalId: varchar("stage_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
+  fieldName: varchar("field_name").notNull(),
+  fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
+  isRequired: boolean("is_required").default(false),
+  order: integer("order").notNull(),
+  // For boolean fields - what value is required for approval
+  expectedValueBoolean: boolean("expected_value_boolean"),
+  // For number fields - comparison type and expected value
+  comparisonType: comparisonTypeEnum("comparison_type"),
+  expectedValueNumber: integer("expected_value_number"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_stage_approval_fields_stage_approval_id").on(table.stageApprovalId),
+  // CHECK constraint to ensure proper fields are populated based on fieldType
+  check("check_boolean_field_validation", sql`
+    (field_type != 'boolean' OR expected_value_boolean IS NOT NULL)
+  `),
+  check("check_number_field_validation", sql`
+    (field_type != 'number' OR (comparison_type IS NOT NULL AND expected_value_number IS NOT NULL))
+  `),
+  check("check_long_text_field_validation", sql`
+    (field_type != 'long_text' OR (expected_value_boolean IS NULL AND comparison_type IS NULL AND expected_value_number IS NULL))
+  `),
+]);
+
+// Stage approval responses table - user responses when filling approval forms
+export const stageApprovalResponses = pgTable("stage_approval_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  fieldId: varchar("field_id").notNull().references(() => stageApprovalFields.id, { onDelete: "restrict" }),
+  valueBoolean: boolean("value_boolean"), // For boolean field types
+  valueNumber: integer("value_number"), // For number field types
+  valueLongText: text("value_long_text"), // For long_text field types
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_stage_approval_responses_project_id").on(table.projectId),
+  index("idx_stage_approval_responses_field_id").on(table.fieldId),
+  unique("unique_project_field_response").on(table.projectId, table.fieldId),
+  // CHECK constraint to ensure only one value column is populated and matches field type requirements
+  check("check_single_value_populated", sql`
+    (value_boolean IS NOT NULL AND value_number IS NULL AND value_long_text IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NOT NULL AND value_long_text IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NOT NULL)
+  `),
+]);
+
 // Kanban stages configuration table
 export const kanbanStages = pgTable("kanban_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -192,63 +249,6 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
     (field_type = 'short_text' AND value_number IS NULL AND value_short_text IS NOT NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
     (field_type = 'long_text' AND value_number IS NULL AND value_short_text IS NULL AND value_long_text IS NOT NULL AND value_multi_select IS NULL) OR
     (field_type = 'multi_select' AND value_number IS NULL AND value_short_text IS NULL AND value_long_text IS NULL AND value_multi_select IS NOT NULL AND array_length(value_multi_select, 1) > 0)
-  `),
-]);
-
-// Stage approvals configuration table
-export const stageApprovals = pgTable("stage_approvals", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull().unique(),
-  description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Stage approval fields table - questions/fields for each stage approval
-export const stageApprovalFields = pgTable("stage_approval_fields", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  stageApprovalId: varchar("stage_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
-  fieldName: varchar("field_name").notNull(),
-  fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
-  isRequired: boolean("is_required").default(false),
-  order: integer("order").notNull(),
-  // For boolean fields - what value is required for approval
-  expectedValueBoolean: boolean("expected_value_boolean"),
-  // For number fields - comparison type and expected value
-  comparisonType: comparisonTypeEnum("comparison_type"),
-  expectedValueNumber: integer("expected_value_number"),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_stage_approval_fields_stage_approval_id").on(table.stageApprovalId),
-  // CHECK constraint to ensure proper fields are populated based on fieldType
-  check("check_boolean_field_validation", sql`
-    (field_type != 'boolean' OR expected_value_boolean IS NOT NULL)
-  `),
-  check("check_number_field_validation", sql`
-    (field_type != 'number' OR (comparison_type IS NOT NULL AND expected_value_number IS NOT NULL))
-  `),
-  check("check_long_text_field_validation", sql`
-    (field_type != 'long_text' OR (expected_value_boolean IS NULL AND comparison_type IS NULL AND expected_value_number IS NULL))
-  `),
-]);
-
-// Stage approval responses table - user responses when filling approval forms
-export const stageApprovalResponses = pgTable("stage_approval_responses", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  fieldId: varchar("field_id").notNull().references(() => stageApprovalFields.id, { onDelete: "restrict" }),
-  valueBoolean: boolean("value_boolean"), // For boolean field types
-  valueNumber: integer("value_number"), // For number field types
-  valueLongText: text("value_long_text"), // For long_text field types
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_stage_approval_responses_project_id").on(table.projectId),
-  index("idx_stage_approval_responses_field_id").on(table.fieldId),
-  unique("unique_project_field_response").on(table.projectId, table.fieldId),
-  // CHECK constraint to ensure only one value column is populated and matches field type requirements
-  check("check_single_value_populated", sql`
-    (value_boolean IS NOT NULL AND value_number IS NULL AND value_long_text IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NOT NULL AND value_long_text IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NOT NULL)
   `),
 ]);
 
