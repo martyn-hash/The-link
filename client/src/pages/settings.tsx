@@ -35,6 +35,8 @@ interface EditingReason {
   id?: string;
   reason: string;
   description: string;
+  showCountInProject: boolean;
+  countLabel: string;
 }
 
 interface EditingDescription {
@@ -66,6 +68,8 @@ const DEFAULT_STAGE: EditingStage = {
 const DEFAULT_REASON: EditingReason = {
   reason: "",
   description: "",
+  showCountInProject: false,
+  countLabel: "",
 };
 
 const DEFAULT_DESCRIPTION: EditingDescription = {
@@ -479,6 +483,16 @@ export default function SettingsPage() {
       return;
     }
 
+    // Validate count label when showCountInProject is enabled
+    if (editingReason.showCountInProject && !editingReason.countLabel.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Count Label is required when 'Show Count in Project' is enabled",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (editingReason.id) {
       updateReasonMutation.mutate(editingReason);
     } else {
@@ -492,6 +506,8 @@ export default function SettingsPage() {
       id: reason.id,
       reason: reason.reason,
       description: reason.description || "",
+      showCountInProject: reason.showCountInProject || false,
+      countLabel: reason.countLabel || "",
     });
     setIsAddingReason(false);
   };
@@ -611,6 +627,12 @@ export default function SettingsPage() {
   const getReasonCustomFields = (reasonId: string) => {
     return customFields?.filter(field => field.reasonId === reasonId)
       .sort((a, b) => a.order - b.order) || [];
+  };
+
+  // Helper function to check if a reason has numeric custom fields
+  const reasonHasNumericFields = (reasonId: string) => {
+    const reasonFields = getReasonCustomFields(reasonId);
+    return reasonFields.some(field => field.fieldType === 'number');
   };
 
   if (isLoading) {
@@ -1321,6 +1343,50 @@ export default function SettingsPage() {
                                   </div>
                                 </CardContent>
                               </Card>
+                            )}
+
+                            {/* Progress Tracking Section - Only show if reason has numeric fields */}
+                            {reasonHasNumericFields(reason.id) && (
+                              <div>
+                                <Label>Progress Tracking</Label>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                  Configure how numeric values from this reason should be displayed in projects
+                                </p>
+                                
+                                <div className="space-y-4">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id="show-count-in-project"
+                                      checked={editingReason.showCountInProject}
+                                      onCheckedChange={(checked) => setEditingReason({
+                                        ...editingReason,
+                                        showCountInProject: !!checked
+                                      })}
+                                      data-testid="checkbox-show-count-in-project"
+                                    />
+                                    <Label htmlFor="show-count-in-project" className="text-sm font-normal cursor-pointer">
+                                      Show Count in Project
+                                    </Label>
+                                  </div>
+                                  
+                                  {editingReason.showCountInProject && (
+                                    <div>
+                                      <Label htmlFor="count-label">Count Label</Label>
+                                      <Input
+                                        id="count-label"
+                                        value={editingReason.countLabel}
+                                        onChange={(e) => setEditingReason({
+                                          ...editingReason,
+                                          countLabel: e.target.value
+                                        })}
+                                        placeholder="e.g., Items Processed, Hours Worked, Documents Reviewed"
+                                        data-testid="input-count-label"
+                                        className="w-full"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             )}
 
                             <div className="flex gap-2">
