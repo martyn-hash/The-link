@@ -9,6 +9,8 @@ import {
   integer,
   boolean,
   pgEnum,
+  check,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -44,6 +46,9 @@ export const changeReasonEnum = pgEnum("change_reason", [
   "work_completed_successfully",
   "clarifications_needed"
 ]);
+
+// Custom field type enum
+export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -123,6 +128,54 @@ export const projectDescriptions = pgTable("project_descriptions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Stage-Reason mapping table (many-to-many relationship)
+export const stageReasonMaps = pgTable("stage_reason_maps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stageId: varchar("stage_id").notNull().references(() => kanbanStages.id, { onDelete: "cascade" }),
+  reasonId: varchar("reason_id").notNull().references(() => changeReasons.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_stage_reason_maps_stage_id").on(table.stageId),
+  index("idx_stage_reason_maps_reason_id").on(table.reasonId),
+  unique("unique_stage_reason").on(table.stageId, table.reasonId),
+]);
+
+// Custom fields per change reason
+export const reasonCustomFields = pgTable("reason_custom_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reasonId: varchar("reason_id").notNull().references(() => changeReasons.id, { onDelete: "cascade" }),
+  fieldName: varchar("field_name").notNull(),
+  fieldType: customFieldTypeEnum("field_type").notNull(),
+  isRequired: boolean("is_required").default(false),
+  placeholder: varchar("placeholder"),
+  order: integer("order").notNull(), // for sorting in UI
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_reason_custom_fields_reason_id").on(table.reasonId),
+]);
+
+// Field responses tied to project chronology
+export const reasonFieldResponses = pgTable("reason_field_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chronologyId: varchar("chronology_id").notNull().references(() => projectChronology.id, { onDelete: "cascade" }),
+  customFieldId: varchar("custom_field_id").notNull().references(() => reasonCustomFields.id, { onDelete: "restrict" }),
+  fieldType: customFieldTypeEnum("field_type").notNull(), // Store fieldType for validation
+  valueNumber: integer("value_number"), // For number field types
+  valueShortText: varchar("value_short_text", { length: 255 }), // For short_text field types
+  valueLongText: text("value_long_text"), // For long_text field types
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_reason_field_responses_chronology_id").on(table.chronologyId),
+  index("idx_reason_field_responses_custom_field_id").on(table.customFieldId),
+  unique("unique_chronology_custom_field").on(table.chronologyId, table.customFieldId),
+  // CHECK constraint to ensure only one value column is populated based on fieldType
+  check("check_single_value_column", sql`
+    (field_type = 'number' AND value_number IS NOT NULL AND value_short_text IS NULL AND value_long_text IS NULL) OR
+    (field_type = 'short_text' AND value_number IS NULL AND value_short_text IS NOT NULL AND value_long_text IS NULL) OR
+    (field_type = 'long_text' AND value_number IS NULL AND value_short_text IS NULL AND value_long_text IS NOT NULL)
+  `),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   assignedProjects: many(projects, { relationName: "assignee" }),
@@ -158,7 +211,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   chronology: many(projectChronology),
 }));
 
-export const projectChronologyRelations = relations(projectChronology, ({ one }) => ({
+export const projectChronologyRelations = relations(projectChronology, ({ one, many }) => ({
   project: one(projects, {
     fields: [projectChronology.projectId],
     references: [projects.id],
@@ -166,6 +219,46 @@ export const projectChronologyRelations = relations(projectChronology, ({ one })
   assignee: one(users, {
     fields: [projectChronology.assigneeId],
     references: [users.id],
+  }),
+  fieldResponses: many(reasonFieldResponses),
+}));
+
+export const kanbanStagesRelations = relations(kanbanStages, ({ many }) => ({
+  stageReasonMaps: many(stageReasonMaps),
+}));
+
+export const changeReasonsRelations = relations(changeReasons, ({ many }) => ({
+  stageReasonMaps: many(stageReasonMaps),
+  customFields: many(reasonCustomFields),
+}));
+
+export const stageReasonMapsRelations = relations(stageReasonMaps, ({ one }) => ({
+  stage: one(kanbanStages, {
+    fields: [stageReasonMaps.stageId],
+    references: [kanbanStages.id],
+  }),
+  reason: one(changeReasons, {
+    fields: [stageReasonMaps.reasonId],
+    references: [changeReasons.id],
+  }),
+}));
+
+export const reasonCustomFieldsRelations = relations(reasonCustomFields, ({ one, many }) => ({
+  reason: one(changeReasons, {
+    fields: [reasonCustomFields.reasonId],
+    references: [changeReasons.id],
+  }),
+  responses: many(reasonFieldResponses),
+}));
+
+export const reasonFieldResponsesRelations = relations(reasonFieldResponses, ({ one }) => ({
+  chronology: one(projectChronology, {
+    fields: [reasonFieldResponses.chronologyId],
+    references: [projectChronology.id],
+  }),
+  customField: one(reasonCustomFields, {
+    fields: [reasonFieldResponses.customFieldId],
+    references: [reasonCustomFields.id],
   }),
 }));
 
@@ -212,12 +305,51 @@ export const insertProjectDescriptionSchema = createInsertSchema(projectDescript
   createdAt: true,
 });
 
+export const insertStageReasonMapSchema = createInsertSchema(stageReasonMaps).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertReasonCustomFieldSchema = createInsertSchema(reasonCustomFields).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertReasonFieldResponseSchema = createInsertSchema(reasonFieldResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
   newStatus: z.string(), // Now accepts any kanban stage name
   changeReason: z.enum(["errors_identified_from_bookkeeper", "first_allocation_of_work", "queries_answered", "work_completed_successfully", "clarifications_needed"]),
   notes: z.string().optional(),
+  fieldResponses: z.array(z.object({
+    customFieldId: z.string(),
+    fieldType: z.enum(["number", "short_text", "long_text"]),
+    valueNumber: z.number().int().optional(),
+    valueShortText: z.string().max(255).optional(),
+    valueLongText: z.string().optional(),
+  }).refine((data) => {
+    // Ensure only one value field is populated based on fieldType
+    const hasNumber = data.valueNumber !== undefined && data.valueNumber !== null;
+    const hasShortText = data.valueShortText !== undefined && data.valueShortText !== null && data.valueShortText !== "";
+    const hasLongText = data.valueLongText !== undefined && data.valueLongText !== null && data.valueLongText !== "";
+    
+    if (data.fieldType === "number") {
+      return hasNumber && !hasShortText && !hasLongText;
+    } else if (data.fieldType === "short_text") {
+      return !hasNumber && hasShortText && !hasLongText;
+    } else if (data.fieldType === "long_text") {
+      return !hasNumber && !hasShortText && hasLongText;
+    }
+    
+    return false;
+  }, {
+    message: "Exactly one value field must be populated based on fieldType"
+  })).optional(),
 });
 
 // Month normalization helper function for project storage (preserves exact day)
@@ -328,6 +460,12 @@ export type ChangeReason = typeof changeReasons.$inferSelect;
 export type InsertChangeReason = z.infer<typeof insertChangeReasonSchema>;
 export type ProjectDescription = typeof projectDescriptions.$inferSelect;
 export type InsertProjectDescription = z.infer<typeof insertProjectDescriptionSchema>;
+export type StageReasonMap = typeof stageReasonMaps.$inferSelect;
+export type InsertStageReasonMap = z.infer<typeof insertStageReasonMapSchema>;
+export type ReasonCustomField = typeof reasonCustomFields.$inferSelect;
+export type InsertReasonCustomField = z.infer<typeof insertReasonCustomFieldSchema>;
+export type ReasonFieldResponse = typeof reasonFieldResponses.$inferSelect;
+export type InsertReasonFieldResponse = z.infer<typeof insertReasonFieldResponseSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 
