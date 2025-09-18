@@ -20,7 +20,11 @@ import type {
   ChangeReason, 
   ProjectDescription,
   StageReasonMap,
-  ReasonCustomField
+  ReasonCustomField,
+  StageApproval,
+  StageApprovalField,
+  InsertStageApproval,
+  InsertStageApprovalField
 } from "@shared/schema";
 
 interface EditingStage {
@@ -60,6 +64,26 @@ interface EditingCustomField {
   order: number;
 }
 
+interface EditingStageApproval {
+  id?: string;
+  name: string;
+  description: string;
+}
+
+interface EditingStageApprovalField {
+  id?: string;
+  stageApprovalId: string;
+  fieldName: string;
+  fieldType: 'boolean' | 'number' | 'long_text';
+  isRequired: boolean;
+  order: number;
+  // Boolean validation
+  expectedValueBoolean?: boolean;
+  // Number validation  
+  comparisonType?: 'equal_to' | 'less_than' | 'greater_than';
+  expectedValueNumber?: number;
+}
+
 const DEFAULT_STAGE: EditingStage = {
   name: "",
   assignedRole: "client_manager",
@@ -92,6 +116,11 @@ const DEFAULT_CUSTOM_FIELD: EditingCustomField = {
   order: 0,
 };
 
+const DEFAULT_STAGE_APPROVAL: EditingStageApproval = { name: "", description: "" };
+const DEFAULT_STAGE_APPROVAL_FIELD: EditingStageApprovalField = { 
+  stageApprovalId: "", fieldName: "", fieldType: "boolean", isRequired: false, order: 0 
+};
+
 const ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
@@ -119,10 +148,14 @@ export default function SettingsPage() {
   const [editingReason, setEditingReason] = useState<EditingReason | null>(null);
   const [editingDescription, setEditingDescription] = useState<EditingDescription | null>(null);
   const [editingCustomField, setEditingCustomField] = useState<EditingCustomField | null>(null);
+  const [editingStageApproval, setEditingStageApproval] = useState<EditingStageApproval | null>(null);
+  const [editingStageApprovalField, setEditingStageApprovalField] = useState<EditingStageApprovalField | null>(null);
   const [isAddingStage, setIsAddingStage] = useState(false);
   const [isAddingReason, setIsAddingReason] = useState(false);
   const [isAddingDescription, setIsAddingDescription] = useState(false);
   const [isAddingCustomField, setIsAddingCustomField] = useState(false);
+  const [isAddingStageApproval, setIsAddingStageApproval] = useState(false);
+  const [isAddingStageApprovalField, setIsAddingStageApprovalField] = useState(false);
   const [selectedStageReasons, setSelectedStageReasons] = useState<string[]>([]);
   
   const { toast } = useToast();
@@ -151,6 +184,16 @@ export default function SettingsPage() {
   // Fetch custom fields
   const { data: customFields, isLoading: customFieldsLoading } = useQuery<ReasonCustomField[]>({
     queryKey: ["/api/config/custom-fields"],
+  });
+
+  // Fetch stage approvals
+  const { data: stageApprovals, isLoading: stageApprovalsLoading } = useQuery<StageApproval[]>({
+    queryKey: ["/api/config/stage-approvals"],
+  });
+
+  // Fetch stage approval fields
+  const { data: stageApprovalFields, isLoading: stageApprovalFieldsLoading } = useQuery<StageApprovalField[]>({
+    queryKey: ["/api/config/stage-approval-fields"],
   });
 
   // Stage mutations
@@ -436,6 +479,116 @@ export default function SettingsPage() {
     },
   });
 
+  // Stage approval mutations
+  const createStageApprovalMutation = useMutation({
+    mutationFn: async (stageApproval: Omit<EditingStageApproval, 'id'>) => {
+      return await apiRequest("POST", "/api/config/stage-approvals", stageApproval);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approvals"] });
+      setIsAddingStageApproval(false);
+      setEditingStageApproval(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create stage approval",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStageApprovalMutation = useMutation({
+    mutationFn: async ({ id, ...stageApproval }: EditingStageApproval) => {
+      return await apiRequest("PATCH", `/api/config/stage-approvals/${id}`, stageApproval);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approvals"] });
+      setEditingStageApproval(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stage approval",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteStageApprovalMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/stage-approvals/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approvals"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stage approval",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Stage approval field mutations
+  const createStageApprovalFieldMutation = useMutation({
+    mutationFn: async (field: Omit<EditingStageApprovalField, 'id'>) => {
+      return await apiRequest("POST", "/api/config/stage-approval-fields", field);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval field created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+      setIsAddingStageApprovalField(false);
+      setEditingStageApprovalField(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create stage approval field",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStageApprovalFieldMutation = useMutation({
+    mutationFn: async ({ id, ...field }: EditingStageApprovalField) => {
+      return await apiRequest("PATCH", `/api/config/stage-approval-fields/${id}`, field);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval field updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+      setEditingStageApprovalField(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stage approval field",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteStageApprovalFieldMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/stage-approval-fields/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval field deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stage approval field",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handle stage operations
   const handleSaveStage = () => {
     if (!editingStage) return;
@@ -641,6 +794,106 @@ export default function SettingsPage() {
     return reasonFields.some(field => field.fieldType === 'number');
   };
 
+  // Handle stage approval operations
+  const handleSaveStageApproval = () => {
+    if (!editingStageApproval) return;
+
+    if (!editingStageApproval.name) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a stage approval name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editingStageApproval.id) {
+      updateStageApprovalMutation.mutate(editingStageApproval);
+    } else {
+      const { id, ...stageApprovalData } = editingStageApproval;
+      createStageApprovalMutation.mutate(stageApprovalData);
+    }
+  };
+
+  const handleEditStageApproval = (stageApproval: StageApproval) => {
+    setEditingStageApproval({
+      id: stageApproval.id,
+      name: stageApproval.name,
+      description: stageApproval.description || "",
+    });
+    setIsAddingStageApproval(false);
+  };
+
+  const handleAddStageApproval = () => {
+    setEditingStageApproval({ ...DEFAULT_STAGE_APPROVAL });
+    setIsAddingStageApproval(true);
+  };
+
+  // Handle stage approval field operations
+  const handleSaveStageApprovalField = () => {
+    if (!editingStageApprovalField) return;
+
+    // Validate required fields
+    if (!editingStageApprovalField.fieldName || !editingStageApprovalField.stageApprovalId) {
+      toast({ title: "Validation Error", description: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+
+    // Field type specific validation
+    if (editingStageApprovalField.fieldType === 'boolean' && editingStageApprovalField.expectedValueBoolean == null) {
+      toast({ title: "Validation Error", description: "Boolean fields require an expected value", variant: "destructive" });
+      return;
+    }
+
+    if (editingStageApprovalField.fieldType === 'number') {
+      if (!editingStageApprovalField.comparisonType || editingStageApprovalField.expectedValueNumber == null) {
+        toast({ title: "Validation Error", description: "Number fields require comparison type and expected value", variant: "destructive" });
+        return;
+      }
+    }
+
+    if (editingStageApprovalField.fieldType === 'long_text') {
+      // Only isRequired, clear validation fields
+      editingStageApprovalField.expectedValueBoolean = undefined;
+      editingStageApprovalField.comparisonType = undefined;
+      editingStageApprovalField.expectedValueNumber = undefined;
+    }
+
+    // Call appropriate mutation
+    if (editingStageApprovalField.id) {
+      updateStageApprovalFieldMutation.mutate({ id: editingStageApprovalField.id, ...editingStageApprovalField });
+    } else {
+      createStageApprovalFieldMutation.mutate(editingStageApprovalField);
+    }
+  };
+
+  const handleEditStageApprovalField = (field: StageApprovalField) => {
+    setEditingStageApprovalField({
+      id: field.id,
+      stageApprovalId: field.stageApprovalId,
+      fieldName: field.fieldName,
+      fieldType: field.fieldType,
+      isRequired: field.isRequired || false,
+      order: field.order,
+      expectedValueBoolean: field.expectedValueBoolean || undefined,
+      comparisonType: field.comparisonType || undefined,
+      expectedValueNumber: field.expectedValueNumber || undefined,
+    });
+    setIsAddingStageApprovalField(false);
+  };
+
+  const handleAddStageApprovalField = (stageApprovalId: string) => {
+    const approvalFields = stageApprovalFields?.filter(f => f.stageApprovalId === stageApprovalId) || [];
+    const nextOrder = Math.max(0, ...approvalFields.map(f => f.order)) + 1;
+    setEditingStageApprovalField({ ...DEFAULT_STAGE_APPROVAL_FIELD, stageApprovalId, order: nextOrder });
+    setIsAddingStageApprovalField(true);
+  };
+
+  const getStageApprovalFields = (stageApprovalId: string) => {
+    return stageApprovalFields?.filter(field => field.stageApprovalId === stageApprovalId)
+      .sort((a, b) => a.order - b.order) || [];
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -682,10 +935,11 @@ export default function SettingsPage() {
           </div>
 
           <Tabs defaultValue="stages" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="stages">Kanban Stages</TabsTrigger>
               <TabsTrigger value="reasons">Change Reasons</TabsTrigger>
               <TabsTrigger value="descriptions">Project Descriptions</TabsTrigger>
+              <TabsTrigger value="approvals">Stage Approvals</TabsTrigger>
             </TabsList>
             
             <TabsContent value="stages" className="space-y-6">
@@ -1790,6 +2044,456 @@ export default function SettingsPage() {
                               setIsAddingDescription(false);
                             }}
                             data-testid="button-cancel-new-description"
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="approvals" className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">Stage Approvals</h2>
+                  <p className="text-muted-foreground">Manage approval forms that can be linked to workflow stages.</p>
+                </div>
+                <Button
+                  onClick={handleAddStageApproval}
+                  data-testid="button-add-stage-approval"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Stage Approval
+                </Button>
+              </div>
+
+              <div className="grid gap-4">
+                {stageApprovalsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  </div>
+                ) : (
+                  stageApprovals?.map((stageApproval) => (
+                    <Card key={stageApproval.id} className="bg-background">
+                      <CardContent className="p-6">
+                        {editingStageApproval?.id === stageApproval.id ? (
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="stage-approval-name">Stage Approval Name</Label>
+                              <Input
+                                id="stage-approval-name"
+                                value={editingStageApproval.name}
+                                onChange={(e) => setEditingStageApproval({
+                                  ...editingStageApproval,
+                                  name: e.target.value
+                                })}
+                                data-testid="input-stage-approval-name"
+                                placeholder="Enter stage approval name"
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor="stage-approval-description">Description (Optional)</Label>
+                              <Textarea
+                                id="stage-approval-description"
+                                value={editingStageApproval.description}
+                                onChange={(e) => setEditingStageApproval({
+                                  ...editingStageApproval,
+                                  description: e.target.value
+                                })}
+                                data-testid="textarea-stage-approval-description"
+                                placeholder="Enter description"
+                                rows={3}
+                              />
+                            </div>
+
+                            {/* Stage Approval Fields Section */}
+                            <div>
+                              <div className="flex items-center justify-between mb-3">
+                                <div>
+                                  <Label>Approval Fields</Label>
+                                  <p className="text-sm text-muted-foreground">
+                                    Add fields that users must complete for this approval
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleAddStageApprovalField(stageApproval.id)}
+                                  data-testid="button-add-stage-approval-field"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add Field
+                                </Button>
+                              </div>
+                              
+                              {stageApprovalFieldsLoading ? (
+                                <div className="text-center py-4">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto"></div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {getStageApprovalFields(stageApproval.id).map((field) => (
+                                    <div key={field.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">{field.fieldName}</span>
+                                          <Badge variant="outline" className="text-xs">
+                                            {field.fieldType === 'boolean' ? 'Boolean' : 
+                                             field.fieldType === 'number' ? 'Number' : 'Long Text'}
+                                          </Badge>
+                                          {field.isRequired && (
+                                            <Badge variant="destructive" className="text-xs">Required</Badge>
+                                          )}
+                                        </div>
+                                        {field.fieldType === 'boolean' && field.expectedValueBoolean != null && (
+                                          <p className="text-sm text-muted-foreground mt-1">
+                                            Expected: {field.expectedValueBoolean ? 'True' : 'False'}
+                                          </p>
+                                        )}
+                                        {field.fieldType === 'number' && field.comparisonType && field.expectedValueNumber != null && (
+                                          <p className="text-sm text-muted-foreground mt-1">
+                                            Expected: {field.comparisonType === 'equal_to' ? '=' : 
+                                                     field.comparisonType === 'less_than' ? '<' : '>'} {field.expectedValueNumber}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleEditStageApprovalField(field)}
+                                          data-testid={`button-edit-stage-approval-field-${field.id}`}
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => deleteStageApprovalFieldMutation.mutate(field.id)}
+                                          className="text-destructive hover:text-destructive"
+                                          data-testid={`button-delete-stage-approval-field-${field.id}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  
+                                  {getStageApprovalFields(stageApproval.id).length === 0 && (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                      No fields defined for this stage approval
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Stage Approval Field Editing Form */}
+                            {(isAddingStageApprovalField || editingStageApprovalField) && editingStageApprovalField && (
+                              <Card className="bg-muted/50 border-dashed">
+                                <CardContent className="p-4">
+                                  <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-medium">
+                                        {editingStageApprovalField.id ? 'Edit Approval Field' : 'Add New Approval Field'}
+                                      </h4>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label htmlFor="stage-approval-field-name">Field Name</Label>
+                                        <Input
+                                          id="stage-approval-field-name"
+                                          value={editingStageApprovalField.fieldName}
+                                          onChange={(e) => setEditingStageApprovalField({
+                                            ...editingStageApprovalField,
+                                            fieldName: e.target.value
+                                          })}
+                                          placeholder="Enter field name"
+                                          data-testid="input-stage-approval-field-name"
+                                        />
+                                      </div>
+                                      
+                                      <div>
+                                        <Label htmlFor="stage-approval-field-type">Field Type</Label>
+                                        <Select
+                                          value={editingStageApprovalField.fieldType}
+                                          onValueChange={(value: 'boolean' | 'number' | 'long_text') => 
+                                            setEditingStageApprovalField({
+                                              ...editingStageApprovalField,
+                                              fieldType: value,
+                                              // Clear validation fields when changing type
+                                              expectedValueBoolean: value === 'boolean' ? false : undefined,
+                                              comparisonType: value === 'number' ? 'equal_to' : undefined,
+                                              expectedValueNumber: value === 'number' ? 0 : undefined,
+                                            })
+                                          }
+                                        >
+                                          <SelectTrigger data-testid="select-stage-approval-field-type">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="boolean">Boolean</SelectItem>
+                                            <SelectItem value="number">Number</SelectItem>
+                                            <SelectItem value="long_text">Long Text</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+
+                                    {/* Boolean Field Validation */}
+                                    {editingStageApprovalField.fieldType === 'boolean' && (
+                                      <div>
+                                        <Label>Expected Value</Label>
+                                        <div className="flex items-center gap-4 mt-2">
+                                          <div className="flex items-center space-x-2">
+                                            <input
+                                              type="radio"
+                                              id="expected-true"
+                                              name="expectedValue"
+                                              checked={editingStageApprovalField.expectedValueBoolean === true}
+                                              onChange={() => setEditingStageApprovalField({
+                                                ...editingStageApprovalField,
+                                                expectedValueBoolean: true
+                                              })}
+                                              data-testid="radio-expected-true"
+                                            />
+                                            <Label htmlFor="expected-true">True</Label>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <input
+                                              type="radio"
+                                              id="expected-false"
+                                              name="expectedValue"
+                                              checked={editingStageApprovalField.expectedValueBoolean === false}
+                                              onChange={() => setEditingStageApprovalField({
+                                                ...editingStageApprovalField,
+                                                expectedValueBoolean: false
+                                              })}
+                                              data-testid="radio-expected-false"
+                                            />
+                                            <Label htmlFor="expected-false">False</Label>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Number Field Validation */}
+                                    {editingStageApprovalField.fieldType === 'number' && (
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                          <Label htmlFor="comparison-type">Comparison Type</Label>
+                                          <Select
+                                            value={editingStageApprovalField.comparisonType}
+                                            onValueChange={(value: 'equal_to' | 'less_than' | 'greater_than') => 
+                                              setEditingStageApprovalField({
+                                                ...editingStageApprovalField,
+                                                comparisonType: value
+                                              })
+                                            }
+                                          >
+                                            <SelectTrigger data-testid="select-comparison-type">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="equal_to">Equal to (=)</SelectItem>
+                                              <SelectItem value="less_than">Less than (&lt;)</SelectItem>
+                                              <SelectItem value="greater_than">Greater than (&gt;)</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        
+                                        <div>
+                                          <Label htmlFor="expected-number">Expected Value</Label>
+                                          <Input
+                                            id="expected-number"
+                                            type="number"
+                                            value={editingStageApprovalField.expectedValueNumber || ''}
+                                            onChange={(e) => setEditingStageApprovalField({
+                                              ...editingStageApprovalField,
+                                              expectedValueNumber: e.target.value ? parseInt(e.target.value) : 0
+                                            })}
+                                            placeholder="Enter expected value"
+                                            data-testid="input-expected-number"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id="stage-approval-field-required"
+                                          checked={editingStageApprovalField.isRequired}
+                                          onCheckedChange={(checked) => setEditingStageApprovalField({
+                                            ...editingStageApprovalField,
+                                            isRequired: !!checked
+                                          })}
+                                          data-testid="checkbox-stage-approval-field-required"
+                                        />
+                                        <Label htmlFor="stage-approval-field-required">Required field</Label>
+                                      </div>
+                                      
+                                      <div>
+                                        <Label htmlFor="stage-approval-field-order">Order</Label>
+                                        <Input
+                                          id="stage-approval-field-order"
+                                          type="number"
+                                          value={editingStageApprovalField.order}
+                                          onChange={(e) => setEditingStageApprovalField({
+                                            ...editingStageApprovalField,
+                                            order: parseInt(e.target.value) || 0
+                                          })}
+                                          data-testid="input-stage-approval-field-order"
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                      <Button
+                                        onClick={handleSaveStageApprovalField}
+                                        disabled={createStageApprovalFieldMutation.isPending || updateStageApprovalFieldMutation.isPending}
+                                        data-testid="button-save-stage-approval-field"
+                                      >
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {editingStageApprovalField.id ? 'Update Field' : 'Create Field'}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEditingStageApprovalField(null);
+                                          setIsAddingStageApprovalField(false);
+                                        }}
+                                        data-testid="button-cancel-stage-approval-field"
+                                      >
+                                        <X className="w-4 h-4 mr-2" />
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={handleSaveStageApproval}
+                                disabled={createStageApprovalMutation.isPending || updateStageApprovalMutation.isPending}
+                                data-testid="button-save-stage-approval"
+                              >
+                                <Save className="w-4 h-4 mr-2" />
+                                Save
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingStageApproval(null);
+                                  setIsAddingStageApproval(false);
+                                }}
+                                data-testid="button-cancel-stage-approval"
+                              >
+                                <X className="w-4 h-4 mr-2" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-medium">{stageApproval.name}</h3>
+                              {stageApproval.description && (
+                                <p className="text-sm text-muted-foreground mt-1">{stageApproval.description}</p>
+                              )}
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                                <Badge variant="outline">
+                                  {getStageApprovalFields(stageApproval.id).length} field(s)
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditStageApproval(stageApproval)}
+                                data-testid={`button-edit-stage-approval-${stageApproval.id}`}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteStageApprovalMutation.mutate(stageApproval.id)}
+                                className="text-destructive hover:text-destructive"
+                                data-testid={`button-delete-stage-approval-${stageApproval.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+
+                {/* Add new stage approval form */}
+                {isAddingStageApproval && editingStageApproval && !editingStageApproval.id && (
+                  <Card className="bg-background border-dashed">
+                    <CardContent className="p-6">
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="new-stage-approval-name">Stage Approval Name</Label>
+                          <Input
+                            id="new-stage-approval-name"
+                            value={editingStageApproval.name}
+                            onChange={(e) => setEditingStageApproval({
+                              ...editingStageApproval,
+                              name: e.target.value
+                            })}
+                            data-testid="input-new-stage-approval-name"
+                            placeholder="Enter stage approval name"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="new-stage-approval-description">Description (Optional)</Label>
+                          <Textarea
+                            id="new-stage-approval-description"
+                            value={editingStageApproval.description}
+                            onChange={(e) => setEditingStageApproval({
+                              ...editingStageApproval,
+                              description: e.target.value
+                            })}
+                            data-testid="textarea-new-stage-approval-description"
+                            placeholder="Enter description"
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveStageApproval}
+                            disabled={createStageApprovalMutation.isPending}
+                            data-testid="button-create-stage-approval"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            Create Stage Approval
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setEditingStageApproval(null);
+                              setIsAddingStageApproval(false);
+                            }}
+                            data-testid="button-cancel-new-stage-approval"
                           >
                             <X className="w-4 h-4 mr-2" />
                             Cancel
