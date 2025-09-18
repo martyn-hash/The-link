@@ -31,6 +31,24 @@ const getCurrentTimeInStage = (project: ProjectWithRelations) => {
 export default function ProjectInfo({ project, user }: ProjectInfoProps) {
   return (
     <div className="space-y-6">
+      {/* Progress Metrics Section - Row 1, Column 1 */}
+      {project.progressMetrics && project.progressMetrics.length > 0 && (
+        <div>
+          <h4 className="font-semibold text-foreground mb-4">Progress Metrics</h4>
+          <div className="space-y-3">
+            {project.progressMetrics.map((metric) => (
+              <div key={metric.reasonId} className="flex justify-between">
+                <span className="text-muted-foreground">{metric.label}:</span>
+                <span className="font-medium" data-testid={`text-progress-metric-${metric.reasonId}`}>
+                  {metric.total}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Project Details Section */}
       <div>
         <h4 className="font-semibold text-foreground mb-4">Project Details</h4>
         <div className="space-y-3">

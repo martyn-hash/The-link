@@ -542,4 +542,9 @@ export type ProjectWithRelations = Project & {
     assignee?: User; 
     fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
   })[];
+  progressMetrics?: {
+    reasonId: string;
+    label: string;
+    total: number;
+  }[];
 };
