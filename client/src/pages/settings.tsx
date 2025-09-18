@@ -534,6 +534,24 @@ export default function SettingsPage() {
     },
   });
 
+  // Stage approval mapping mutation
+  const updateStageApprovalMappingMutation = useMutation({
+    mutationFn: async ({ id, stageApprovalId }: { id: string; stageApprovalId: string | null }) => {
+      return await apiRequest("PATCH", `/api/config/stages/${id}`, { stageApprovalId });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage approval mapping updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stages"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stage approval mapping",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Stage approval field mutations
   const createStageApprovalFieldMutation = useMutation({
     mutationFn: async (field: Omit<EditingStageApprovalField, 'id'>) => {
@@ -2503,6 +2521,91 @@ export default function SettingsPage() {
                     </CardContent>
                   </Card>
                 )}
+              </div>
+
+              {/* Stage Approval Mappings Section */}
+              <div className="mt-8 space-y-6">
+                <div className="border-t pt-6">
+                  <div>
+                    <h3 className="text-lg font-semibold">Stage Approval Mappings</h3>
+                    <p className="text-muted-foreground">Link kanban stages to approval forms that must be completed before stage transitions</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  {stagesLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    </div>
+                  ) : (
+                    stages?.map((stage) => {
+                      const currentApproval = stageApprovals?.find(approval => approval.id === stage.stageApprovalId);
+                      const isSaving = updateStageApprovalMappingMutation.isPending && updateStageApprovalMappingMutation.variables?.id === stage.id;
+                      
+                      return (
+                        <Card key={stage.id} className="bg-background">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div 
+                                  className="w-4 h-4 rounded-full" 
+                                  style={{ backgroundColor: stage.color || '#6b7280' }}
+                                ></div>
+                                <div>
+                                  <h4 className="font-medium">{stage.name}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {currentApproval ? `Mapped to: ${currentApproval.name}` : 'No approval required'}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center space-x-3">
+                                <Select
+                                  value={stage.stageApprovalId || "none"}
+                                  onValueChange={(value) => {
+                                    const stageApprovalId = value === "none" ? null : value;
+                                    updateStageApprovalMappingMutation.mutate({ 
+                                      id: stage.id, 
+                                      stageApprovalId 
+                                    });
+                                  }}
+                                  disabled={stageApprovalsLoading || isSaving}
+                                >
+                                  <SelectTrigger 
+                                    className="w-[250px]" 
+                                    data-testid={`select-stage-approval-${stage.id}`}
+                                  >
+                                    <SelectValue placeholder="Select approval form" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none" data-testid="select-item-none">None</SelectItem>
+                                    {stageApprovals?.map((approval) => (
+                                      <SelectItem key={approval.id} value={approval.id} data-testid={`select-item-approval-${approval.id}`}>
+                                        {approval.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                
+                                {isSaving && (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  )}
+                  
+                  {!stagesLoading && (!stages || stages.length === 0) && (
+                    <Card className="bg-background">
+                      <CardContent className="p-6 text-center">
+                        <p className="text-muted-foreground">No kanban stages configured. Create stages first in the Kanban Stages tab.</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
               </div>
             </TabsContent>
           </Tabs>
