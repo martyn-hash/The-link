@@ -475,5 +475,8 @@ export type ProjectWithRelations = Project & {
   bookkeeper: User;
   clientManager: User;
   currentAssignee?: User;
-  chronology: (ProjectChronology & { assignee?: User })[];
+  chronology: (ProjectChronology & { 
+    assignee?: User; 
+    fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
+  })[];
 };

@@ -150,6 +150,54 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                         : "System"}
                     </span>
                   </div>
+
+                  {/* Custom Field Responses */}
+                  {entry.fieldResponses && entry.fieldResponses.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <span className="text-xs text-muted-foreground font-medium">Additional Information:</span>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-md p-3 space-y-2" data-testid={`field-responses-${entry.id}`}>
+                        {entry.fieldResponses.map((response) => {
+                          // Get the appropriate value based on field type
+                          const getFieldValue = () => {
+                            switch (response.fieldType) {
+                              case 'number':
+                                return response.valueNumber?.toString() || 'No value';
+                              case 'short_text':
+                                return response.valueShortText || 'No value';
+                              case 'long_text':
+                                return response.valueLongText || 'No value';
+                              default:
+                                return 'Unknown field type';
+                            }
+                          };
+
+                          return (
+                            <div key={response.id} className="flex flex-col space-y-1" data-testid={`field-response-${response.id}`}>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs font-medium text-foreground">
+                                  {response.customField.fieldName}:
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  {response.fieldType.replace('_', ' ')}
+                                </Badge>
+                              </div>
+                              <div className="ml-2">
+                                {response.fieldType === 'long_text' ? (
+                                  <div className="text-xs text-foreground bg-white dark:bg-slate-700 p-2 rounded border">
+                                    {getFieldValue()}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-foreground font-mono">
+                                    {getFieldValue()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {entry.notes && (

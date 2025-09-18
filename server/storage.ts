@@ -70,7 +70,7 @@ export interface IStorage {
   
   // Chronology operations
   createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology>;
-  getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User })[]>;
+  getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]>;
   
   // Configuration operations
   getAllKanbanStages(): Promise<KanbanStage[]>;
@@ -369,6 +369,11 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
           },
           orderBy: desc(projectChronology.timestamp),
         },
@@ -382,6 +387,7 @@ export class DatabaseStorage implements IStorage {
       chronology: project.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
+        fieldResponses: c.fieldResponses || [],
       })),
     }));
   }
@@ -427,6 +433,11 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
           },
           orderBy: desc(projectChronology.timestamp),
         },
@@ -440,6 +451,7 @@ export class DatabaseStorage implements IStorage {
       chronology: project.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
+        fieldResponses: c.fieldResponses || [],
       })),
     }));
   }
@@ -455,6 +467,11 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
           },
           orderBy: desc(projectChronology.timestamp),
         },
@@ -470,6 +487,7 @@ export class DatabaseStorage implements IStorage {
       chronology: result.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
+        fieldResponses: c.fieldResponses || [],
       })),
     };
   }
@@ -608,11 +626,16 @@ export class DatabaseStorage implements IStorage {
     return chronology;
   }
 
-  async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User })[]> {
+  async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]> {
     const results = await db.query.projectChronology.findMany({
       where: eq(projectChronology.projectId, projectId),
       with: {
         assignee: true,
+        fieldResponses: {
+          with: {
+            customField: true,
+          },
+        },
       },
       orderBy: desc(projectChronology.timestamp),
     });
@@ -621,6 +644,7 @@ export class DatabaseStorage implements IStorage {
     return results.map(c => ({
       ...c,
       assignee: c.assignee || undefined,
+      fieldResponses: c.fieldResponses || [],
     }));
   }
 
