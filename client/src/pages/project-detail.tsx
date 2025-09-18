@@ -61,8 +61,12 @@ export default function ProjectDetail() {
   }, [projectError, toast]);
 
   const handleBack = () => {
-    // Navigate back to projects page
-    setLocation("/projects");
+    // Navigate back to the appropriate projects page based on user role
+    if (user?.role === 'admin' || user?.role === 'manager') {
+      setLocation("/all-projects");
+    } else {
+      setLocation("/projects");
+    }
   };
 
   const handleStatusUpdated = () => {
