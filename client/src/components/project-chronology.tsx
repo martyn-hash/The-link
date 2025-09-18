@@ -214,6 +214,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                                 return response.valueShortText || 'No value';
                               case 'long_text':
                                 return response.valueLongText || 'No value';
+                              case 'multi_select':
+                                return response.valueMultiSelect?.join(', ') || 'No selections';
                               default:
                                 return 'Unknown field type';
                             }

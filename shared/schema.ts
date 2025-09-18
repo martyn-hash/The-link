@@ -155,7 +155,7 @@ export const reasonCustomFields = pgTable("reason_custom_fields", {
   index("idx_reason_custom_fields_reason_id").on(table.reasonId),
   // CHECK constraint to ensure options is non-empty when field_type = 'multi_select'
   check("check_multi_select_options", sql`
-    (field_type != 'multi_select' OR (options IS NOT NULL AND array_length(options, 1) > 0))
+    (field_type != 'multi_select' OR (options IS NOT NULL AND array_length(options, 1) > 0 AND options <> ARRAY[]::text[]))
   `),
 ]);
 
@@ -317,9 +317,77 @@ export const insertStageReasonMapSchema = createInsertSchema(stageReasonMaps).om
   createdAt: true,
 });
 
-export const insertReasonCustomFieldSchema = createInsertSchema(reasonCustomFields).omit({
+// Base schema without refinements (for use with .partial())
+const baseReasonCustomFieldSchema = createInsertSchema(reasonCustomFields).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertReasonCustomFieldSchema = baseReasonCustomFieldSchema.refine((data) => {
+  // When fieldType is 'multi_select', options must be present and non-empty
+  if (data.fieldType === 'multi_select') {
+    if (!data.options || !Array.isArray(data.options) || data.options.length === 0) {
+      return false;
+    }
+    
+    // All options must be non-empty trimmed strings
+    const trimmedOptions = data.options.map(opt => opt?.trim()).filter(Boolean);
+    if (trimmedOptions.length !== data.options.length) {
+      return false;
+    }
+    
+    // All options must be unique
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== trimmedOptions.length) {
+      return false;
+    }
+  }
+  return true;
+}, {
+  message: "Multi-select fields must have at least one unique, non-empty option",
+}).transform((data) => {
+  // Trim options for multi-select fields
+  if (data.fieldType === 'multi_select' && data.options) {
+    return {
+      ...data,
+      options: data.options.map(opt => opt.trim()).filter(Boolean)
+    };
+  }
+  return data;
+});
+
+// Update schema for patches (allows partial updates)
+export const updateReasonCustomFieldSchema = baseReasonCustomFieldSchema.partial().refine((data) => {
+  // If fieldType is being set to 'multi_select', options must be present and non-empty
+  if (data.fieldType === 'multi_select') {
+    if (!data.options || !Array.isArray(data.options) || data.options.length === 0) {
+      return false;
+    }
+    
+    // All options must be non-empty trimmed strings
+    const trimmedOptions = data.options.map(opt => opt?.trim()).filter(Boolean);
+    if (trimmedOptions.length !== data.options.length) {
+      return false;
+    }
+    
+    // All options must be unique
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== trimmedOptions.length) {
+      return false;
+    }
+  }
+  return true;
+}, {
+  message: "Multi-select fields must have at least one unique, non-empty option",
+}).transform((data) => {
+  // Trim options for multi-select fields
+  if (data.fieldType === 'multi_select' && data.options) {
+    return {
+      ...data,
+      options: data.options.map(opt => opt.trim()).filter(Boolean)
+    };
+  }
+  return data;
 });
 
 export const insertReasonFieldResponseSchema = createInsertSchema(reasonFieldResponses).omit({

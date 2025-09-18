@@ -12,6 +12,7 @@ import {
   insertProjectDescriptionSchema,
   insertStageReasonMapSchema,
   insertReasonCustomFieldSchema,
+  updateReasonCustomFieldSchema,
   insertReasonFieldResponseSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
@@ -898,7 +899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/config/custom-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const fieldData = insertReasonCustomFieldSchema.partial().parse(req.body);
+      const fieldData = updateReasonCustomFieldSchema.parse(req.body);
       const customField = await storage.updateReasonCustomField(req.params.id, fieldData);
       res.json(customField);
     } catch (error) {
