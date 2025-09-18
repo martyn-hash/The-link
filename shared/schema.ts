@@ -50,6 +50,12 @@ export const projectStatusEnum = pgEnum("project_status", [
 // Custom field type enum
 export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text", "multi_select"]);
 
+// Stage approval field type enum
+export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "long_text"]);
+
+// Comparison type enum for number fields in stage approvals
+export const comparisonTypeEnum = pgEnum("comparison_type", ["equal_to", "less_than", "greater_than"]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -111,6 +117,7 @@ export const kanbanStages = pgTable("kanban_stages", {
   color: varchar("color").default("#6b7280"),
   maxInstanceTime: integer("max_instance_time"), // Maximum hours for a single visit to this stage (optional)
   maxTotalTime: integer("max_total_time"), // Maximum cumulative hours across all visits to this stage (optional)
+  stageApprovalId: varchar("stage_approval_id").references(() => stageApprovals.id, { onDelete: "set null" }), // Optional stage approval
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -188,6 +195,63 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
   `),
 ]);
 
+// Stage approvals configuration table
+export const stageApprovals = pgTable("stage_approvals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Stage approval fields table - questions/fields for each stage approval
+export const stageApprovalFields = pgTable("stage_approval_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stageApprovalId: varchar("stage_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
+  fieldName: varchar("field_name").notNull(),
+  fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
+  isRequired: boolean("is_required").default(false),
+  order: integer("order").notNull(),
+  // For boolean fields - what value is required for approval
+  expectedValueBoolean: boolean("expected_value_boolean"),
+  // For number fields - comparison type and expected value
+  comparisonType: comparisonTypeEnum("comparison_type"),
+  expectedValueNumber: integer("expected_value_number"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_stage_approval_fields_stage_approval_id").on(table.stageApprovalId),
+  // CHECK constraint to ensure proper fields are populated based on fieldType
+  check("check_boolean_field_validation", sql`
+    (field_type != 'boolean' OR expected_value_boolean IS NOT NULL)
+  `),
+  check("check_number_field_validation", sql`
+    (field_type != 'number' OR (comparison_type IS NOT NULL AND expected_value_number IS NOT NULL))
+  `),
+  check("check_long_text_field_validation", sql`
+    (field_type != 'long_text' OR (expected_value_boolean IS NULL AND comparison_type IS NULL AND expected_value_number IS NULL))
+  `),
+]);
+
+// Stage approval responses table - user responses when filling approval forms
+export const stageApprovalResponses = pgTable("stage_approval_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  fieldId: varchar("field_id").notNull().references(() => stageApprovalFields.id, { onDelete: "restrict" }),
+  valueBoolean: boolean("value_boolean"), // For boolean field types
+  valueNumber: integer("value_number"), // For number field types
+  valueLongText: text("value_long_text"), // For long_text field types
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_stage_approval_responses_project_id").on(table.projectId),
+  index("idx_stage_approval_responses_field_id").on(table.fieldId),
+  unique("unique_project_field_response").on(table.projectId, table.fieldId),
+  // CHECK constraint to ensure only one value column is populated and matches field type requirements
+  check("check_single_value_populated", sql`
+    (value_boolean IS NOT NULL AND value_number IS NULL AND value_long_text IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NOT NULL AND value_long_text IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NOT NULL)
+  `),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   assignedProjects: many(projects, { relationName: "assignee" }),
@@ -235,8 +299,12 @@ export const projectChronologyRelations = relations(projectChronology, ({ one, m
   fieldResponses: many(reasonFieldResponses),
 }));
 
-export const kanbanStagesRelations = relations(kanbanStages, ({ many }) => ({
+export const kanbanStagesRelations = relations(kanbanStages, ({ one, many }) => ({
   stageReasonMaps: many(stageReasonMaps),
+  stageApproval: one(stageApprovals, {
+    fields: [kanbanStages.stageApprovalId],
+    references: [stageApprovals.id],
+  }),
 }));
 
 export const changeReasonsRelations = relations(changeReasons, ({ many }) => ({
@@ -271,6 +339,30 @@ export const reasonFieldResponsesRelations = relations(reasonFieldResponses, ({ 
   customField: one(reasonCustomFields, {
     fields: [reasonFieldResponses.customFieldId],
     references: [reasonCustomFields.id],
+  }),
+}));
+
+export const stageApprovalsRelations = relations(stageApprovals, ({ many }) => ({
+  fields: many(stageApprovalFields),
+  linkedStages: many(kanbanStages),
+}));
+
+export const stageApprovalFieldsRelations = relations(stageApprovalFields, ({ one, many }) => ({
+  stageApproval: one(stageApprovals, {
+    fields: [stageApprovalFields.stageApprovalId],
+    references: [stageApprovals.id],
+  }),
+  responses: many(stageApprovalResponses),
+}));
+
+export const stageApprovalResponsesRelations = relations(stageApprovalResponses, ({ one }) => ({
+  project: one(projects, {
+    fields: [stageApprovalResponses.projectId],
+    references: [projects.id],
+  }),
+  field: one(stageApprovalFields, {
+    fields: [stageApprovalResponses.fieldId],
+    references: [stageApprovalFields.id],
   }),
 }));
 
@@ -431,6 +523,59 @@ export const insertReasonFieldResponseSchema = createInsertSchema(reasonFieldRes
   createdAt: true,
 });
 
+// Stage approval schemas
+export const insertStageApprovalSchema = createInsertSchema(stageApprovals).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateStageApprovalSchema = insertStageApprovalSchema.partial();
+
+// Base schema for stage approval fields without refinements (for use with .partial())
+const baseStageApprovalFieldSchema = createInsertSchema(stageApprovalFields).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStageApprovalFieldSchema = baseStageApprovalFieldSchema.refine((data) => {
+  // Boolean fields must have expectedValueBoolean
+  if (data.fieldType === 'boolean' && data.expectedValueBoolean == null) {
+    return false;
+  }
+  // Number fields must have both comparisonType and expectedValueNumber  
+  if (data.fieldType === 'number' && (data.comparisonType == null || data.expectedValueNumber == null)) {
+    return false;
+  }
+  // Long text fields should not have validation fields
+  if (data.fieldType === 'long_text' && (data.expectedValueBoolean != null || data.comparisonType != null || data.expectedValueNumber != null)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Field validation requirements not met for the specified field type",
+});
+
+export const updateStageApprovalFieldSchema = baseStageApprovalFieldSchema.partial().refine((data) => {
+  // If fieldType is being set, validate accordingly
+  if (data.fieldType === 'boolean' && data.expectedValueBoolean == null) {
+    return false;
+  }
+  if (data.fieldType === 'number' && (data.comparisonType == null || data.expectedValueNumber == null)) {
+    return false;
+  }
+  if (data.fieldType === 'long_text' && (data.expectedValueBoolean != null || data.comparisonType != null || data.expectedValueNumber != null)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Field validation requirements not met for the specified field type",
+});
+
+export const insertStageApprovalResponseSchema = createInsertSchema(stageApprovalResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
@@ -561,6 +706,14 @@ export type ReasonCustomField = typeof reasonCustomFields.$inferSelect;
 export type InsertReasonCustomField = z.infer<typeof insertReasonCustomFieldSchema>;
 export type ReasonFieldResponse = typeof reasonFieldResponses.$inferSelect;
 export type InsertReasonFieldResponse = z.infer<typeof insertReasonFieldResponseSchema>;
+export type StageApproval = typeof stageApprovals.$inferSelect;
+export type InsertStageApproval = z.infer<typeof insertStageApprovalSchema>;
+export type UpdateStageApproval = z.infer<typeof updateStageApprovalSchema>;
+export type StageApprovalField = typeof stageApprovalFields.$inferSelect;
+export type InsertStageApprovalField = z.infer<typeof insertStageApprovalFieldSchema>;
+export type UpdateStageApprovalField = z.infer<typeof updateStageApprovalFieldSchema>;
+export type StageApprovalResponse = typeof stageApprovalResponses.$inferSelect;
+export type InsertStageApprovalResponse = z.infer<typeof insertStageApprovalResponseSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 
