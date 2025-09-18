@@ -20,49 +20,60 @@ export function calculateBusinessHours(startTimestamp: string, endTimestamp: str
     return 0; // No business hours if start is after or equal to end
   }
   
-  // Calculate total hours between timestamps
-  const totalMilliseconds = end.getTime() - start.getTime();
-  const totalHours = totalMilliseconds / (1000 * 60 * 60);
+  let totalBusinessHours = 0;
   
-  // Count weekend hours to subtract
-  let weekendHours = 0;
+  // Create date objects for iteration - work with the actual timestamps, not day boundaries
+  const current = new Date(start);
+  const endTime = new Date(end);
   
-  // Create date objects for iteration (reset to start of day)
-  const currentDate = new Date(start);
-  currentDate.setHours(0, 0, 0, 0);
-  
-  const endDate = new Date(end);
-  endDate.setHours(23, 59, 59, 999);
-  
-  // Iterate through each day in the range
-  while (currentDate <= endDate) {
-    const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
+  // If the entire period is within the same day
+  if (current.getDate() === endTime.getDate() && 
+      current.getMonth() === endTime.getMonth() && 
+      current.getFullYear() === endTime.getFullYear()) {
     
-    if (dayOfWeek === 0 || dayOfWeek === 6) { // Weekend day
-      // Calculate how many hours of this weekend day are in our range
-      const dayStart = new Date(currentDate);
-      const dayEnd = new Date(currentDate);
-      dayEnd.setHours(23, 59, 59, 999);
-      
-      // Find the overlap between this weekend day and our time range
-      const rangeStart = dayStart < start ? start : dayStart;
-      const rangeEnd = dayEnd > end ? end : dayEnd;
-      
-      if (rangeStart < rangeEnd) {
-        const weekendMilliseconds = rangeEnd.getTime() - rangeStart.getTime();
-        weekendHours += weekendMilliseconds / (1000 * 60 * 60);
-      }
+    // Check if it's a weekday
+    const dayOfWeek = current.getDay(); // 0 = Sunday, 6 = Saturday
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      // It's a weekday, calculate hours
+      const milliseconds = endTime.getTime() - current.getTime();
+      totalBusinessHours = milliseconds / (1000 * 60 * 60);
     }
-    
-    // Move to next day
-    currentDate.setDate(currentDate.getDate() + 1);
+    // If it's a weekend day, totalBusinessHours remains 0
+  } else {
+    // Multiple days involved - process day by day
+    while (current < endTime) {
+      const dayOfWeek = current.getDay();
+      
+      // Only count weekdays (Monday = 1, Tuesday = 2, ..., Friday = 5)
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        // Calculate start and end times for this day
+        const dayStart = new Date(current);
+        const dayEnd = new Date(current);
+        dayEnd.setHours(23, 59, 59, 999);
+        
+        // Determine actual start time for this day
+        const actualStart = current.getDate() === start.getDate() && 
+                           current.getMonth() === start.getMonth() && 
+                           current.getFullYear() === start.getFullYear() ? start : dayStart;
+        
+        // Determine actual end time for this day
+        const actualEnd = dayEnd > endTime ? endTime : dayEnd;
+        
+        // Only add hours if there's actual overlap on this day
+        if (actualStart < actualEnd) {
+          const dayHours = (actualEnd.getTime() - actualStart.getTime()) / (1000 * 60 * 60);
+          totalBusinessHours += dayHours;
+        }
+      }
+      
+      // Move to next day
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0); // Reset to start of next day
+    }
   }
   
-  // Subtract weekend hours from total hours
-  const businessHours = totalHours - weekendHours;
-  
   // Return result rounded to 2 decimal places for precision
-  return Math.round(businessHours * 100) / 100;
+  return Math.round(totalBusinessHours * 100) / 100;
 }
 
 /**
