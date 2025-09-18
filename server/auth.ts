@@ -1,9 +1,21 @@
 import bcrypt from "bcrypt";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import type { Express, RequestHandler } from "express";
+import type { Express, RequestHandler, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
+
+// Extend express-session to include our custom session properties
+declare module "express-session" {
+  interface SessionData {
+    userId?: string;
+    userEmail?: string | null;
+    userRole?: string;
+  }
+}
+
+// Type for authenticated middleware - compatible with Express RequestHandler
+type AuthMiddleware = RequestHandler;
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -28,10 +40,10 @@ export function getSession() {
   });
 }
 
-export interface AuthenticatedRequest extends Express.Request {
+export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
-    email: string;
+    email: string | null;
     role: string;
     effectiveUser?: User;
     effectiveUserId?: string;
@@ -105,23 +117,25 @@ export async function setupAuth(app: Express) {
   });
 }
 
-export const isAuthenticated: RequestHandler = async (req: AuthenticatedRequest, res, next) => {
+export const isAuthenticated: AuthMiddleware = async (req, res, next) => {
   try {
     if (!req.session || !req.session.userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      res.status(401).json({ message: "Unauthorized" });
+      return;
     }
 
     // Get user from database
     const user = await storage.getUser(req.session.userId);
     if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      res.status(401).json({ message: "User not found" });
+      return;
     }
 
-    // Set user context
-    req.user = {
+    // Set user context (cast req to AuthenticatedRequest)
+    (req as AuthenticatedRequest).user = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role as string, // Convert enum to string
     };
 
     next();

@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Response, NextFunction, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import Papa from "papaparse";
@@ -10,6 +10,9 @@ import {
   insertKanbanStageSchema,
   insertChangeReasonSchema,
   insertProjectDescriptionSchema,
+  insertStageReasonMapSchema,
+  insertReasonCustomFieldSchema,
+  insertReasonFieldResponseSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
   type User,
@@ -35,7 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Middleware to resolve effective user (for impersonation)
-  const resolveEffectiveUser = async (req: AuthenticatedRequest, res: any, next: any) => {
+  const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {
       if (req.user && req.user.id) {
         const originalUserId = req.user.id;
@@ -66,13 +69,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       next();
     } catch (error) {
-      console.error("Error resolving effective user:", error);
+      console.error("Error resolving effective user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       next();
     }
   };
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, resolveEffectiveUser, async (req: AuthenticatedRequest, res) => {
+  app.get('/api/auth/user', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const originalUserId = req.user!.id;
       const effectiveUser = req.user!.effectiveUser;
@@ -95,13 +98,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(sanitizedUser);
     } catch (error) {
-      console.error("Error fetching user:", error);
+      console.error("Error fetching user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
   // Helper function to check admin role (must be real admin, not impersonated)
-  const requireAdmin = async (req: AuthenticatedRequest, res: any, next: any) => {
+  const requireAdmin = async (req: any, res: any, next: any) => {
     try {
       const originalUserId = req.user!.id;
       const originalUser = await storage.getUser(originalUserId);
@@ -115,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Helper function to check manager+ role (uses effective user for proper testing)
-  const requireManager = async (req: AuthenticatedRequest, res: any, next: any) => {
+  const requireManager = async (req: any, res: any, next: any) => {
     try {
       const effectiveRole = req.user!.effectiveRole;
       if (!effectiveRole || !['admin', 'manager'].includes(effectiveRole)) {
@@ -128,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // One-time admin creation route (for production bootstrap)
-  app.post("/api/bootstrap-admin", async (req, res) => {
+  app.post("/api/bootstrap-admin", async (req: any, res: any) => {
     try {
       const { email, password, firstName, lastName, bootstrapSecret } = req.body;
 
@@ -191,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: userResponse 
       });
     } catch (error) {
-      console.error("Error creating bootstrap admin:", error);
+      console.error("Error creating bootstrap admin:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to create admin user" });
     }
   });
@@ -246,25 +249,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Error resetting password:", error);
+      console.error("Error resetting password:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to reset password" });
     }
   });
 
   // User management routes
-  app.get("/api/users", isAuthenticated, resolveEffectiveUser, requireManager, async (req, res) => {
+  app.get("/api/users", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       const users = await storage.getAllUsers();
       // Strip password hash from response for security
       const sanitizedUsers = users.map(({ passwordHash, ...user }) => user);
       res.json(sanitizedUsers);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      console.error("Error fetching users:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
-  app.post("/api/users", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req, res) => {
+  app.post("/api/users", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const { password, ...userData } = req.body;
       
@@ -293,12 +296,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { passwordHash: _, ...userResponse } = user;
       res.json(userResponse);
     } catch (error) {
-      console.error("Error creating user:", error);
+      console.error("Error creating user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(400).json({ message: "Failed to create user" });
     }
   });
 
-  app.patch("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req, res) => {
+  app.patch("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const { password, ...userData } = req.body;
       
@@ -309,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeUserSchema = insertUserSchema.omit({ passwordHash: true }).partial();
       const validUserData = safeUserSchema.parse(userData);
       
-      let updateData = { ...validUserData };
+      let updateData: any = { ...validUserData };
       
       // Hash password only if provided and valid
       if (password && typeof password === 'string' && password.trim().length >= 6) {
@@ -324,23 +327,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { passwordHash: _, ...userResponse } = user;
       res.json(userResponse);
     } catch (error) {
-      console.error("Error updating user:", error);
+      console.error("Error updating user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(400).json({ message: "Failed to update user" });
     }
   });
 
-  app.delete("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req, res) => {
+  app.delete("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       await storage.deleteUser(req.params.id);
       res.json({ message: "User deleted successfully" });
     } catch (error) {
-      console.error("Error deleting user:", error);
+      console.error("Error deleting user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(400).json({ message: "Failed to delete user" });
     }
   });
 
   // User impersonation routes (admin only)
-  app.post("/api/auth/impersonate/:userId", isAuthenticated, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/auth/impersonate/:userId", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const adminUserId = req.user!.id;
       const targetUserId = req.params.userId;
@@ -349,11 +352,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Impersonation started successfully" });
     } catch (error) {
       console.error("Error starting impersonation:", error);
-      res.status(400).json({ message: error.message || "Failed to start impersonation" });
+      res.status(400).json({ message: (error instanceof Error ? (error instanceof Error ? error.message : null) : String(error)) || "Failed to start impersonation" });
     }
   });
 
-  app.delete("/api/auth/impersonate", isAuthenticated, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.delete("/api/auth/impersonate", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const adminUserId = req.user!.id;
       await storage.stopImpersonation(adminUserId);
@@ -364,7 +367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/auth/impersonation-state", isAuthenticated, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/auth/impersonation-state", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const adminUserId = req.user!.id;
       const state = await storage.getImpersonationState(adminUserId);
@@ -376,10 +379,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project routes
-  app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const effectiveUserId = req.user.effectiveUserId;
-      const effectiveRole = req.user.effectiveRole;
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveRole = req.user?.effectiveRole;
       
       if (!effectiveUserId || !effectiveRole) {
         return res.status(404).json({ message: "User not found" });
@@ -394,12 +397,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projects = await storage.getProjectsByUser(effectiveUserId, effectiveRole, filters);
       res.json(projects);
     } catch (error) {
-      console.error("Error fetching projects:", error);
+      console.error("Error fetching projects:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch projects" });
     }
   });
 
-  app.get("/api/projects/:id", isAuthenticated, resolveEffectiveUser, async (req, res) => {
+  app.get("/api/projects/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const project = await storage.getProject(req.params.id);
       if (!project) {
@@ -407,22 +410,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(project);
     } catch (error) {
-      console.error("Error fetching project:", error);
+      console.error("Error fetching project:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch project" });
     }
   });
 
-  app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const effectiveUserId = req.user.effectiveUserId;
-      const effectiveRole = req.user.effectiveRole;
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveRole = req.user?.effectiveRole;
       
       if (!effectiveUserId || !effectiveRole) {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // First, convert reason ID to enum value if needed
+      let changeReasonValue = req.body.changeReason;
+      if (changeReasonValue && !["errors_identified_from_bookkeeper", "first_allocation_of_work", "queries_answered", "work_completed_successfully", "clarifications_needed"].includes(changeReasonValue)) {
+        // This looks like a reason ID, convert it to enum value
+        const reasons = await storage.getAllChangeReasons();
+        const reason = reasons.find(r => r.id === changeReasonValue);
+        if (!reason) {
+          return res.status(400).json({ message: "Invalid change reason ID" });
+        }
+        changeReasonValue = reason.reason;
+      }
+
       const updateData = updateProjectStatusSchema.parse({
         ...req.body,
+        changeReason: changeReasonValue,
         projectId: req.params.id,
       });
 
@@ -444,6 +460,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not authorized to update this project" });
       }
 
+      // Validate stage-reason mapping is valid
+      const stageValidation = await storage.validateProjectStatus(updateData.newStatus);
+      if (!stageValidation.isValid) {
+        return res.status(400).json({ message: stageValidation.reason || "Invalid project status" });
+      }
+
+      // Get the stage to find change reason
+      const stages = await storage.getAllKanbanStages();
+      const targetStage = stages.find(stage => stage.name === updateData.newStatus);
+      if (!targetStage) {
+        return res.status(400).json({ message: "Invalid project status" });
+      }
+
+      // Validate stage-reason mapping exists
+      const mappingValidation = await storage.validateStageReasonMapping(targetStage.id, updateData.changeReason);
+      if (!mappingValidation.isValid) {
+        return res.status(400).json({ message: mappingValidation.reason || "Invalid change reason for this stage" });
+      }
+
+      // Get the change reason ID for field validation
+      const reasons = await storage.getAllChangeReasons();
+      const changeReason = reasons.find(reason => reason.reason === updateData.changeReason);
+      if (!changeReason) {
+        return res.status(400).json({ message: "Invalid change reason" });
+      }
+
+      // Validate required fields for this change reason
+      const fieldValidation = await storage.validateRequiredFields(changeReason.id, updateData.fieldResponses);
+      if (!fieldValidation.isValid) {
+        return res.status(400).json({ 
+          message: fieldValidation.reason || "Required fields are missing",
+          missingFields: fieldValidation.missingFields 
+        });
+      }
+
       const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
 
       // Send email notification to new assignee
@@ -463,11 +514,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(updatedProject);
     } catch (error) {
-      console.error("Error updating project status:", error);
-      if (error.name === 'ZodError') {
-        console.error("Validation errors:", error.issues);
-        res.status(400).json({ message: "Validation failed", errors: error.issues });
-      } else if (error.message && (error.message.includes("Invalid project status") || error.message.includes("not found"))) {
+      console.error("Error updating project status:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        console.error("Validation errors:", (error as any).issues);
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && (error.message.includes("Invalid project status") || error.message.includes("not found"))) {
         // Handle validation errors from validateProjectStatus and stage lookup errors
         res.status(400).json({ message: error.message });
       } else {
@@ -477,7 +528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CSV upload route
-  app.post("/api/projects/upload", isAuthenticated, requireAdmin, upload.single('csvFile'), async (req: AuthenticatedRequest, res) => {
+  app.post("/api/projects/upload", isAuthenticated, requireAdmin, upload.single('csvFile'), async (req: any, res: any) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No CSV file uploaded" });
@@ -513,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           validatedProjects.push(projectData);
         } catch (error) {
-          errors.push(`Row ${i + 2}: ${error.message}`);
+          errors.push(`Row ${i + 2}: ${error instanceof Error ? (error instanceof Error ? error.message : null) : String(error)}`);
         }
       }
 
@@ -548,49 +599,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Error uploading CSV:", error);
+      console.error("Error uploading CSV:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to upload CSV" });
     }
   });
 
   // Configuration routes
-  app.get("/api/config/stages", isAuthenticated, async (req, res) => {
+  app.get("/api/config/stages", isAuthenticated, async (req: any, res: any) => {
     try {
       const stages = await storage.getAllKanbanStages();
       res.json(stages);
     } catch (error) {
-      console.error("Error fetching stages:", error);
+      console.error("Error fetching stages:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch stages" });
     }
   });
 
-  app.post("/api/config/stages", isAuthenticated, requireAdmin, async (req, res) => {
+  app.post("/api/config/stages", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const stageData = insertKanbanStageSchema.parse(req.body);
       const stage = await storage.createKanbanStage(stageData);
       res.json(stage);
     } catch (error) {
-      console.error("Error creating stage:", error);
+      console.error("Error creating stage:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(400).json({ message: "Failed to create stage" });
     }
   });
 
-  app.patch("/api/config/stages/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.patch("/api/config/stages/:id", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const stage = await storage.updateKanbanStage(req.params.id, req.body);
       res.json(stage);
     } catch (error) {
-      console.error("Error updating stage:", error);
+      console.error("Error updating stage:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       
       // Check if this is a validation error about projects using the stage
-      if (error instanceof Error && error.message.includes("Cannot rename stage")) {
+      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Cannot rename stage")) {
         return res.status(409).json({ 
-          message: error.message,
+          message: (error instanceof Error ? error.message : null),
           code: "STAGE_IN_USE"
         });
       }
       
-      if (error instanceof Error && error.message.includes("Stage not found")) {
+      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Stage not found")) {
         return res.status(404).json({ message: "Stage not found" });
       }
       
@@ -606,14 +657,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error deleting stage:", error);
       
       // Check if this is a validation error about projects using the stage
-      if (error instanceof Error && error.message.includes("Cannot delete stage")) {
+      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Cannot delete stage")) {
         return res.status(409).json({ 
-          message: error.message,
+          message: (error instanceof Error ? error.message : null),
           code: "STAGE_IN_USE"
         });
       }
       
-      if (error instanceof Error && error.message.includes("Stage not found")) {
+      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Stage not found")) {
         return res.status(404).json({ message: "Stage not found" });
       }
       
@@ -691,7 +742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating project description:", error);
       
-      if (error instanceof Error && error.message.includes("Project description not found")) {
+      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Project description not found")) {
         return res.status(404).json({ message: "Project description not found" });
       }
       
@@ -706,11 +757,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project description:", error);
       
-      if (error instanceof Error && error.message.includes("Project description not found")) {
+      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Project description not found")) {
         return res.status(404).json({ message: "Project description not found" });
       }
       
       res.status(400).json({ message: "Failed to delete project description" });
+    }
+  });
+
+  // Stage-Reason Mapping Routes
+  app.get("/api/config/stage-reason-maps", isAuthenticated, async (req, res) => {
+    try {
+      const mappings = await storage.getAllStageReasonMaps();
+      res.json(mappings);
+    } catch (error) {
+      console.error("Error fetching stage-reason mappings:", error);
+      res.status(500).json({ message: "Failed to fetch stage-reason mappings" });
+    }
+  });
+
+  app.post("/api/config/stage-reason-maps", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const mappingData = insertStageReasonMapSchema.parse(req.body);
+      
+      // Validate that the stage exists
+      const stage = await storage.getStageById(mappingData.stageId);
+      if (!stage) {
+        return res.status(400).json({ message: "Stage not found" });
+      }
+
+      // Validate that the reason exists
+      const reasons = await storage.getAllChangeReasons();
+      const reason = reasons.find(r => r.id === mappingData.reasonId);
+      if (!reason) {
+        return res.status(400).json({ message: "Change reason not found" });
+      }
+
+      const mapping = await storage.createStageReasonMap(mappingData);
+      res.json(mapping);
+    } catch (error) {
+      console.error("Error creating stage-reason mapping:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if ((error instanceof Error ? error.message : null) && error instanceof Error && error.message && error.message.includes("unique constraint")) {
+        res.status(409).json({ message: "Stage-reason mapping already exists" });
+      } else {
+        res.status(400).json({ message: "Failed to create stage-reason mapping" });
+      }
+    }
+  });
+
+  app.get("/api/config/stages/:stageId/reasons", isAuthenticated, async (req, res) => {
+    try {
+      const reasons = await storage.getValidChangeReasonsForStage(req.params.stageId);
+      res.json(reasons);
+    } catch (error) {
+      console.error("Error fetching valid reasons for stage:", error);
+      res.status(500).json({ message: "Failed to fetch valid reasons for stage" });
+    }
+  });
+
+  app.delete("/api/config/stage-reason-maps/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteStageReasonMap(req.params.id);
+      res.json({ message: "Stage-reason mapping deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting stage-reason mapping:", error);
+      if ((error instanceof Error ? error.message : null) && error instanceof Error && error.message && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Stage-reason mapping not found" });
+      }
+      res.status(400).json({ message: "Failed to delete stage-reason mapping" });
+    }
+  });
+
+  // Custom Fields Routes
+  app.get("/api/config/custom-fields", isAuthenticated, async (req, res) => {
+    try {
+      const customFields = await storage.getAllReasonCustomFields();
+      res.json(customFields);
+    } catch (error) {
+      console.error("Error fetching custom fields:", error);
+      res.status(500).json({ message: "Failed to fetch custom fields" });
+    }
+  });
+
+  app.get("/api/config/reasons/:reasonId/custom-fields", isAuthenticated, async (req, res) => {
+    try {
+      const customFields = await storage.getReasonCustomFieldsByReasonId(req.params.reasonId);
+      res.json(customFields);
+    } catch (error) {
+      console.error("Error fetching custom fields for reason:", error);
+      res.status(500).json({ message: "Failed to fetch custom fields for reason" });
+    }
+  });
+
+  app.post("/api/config/custom-fields", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const fieldData = insertReasonCustomFieldSchema.parse(req.body);
+      const customField = await storage.createReasonCustomField(fieldData);
+      res.json(customField);
+    } catch (error) {
+      console.error("Error creating custom field:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else {
+        res.status(400).json({ message: "Failed to create custom field" });
+      }
+    }
+  });
+
+  app.patch("/api/config/custom-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const fieldData = insertReasonCustomFieldSchema.partial().parse(req.body);
+      const customField = await storage.updateReasonCustomField(req.params.id, fieldData);
+      res.json(customField);
+    } catch (error) {
+      console.error("Error updating custom field:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if ((error instanceof Error ? error.message : null) && error instanceof Error && error.message && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Custom field not found" });
+      } else {
+        res.status(400).json({ message: "Failed to update custom field" });
+      }
+    }
+  });
+
+  app.delete("/api/config/custom-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteReasonCustomField(req.params.id);
+      res.json({ message: "Custom field deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting custom field:", error);
+      if ((error instanceof Error ? error.message : null) && error instanceof Error && error.message && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Custom field not found" });
+      }
+      res.status(400).json({ message: "Failed to delete custom field" });
+    }
+  });
+
+  // Field Responses Routes (read-only for reports)
+  app.get("/api/projects/:projectId/field-responses", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveRole = req.user?.effectiveRole;
+      
+      if (!effectiveUserId || !effectiveRole) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Verify user has permission to view this project
+      const project = await storage.getProject(req.params.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check if effective user is authorized to view this project
+      const canView = 
+        effectiveRole === 'admin' ||
+        effectiveRole === 'manager' ||
+        project.currentAssigneeId === effectiveUserId ||
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
+
+      if (!canView) {
+        return res.status(403).json({ message: "Not authorized to view this project" });
+      }
+
+      // Get project chronology to retrieve field responses
+      const chronology = await storage.getProjectChronology(req.params.projectId);
+      
+      // For each chronology entry, get its field responses
+      const chronologyWithResponses = await Promise.all(
+        chronology.map(async (entry) => {
+          const fieldResponses = await storage.getReasonFieldResponsesByChronologyId(entry.id);
+          return {
+            ...entry,
+            fieldResponses
+          };
+        })
+      );
+
+      res.json(chronologyWithResponses);
+    } catch (error) {
+      console.error("Error fetching field responses for project:", error);
+      res.status(500).json({ message: "Failed to fetch field responses for project" });
     }
   });
 

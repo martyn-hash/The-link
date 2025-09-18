@@ -9,10 +9,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit2, Trash2, Save, X, Settings } from "lucide-react";
-import type { KanbanStage, ChangeReason, ProjectDescription } from "@shared/schema";
+import { Plus, Edit2, Trash2, Save, X, Settings, Link, Unlink } from "lucide-react";
+import type { 
+  KanbanStage, 
+  ChangeReason, 
+  ProjectDescription,
+  StageReasonMap,
+  ReasonCustomField
+} from "@shared/schema";
 
 interface EditingStage {
   id?: string;
@@ -35,6 +44,16 @@ interface EditingDescription {
   order: number;
 }
 
+interface EditingCustomField {
+  id?: string;
+  reasonId: string;
+  fieldName: string;
+  fieldType: 'number' | 'short_text' | 'long_text';
+  isRequired: boolean;
+  placeholder: string;
+  order: number;
+}
+
 const DEFAULT_STAGE: EditingStage = {
   name: "",
   assignedRole: "client_manager",
@@ -50,6 +69,15 @@ const DEFAULT_REASON: EditingReason = {
 const DEFAULT_DESCRIPTION: EditingDescription = {
   name: "",
   active: true,
+  order: 0,
+};
+
+const DEFAULT_CUSTOM_FIELD: EditingCustomField = {
+  reasonId: "",
+  fieldName: "",
+  fieldType: "short_text",
+  isRequired: false,
+  placeholder: "",
   order: 0,
 };
 
@@ -73,14 +101,23 @@ const STAGE_COLORS = [
   "#22c55e", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"
 ];
 
+const FIELD_TYPE_OPTIONS = [
+  { value: "number", label: "Number" },
+  { value: "short_text", label: "Short Text" },
+  { value: "long_text", label: "Long Text" },
+];
+
 export default function SettingsPage() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [editingStage, setEditingStage] = useState<EditingStage | null>(null);
   const [editingReason, setEditingReason] = useState<EditingReason | null>(null);
   const [editingDescription, setEditingDescription] = useState<EditingDescription | null>(null);
+  const [editingCustomField, setEditingCustomField] = useState<EditingCustomField | null>(null);
   const [isAddingStage, setIsAddingStage] = useState(false);
   const [isAddingReason, setIsAddingReason] = useState(false);
   const [isAddingDescription, setIsAddingDescription] = useState(false);
+  const [isAddingCustomField, setIsAddingCustomField] = useState(false);
+  const [selectedStageReasons, setSelectedStageReasons] = useState<string[]>([]);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -98,6 +135,16 @@ export default function SettingsPage() {
   // Fetch project descriptions
   const { data: descriptions, isLoading: descriptionsLoading } = useQuery<ProjectDescription[]>({
     queryKey: ["/api/config/project-descriptions"],
+  });
+
+  // Fetch stage-reason mappings
+  const { data: stageReasonMaps, isLoading: stageReasonMapsLoading } = useQuery<StageReasonMap[]>({
+    queryKey: ["/api/config/stage-reason-maps"],
+  });
+
+  // Fetch custom fields
+  const { data: customFields, isLoading: customFieldsLoading } = useQuery<ReasonCustomField[]>({
+    queryKey: ["/api/config/custom-fields"],
   });
 
   // Stage mutations
@@ -293,6 +340,96 @@ export default function SettingsPage() {
     },
   });
 
+  // Stage-Reason mapping mutations
+  const createStageReasonMapMutation = useMutation({
+    mutationFn: async ({ stageId, reasonId }: { stageId: string; reasonId: string }) => {
+      return await apiRequest("POST", "/api/config/stage-reason-maps", { stageId, reasonId });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage-reason mapping created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-reason-maps"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create stage-reason mapping",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteStageReasonMapMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/stage-reason-maps/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Stage-reason mapping deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-reason-maps"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stage-reason mapping",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Custom field mutations
+  const createCustomFieldMutation = useMutation({
+    mutationFn: async (field: Omit<EditingCustomField, 'id'>) => {
+      return await apiRequest("POST", "/api/config/custom-fields", field);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Custom field created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/custom-fields"] });
+      setIsAddingCustomField(false);
+      setEditingCustomField(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create custom field",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCustomFieldMutation = useMutation({
+    mutationFn: async ({ id, ...field }: EditingCustomField) => {
+      return await apiRequest("PATCH", `/api/config/custom-fields/${id}`, field);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Custom field updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/custom-fields"] });
+      setEditingCustomField(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update custom field",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCustomFieldMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/custom-fields/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Custom field deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/custom-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete custom field",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handle stage operations
   const handleSaveStage = () => {
     if (!editingStage) return;
@@ -401,6 +538,69 @@ export default function SettingsPage() {
     const nextOrder = Math.max(0, ...(descriptions?.map(d => d.order) || [])) + 1;
     setEditingDescription({ ...DEFAULT_DESCRIPTION, order: nextOrder });
     setIsAddingDescription(true);
+  };
+
+  // Handle stage-reason mapping operations
+  const handleToggleStageReasonMapping = (stageId: string, reasonId: string) => {
+    const existingMapping = stageReasonMaps?.find(
+      map => map.stageId === stageId && map.reasonId === reasonId
+    );
+
+    if (existingMapping) {
+      deleteStageReasonMapMutation.mutate(existingMapping.id);
+    } else {
+      createStageReasonMapMutation.mutate({ stageId, reasonId });
+    }
+  };
+
+  const getStageReasons = (stageId: string) => {
+    return stageReasonMaps?.filter(map => map.stageId === stageId) || [];
+  };
+
+  // Handle custom field operations
+  const handleSaveCustomField = () => {
+    if (!editingCustomField) return;
+
+    if (!editingCustomField.fieldName || !editingCustomField.reasonId) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editingCustomField.id) {
+      updateCustomFieldMutation.mutate(editingCustomField);
+    } else {
+      const { id, ...fieldData } = editingCustomField;
+      createCustomFieldMutation.mutate(fieldData);
+    }
+  };
+
+  const handleEditCustomField = (field: ReasonCustomField) => {
+    setEditingCustomField({
+      id: field.id,
+      reasonId: field.reasonId,
+      fieldName: field.fieldName,
+      fieldType: field.fieldType,
+      isRequired: field.isRequired || false,
+      placeholder: field.placeholder || "",
+      order: field.order,
+    });
+    setIsAddingCustomField(false);
+  };
+
+  const handleAddCustomField = (reasonId: string) => {
+    const reasonFields = customFields?.filter(f => f.reasonId === reasonId) || [];
+    const nextOrder = Math.max(0, ...reasonFields.map(f => f.order)) + 1;
+    setEditingCustomField({ ...DEFAULT_CUSTOM_FIELD, reasonId, order: nextOrder });
+    setIsAddingCustomField(true);
+  };
+
+  const getReasonCustomFields = (reasonId: string) => {
+    return customFields?.filter(field => field.reasonId === reasonId)
+      .sort((a, b) => a.order - b.order) || [];
   };
 
   if (isLoading) {
@@ -548,6 +748,45 @@ export default function SettingsPage() {
                               </div>
                             </div>
 
+                            {/* Mapped Reasons Section */}
+                            <div>
+                              <Label>Mapped Reasons</Label>
+                              <p className="text-sm text-muted-foreground mb-3">
+                                Select which change reasons are valid for this stage
+                              </p>
+                              {stageReasonMapsLoading ? (
+                                <div className="text-center py-4">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto"></div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {reasons?.map((reason) => {
+                                    const isChecked = stageReasonMaps?.some(
+                                      map => map.stageId === stage.id && map.reasonId === reason.id
+                                    );
+                                    const reasonLabel = REASON_OPTIONS.find(r => r.value === reason.reason)?.label || reason.reason;
+                                    
+                                    return (
+                                      <div key={reason.id} className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`stage-reason-${reason.id}`}
+                                          checked={isChecked}
+                                          onCheckedChange={() => handleToggleStageReasonMapping(stage.id, reason.id)}
+                                          data-testid={`checkbox-stage-reason-${reason.id}`}
+                                        />
+                                        <Label
+                                          htmlFor={`stage-reason-${reason.id}`}
+                                          className="text-sm font-normal cursor-pointer"
+                                        >
+                                          {reasonLabel}
+                                        </Label>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
                             <div className="flex gap-2">
                               <Button
                                 onClick={handleSaveStage}
@@ -584,6 +823,20 @@ export default function SettingsPage() {
                                     {ROLE_OPTIONS.find(r => r.value === stage.assignedRole)?.label || stage.assignedRole}
                                   </Badge>
                                   <span>Order: {stage.order}</span>
+                                </div>
+                                {/* Display mapped reasons */}
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {getStageReasons(stage.id).map(mapping => {
+                                    const reason = reasons?.find(r => r.id === mapping.reasonId);
+                                    if (!reason) return null;
+                                    const reasonLabel = REASON_OPTIONS.find(r => r.value === reason.reason)?.label || reason.reason;
+                                    return (
+                                      <Badge key={mapping.id} variant="secondary" className="text-xs">
+                                        <Link className="w-3 h-3 mr-1" />
+                                        {reasonLabel}
+                                      </Badge>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </div>
@@ -780,6 +1033,202 @@ export default function SettingsPage() {
                               />
                             </div>
 
+                            {/* Custom Fields Section */}
+                            <div>
+                              <div className="flex items-center justify-between mb-3">
+                                <div>
+                                  <Label>Custom Fields</Label>
+                                  <p className="text-sm text-muted-foreground">
+                                    Add custom fields that will be required when using this reason
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleAddCustomField(reason.id)}
+                                  data-testid="button-add-custom-field"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add Field
+                                </Button>
+                              </div>
+                              
+                              {customFieldsLoading ? (
+                                <div className="text-center py-4">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto"></div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {getReasonCustomFields(reason.id).map((field) => (
+                                    <div key={field.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">{field.fieldName}</span>
+                                          <Badge variant="outline" className="text-xs">
+                                            {FIELD_TYPE_OPTIONS.find(t => t.value === field.fieldType)?.label}
+                                          </Badge>
+                                          {field.isRequired && (
+                                            <Badge variant="destructive" className="text-xs">Required</Badge>
+                                          )}
+                                        </div>
+                                        {field.placeholder && (
+                                          <p className="text-sm text-muted-foreground mt-1">{field.placeholder}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleEditCustomField(field)}
+                                          data-testid={`button-edit-custom-field-${field.id}`}
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => deleteCustomFieldMutation.mutate(field.id)}
+                                          className="text-destructive hover:text-destructive"
+                                          data-testid={`button-delete-custom-field-${field.id}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  
+                                  {getReasonCustomFields(reason.id).length === 0 && (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                      No custom fields defined for this reason
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Custom Field Editing Form */}
+                            {(isAddingCustomField || editingCustomField) && editingCustomField && (
+                              <Card className="bg-muted/50 border-dashed">
+                                <CardContent className="p-4">
+                                  <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-medium">
+                                        {editingCustomField.id ? 'Edit Custom Field' : 'Add New Custom Field'}
+                                      </h4>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label htmlFor="custom-field-name">Field Name</Label>
+                                        <Input
+                                          id="custom-field-name"
+                                          value={editingCustomField.fieldName}
+                                          onChange={(e) => setEditingCustomField({
+                                            ...editingCustomField,
+                                            fieldName: e.target.value
+                                          })}
+                                          placeholder="Enter field name"
+                                          data-testid="input-custom-field-name"
+                                        />
+                                      </div>
+                                      
+                                      <div>
+                                        <Label htmlFor="custom-field-type">Field Type</Label>
+                                        <Select
+                                          value={editingCustomField.fieldType}
+                                          onValueChange={(value: 'number' | 'short_text' | 'long_text') => 
+                                            setEditingCustomField({
+                                              ...editingCustomField,
+                                              fieldType: value
+                                            })
+                                          }
+                                        >
+                                          <SelectTrigger data-testid="select-custom-field-type">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {FIELD_TYPE_OPTIONS.map(option => (
+                                              <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                    
+                                    <div>
+                                      <Label htmlFor="custom-field-placeholder">Placeholder Text</Label>
+                                      <Input
+                                        id="custom-field-placeholder"
+                                        value={editingCustomField.placeholder}
+                                        onChange={(e) => setEditingCustomField({
+                                          ...editingCustomField,
+                                          placeholder: e.target.value
+                                        })}
+                                        placeholder="Enter placeholder text"
+                                        data-testid="input-custom-field-placeholder"
+                                      />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id="custom-field-required"
+                                          checked={editingCustomField.isRequired}
+                                          onCheckedChange={(checked) => setEditingCustomField({
+                                            ...editingCustomField,
+                                            isRequired: !!checked
+                                          })}
+                                          data-testid="checkbox-custom-field-required"
+                                        />
+                                        <Label htmlFor="custom-field-required">Required field</Label>
+                                      </div>
+                                      
+                                      <div>
+                                        <Label htmlFor="custom-field-order">Order</Label>
+                                        <Input
+                                          id="custom-field-order"
+                                          type="number"
+                                          value={editingCustomField.order}
+                                          onChange={(e) => setEditingCustomField({
+                                            ...editingCustomField,
+                                            order: parseInt(e.target.value) || 0
+                                          })}
+                                          data-testid="input-custom-field-order"
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                      <Button
+                                        onClick={handleSaveCustomField}
+                                        disabled={createCustomFieldMutation.isPending || updateCustomFieldMutation.isPending}
+                                        data-testid="button-save-custom-field"
+                                      >
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {editingCustomField.id ? 'Save' : 'Create'} Field
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEditingCustomField(null);
+                                          setIsAddingCustomField(false);
+                                        }}
+                                        data-testid="button-cancel-custom-field"
+                                      >
+                                        <X className="w-4 h-4 mr-2" />
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
                             <div className="flex gap-2">
                               <Button
                                 onClick={handleSaveReason}
@@ -811,6 +1260,14 @@ export default function SettingsPage() {
                               {reason.description && (
                                 <p className="text-sm text-muted-foreground mt-1">{reason.description}</p>
                               )}
+                              {/* Display custom fields count */}
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {getReasonCustomFields(reason.id).length > 0 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {getReasonCustomFields(reason.id).length} custom field{getReasonCustomFields(reason.id).length !== 1 ? 's' : ''}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <Button
