@@ -16,6 +16,11 @@ import {
   insertReasonCustomFieldSchema,
   updateReasonCustomFieldSchema,
   insertReasonFieldResponseSchema,
+  insertStageApprovalSchema,
+  updateStageApprovalSchema,
+  insertStageApprovalFieldSchema,
+  updateStageApprovalFieldSchema,
+  insertStageApprovalResponseSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
   type User,
@@ -768,6 +773,230 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting change reason:", error);
       res.status(400).json({ message: "Failed to delete change reason" });
+    }
+  });
+
+  // Stage Approvals configuration routes
+  app.get("/api/config/stage-approvals", isAuthenticated, async (req, res) => {
+    try {
+      const approvals = await storage.getAllStageApprovals();
+      res.json(approvals);
+    } catch (error) {
+      console.error("Error fetching stage approvals:", error);
+      res.status(500).json({ message: "Failed to fetch stage approvals" });
+    }
+  });
+
+  app.post("/api/config/stage-approvals", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const approvalData = insertStageApprovalSchema.parse(req.body);
+      const approval = await storage.createStageApproval(approvalData);
+      res.json(approval);
+    } catch (error) {
+      console.error("Error creating stage approval:", error);
+      
+      // Check for Zod validation errors
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
+      // Check for unique constraint violation
+      if (error instanceof Error && (error as any).code === '23505' && (error as any).constraint_name === 'unique_name') {
+        return res.status(409).json({ 
+          message: `A stage approval with the name "${req.body.name}" already exists. Please choose a different name.`,
+          code: "DUPLICATE_APPROVAL_NAME"
+        });
+      }
+      
+      // Check for duplicate key error (alternative constraint format)
+      if (error instanceof Error && error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        if (error.message.includes('unique_name') || error.message.includes('name_unique')) {
+          return res.status(409).json({ 
+            message: `A stage approval with the name "${req.body.name}" already exists. Please choose a different name.`,
+            code: "DUPLICATE_APPROVAL_NAME"
+          });
+        }
+      }
+      
+      // Check for specific storage error message
+      if (error instanceof Error && error.message && error.message.includes('already exists')) {
+        return res.status(409).json({ 
+          message: error.message,
+          code: "DUPLICATE_APPROVAL_NAME"
+        });
+      }
+      
+      res.status(400).json({ message: "Failed to create stage approval" });
+    }
+  });
+
+  app.patch("/api/config/stage-approvals/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const approvalData = updateStageApprovalSchema.parse(req.body);
+      const approval = await storage.updateStageApproval(req.params.id, approvalData);
+      res.json(approval);
+    } catch (error) {
+      console.error("Error updating stage approval:", error);
+      
+      // Check for Zod validation errors
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
+      // Check for unique constraint violation
+      if (error instanceof Error && (error as any).code === '23505' && (error as any).constraint_name === 'unique_name') {
+        return res.status(409).json({ 
+          message: `A stage approval with the name "${req.body.name}" already exists. Please choose a different name.`,
+          code: "DUPLICATE_APPROVAL_NAME"
+        });
+      }
+      
+      // Check for duplicate key error (alternative constraint format)
+      if (error instanceof Error && error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        if (error.message.includes('unique_name') || error.message.includes('name_unique')) {
+          return res.status(409).json({ 
+            message: `A stage approval with the name "${req.body.name}" already exists. Please choose a different name.`,
+            code: "DUPLICATE_APPROVAL_NAME"
+          });
+        }
+      }
+      
+      // Check for not found error
+      if (error instanceof Error && error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Stage approval not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to update stage approval" });
+    }
+  });
+
+  app.delete("/api/config/stage-approvals/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteStageApproval(req.params.id);
+      res.json({ message: "Stage approval deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting stage approval:", error);
+      
+      // Check for not found error
+      if (error instanceof Error && error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Stage approval not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to delete stage approval" });
+    }
+  });
+
+  // Stage Approval Fields configuration routes
+  app.get("/api/config/stage-approval-fields", isAuthenticated, async (req, res) => {
+    try {
+      const fields = await storage.getAllStageApprovalFields();
+      res.json(fields);
+    } catch (error) {
+      console.error("Error fetching stage approval fields:", error);
+      res.status(500).json({ message: "Failed to fetch stage approval fields" });
+    }
+  });
+
+  app.get("/api/config/stage-approvals/:approvalId/fields", isAuthenticated, async (req, res) => {
+    try {
+      const fields = await storage.getStageApprovalFieldsByApprovalId(req.params.approvalId);
+      res.json(fields);
+    } catch (error) {
+      console.error("Error fetching stage approval fields for approval:", error);
+      res.status(500).json({ message: "Failed to fetch stage approval fields" });
+    }
+  });
+
+  app.post("/api/config/stage-approval-fields", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const fieldData = insertStageApprovalFieldSchema.parse(req.body);
+      const field = await storage.createStageApprovalField(fieldData);
+      res.json(field);
+    } catch (error) {
+      console.error("Error creating stage approval field:", error);
+      
+      // Check for Zod validation errors
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
+      res.status(400).json({ message: "Failed to create stage approval field" });
+    }
+  });
+
+  app.patch("/api/config/stage-approval-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const fieldData = updateStageApprovalFieldSchema.parse(req.body);
+      const field = await storage.updateStageApprovalField(req.params.id, fieldData);
+      res.json(field);
+    } catch (error) {
+      console.error("Error updating stage approval field:", error);
+      
+      // Check for Zod validation errors
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
+      // Check for not found error
+      if (error instanceof Error && error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Stage approval field not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to update stage approval field" });
+    }
+  });
+
+  app.delete("/api/config/stage-approval-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteStageApprovalField(req.params.id);
+      res.json({ message: "Stage approval field deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting stage approval field:", error);
+      
+      // Check for not found error
+      if (error instanceof Error && error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Stage approval field not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to delete stage approval field" });
+    }
+  });
+
+  // Stage Approval Validation endpoint
+  app.post("/api/config/stage-approvals/:approvalId/validate", isAuthenticated, async (req, res) => {
+    try {
+      // Parse request body as array of InsertStageApprovalResponse
+      const responses = Array.isArray(req.body) ? req.body : [req.body];
+      const validatedResponses = responses.map(response => insertStageApprovalResponseSchema.parse(response));
+      
+      // Call storage validation method
+      const validationResult = await storage.validateStageApprovalResponses(req.params.approvalId, validatedResponses);
+      
+      res.json(validationResult);
+    } catch (error) {
+      console.error("Error validating stage approval responses:", error);
+      
+      // Check for Zod validation errors
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: (error as any).issues 
+        });
+      }
+      
+      res.status(400).json({ message: "Failed to validate stage approval responses" });
     }
   });
 
