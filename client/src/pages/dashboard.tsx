@@ -3,11 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { type ProjectWithRelations } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { Button } from "@/components/ui/button";
-import { Columns3, List, Filter } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Columns3, List, Filter, Archive } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -23,9 +26,10 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [filter, setFilter] = useState("all");
+  const [showArchived, setShowArchived] = useState<boolean>(false);
 
-  const { data: projects, isLoading: projectsLoading, error } = useQuery({
-    queryKey: ["/api/projects"],
+  const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/projects", { archived: showArchived }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -71,14 +75,14 @@ export default function Dashboard() {
     );
   }
 
-  const filteredProjects = projects ? projects.filter((project: any) => {
+  const filteredProjects = projects ? projects.filter((project: ProjectWithRelations) => {
     switch (filter) {
       case "urgent":
         return project.priority === "urgent";
       case "overdue":
         // Simple overdue check - projects in same stage for more than 7 days
         const lastChronology = project.chronology?.[0];
-        if (!lastChronology) return false;
+        if (!lastChronology || !lastChronology.timestamp) return false;
         const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
         return daysSinceLastChange > 7;
       case "my-assignments":
@@ -120,6 +124,22 @@ export default function Dashboard() {
                     <SelectItem value="my-assignments">My Assignments</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Archived Toggle */}
+              <div className="flex items-center space-x-2">
+                <Archive className="w-4 h-4 text-muted-foreground" />
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="show-archived"
+                    checked={showArchived}
+                    onCheckedChange={setShowArchived}
+                    data-testid="switch-show-archived"
+                  />
+                  <Label htmlFor="show-archived" className="text-sm">
+                    Show archived
+                  </Label>
+                </div>
               </div>
               
               {/* View Toggle */}
