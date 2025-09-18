@@ -410,7 +410,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      res.json(project);
+
+      // Fetch progress metrics for the project
+      const progressMetrics = await storage.getProjectProgressMetrics(req.params.id);
+
+      // Return project data with progress metrics included
+      res.json({
+        ...project,
+        progressMetrics,
+      });
     } catch (error) {
       console.error("Error fetching project:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch project" });

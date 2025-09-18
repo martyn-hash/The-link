@@ -35,7 +35,7 @@ import {
   type UpdateProjectStatus,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -133,6 +133,9 @@ export interface IStorage {
   validateStageReasonMapping(stageId: string, reasonId: string): Promise<{ isValid: boolean; reason?: string }>;
   validateRequiredFields(reasonId: string, fieldResponses?: { customFieldId: string; fieldType: string; valueNumber?: number; valueShortText?: string; valueLongText?: string }[]): Promise<{ isValid: boolean; reason?: string; missingFields?: string[] }>;
   getValidChangeReasonsForStage(stageId: string): Promise<ChangeReason[]>;
+
+  // Project progress metrics
+  getProjectProgressMetrics(projectId: string): Promise<{ reasonId: string; label: string; total: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1351,6 +1354,39 @@ export class DatabaseStorage implements IStorage {
     });
 
     return mappings.map(mapping => mapping.reason);
+  }
+
+  async getProjectProgressMetrics(projectId: string): Promise<{ reasonId: string; label: string; total: number }[]> {
+    // Query to aggregate numeric field responses by change reason for a specific project
+    // We need to join: reasonFieldResponses -> reasonCustomFields -> changeReasons
+    // and also join through projectChronology to filter by projectId
+    const results = await db
+      .select({
+        reasonId: changeReasons.id,
+        label: changeReasons.countLabel,
+        reason: changeReasons.reason,
+        total: sum(reasonFieldResponses.valueNumber).as('total'),
+      })
+      .from(reasonFieldResponses)
+      .innerJoin(reasonCustomFields, eq(reasonFieldResponses.customFieldId, reasonCustomFields.id))
+      .innerJoin(changeReasons, eq(reasonCustomFields.reasonId, changeReasons.id))
+      .innerJoin(projectChronology, eq(reasonFieldResponses.chronologyId, projectChronology.id))
+      .where(
+        and(
+          eq(projectChronology.projectId, projectId),
+          eq(changeReasons.showCountInProject, true),
+          eq(reasonFieldResponses.fieldType, 'number'),
+          sql`${reasonFieldResponses.valueNumber} IS NOT NULL`
+        )
+      )
+      .groupBy(changeReasons.id, changeReasons.countLabel, changeReasons.reason);
+
+    // Convert the results to the expected format, using countLabel if available, otherwise reason
+    return results.map(result => ({
+      reasonId: result.reasonId,
+      label: result.label || result.reason,
+      total: Number(result.total) || 0,
+    }));
   }
 }
 
