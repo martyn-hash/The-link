@@ -95,7 +95,7 @@ export default function Projects() {
   }
 
   // Apply client-side filters (month and archived are handled server-side)
-  const filteredProjects = projects ? projects.filter((project: any) => {
+  const filteredProjects = projects && Array.isArray(projects) ? projects.filter((project: any) => {
     switch (filter) {
       case "urgent":
         return project.priority === "urgent";
@@ -117,7 +117,7 @@ export default function Projects() {
     }
   }) : [];
 
-  const projectStats = projects ? {
+  const projectStats = projects && Array.isArray(projects) ? {
     total: projects.length,
     myAssignments: projects.filter((p: any) => p.currentAssigneeId === user.id).length,
     urgent: projects.filter((p: any) => p.priority === "urgent").length,

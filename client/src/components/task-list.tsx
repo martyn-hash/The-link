@@ -11,18 +11,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Eye, Clock, User as UserIcon } from "lucide-react";
-import ProjectModal from "./project-modal";
+import { useLocation } from "wouter";
 import type { ProjectWithRelations, User } from "@shared/schema";
 
 interface TaskListProps {
   projects: ProjectWithRelations[];
   user: User;
-  selectedProjectId?: string | null;
-  onSelectProject?: (projectId: string | null) => void;
 }
 
-export default function TaskList({ projects, user, selectedProjectId, onSelectProject }: TaskListProps) {
-  const [selectedProject, setSelectedProject] = useState<ProjectWithRelations | null>(null);
+export default function TaskList({ projects, user }: TaskListProps) {
+  const [, setLocation] = useLocation();
   const [sortBy, setSortBy] = useState<"client" | "status" | "time">("time");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -152,14 +150,8 @@ export default function TaskList({ projects, user, selectedProjectId, onSelectPr
                 {visibleProjects.map((project) => (
                   <TableRow 
                     key={project.id} 
-                    className={`cursor-pointer transition-colors hover:bg-muted/50 ${
-                      selectedProjectId === project.id 
-                        ? 'bg-primary/10 border-l-2 border-primary' 
-                        : ''
-                    }`}
-                    onClick={() => onSelectProject?.(project.id)}
+                    className="hover:bg-muted/50"
                     data-testid={`task-row-${project.id}`}
-                    aria-selected={selectedProjectId === project.id}
                   >
                     <TableCell className="font-medium">
                       <span>{project.client.name}</span>
@@ -193,7 +185,7 @@ export default function TaskList({ projects, user, selectedProjectId, onSelectPr
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedProject(project);
+                          setLocation(`/projects/${project.id}`);
                         }}
                         data-testid={`button-view-project-${project.id}`}
                       >
@@ -209,14 +201,6 @@ export default function TaskList({ projects, user, selectedProjectId, onSelectPr
         </CardContent>
       </Card>
 
-      {selectedProject && (
-        <ProjectModal
-          project={selectedProject}
-          user={user}
-          isOpen={!!selectedProject}
-          onClose={() => setSelectedProject(null)}
-        />
-      )}
     </div>
   );
 }

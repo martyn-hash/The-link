@@ -57,7 +57,7 @@ export default function ProjectCard({
   };
 
   const getStatusLabel = () => {
-    const labels = {
+    const labels: Record<string, string> = {
       no_latest_action: "New",
       bookkeeping_work_required: "In Progress",
       in_review: "Review",
@@ -96,7 +96,6 @@ export default function ProjectCard({
             <MoreHorizontal 
               {...listeners}
               className="w-4 h-4 text-muted-foreground cursor-move hover:text-foreground transition-colors" 
-              title="Drag to move project"
             />
           </div>
         </div>

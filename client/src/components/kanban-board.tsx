@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
-import ProjectModal from "./project-modal";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,8 +38,12 @@ const getColorStyle = (hexColor: string): { backgroundColor: string } => {
 };
 
 export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
-  const [selectedProject, setSelectedProject] = useState<ProjectWithRelations | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [location, setLocation] = useLocation();
+
+  const navigateToProject = (projectId: string) => {
+    setLocation(`/projects/${projectId}`);
+  };
 
   // Fetch kanban stages from API
   const { 
@@ -210,7 +214,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                           key={project.id}
                           project={project}
                           timeInStage={getTimeInStage(project)}
-                          onOpenModal={() => setSelectedProject(project)}
+                          onOpenModal={() => navigateToProject(project.id)}
                         />
                       ))}
                     </SortableContext>
@@ -232,21 +236,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
             <ProjectCard
               project={activeProject}
               timeInStage={getTimeInStage(activeProject)}
-              onOpenModal={() => {}}
+              onOpenModal={() => navigateToProject(activeProject.id)}
               isDragging
             />
           )}
         </DragOverlay>
       </DndContext>
 
-      {selectedProject && (
-        <ProjectModal
-          project={selectedProject}
-          user={user}
-          isOpen={!!selectedProject}
-          onClose={() => setSelectedProject(null)}
-        />
-      )}
     </div>
   );
 }

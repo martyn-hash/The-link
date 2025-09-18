@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,8 +24,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useLocation } from "wouter";
 import type { ProjectWithRelations, User, KanbanStage, ChangeReason, ReasonCustomField } from "@shared/schema";
 
 interface ProjectModalProps {
@@ -66,6 +68,12 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+
+  const handleViewFullDetails = () => {
+    setLocation(`/projects/${project.id}`);
+    onClose();
+  };
 
   // Fetch kanban stages
   const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
@@ -314,9 +322,24 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden" data-testid="project-modal">
         <DialogHeader>
-          <DialogTitle className="text-lg">
-            {project.client.name} - {project.description}
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg">
+              {project.client.name} - {project.description}
+            </DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleViewFullDetails}
+              className="ml-4"
+              data-testid="button-view-full-details"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              View Full Details
+            </Button>
+          </div>
+          <DialogDescription>
+            View and manage project details, update status, and track chronology history.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">

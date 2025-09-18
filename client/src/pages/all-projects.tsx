@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { getCurrentMonthForFiltering, type ProjectWithRelations, type User } from "@shared/schema";
+import { type ProjectWithRelations, type User } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Columns3, List, Filter, Users, Clock, User as UserIcon, Calendar, Archive } from "lucide-react";
+import { Columns3, List, Filter, Users, Calendar, Archive } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,12 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
-import { formatDistanceToNow, format } from "date-fns";
 
 type ViewMode = "kanban" | "list";
 
@@ -39,13 +33,6 @@ const STATUS_OPTIONS = [
   { value: "completed", label: "Completed", assignedTo: "Project Status" },
 ];
 
-const CHANGE_REASONS = [
-  { value: "first_allocation_of_work", label: "First Allocation of Work" },
-  { value: "errors_identified_from_bookkeeper", label: "Errors identified from Bookkeeper" },
-  { value: "queries_answered", label: "Queries Answered" },
-  { value: "work_completed_successfully", label: "Work Completed Successfully" },
-  { value: "clarifications_needed", label: "Clarifications Needed" },
-];
 
 export default function AllProjects() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -55,7 +42,6 @@ export default function AllProjects() {
   const [userFilter, setUserFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState<boolean>(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { month: monthFilter || undefined, archived: showArchived }],
@@ -159,15 +145,6 @@ export default function AllProjects() {
     return statusMatch && userMatch;
   });
 
-  // Find selected project from filtered projects
-  const selectedProject = selectedProjectId ? filteredProjects.find((p: ProjectWithRelations) => p.id === selectedProjectId) : null;
-
-  // Clear selection if project is no longer in filtered results
-  useEffect(() => {
-    if (selectedProjectId && !filteredProjects.some((p: ProjectWithRelations) => p.id === selectedProjectId)) {
-      setSelectedProjectId(null);
-    }
-  }, [selectedProjectId, filteredProjects]);
 
 
   return (
@@ -296,144 +273,7 @@ export default function AllProjects() {
           ) : viewMode === "kanban" ? (
             <KanbanBoard projects={filteredProjects} user={user} />
           ) : (
-            <ResizablePanelGroup direction="horizontal" className="h-full">
-              <ResizablePanel defaultSize={60} minSize={40} data-testid="pane-left">
-                <TaskList 
-                  projects={filteredProjects} 
-                  user={user} 
-                  selectedProjectId={selectedProjectId}
-                  onSelectProject={setSelectedProjectId}
-                />
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={40} minSize={30} data-testid="pane-right">
-                <div className="h-full p-6 bg-muted/20" data-testid="chronology-panel">
-                  {selectedProject ? (
-                    <div className="h-full flex flex-col">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold">{selectedProject.client.name}</h3>
-                        <p className="text-sm text-muted-foreground">{selectedProject.description}</p>
-                      </div>
-                      
-                      <div className="flex-1 overflow-auto">
-                        <h4 className="text-sm font-medium mb-3 flex items-center">
-                          <Clock className="w-4 h-4 mr-2" />
-                          Project Timeline
-                        </h4>
-                        
-                        {selectedProject.chronology && selectedProject.chronology.length > 0 ? (
-                          <div className="space-y-4">
-                            {[...selectedProject.chronology]
-                              .sort((a, b) => {
-                                const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                                const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                                return bTime - aTime;
-                              })
-                              .map((entry, index) => {
-                                // Helper function to format time duration
-                                const formatDuration = (minutes: number | null) => {
-                                  if (!minutes || minutes === 0) return "0 days, 0 hours";
-                                  const days = Math.floor(minutes / (60 * 24));
-                                  const hours = Math.floor((minutes % (60 * 24)) / 60);
-                                  return `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''}`;
-                                };
-
-                                return (
-                                  <div key={entry.id} className="border-l-2 border-primary pl-3 pb-4">
-                                    <div className="w-2 h-2 bg-primary rounded-full -ml-4 mb-2 border-2 border-background"></div>
-                                    
-                                    {/* Status Transition */}
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      {entry.fromStatus ? (
-                                        <div className="flex items-center space-x-2 text-sm">
-                                          <Badge variant="outline" className="text-xs">
-                                            {STATUS_OPTIONS.find(s => s.value === entry.fromStatus)?.label}
-                                          </Badge>
-                                          <span className="text-muted-foreground">→</span>
-                                          <Badge variant="default" className="text-xs">
-                                            {STATUS_OPTIONS.find(s => s.value === entry.toStatus)?.label}
-                                          </Badge>
-                                        </div>
-                                      ) : (
-                                        <Badge variant="default" className="text-xs">
-                                          {STATUS_OPTIONS.find(s => s.value === entry.toStatus)?.label}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    
-                                    {/* Timestamp */}
-                                    <div className="flex flex-col space-y-1 mb-2">
-                                      <span className="text-xs text-muted-foreground">
-                                        {entry.timestamp ? format(new Date(entry.timestamp), 'PPp') : 'No timestamp'}
-                                      </span>
-                                      <span className="text-xs text-muted-foreground">
-                                        ({entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true }) : 'Unknown time'})
-                                      </span>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                      {/* Change Reason */}
-                                      <div className="flex items-center space-x-2">
-                                        <span className="text-xs text-muted-foreground font-medium">Reason:</span>
-                                        <Badge variant="secondary" className="text-xs">
-                                          {CHANGE_REASONS.find(r => r.value === entry.changeReason)?.label || entry.changeReason || 'Not specified'}
-                                        </Badge>
-                                      </div>
-                                      
-                                      {/* Time in Previous Stage */}
-                                      {entry.fromStatus && entry.timeInPreviousStage !== null && (
-                                        <div className="flex items-center space-x-2">
-                                          <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
-                                          <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                                            {formatDuration(entry.timeInPreviousStage)}
-                                          </span>
-                                        </div>
-                                      )}
-                                      
-                                      {/* Assignee Information */}
-                                      <div className="flex items-center space-x-2">
-                                        <span className="text-xs text-muted-foreground font-medium">
-                                          {entry.fromStatus ? "Assigned to:" : "Project created - Assigned to:"}
-                                        </span>
-                                        <div className="flex items-center text-xs text-foreground">
-                                          <UserIcon className="w-3 h-3 mr-1" />
-                                          {entry.assignee 
-                                            ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
-                                            : "System"}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {entry.notes && (
-                                      <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded text-xs text-muted-foreground italic">
-                                        "{entry.notes}"
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })
-                            }
-                          </div>
-                        ) : (
-                          <div className="text-center text-muted-foreground py-8">
-                            <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                            <p>No timeline entries yet</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center" data-testid="chronology-empty-state">
-                      <div className="text-center text-muted-foreground">
-                        <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                        <h3 className="text-lg font-medium mb-2">Select a project</h3>
-                        <p className="text-sm">Click on any project row to view its chronology and timeline</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
+            <TaskList projects={filteredProjects} user={user} />
           )}
         </main>
       </div>
