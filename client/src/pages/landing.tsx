@@ -3,7 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, Users, Clock, CheckCircle, Settings, LogIn } from "lucide-react";
+import MagicLinkLoginForm from "@/components/magic-link-login-form";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import logoPath from "@assets/resized_logo_1758262615320.png";
@@ -187,63 +189,82 @@ export default function Landing() {
 
           {/* Right Column - Login Form */}
           <div className="flex flex-col justify-center">
-            <Card className="w-full max-w-md mx-auto">
-              <CardHeader>
-                <CardTitle className="text-center flex items-center justify-center space-x-2">
-                  <LogIn className="w-5 h-5" />
-                  <span>Sign In</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      value={loginFormData.email}
-                      onChange={(e) => handleLoginInputChange('email', e.target.value)}
-                      required
-                      placeholder="Enter your email"
-                      data-testid="input-login-email"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Password</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      value={loginFormData.password}
-                      onChange={(e) => handleLoginInputChange('password', e.target.value)}
-                      required
-                      placeholder="Enter your password"
-                      data-testid="input-login-password"
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    disabled={isLoggingIn}
-                    className="w-full"
-                    data-testid="button-login"
-                  >
-                    {isLoggingIn ? "Signing In..." : "Sign In"}
-                  </Button>
-                  
-                  <div className="text-center mt-4">
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      onClick={() => setResetFormOpen(true)}
-                      className="text-sm text-muted-foreground hover:text-foreground"
-                      data-testid="button-forgot-password"
-                    >
-                      Forgot Password?
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+            <div className="w-full max-w-md mx-auto">
+              <Tabs defaultValue="password" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="password" data-testid="tab-password-login">
+                    Password
+                  </TabsTrigger>
+                  <TabsTrigger value="magic-link" data-testid="tab-magic-link">
+                    Magic Link
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="password" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-center flex items-center justify-center space-x-2">
+                        <LogIn className="w-5 h-5" />
+                        <span>Sign In</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleLogin} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="login-email">Email</Label>
+                          <Input
+                            id="login-email"
+                            type="email"
+                            value={loginFormData.email}
+                            onChange={(e) => handleLoginInputChange('email', e.target.value)}
+                            required
+                            placeholder="Enter your email"
+                            data-testid="input-login-email"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="login-password">Password</Label>
+                          <Input
+                            id="login-password"
+                            type="password"
+                            value={loginFormData.password}
+                            onChange={(e) => handleLoginInputChange('password', e.target.value)}
+                            required
+                            placeholder="Enter your password"
+                            data-testid="input-login-password"
+                          />
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={isLoggingIn}
+                          className="w-full"
+                          data-testid="button-login"
+                        >
+                          {isLoggingIn ? "Signing In..." : "Sign In"}
+                        </Button>
+                        
+                        <div className="text-center mt-4">
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={() => setResetFormOpen(true)}
+                            className="text-sm text-muted-foreground hover:text-foreground"
+                            data-testid="button-forgot-password"
+                          >
+                            Forgot Password?
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="magic-link" className="mt-6">
+                  <MagicLinkLoginForm />
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         </div>
 

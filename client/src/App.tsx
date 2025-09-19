@@ -13,6 +13,7 @@ import Upload from "@/pages/upload";
 import AllProjects from "@/pages/all-projects";
 import Projects from "@/pages/projects";
 import ProjectDetail from "@/pages/project-detail";
+import MagicLinkVerify from "@/pages/magic-link-verify";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -31,7 +32,10 @@ function Router() {
   return (
     <Switch>
       {!isAuthenticated ? (
-        <Route path="/" component={Landing} />
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="/magic-link-verify" component={MagicLinkVerify} />
+        </>
       ) : (
         <>
           <Route path="/" component={Dashboard} />
