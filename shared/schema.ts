@@ -51,7 +51,7 @@ export const projectStatusEnum = pgEnum("project_status", [
 export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text", "multi_select"]);
 
 // Stage approval field type enum
-export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "long_text"]);
+export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "long_text", "multi_select"]);
 
 // Comparison type enum for number fields in stage approvals
 export const comparisonTypeEnum = pgEnum("comparison_type", ["equal_to", "less_than", "greater_than"]);
@@ -152,11 +152,14 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
   fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
   isRequired: boolean("is_required").default(false),
   order: integer("order").notNull(),
+  placeholder: varchar("placeholder"), // For all field types
   // For boolean fields - what value is required for approval
   expectedValueBoolean: boolean("expected_value_boolean"),
   // For number fields - comparison type and expected value
   comparisonType: comparisonTypeEnum("comparison_type"),
   expectedValueNumber: integer("expected_value_number"),
+  // For multi_select fields - available options
+  options: text("options").array(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_stage_approval_fields_stage_approval_id").on(table.stageApprovalId),
@@ -167,8 +170,11 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
   check("check_number_field_validation", sql`
     (field_type != 'number' OR (comparison_type IS NOT NULL AND expected_value_number IS NOT NULL))
   `),
+  check("check_multi_select_field_validation", sql`
+    (field_type != 'multi_select' OR (options IS NOT NULL AND array_length(options, 1) > 0 AND options <> ARRAY[]::text[]))
+  `),
   check("check_long_text_field_validation", sql`
-    (field_type != 'long_text' OR (expected_value_boolean IS NULL AND comparison_type IS NULL AND expected_value_number IS NULL))
+    (field_type != 'long_text' OR (expected_value_boolean IS NULL AND comparison_type IS NULL AND expected_value_number IS NULL AND options IS NULL))
   `),
 ]);
 
@@ -180,6 +186,7 @@ export const stageApprovalResponses = pgTable("stage_approval_responses", {
   valueBoolean: boolean("value_boolean"), // For boolean field types
   valueNumber: integer("value_number"), // For number field types
   valueLongText: text("value_long_text"), // For long_text field types
+  valueMultiSelect: text("value_multi_select").array(), // For multi_select field types
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_stage_approval_responses_project_id").on(table.projectId),
@@ -187,9 +194,10 @@ export const stageApprovalResponses = pgTable("stage_approval_responses", {
   unique("unique_project_field_response").on(table.projectId, table.fieldId),
   // CHECK constraint to ensure only one value column is populated and matches field type requirements
   check("check_single_value_populated", sql`
-    (value_boolean IS NOT NULL AND value_number IS NULL AND value_long_text IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NOT NULL AND value_long_text IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NOT NULL)
+    (value_boolean IS NOT NULL AND value_number IS NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NOT NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NOT NULL AND value_multi_select IS NULL) OR
+    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NULL AND value_multi_select IS NOT NULL)
   `),
 ]);
 
