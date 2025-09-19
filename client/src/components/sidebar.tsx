@@ -12,7 +12,8 @@ import {
   Upload, 
   Users, 
   LogOut,
-  UserX
+  UserX,
+  Building2
 } from "lucide-react";
 import ImpersonationPanel from "@/components/impersonation-panel";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +48,12 @@ export default function Sidebar({ user }: SidebarProps) {
       label: "All Projects",
       href: "/all-projects",
       icon: Folder,
+      roles: ["admin", "manager"],
+    },
+    {
+      label: "Clients",
+      href: "/clients",
+      icon: Building2,
       roles: ["admin", "manager"],
     },
   ];
