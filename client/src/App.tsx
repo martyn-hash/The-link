@@ -13,6 +13,7 @@ import Upload from "@/pages/upload";
 import AllProjects from "@/pages/all-projects";
 import Projects from "@/pages/projects";
 import ProjectDetail from "@/pages/project-detail";
+import Profile from "@/pages/profile";
 import MagicLinkVerify from "@/pages/magic-link-verify";
 
 function Router() {
@@ -42,6 +43,7 @@ function Router() {
           <Route path="/projects" component={Projects} />
           <Route path="/projects/:id" component={ProjectDetail} />
           <Route path="/all-projects" component={AllProjects} />
+          <Route path="/profile" component={Profile} />
           <Route path="/settings" component={Settings} />
           <Route path="/users" component={Users} />
           <Route path="/upload" component={Upload} />

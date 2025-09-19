@@ -118,36 +118,43 @@ export default function Sidebar({ user }: SidebarProps) {
       </div>
 
       {/* User Info */}
-      <div className={`p-4 border-b border-border ${isImpersonating ? 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800' : ''}`}>
+      <div className={`border-b border-border ${isImpersonating ? 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800' : ''}`}>
         {isImpersonating && (
-          <div className="mb-2">
+          <div className="p-4 pb-2">
             <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" data-testid="impersonation-indicator">
               <UserX className="w-3 h-3 mr-1" />
               Testing Mode
             </Badge>
           </div>
         )}
-        <div className="flex items-center space-x-3">
-          <Avatar className="w-10 h-10">
-            <AvatarImage src={user?.profileImageUrl || ""} alt={`${user?.firstName || ''} ${user?.lastName || ''}`} />
-            <AvatarFallback className="bg-accent text-accent-foreground">
-              {getUserInitials()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate" data-testid="text-user-name">
-              {user?.firstName && user?.lastName 
-                ? `${user.firstName} ${user.lastName}` 
-                : user?.email || 'Loading...'}
-              {isImpersonating && (
-                <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground" data-testid="text-user-role">
-              {getRoleLabel()}
-            </p>
+        <Link href="/profile">
+          <div 
+            className={`p-4 hover:bg-accent/50 transition-colors cursor-pointer ${isImpersonating ? 'pt-2' : ''}`} 
+            data-testid="link-user-profile"
+          >
+            <div className="flex items-center space-x-3">
+              <Avatar className="w-10 h-10">
+                <AvatarImage src={user?.profileImageUrl || ""} alt={`${user?.firstName || ''} ${user?.lastName || ''}`} />
+                <AvatarFallback className="bg-accent text-accent-foreground">
+                  {getUserInitials()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" data-testid="text-user-name">
+                  {user?.firstName && user?.lastName 
+                    ? `${user.firstName} ${user.lastName}` 
+                    : user?.email || 'Loading...'}
+                  {isImpersonating && (
+                    <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground" data-testid="text-user-role">
+                  {getRoleLabel()}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Navigation */}
