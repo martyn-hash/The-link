@@ -8,22 +8,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Loader2 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { Mail, Loader2, KeyRound, ArrowLeft, CheckCircle } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 
 const magicLinkFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
 });
 
+const codeVerifySchema = z.object({
+  code: z.string().min(4, "Verification code must be 4 digits").max(4, "Verification code must be 4 digits"),
+});
+
 type MagicLinkFormData = z.infer<typeof magicLinkFormSchema>;
+type CodeVerifyFormData = z.infer<typeof codeVerifySchema>;
+
+type FormState = "email_input" | "code_entry";
 
 interface MagicLinkLoginFormProps {
   onSuccess?: () => void;
 }
 
 export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProps) {
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [formState, setFormState] = useState<FormState>("email_input");
+  const [sentEmail, setSentEmail] = useState<string>("");
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const form = useForm<MagicLinkFormData>({
@@ -33,18 +44,25 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
     },
   });
 
+  const codeForm = useForm<CodeVerifyFormData>({
+    resolver: zodResolver(codeVerifySchema),
+    defaultValues: {
+      code: "",
+    },
+  });
+
   const magicLinkMutation = useMutation({
     mutationFn: async (data: MagicLinkFormData) => {
       const response = await apiRequest("POST", "/api/magic-link/request", data);
       return response.json();
     },
-    onSuccess: (data) => {
-      setIsSuccess(true);
+    onSuccess: (data, variables) => {
+      setFormState("code_entry");
+      setSentEmail(variables.email);
       toast({
         title: "Magic Link Sent!",
         description: "Check your email for a magic link to sign in. The link will expire in 10 minutes.",
       });
-      onSuccess?.();
     },
     onError: (error: any) => {
       // The API always returns 200, but handle network errors
@@ -56,12 +74,60 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
     },
   });
 
+  const codeVerifyMutation = useMutation({
+    mutationFn: async (data: CodeVerifyFormData) => {
+      const response = await apiRequest("POST", "/api/magic-link/verify", {
+        code: data.code,
+        email: sentEmail,
+      });
+      return response.json();
+    },
+    onSuccess: async (data) => {
+      toast({
+        title: "Welcome!",
+        description: "You have been successfully signed in with your verification code.",
+      });
+      
+      // Refresh auth state to ensure Router recognizes user is authenticated
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
+      // Wait for auth state to update before navigation
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          setLocation("/"); // Navigate to dashboard using client-side routing
+        }
+      }, 500);
+    },
+    onError: (error: any) => {
+      console.error("Code verification error:", error);
+      const errorMessage = error.message || "Invalid verification code. Please check your code and try again.";
+      toast({
+        title: "Verification Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: MagicLinkFormData) => {
-    setIsSuccess(false);
+    setFormState("email_input");
     magicLinkMutation.mutate(data);
   };
 
-  if (isSuccess) {
+  const onCodeSubmit = (data: CodeVerifyFormData) => {
+    codeVerifyMutation.mutate(data);
+  };
+
+  const handleBackToEmail = () => {
+    setFormState("email_input");
+    setSentEmail("");
+    codeForm.reset();
+  };
+
+  // Code entry state - show success message + code input
+  if (formState === "code_entry") {
     return (
       <Card className="w-full max-w-md mx-auto">
         <CardHeader className="text-center">
@@ -72,7 +138,7 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
           </div>
           <CardTitle className="text-green-700">Check Your Email</CardTitle>
           <CardDescription>
-            We've sent a magic link to your email address. Click the link or use the 4-digit code to sign in.
+            We've sent a magic link to <strong>{sentEmail}</strong>. Check your email for a link, or enter the 4-digit code below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -82,18 +148,77 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
             </p>
             <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
               <li>Click the magic link in your email</li>
-              <li>Enter the 4-digit code manually</li>
+              <li>Enter the 4-digit code manually below</li>
             </ul>
           </div>
-          <div className="text-center">
-            <Button
-              variant="outline"
-              onClick={() => setIsSuccess(false)}
-              data-testid="button-send-another"
-            >
-              Send Another Link
-            </Button>
-          </div>
+          
+          {/* Code verification form */}
+          <Form {...codeForm}>
+            <form onSubmit={codeForm.handleSubmit(onCodeSubmit)} className="space-y-4">
+              <FormField
+                control={codeForm.control}
+                name="code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center justify-center space-x-2">
+                      <KeyRound className="w-4 h-4" />
+                      <span>4-Digit Verification Code</span>
+                    </FormLabel>
+                    <FormControl>
+                      <div className="flex justify-center">
+                        <InputOTP 
+                          maxLength={4} 
+                          value={field.value} 
+                          onChange={field.onChange}
+                          data-testid="input-verification-code"
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="space-y-3">
+                <Button
+                  type="submit"
+                  disabled={codeVerifyMutation.isPending}
+                  className="w-full"
+                  data-testid="button-verify-code"
+                >
+                  {codeVerifyMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Verify & Sign In
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBackToEmail}
+                  className="w-full"
+                  data-testid="button-back-to-email"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Use Different Email
+                </Button>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     );
