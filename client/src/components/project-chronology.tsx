@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
 import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
 import { calculateBusinessHours } from "@shared/businessTime";
 
@@ -26,10 +27,33 @@ const formatChangeReason = (reason: string): string => {
 };
 
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
+  // State for live time updates
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every minute for live time calculations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch kanban stages to get colors
   const { data: stages } = useQuery<KanbanStage[]>({
     queryKey: ["/api/config/stages"],
   });
+
+  // Memoize sorted chronology to avoid re-sorting on every render
+  const sortedChronology = useMemo(() => {
+    if (!project.chronology) return [];
+    return [...project.chronology].sort((a, b) => {
+      // Sort by timestamp in descending order (newest first)
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [project.chronology]);
 
   // Create a mapping of stage names to colors
   const stageColors = stages?.reduce((acc, stage) => {
@@ -76,79 +100,83 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     return parts.join(', ');
   };
 
-  // Function to calculate duration dynamically from timestamps
-  const calculateDurationInMinutes = (entry: any, index: number, chronologyArray: any[]): number => {
-    // If this is the first entry (no fromStatus), no duration to show
-    if (!entry.fromStatus || !entry.timestamp) {
-      return 0;
-    }
+  // Memoized function to calculate time spent IN the current stage (not previous stage)
+  const calculateTimeInCurrentStage = useMemo(() => {
+    return (entry: any, index: number, chronologyArray: any[]): number => {
+      // For the most recent entry (current stage), calculate live time using current state
+      if (index === 0) {
+        if (!entry.timestamp) return 0;
+        const timeDiff = currentTime - new Date(entry.timestamp).getTime();
+        return Math.max(0, Math.floor(timeDiff / (1000 * 60))); // Convert to minutes
+      }
 
-    let previousTimestamp: string | null = null;
+      // For completed stages, calculate time from this entry to the next entry
+      if (!entry.timestamp) {
+        return 0;
+      }
 
-    // For entries that are not the last in array (not the oldest chronologically)
-    if (index < chronologyArray.length - 1) {
-      // Get the previous entry (next in array since array is newest to oldest)
-      const previousEntry = chronologyArray[index + 1];
-      previousTimestamp = previousEntry?.timestamp;
-    } else {
-      // This is the oldest chronology entry, calculate from project creation
-      previousTimestamp = project.createdAt ? new Date(project.createdAt).toISOString() : null;
-    }
+      let nextTimestamp: string | null = null;
 
-    // Calculate duration if we have both timestamps
-    if (previousTimestamp && entry.timestamp) {
-      const currentTime = new Date(entry.timestamp);
-      const previousTime = new Date(previousTimestamp);
-      const diffMs = currentTime.getTime() - previousTime.getTime();
-      return Math.max(0, Math.floor(diffMs / (1000 * 60))); // Convert to minutes
-    }
+      // Get the next chronology entry (previous in array since array is newest to oldest)
+      if (index > 0) {
+        const nextEntry = chronologyArray[index - 1];
+        nextTimestamp = nextEntry?.timestamp;
+      }
 
-    return 0; // Default fallback for missing timestamps
-  };
+      // Calculate duration if we have both timestamps
+      if (nextTimestamp && entry.timestamp) {
+        const nextTime = new Date(nextTimestamp);
+        const entryTime = new Date(entry.timestamp);
+        const diffMs = nextTime.getTime() - entryTime.getTime();
+        return Math.max(0, Math.floor(diffMs / (1000 * 60))); // Convert to minutes
+      }
 
-  // Function to get business hours for a chronology entry
-  const getBusinessHoursForEntry = (entry: any, index: number, chronologyArray: any[]): string => {
-    // If this is the first entry (no fromStatus), no business hours to show
-    if (!entry.fromStatus) {
-      return "";
-    }
+      return 0; // Default fallback for missing timestamps
+    };
+  }, [currentTime]);
 
-    // First, try to use the stored businessHoursInPreviousStage value (stored in minutes, convert to hours)
-    if (entry.businessHoursInPreviousStage !== null && entry.businessHoursInPreviousStage !== undefined) {
-      const businessHours = entry.businessHoursInPreviousStage / 60; // Convert minutes to hours
-      return formatBusinessHours(businessHours);
-    }
+  // Memoized function to get business hours for time spent IN the current stage
+  const getBusinessHoursInCurrentStage = useMemo(() => {
+    return (entry: any, index: number, chronologyArray: any[]): string => {
+      // For the most recent entry (current stage), calculate live business hours using current state
+      if (index === 0) {
+        if (!entry.timestamp) return "0 business hours";
+        try {
+          const businessHours = calculateBusinessHours(entry.timestamp, new Date(currentTime).toISOString());
+          return formatBusinessHours(businessHours);
+        } catch (error) {
+          console.error('Error calculating live business hours:', error);
+          return "0 business hours";
+        }
+      }
 
-    // Fallback: calculate business hours if stored value is not available
-    if (!entry.timestamp) {
-      return "0 business hours";
-    }
-
-    let previousTimestamp: string | null = null;
-
-    // For entries that are not the last in array (not the oldest chronologically)
-    if (index < chronologyArray.length - 1) {
-      // Get the previous entry (next in array since array is newest to oldest)
-      const previousEntry = chronologyArray[index + 1];
-      previousTimestamp = previousEntry?.timestamp;
-    } else {
-      // This is the oldest chronology entry, calculate from project creation
-      previousTimestamp = project.createdAt ? new Date(project.createdAt).toISOString() : null;
-    }
-
-    // Calculate business hours if we have both timestamps
-    if (previousTimestamp && entry.timestamp) {
-      try {
-        const businessHours = calculateBusinessHours(previousTimestamp, entry.timestamp);
-        return formatBusinessHours(businessHours);
-      } catch (error) {
-        console.error('Error calculating business hours:', error);
+      // For completed stages, calculate business hours from this entry to the next entry
+      if (!entry.timestamp) {
         return "0 business hours";
       }
-    }
 
-    return "0 business hours";
-  };
+      let nextTimestamp: string | null = null;
+
+      // Get the next chronology entry (previous in array since array is newest to oldest)
+      if (index > 0) {
+        const nextEntry = chronologyArray[index - 1];
+        nextTimestamp = nextEntry?.timestamp;
+      }
+
+      // Calculate business hours if we have both timestamps
+      if (nextTimestamp && entry.timestamp) {
+        try {
+          const businessHours = calculateBusinessHours(entry.timestamp, nextTimestamp);
+          return formatBusinessHours(businessHours);
+        } catch (error) {
+          console.error('Error calculating business hours:', error);
+          return "0 business hours";
+        }
+      }
+
+      return "0 business hours";
+    };
+  }, [currentTime]);
 
   // Format business hours for display
   const formatBusinessHours = (hours: number): string => {
@@ -180,15 +208,10 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       <h4 className="font-semibold text-foreground mb-4">Project Chronology</h4>
       <ScrollArea className="h-96">
         <div className="space-y-4">
-          {project.chronology?.sort((a, b) => {
-            // Sort by timestamp in descending order (newest first)
-            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-            return timeB - timeA;
-          }).map((entry, index) => {
+          {sortedChronology.map((entry, index) => {
             const hasFields = entry.fieldResponses && entry.fieldResponses.length > 0;
             return (
-              <div key={entry.id} className="border-l-2 border-primary pl-4 pb-4">
+              <div key={entry.id} className="border-l-2 border-primary pl-4 pb-4 min-h-[200px] flex flex-col">
                 {/* Timestamp header */}
                 <div className="flex justify-end mb-2">
                   <span className="text-xs text-muted-foreground">
@@ -196,8 +219,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                   </span>
                 </div>
                 
-                {/* Conditional grid layout - full width if no custom fields, two columns if fields exist */}
-                <div className={`grid grid-cols-1 ${hasFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-4`}>
+                {/* Fixed two-column layout with scrollable right column */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
                   {/* Left Column: Main chronology information */}
                   <div className="space-y-2">
                     {/* Status Change */}
@@ -239,23 +262,25 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                       </Badge>
                     </div>
                     
-                    {/* Time in Previous Stage */}
-                    {entry.fromStatus && (
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-muted-foreground font-medium">Duration in previous stage:</span>
-                          <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                            {formatDuration(calculateDurationInMinutes(entry, index, project.chronology || []))}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-muted-foreground font-medium">Business hours in previous stage:</span>
-                          <span className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded" data-testid={`business-hours-${entry.id}`}>
-                            {getBusinessHoursForEntry(entry, index, project.chronology || [])}
-                          </span>
-                        </div>
+                    {/* Time in Current Stage */}
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {index === 0 ? "Time in current stage:" : "Time spent in this stage:"}
+                        </span>
+                        <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded" data-testid={`time-duration-${entry.id}`}>
+                          {formatDuration(calculateTimeInCurrentStage(entry, index, sortedChronology))}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {index === 0 ? "Business hours in current stage:" : "Business hours spent in this stage:"}
+                        </span>
+                        <span className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded" data-testid={`business-hours-${entry.id}`}>
+                          {getBusinessHoursInCurrentStage(entry, index, sortedChronology)}
+                        </span>
+                      </div>
+                    </div>
                     
                     {/* Assignee Information */}
                     <div className="flex items-center space-x-2">
@@ -277,56 +302,71 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     )}
                   </div>
 
-                  {/* Right Column: Custom Fields */}
-                  {entry.fieldResponses && entry.fieldResponses.length > 0 && (
-                    <div className="space-y-2">
-                      <span className="text-xs text-muted-foreground font-medium">Additional Information</span>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-md p-3 space-y-3" data-testid={`field-responses-${entry.id}`}>
-                        {entry.fieldResponses.map((response) => {
-                          // Get the appropriate value based on field type
-                          const getFieldValue = () => {
-                            switch (response.fieldType) {
-                              case 'number':
-                                return response.valueNumber?.toString() || 'No value';
-                              case 'short_text':
-                                return response.valueShortText || 'No value';
-                              case 'long_text':
-                                return response.valueLongText || 'No value';
-                              case 'multi_select':
-                                return response.valueMultiSelect?.join(', ') || 'No selections';
-                              default:
-                                return 'Unknown field type';
-                            }
-                          };
-
-                          return (
-                            <div key={response.id} className="space-y-1" data-testid={`field-response-${response.id}`}>
-                              <span className="text-xs font-medium text-foreground block">
-                                {response.customField.fieldName}
-                              </span>
-                              <div className="ml-1">
-                                {response.fieldType === 'long_text' ? (
-                                  <div className="text-xs text-foreground bg-white dark:bg-slate-700 p-2 rounded border">
-                                    {getFieldValue()}
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-foreground">
-                                    {getFieldValue()}
-                                  </span>
-                                )}
-                              </div>
+                  {/* Right Column: Additional Information with scrollable content */}
+                  <div className="space-y-2">
+                    <span className="text-xs text-muted-foreground font-medium">Additional Information</span>
+                    <ScrollArea className="h-[120px] w-full">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-md p-3 space-y-3 min-h-[120px]" data-testid={`additional-info-${entry.id}`}>
+                        {/* Field Responses */}
+                        {entry.fieldResponses && entry.fieldResponses.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium text-foreground border-b border-slate-300 dark:border-slate-600 pb-1">
+                              Stage Approval Responses
                             </div>
-                          );
-                        })}
+                            {entry.fieldResponses.map((response) => {
+                              // Get the appropriate value based on field type
+                              const getFieldValue = () => {
+                                switch (response.fieldType) {
+                                  case 'number':
+                                    return response.valueNumber?.toString() || 'No value';
+                                  case 'short_text':
+                                    return response.valueShortText || 'No value';
+                                  case 'long_text':
+                                    return response.valueLongText || 'No value';
+                                  case 'multi_select':
+                                    return response.valueMultiSelect?.join(', ') || 'No selections';
+                                  default:
+                                    return 'Unknown field type';
+                                }
+                              };
+
+                              return (
+                                <div key={response.id} className="space-y-1" data-testid={`field-response-${response.id}`}>
+                                  <span className="text-xs font-medium text-foreground block">
+                                    {response.customField.fieldName}
+                                  </span>
+                                  <div className="ml-1">
+                                    {response.fieldType === 'long_text' ? (
+                                      <div className="text-xs text-foreground bg-white dark:bg-slate-700 p-2 rounded border max-h-16 overflow-y-auto">
+                                        {getFieldValue()}
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-foreground">
+                                        {getFieldValue()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* Show placeholder if no additional information */}
+                        {(!entry.fieldResponses || entry.fieldResponses.length === 0) && (
+                          <div className="text-xs text-muted-foreground italic flex items-center justify-center h-full">
+                            No additional information available
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    </ScrollArea>
+                  </div>
                 </div>
               </div>
             );
           })}
           
-          {!project.chronology?.length && (
+          {!sortedChronology.length && (
             <div className="text-center py-8 text-muted-foreground">
               <p className="text-sm">No chronology available</p>
             </div>
