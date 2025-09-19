@@ -160,7 +160,7 @@ export async function setupAuth(app: Express) {
         // Always return 200 to prevent enumeration, but don't process the request
         return res.json({ 
           message: "Magic link request created successfully",
-          expiresIn: "15 minutes"
+          expiresIn: "10 minutes"
         });
       }
 
@@ -191,7 +191,7 @@ export async function setupAuth(app: Express) {
             tokenHash,
             codeHash,
             email: normalizedEmail,
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
           });
 
           // Send magic link email with plain token and code values
@@ -222,7 +222,7 @@ export async function setupAuth(app: Express) {
       // Always return success response to prevent user enumeration
       res.json({ 
         message: "Magic link request created successfully",
-        expiresIn: "15 minutes"
+        expiresIn: "10 minutes"
       });
     } catch (error) {
       console.error("Magic link request error:", error);

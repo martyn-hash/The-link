@@ -42,7 +42,7 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
       setIsSuccess(true);
       toast({
         title: "Magic Link Sent!",
-        description: "Check your email for a magic link to sign in. The link will expire in 15 minutes.",
+        description: "Check your email for a magic link to sign in. The link will expire in 10 minutes.",
       });
       onSuccess?.();
     },

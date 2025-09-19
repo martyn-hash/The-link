@@ -76,7 +76,7 @@ export const magicLinkTokens = pgTable("magic_link_tokens", {
   tokenHash: varchar("token_hash").notNull().unique(),
   codeHash: varchar("code_hash").notNull(),
   email: varchar("email").notNull(),
-  expiresAt: timestamp("expires_at").notNull().default(sql`now() + interval '15 minutes'`),
+  expiresAt: timestamp("expires_at").notNull().default(sql`now() + interval '10 minutes'`),
   used: boolean("used").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
