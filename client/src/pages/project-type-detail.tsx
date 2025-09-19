@@ -1825,10 +1825,10 @@ export default function ProjectTypeDetail() {
                         
                         <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
                           {editingStageApproval?.id && allStageApprovalFields ? (
-                            allStageApprovalFields.filter(field => field.stageApprovalId === editingStageApproval.id).length > 0 ? (
+                            allStageApprovalFields?.filter(field => field.stageApprovalId === editingStageApproval.id).length > 0 ? (
                               <div className="space-y-2">
                                 {allStageApprovalFields
-                                  .filter(field => field.stageApprovalId === editingStageApproval.id)
+                                  ?.filter(field => field.stageApprovalId === editingStageApproval.id)
                                   .sort((a, b) => a.order - b.order)
                                   .map((field, index) => (
                                     <div key={field.id} className="flex items-center justify-between p-2 border rounded">
