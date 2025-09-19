@@ -103,7 +103,7 @@ export const clients = pgTable("clients", {
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id),
-  projectTypeId: varchar("project_type_id").references(() => projectTypes.id), // links to project type configuration (temporarily nullable for migration)
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id), // links to project type configuration
   bookkeeperId: varchar("bookkeeper_id").notNull().references(() => users.id),
   clientManagerId: varchar("client_manager_id").notNull().references(() => users.id),
   description: text("description").notNull(),
@@ -134,7 +134,7 @@ export const projectChronology = pgTable("project_chronology", {
 // Stage approvals configuration table
 export const stageApprovals = pgTable("stage_approvals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectTypeId: varchar("project_type_id").references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type (temporarily nullable for migration)
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type
   name: varchar("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -196,7 +196,7 @@ export const stageApprovalResponses = pgTable("stage_approval_responses", {
 // Kanban stages configuration table
 export const kanbanStages = pgTable("kanban_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectTypeId: varchar("project_type_id").references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type (temporarily nullable for migration)
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type
   name: varchar("name").notNull(),
   assignedRole: userRoleEnum("assigned_role"),
   order: integer("order").notNull(),
@@ -214,7 +214,7 @@ export const kanbanStages = pgTable("kanban_stages", {
 // Change reasons configuration table
 export const changeReasons = pgTable("change_reasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectTypeId: varchar("project_type_id").references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type (temporarily nullable for migration)
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type
   reason: varchar("reason").notNull(),
   description: varchar("description"),
   showCountInProject: boolean("show_count_in_project").default(false),

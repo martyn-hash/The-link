@@ -1265,23 +1265,17 @@ export class DatabaseStorage implements IStorage {
           throw new Error("No kanban stages found. Please create at least one stage before importing projects.");
         }
 
-        // Find "Not Completed in Time" stage or create it if needed
-        let notCompletedStage = await tx.select().from(kanbanStages).where(eq(kanbanStages.name, "Not Completed in Time"));
-        if (notCompletedStage.length === 0) {
-          // Create the stage if it doesn't exist
-          const maxOrder = await tx.select({ maxOrder: sql<number>`COALESCE(MAX(${kanbanStages.order}), 0)` }).from(kanbanStages);
-          const [newStage] = await tx.insert(kanbanStages).values({
-            name: "Not Completed in Time",
-            assignedRole: "admin",
-            order: (maxOrder[0]?.maxOrder || 0) + 1,
-            color: "#ef4444", // Red color for overdue items
-          }).returning();
-          notCompletedStage = [newStage];
-        }
+        // We'll create "Not Completed in Time" stage per project type as needed in the loop
 
         // Process each CSV row
         for (const data of projectsData) {
           try {
+            // Find project type for this description
+            const projectType = await this.getProjectTypeByName(data.projectDescription);
+            if (!projectType) {
+              throw new Error(`Project type '${data.projectDescription}' not found. Please configure this project type in the admin area before importing.`);
+            }
+
             // Find or create client
             let client = await this.getClientByName(data.clientName);
             if (!client) {
@@ -1369,9 +1363,28 @@ export class DatabaseStorage implements IStorage {
               }
             }
 
+            // Find "Not Completed in Time" stage for this project type or create it if needed
+            let notCompletedStage = await tx.select().from(kanbanStages).where(and(
+              eq(kanbanStages.name, "Not Completed in Time"),
+              eq(kanbanStages.projectTypeId, projectType.id)
+            ));
+            if (notCompletedStage.length === 0) {
+              // Create the stage if it doesn't exist for this project type
+              const maxOrder = await tx.select({ maxOrder: sql<number>`COALESCE(MAX(${kanbanStages.order}), 0)` }).from(kanbanStages).where(eq(kanbanStages.projectTypeId, projectType.id));
+              const [newStage] = await tx.insert(kanbanStages).values({
+                name: "Not Completed in Time",
+                projectTypeId: projectType.id,
+                assignedRole: "admin",
+                order: (maxOrder[0]?.maxOrder || 0) + 1,
+                color: "#ef4444", // Red color for overdue items
+              }).returning();
+              notCompletedStage = [newStage];
+            }
+
             // Create new project for this month
             const [newProject] = await tx.insert(projects).values({
               clientId: client.id,
+              projectTypeId: projectType.id,
               bookkeeperId: bookkeeper.id,
               clientManagerId: clientManager.id,
               currentAssigneeId: clientManager.id,
@@ -1445,7 +1458,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Validate project descriptions against configured ones
-    const activeDescriptions = await db.select().from(projectTypes).where(eq(projectTypes.isActive, true));
+    const activeDescriptions = await db.select().from(projectTypes).where(eq(projectTypes.active, true));
     if (activeDescriptions.length === 0) {
       errors.push("No active project descriptions found. Please configure project descriptions in the admin area before importing projects.");
       return { isValid: false, errors };
