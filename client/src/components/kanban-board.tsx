@@ -79,20 +79,6 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     return acc;
   }, {} as Record<string, ProjectWithRelations[]>);
 
-  // Calculate time in current stage
-  const getTimeInStage = (project: ProjectWithRelations) => {
-    const lastChronology = project.chronology?.[0];
-    if (!lastChronology || !lastChronology.timestamp) return "0h";
-    
-    const timeDiff = Date.now() - new Date(lastChronology.timestamp).getTime();
-    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    
-    if (days > 0) {
-      return `${days}d ${hours % 24}h`;
-    }
-    return `${hours}h`;
-  };
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -209,14 +195,19 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                       items={stageProjects.map(p => p.id)}
                       strategy={verticalListSortingStrategy}
                     >
-                      {stageProjects.map((project) => (
-                        <ProjectCard
-                          key={project.id}
-                          project={project}
-                          timeInStage={getTimeInStage(project)}
-                          onOpenModal={() => navigateToProject(project.id)}
-                        />
-                      ))}
+                      {stageProjects.map((project) => {
+                        // Find the stage configuration for this project's current status
+                        const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
+                        
+                        return (
+                          <ProjectCard
+                            key={project.id}
+                            project={project}
+                            stageConfig={currentStageConfig}
+                            onOpenModal={() => navigateToProject(project.id)}
+                          />
+                        );
+                      })}
                     </SortableContext>
                     
                     {stageProjects.length === 0 && (
@@ -235,7 +226,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
           {activeProject && (
             <ProjectCard
               project={activeProject}
-              timeInStage={getTimeInStage(activeProject)}
+              stageConfig={stages?.find(s => s.name === activeProject.currentStatus)}
               onOpenModal={() => navigateToProject(activeProject.id)}
               isDragging
             />

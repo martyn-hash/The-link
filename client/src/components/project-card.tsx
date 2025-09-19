@@ -1,21 +1,22 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, AlertCircle } from "lucide-react";
-import type { ProjectWithRelations } from "@shared/schema";
-import { calculateBusinessHours } from "@shared/businessTime";
+import { MoreHorizontal, AlertCircle, Clock } from "lucide-react";
+import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
+import { calculateCurrentInstanceTime } from "@shared/businessTime";
 
 interface ProjectCardProps {
   project: ProjectWithRelations;
-  timeInStage: string;
+  stageConfig?: KanbanStage;
   onOpenModal: () => void;
   isDragging?: boolean;
 }
 
 export default function ProjectCard({ 
   project, 
-  timeInStage, 
+  stageConfig,
   onOpenModal, 
   isDragging = false 
 }: ProjectCardProps) {
@@ -34,16 +35,6 @@ export default function ProjectCard({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-  };
-
-  const getPriorityColor = () => {
-    switch (project.priority) {
-      case "urgent": return "text-red-500";
-      case "high": return "text-orange-500";
-      case "medium": return "text-yellow-500";
-      case "low": return "text-green-500";
-      default: return "text-gray-500";
-    }
   };
 
   const getStatusBadgeVariant = () => {
@@ -74,36 +65,38 @@ export default function ProjectCard({
     ? `${project.clientManager.firstName?.charAt(0) || ''}${project.clientManager.lastName?.charAt(0) || ''}`
     : "?";
 
-  // Calculate business hours for current stage
-  const getBusinessHoursForCurrentStage = (): string => {
-    if (!project.chronology || project.chronology.length === 0) {
-      return "0 business hours";
-    }
-
-    // Find the most recent chronology entry (current stage start)
-    const sortedChronology = [...project.chronology].sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return timeB - timeA;
-    });
-
-    const lastEntry = sortedChronology[0];
-    if (!lastEntry?.timestamp) {
-      return "0 business hours";
-    }
-
+  // Memoized calculation of current business hours in stage using shared calculateCurrentInstanceTime function
+  const currentBusinessHours = useMemo(() => {
+    const createdAt = project.createdAt 
+      ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
+      : undefined;
+    
+    // Transform chronology data to match the expected format for calculateCurrentInstanceTime
+    // Filter out null timestamps and convert Date objects to ISO strings
+    const transformedChronology = (project.chronology || [])
+      .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
+        return entry.timestamp !== null && entry.timestamp !== undefined;
+      })
+      .map((entry) => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date 
+          ? entry.timestamp.toISOString() 
+          : typeof entry.timestamp === 'string'
+          ? entry.timestamp
+          : new Date(entry.timestamp).toISOString()
+      }));
+    
     try {
-      const startTime: string = typeof lastEntry.timestamp === 'string' 
-        ? lastEntry.timestamp 
-        : new Date(lastEntry.timestamp).toISOString();
-      const currentTime: string = new Date().toISOString();
-      const businessHours = calculateBusinessHours(startTime, currentTime);
-      return formatBusinessHours(businessHours);
+      return calculateCurrentInstanceTime(
+        transformedChronology,
+        project.currentStatus,
+        createdAt
+      );
     } catch (error) {
-      console.error('Error calculating business hours:', error);
-      return "0 business hours";
+      console.error("Error calculating current instance time:", error);
+      return 0;
     }
-  };
+  }, [project.chronology, project.currentStatus, project.createdAt]);
 
   // Format business hours for display
   const formatBusinessHours = (hours: number): string => {
@@ -129,6 +122,19 @@ export default function ProjectCard({
       }
     }
   };
+
+  // Check if project is overdue based on stage configuration
+  const overdueStatus = useMemo(() => {
+    // Handle edge case: maxInstanceTime = 0 means unlimited time (no overdue)
+    if (!stageConfig?.maxInstanceTime || stageConfig.maxInstanceTime === 0) {
+      return false; // No time limit configured or unlimited time
+    }
+    
+    // Use >= for overdue threshold (inclusive) - projects are overdue when they meet or exceed the limit
+    return currentBusinessHours >= stageConfig.maxInstanceTime;
+  }, [currentBusinessHours, stageConfig?.maxInstanceTime]);
+
+  const formattedTimeInStage = formatBusinessHours(currentBusinessHours);
 
   return (
     <Card
@@ -157,10 +163,6 @@ export default function ProjectCard({
           </div>
         </div>
         
-        <p className="text-sm text-muted-foreground mb-3 line-clamp-2" title={project.description}>
-          {project.description}
-        </p>
-        
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center space-x-3 text-muted-foreground">
             <span className="flex items-center space-x-1">
@@ -168,11 +170,23 @@ export default function ProjectCard({
                 {assigneeInitials}
               </div>
             </span>
-            <div className="flex flex-col space-y-1">
-              <span data-testid={`time-in-stage-${project.id}`}>{timeInStage}</span>
-              <span data-testid={`business-hours-${project.id}`} className="text-blue-600 dark:text-blue-400">
-                {getBusinessHoursForCurrentStage()}
+            <div className="flex items-center space-x-2">
+              <Clock className="w-3 h-3" />
+              <span 
+                data-testid={`business-hours-${project.id}`} 
+                className={`${overdueStatus ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}
+              >
+                {formattedTimeInStage}
               </span>
+              {overdueStatus && (
+                <Badge 
+                  variant="destructive" 
+                  className="text-xs px-1 py-0 h-4"
+                  data-testid={`overdue-indicator-${project.id}`}
+                >
+                  Overdue
+                </Badge>
+              )}
             </div>
           </div>
           <Badge variant={getStatusBadgeVariant()} className="text-xs">
