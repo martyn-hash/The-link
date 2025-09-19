@@ -104,12 +104,6 @@ export default function Sidebar({ user }: SidebarProps) {
       {/* Logo and Brand */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center space-x-3">
-          <img 
-            src={logoPath} 
-            alt="Growth Accountants Logo" 
-            className="h-8 w-auto"
-            data-testid="img-sidebar-logo"
-          />
           <div>
             <h1 className="text-lg font-semibold text-foreground" data-testid="text-app-name">The Link</h1>
             <p className="text-xs text-muted-foreground">Growth Accountants</p>
