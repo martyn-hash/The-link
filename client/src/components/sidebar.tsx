@@ -60,8 +60,8 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const adminItems = [
     {
-      label: "Settings",
-      href: "/settings",
+      label: "Project Types",
+      href: "/project-types",
       icon: Settings,
       roles: ["admin"],
     },

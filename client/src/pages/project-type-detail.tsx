@@ -96,6 +96,346 @@ const STAGE_COLORS = [
   "#22c55e", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"
 ];
 
+// Custom field form component
+function CustomFieldForm({ 
+  reasonId, 
+  onSuccess, 
+  onCancel, 
+  createMutation,
+  existingFields 
+}: {
+  reasonId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+  createMutation: any;
+  existingFields: any[];
+}) {
+  const [fieldName, setFieldName] = useState("");
+  const [fieldType, setFieldType] = useState<"number" | "short_text" | "long_text" | "multi_select">("short_text");
+  const [isRequired, setIsRequired] = useState(false);
+  const [placeholder, setPlaceholder] = useState("");
+  const [options, setOptions] = useState<string[]>([""]);
+
+  const handleSubmit = () => {
+    if (!fieldName.trim()) {
+      return;
+    }
+
+    const fieldData = {
+      reasonId,
+      fieldName: fieldName.trim(),
+      fieldType,
+      isRequired,
+      placeholder: placeholder.trim() || undefined,
+      options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
+      order: existingFields.length
+    };
+
+    createMutation.mutate(fieldData, {
+      onSuccess: () => {
+        onSuccess();
+      }
+    });
+  };
+
+  const addOption = () => {
+    setOptions([...options, ""]);
+  };
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...options];
+    newOptions[index] = value;
+    setOptions(newOptions);
+  };
+
+  const removeOption = (index: number) => {
+    setOptions(options.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="field-name">Field Name</Label>
+          <Input
+            id="field-name"
+            value={fieldName}
+            onChange={(e) => setFieldName(e.target.value)}
+            placeholder="Enter field name"
+            data-testid="input-custom-field-name"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="field-type">Field Type</Label>
+          <Select
+            value={fieldType}
+            onValueChange={(value: any) => setFieldType(value)}
+          >
+            <SelectTrigger data-testid="select-custom-field-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="short_text">Short Text</SelectItem>
+              <SelectItem value="long_text">Long Text</SelectItem>
+              <SelectItem value="number">Number</SelectItem>
+              <SelectItem value="multi_select">Multi Select</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="field-placeholder">Placeholder (Optional)</Label>
+        <Input
+          id="field-placeholder"
+          value={placeholder}
+          onChange={(e) => setPlaceholder(e.target.value)}
+          placeholder="Enter placeholder text"
+          data-testid="input-custom-field-placeholder"
+        />
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="field-required"
+          checked={isRequired}
+          onCheckedChange={(checked) => setIsRequired(!!checked)}
+          data-testid="checkbox-custom-field-required"
+        />
+        <Label htmlFor="field-required">Required field</Label>
+      </div>
+
+      {fieldType === "multi_select" && (
+        <div className="space-y-2">
+          <Label>Options</Label>
+          <div className="space-y-2">
+            {options.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <Input
+                  value={option}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  placeholder={`Option ${index + 1}`}
+                  data-testid={`input-custom-field-option-${index}`}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeOption(index)}
+                  disabled={options.length <= 1}
+                  data-testid={`button-remove-option-${index}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addOption}
+            data-testid="button-add-option"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Option
+          </Button>
+        </div>
+      )}
+
+      <div className="flex justify-end space-x-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          data-testid="button-cancel-custom-field"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!fieldName.trim() || (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0)}
+          data-testid="button-save-custom-field"
+        >
+          Add Field
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Approval field form component (similar to CustomFieldForm but for stage approvals)
+function ApprovalFieldForm({ 
+  stageApprovalId, 
+  onSuccess, 
+  onCancel, 
+  createMutation,
+  existingFields 
+}: {
+  stageApprovalId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+  createMutation: any;
+  existingFields: any[];
+}) {
+  const [fieldName, setFieldName] = useState("");
+  const [fieldType, setFieldType] = useState<"number" | "short_text" | "long_text" | "multi_select">("short_text");
+  const [isRequired, setIsRequired] = useState(false);
+  const [placeholder, setPlaceholder] = useState("");
+  const [options, setOptions] = useState<string[]>([""]);
+
+  const handleSubmit = () => {
+    if (!fieldName.trim()) {
+      return;
+    }
+
+    const fieldData = {
+      stageApprovalId,
+      fieldName: fieldName.trim(),
+      fieldType,
+      isRequired,
+      placeholder: placeholder.trim() || undefined,
+      options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
+      order: existingFields.length
+    };
+
+    createMutation.mutate(fieldData, {
+      onSuccess: () => {
+        onSuccess();
+      }
+    });
+  };
+
+  const addOption = () => {
+    setOptions([...options, ""]);
+  };
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...options];
+    newOptions[index] = value;
+    setOptions(newOptions);
+  };
+
+  const removeOption = (index: number) => {
+    setOptions(options.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="approval-field-name">Field Name</Label>
+          <Input
+            id="approval-field-name"
+            value={fieldName}
+            onChange={(e) => setFieldName(e.target.value)}
+            placeholder="Enter field name"
+            data-testid="input-approval-field-name"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="approval-field-type">Field Type</Label>
+          <Select
+            value={fieldType}
+            onValueChange={(value: any) => setFieldType(value)}
+          >
+            <SelectTrigger data-testid="select-approval-field-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="short_text">Short Text</SelectItem>
+              <SelectItem value="long_text">Long Text</SelectItem>
+              <SelectItem value="number">Number</SelectItem>
+              <SelectItem value="multi_select">Multi Select</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="approval-field-placeholder">Placeholder (Optional)</Label>
+        <Input
+          id="approval-field-placeholder"
+          value={placeholder}
+          onChange={(e) => setPlaceholder(e.target.value)}
+          placeholder="Enter placeholder text"
+          data-testid="input-approval-field-placeholder"
+        />
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="approval-field-required"
+          checked={isRequired}
+          onCheckedChange={(checked) => setIsRequired(!!checked)}
+          data-testid="checkbox-approval-field-required"
+        />
+        <Label htmlFor="approval-field-required">Required field</Label>
+      </div>
+
+      {fieldType === "multi_select" && (
+        <div className="space-y-2">
+          <Label>Options</Label>
+          <div className="space-y-2">
+            {options.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <Input
+                  value={option}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  placeholder={`Option ${index + 1}`}
+                  data-testid={`input-approval-field-option-${index}`}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeOption(index)}
+                  disabled={options.length <= 1}
+                  data-testid={`button-remove-approval-option-${index}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addOption}
+            data-testid="button-add-approval-option"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Option
+          </Button>
+        </div>
+      )}
+
+      <div className="flex justify-end space-x-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          data-testid="button-cancel-approval-field"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!fieldName.trim() || (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0)}
+          data-testid="button-save-approval-field"
+        >
+          Add Field
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectTypeDetail() {
   const { id: projectTypeId } = useParams();
   const [location, navigate] = useLocation();
@@ -112,6 +452,15 @@ export default function ProjectTypeDetail() {
   const [isAddingReason, setIsAddingReason] = useState(false);
   const [isAddingStageApproval, setIsAddingStageApproval] = useState(false);
   const [isAddingStageApprovalField, setIsAddingStageApprovalField] = useState(false);
+  
+  // State for stage-reason mappings
+  const [selectedStageReasons, setSelectedStageReasons] = useState<string[]>([]);
+  const [selectedStageApprovalId, setSelectedStageApprovalId] = useState<string | null>(null);
+  
+  // State for custom fields management
+  const [customFields, setCustomFields] = useState<any[]>([]);
+  const [isAddingCustomField, setIsAddingCustomField] = useState(false);
+  const [isAddingApprovalField, setIsAddingApprovalField] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -161,11 +510,24 @@ export default function ProjectTypeDetail() {
     enabled: !!projectTypeId && isAuthenticated && !!user,
   });
 
-  // Fetch stage approval fields (needed for managing approval fields)
-  const { data: stageApprovalFields, isLoading: stageApprovalFieldsLoading } = useQuery<StageApprovalField[]>({
+  // Fetch all stage approval fields (needed for managing approval fields)
+  const { data: allStageApprovalFields, isLoading: stageApprovalFieldsLoading } = useQuery<StageApprovalField[]>({
     queryKey: ["/api/config/stage-approval-fields"],
     enabled: isAuthenticated && !!user,
   });
+  
+  // Fetch all stage-reason mappings
+  const { data: allStageReasonMaps } = useQuery<any[]>({
+    queryKey: ["/api/config/stage-reason-maps"],
+    enabled: isAuthenticated && !!user,
+  });
+  
+  // Fetch all custom fields for reasons
+  const { data: allCustomFields } = useQuery<any[]>({
+    queryKey: ["/api/config/reason-custom-fields"],
+    enabled: isAuthenticated && !!user,
+  });
+
 
   // Handle errors
   useEffect(() => {
@@ -358,6 +720,121 @@ export default function ProjectTypeDetail() {
       });
     },
   });
+  
+  // Stage-Reason mapping mutations
+  const createStageReasonMapMutation = useMutation({
+    mutationFn: async ({ stageId, reasonId }: { stageId: string; reasonId: string }) => {
+      return await apiRequest("POST", "/api/config/stage-reason-maps", { stageId, reasonId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-reason-maps"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create stage-reason mapping",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteStageReasonMapMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/stage-reason-maps/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-reason-maps"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stage-reason mapping",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Custom field mutations
+  const createCustomFieldMutation = useMutation({
+    mutationFn: async (field: any) => {
+      return await apiRequest("POST", "/api/config/reason-custom-fields", field);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/reason-custom-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create custom field",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const updateCustomFieldMutation = useMutation({
+    mutationFn: async ({ id, ...field }: any) => {
+      return await apiRequest("PATCH", `/api/config/reason-custom-fields/${id}`, field);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/reason-custom-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update custom field",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteCustomFieldMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/reason-custom-fields/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/reason-custom-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete custom field",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Stage approval field mutations
+  const createApprovalFieldMutation = useMutation({
+    mutationFn: async (field: any) => {
+      return await apiRequest("POST", "/api/config/stage-approval-fields", field);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create approval field",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteApprovalFieldMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/stage-approval-fields/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete approval field",
+        variant: "destructive",
+      });
+    },
+  });
 
   if (authLoading || !user) {
     return (
@@ -417,13 +894,46 @@ export default function ProjectTypeDetail() {
     );
   }
 
-  const handleStageSubmit = () => {
+  const handleStageSubmit = async () => {
     if (!editingStage) return;
     
-    if (editingStage.id) {
-      updateStageMutation.mutate(editingStage);
-    } else {
-      createStageMutation.mutate(editingStage);
+    try {
+      // Save the stage first
+      if (editingStage.id) {
+        await updateStageMutation.mutateAsync(editingStage);
+      } else {
+        const createdStage = await createStageMutation.mutateAsync(editingStage);
+        editingStage.id = createdStage.id;
+      }
+      
+      // Handle stage-reason mappings if editing an existing stage
+      if (editingStage.id && allStageReasonMaps) {
+        const existingMappings = allStageReasonMaps.filter((map: any) => map.stageId === editingStage.id);
+        
+        // Remove mappings that are no longer selected
+        for (const mapping of existingMappings) {
+          if (!selectedStageReasons.includes(mapping.reasonId)) {
+            await deleteStageReasonMapMutation.mutateAsync(mapping.id);
+          }
+        }
+        
+        // Add new mappings
+        for (const reasonId of selectedStageReasons) {
+          const existingMapping = existingMappings.find((m: any) => m.reasonId === reasonId);
+          if (!existingMapping) {
+            await createStageReasonMapMutation.mutateAsync({ stageId: editingStage.id, reasonId });
+          }
+        }
+      }
+      
+      // Handle stage approval mapping
+      if (editingStage.id && selectedStageApprovalId !== editingStage.stageApprovalId) {
+        const updateData = { ...editingStage, stageApprovalId: selectedStageApprovalId };
+        await updateStageMutation.mutateAsync(updateData);
+      }
+      
+    } catch (error) {
+      console.error("Error saving stage:", error);
     }
   };
 
@@ -526,6 +1036,8 @@ export default function ProjectTypeDetail() {
                   onClick={() => {
                     setEditingStage({ ...DEFAULT_STAGE, order: (stages?.length || 0) });
                     setIsAddingStage(true);
+                    setSelectedStageReasons([]);
+                    setSelectedStageApprovalId(null);
                   }}
                   data-testid="button-add-stage"
                 >
@@ -569,15 +1081,26 @@ export default function ProjectTypeDetail() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setEditingStage({
-                              id: stage.id,
-                              name: stage.name,
-                              assignedRole: stage.assignedRole || "client_manager",
-                              order: stage.order,
-                              color: stage.color || "#6b7280",
-                              maxInstanceTime: stage.maxInstanceTime || undefined,
-                              maxTotalTime: stage.maxTotalTime || undefined
-                            })}
+                            onClick={() => {
+                              setEditingStage({
+                                id: stage.id,
+                                name: stage.name,
+                                assignedRole: stage.assignedRole || "client_manager",
+                                order: stage.order,
+                                color: stage.color || "#6b7280",
+                                maxInstanceTime: stage.maxInstanceTime || undefined,
+                                maxTotalTime: stage.maxTotalTime || undefined
+                              });
+                              
+                              // Load existing mappings for this stage
+                              if (allStageReasonMaps) {
+                                const stageMappings = allStageReasonMaps.filter((map: any) => map.stageId === stage.id);
+                                setSelectedStageReasons(stageMappings.map((m: any) => m.reasonId));
+                              }
+                              
+                              // Set stage approval
+                              setSelectedStageApprovalId(stage.stageApprovalId || null);
+                            }}
                             data-testid={`button-edit-stage-${stage.id}`}
                           >
                             <Edit2 className="w-4 h-4" />
@@ -611,6 +1134,8 @@ export default function ProjectTypeDetail() {
                     onClick={() => {
                       setEditingStage({ ...DEFAULT_STAGE, order: 0 });
                       setIsAddingStage(true);
+                      setSelectedStageReasons([]);
+                      setSelectedStageApprovalId(null);
                     }}
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -717,12 +1242,79 @@ export default function ProjectTypeDetail() {
                       </div>
                     </div>
 
+                    {/* Stage Approval Selection */}
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="stage-approval">Stage Approval (Optional)</Label>
+                      <Select
+                        value={selectedStageApprovalId || "none"}
+                        onValueChange={(value) => setSelectedStageApprovalId(value === "none" ? null : value)}
+                      >
+                        <SelectTrigger data-testid="select-stage-approval">
+                          <SelectValue placeholder="Select stage approval" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No approval required</SelectItem>
+                          {stageApprovals?.map(approval => (
+                            <SelectItem key={approval.id} value={approval.id}>
+                              {approval.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Change Reasons Selection */}
+                    <div className="space-y-2 col-span-2">
+                      <Label>Change Reasons for this Stage</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Select which change reasons can be used when transitioning from this stage
+                      </p>
+                      <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                        {reasonsLoading ? (
+                          <p className="text-sm text-muted-foreground">Loading change reasons...</p>
+                        ) : reasons && reasons.length > 0 ? (
+                          <div className="space-y-2">
+                            {reasons.map(reason => (
+                              <div key={reason.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`reason-${reason.id}`}
+                                  checked={selectedStageReasons.includes(reason.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedStageReasons(prev => [...prev, reason.id]);
+                                    } else {
+                                      setSelectedStageReasons(prev => prev.filter(id => id !== reason.id));
+                                    }
+                                  }}
+                                  data-testid={`checkbox-stage-reason-${reason.id}`}
+                                />
+                                <Label htmlFor={`reason-${reason.id}`} className="text-sm flex-1">
+                                  {reason.reason}
+                                  {reason.description && (
+                                    <span className="text-muted-foreground ml-1">
+                                      - {reason.description}
+                                    </span>
+                                  )}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            No change reasons configured. Add change reasons first.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="flex justify-end space-x-2 mt-4">
                       <Button
                         variant="outline"
                         onClick={() => {
                           setEditingStage(null);
                           setIsAddingStage(false);
+                          setSelectedStageReasons([]);
+                          setSelectedStageApprovalId(null);
                         }}
                         data-testid="button-cancel-stage"
                       >
@@ -897,6 +1489,80 @@ export default function ProjectTypeDetail() {
                           />
                         </div>
                       )}
+
+                      {/* Custom Fields Section */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label>Custom Fields</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsAddingCustomField(true)}
+                            data-testid="button-add-custom-field"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Custom Field
+                          </Button>
+                        </div>
+                        
+                        <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                          {editingReason?.id && allCustomFields ? (
+                            allCustomFields.filter(field => field.reasonId === editingReason.id).length > 0 ? (
+                              <div className="space-y-2">
+                                {allCustomFields
+                                  .filter(field => field.reasonId === editingReason.id)
+                                  .sort((a, b) => a.order - b.order)
+                                  .map((field, index) => (
+                                    <div key={field.id} className="flex items-center justify-between p-2 border rounded">
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium">{field.fieldName}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Type: {field.fieldType} {field.isRequired && "(Required)"}
+                                        </div>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => deleteCustomFieldMutation.mutate(field.id)}
+                                        data-testid={`button-delete-custom-field-${field.id}`}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No custom fields configured for this reason
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              Save the reason first to add custom fields
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Add Custom Field Form */}
+                      {isAddingCustomField && editingReason?.id && (
+                        <Card className="mt-4">
+                          <CardHeader>
+                            <CardTitle className="text-base">Add Custom Field</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <CustomFieldForm 
+                              reasonId={editingReason.id}
+                              onSuccess={() => setIsAddingCustomField(false)}
+                              onCancel={() => setIsAddingCustomField(false)}
+                              createMutation={createCustomFieldMutation}
+                              existingFields={allCustomFields?.filter(f => f.reasonId === editingReason.id) || []}
+                            />
+                          </CardContent>
+                        </Card>
+                      )}
                     </div>
 
                     <div className="flex justify-end space-x-2 mt-4">
@@ -998,7 +1664,7 @@ export default function ProjectTypeDetail() {
                       </CardHeader>
                       <CardContent>
                         <div className="text-sm text-muted-foreground">
-                          {stageApprovalFields?.filter(f => f.stageApprovalId === approval.id).length || 0} fields configured
+                          {allStageApprovalFields?.filter(f => f.stageApprovalId === approval.id).length || 0} fields configured
                         </div>
                       </CardContent>
                     </Card>
@@ -1050,6 +1716,80 @@ export default function ProjectTypeDetail() {
                           data-testid="textarea-approval-description"
                         />
                       </div>
+
+                      {/* Stage Approval Fields Section */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label>Approval Fields</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsAddingApprovalField(true)}
+                            data-testid="button-add-approval-field"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Approval Field
+                          </Button>
+                        </div>
+                        
+                        <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                          {editingStageApproval?.id && allStageApprovalFields ? (
+                            allStageApprovalFields.filter(field => field.stageApprovalId === editingStageApproval.id).length > 0 ? (
+                              <div className="space-y-2">
+                                {allStageApprovalFields
+                                  .filter(field => field.stageApprovalId === editingStageApproval.id)
+                                  .sort((a, b) => a.order - b.order)
+                                  .map((field, index) => (
+                                    <div key={field.id} className="flex items-center justify-between p-2 border rounded">
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium">{field.fieldName}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Type: {field.fieldType} {field.isRequired && "(Required)"}
+                                        </div>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => deleteApprovalFieldMutation.mutate(field.id)}
+                                        data-testid={`button-delete-approval-field-${field.id}`}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No approval fields configured for this stage approval
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              Save the stage approval first to add approval fields
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Add Approval Field Form */}
+                      {isAddingApprovalField && editingStageApproval?.id && (
+                        <Card className="mt-4">
+                          <CardHeader>
+                            <CardTitle className="text-base">Add Approval Field</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ApprovalFieldForm 
+                              stageApprovalId={editingStageApproval.id}
+                              onSuccess={() => setIsAddingApprovalField(false)}
+                              onCancel={() => setIsAddingApprovalField(false)}
+                              createMutation={createApprovalFieldMutation}
+                              existingFields={allStageApprovalFields?.filter(f => f.stageApprovalId === editingStageApproval.id) || []}
+                            />
+                          </CardContent>
+                        </Card>
+                      )}
                     </div>
 
                     <div className="flex justify-end space-x-2 mt-4">
