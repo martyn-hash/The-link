@@ -69,6 +69,16 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// User notification preferences table
+export const userNotificationPreferences = pgTable("user_notification_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  notifyStageChanges: boolean("notify_stage_changes").notNull().default(true),
+  notifyNewProjects: boolean("notify_new_projects").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Magic link tokens table
 export const magicLinkTokens = pgTable("magic_link_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -265,12 +275,13 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
 ]);
 
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   assignedProjects: many(projects, { relationName: "assignee" }),
   bookkeepingProjects: many(projects, { relationName: "bookkeeper" }),
   managedProjects: many(projects, { relationName: "clientManager" }),
   chronologyEntries: many(projectChronology),
   magicLinkTokens: many(magicLinkTokens),
+  notificationPreferences: one(userNotificationPreferences),
 }));
 
 export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => ({
@@ -383,6 +394,13 @@ export const stageApprovalResponsesRelations = relations(stageApprovalResponses,
   field: one(stageApprovalFields, {
     fields: [stageApprovalResponses.fieldId],
     references: [stageApprovalFields.id],
+  }),
+}));
+
+export const userNotificationPreferencesRelations = relations(userNotificationPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [userNotificationPreferences.userId],
+    references: [users.id],
   }),
 }));
 
@@ -601,6 +619,14 @@ export const insertStageApprovalResponseSchema = createInsertSchema(stageApprova
   createdAt: true,
 });
 
+export const insertUserNotificationPreferencesSchema = createInsertSchema(userNotificationPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateUserNotificationPreferencesSchema = insertUserNotificationPreferencesSchema.partial();
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
@@ -741,6 +767,9 @@ export type InsertStageApprovalField = z.infer<typeof insertStageApprovalFieldSc
 export type UpdateStageApprovalField = z.infer<typeof updateStageApprovalFieldSchema>;
 export type StageApprovalResponse = typeof stageApprovalResponses.$inferSelect;
 export type InsertStageApprovalResponse = z.infer<typeof insertStageApprovalResponseSchema>;
+export type UserNotificationPreferences = typeof userNotificationPreferences.$inferSelect;
+export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
+export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 
