@@ -49,6 +49,7 @@ import {
   type UpdateUserNotificationPreferences,
   type ProjectWithRelations,
   type UpdateProjectStatus,
+  type UpdateProjectType,
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
@@ -93,6 +94,7 @@ export interface IStorage {
   
   // Configuration operations
   getAllKanbanStages(): Promise<KanbanStage[]>;
+  getKanbanStagesByProjectTypeId(projectTypeId: string): Promise<KanbanStage[]>;
   createKanbanStage(stage: InsertKanbanStage): Promise<KanbanStage>;
   updateKanbanStage(id: string, stage: Partial<InsertKanbanStage>): Promise<KanbanStage>;
   deleteKanbanStage(id: string): Promise<void>;
@@ -106,6 +108,7 @@ export interface IStorage {
   getDefaultStage(): Promise<KanbanStage | undefined>;
   
   getAllChangeReasons(): Promise<ChangeReason[]>;
+  getChangeReasonsByProjectTypeId(projectTypeId: string): Promise<ChangeReason[]>;
   createChangeReason(reason: InsertChangeReason): Promise<ChangeReason>;
   updateChangeReason(id: string, reason: Partial<InsertChangeReason>): Promise<ChangeReason>;
   deleteChangeReason(id: string): Promise<void>;
@@ -158,6 +161,7 @@ export interface IStorage {
   
   // Stage approval operations
   getAllStageApprovals(): Promise<StageApproval[]>;
+  getStageApprovalsByProjectTypeId(projectTypeId: string): Promise<StageApproval[]>;
   createStageApproval(approval: InsertStageApproval): Promise<StageApproval>;
   updateStageApproval(id: string, approval: Partial<InsertStageApproval>): Promise<StageApproval>;
   deleteStageApproval(id: string): Promise<void>;
@@ -1046,6 +1050,14 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(kanbanStages).orderBy(kanbanStages.order);
   }
 
+  async getKanbanStagesByProjectTypeId(projectTypeId: string): Promise<KanbanStage[]> {
+    return await db
+      .select()
+      .from(kanbanStages)
+      .where(eq(kanbanStages.projectTypeId, projectTypeId))
+      .orderBy(kanbanStages.order);
+  }
+
   async createKanbanStage(stage: InsertKanbanStage): Promise<KanbanStage> {
     const [newStage] = await db.insert(kanbanStages).values(stage).returning();
     return newStage;
@@ -1160,6 +1172,13 @@ export class DatabaseStorage implements IStorage {
 
   async getAllChangeReasons(): Promise<ChangeReason[]> {
     return await db.select().from(changeReasons);
+  }
+
+  async getChangeReasonsByProjectTypeId(projectTypeId: string): Promise<ChangeReason[]> {
+    return await db
+      .select()
+      .from(changeReasons)
+      .where(eq(changeReasons.projectTypeId, projectTypeId));
   }
 
   async createChangeReason(reason: InsertChangeReason): Promise<ChangeReason> {
@@ -1755,6 +1774,13 @@ export class DatabaseStorage implements IStorage {
   // Stage approval operations
   async getAllStageApprovals(): Promise<StageApproval[]> {
     return await db.select().from(stageApprovals);
+  }
+
+  async getStageApprovalsByProjectTypeId(projectTypeId: string): Promise<StageApproval[]> {
+    return await db
+      .select()
+      .from(stageApprovals)
+      .where(eq(stageApprovals.projectTypeId, projectTypeId));
   }
 
   async createStageApproval(approval: InsertStageApproval): Promise<StageApproval> {

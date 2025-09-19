@@ -12,6 +12,7 @@ import {
   insertChangeReasonSchema,
   updateChangeReasonSchema,
   insertProjectTypeSchema,
+  updateProjectTypeSchema,
   insertStageReasonMapSchema,
   insertReasonCustomFieldSchema,
   updateReasonCustomFieldSchema,
@@ -1336,6 +1337,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(400).json({ message: "Failed to delete project description" });
+    }
+  });
+
+  // Project type management routes
+  app.get("/api/config/project-types", isAuthenticated, async (req, res) => {
+    try {
+      const projectTypes = await storage.getAllProjectTypes();
+      res.json(projectTypes);
+    } catch (error) {
+      console.error("Error fetching project types:", error);
+      res.status(500).json({ message: "Failed to fetch project types" });
+    }
+  });
+
+  app.post("/api/config/project-types", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const projectTypeData = insertProjectTypeSchema.parse(req.body);
+      const projectType = await storage.createProjectType(projectTypeData);
+      res.json(projectType);
+    } catch (error) {
+      console.error("Error creating project type:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && error.message.includes("unique constraint")) {
+        res.status(409).json({ message: "Project type with this name already exists" });
+      } else {
+        res.status(400).json({ message: "Failed to create project type" });
+      }
+    }
+  });
+
+  app.patch("/api/config/project-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const updateData = updateProjectTypeSchema.parse(req.body);
+      const projectType = await storage.updateProjectType(req.params.id, updateData);
+      res.json(projectType);
+    } catch (error) {
+      console.error("Error updating project type:", error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && error.message.includes("Project type not found")) {
+        res.status(404).json({ message: "Project type not found" });
+      } else if (error instanceof Error && error.message && error.message.includes("unique constraint")) {
+        res.status(409).json({ message: "Project type with this name already exists" });
+      } else {
+        res.status(400).json({ message: "Failed to update project type" });
+      }
+    }
+  });
+
+  app.delete("/api/config/project-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteProjectType(req.params.id);
+      res.json({ message: "Project type deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting project type:", error);
+      
+      if (error instanceof Error && error.message && error.message.includes("Project type not found")) {
+        res.status(404).json({ message: "Project type not found" });
+      } else if (error instanceof Error && error.message && error.message.includes("cannot delete")) {
+        res.status(409).json({ message: "Cannot delete project type: it is being used by existing projects" });
+      } else {
+        res.status(400).json({ message: "Failed to delete project type" });
+      }
+    }
+  });
+
+  // Project-scoped configuration routes
+  app.get("/api/config/project-types/:projectTypeId/stages", isAuthenticated, async (req, res) => {
+    try {
+      const { projectTypeId } = req.params;
+      const stages = await storage.getKanbanStagesByProjectTypeId(projectTypeId);
+      res.json(stages);
+    } catch (error) {
+      console.error("Error fetching stages for project type:", error);
+      res.status(500).json({ message: "Failed to fetch stages for project type" });
+    }
+  });
+
+  app.get("/api/config/project-types/:projectTypeId/reasons", isAuthenticated, async (req, res) => {
+    try {
+      const { projectTypeId } = req.params;
+      const reasons = await storage.getChangeReasonsByProjectTypeId(projectTypeId);
+      res.json(reasons);
+    } catch (error) {
+      console.error("Error fetching change reasons for project type:", error);
+      res.status(500).json({ message: "Failed to fetch change reasons for project type" });
+    }
+  });
+
+  app.get("/api/config/project-types/:projectTypeId/stage-approvals", isAuthenticated, async (req, res) => {
+    try {
+      const { projectTypeId } = req.params;
+      const stageApprovals = await storage.getStageApprovalsByProjectTypeId(projectTypeId);
+      res.json(stageApprovals);
+    } catch (error) {
+      console.error("Error fetching stage approvals for project type:", error);
+      res.status(500).json({ message: "Failed to fetch stage approvals for project type" });
     }
   });
 
