@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface EditingStage {
   id?: string;
@@ -35,6 +36,7 @@ interface EditingStage {
   color: string;
   maxInstanceTime?: number;
   maxTotalTime?: number;
+  stageApprovalId?: string;
 }
 
 interface EditingReason {
@@ -55,14 +57,18 @@ interface EditingStageApprovalField {
   id?: string;
   stageApprovalId: string;
   fieldName: string;
-  fieldType: 'boolean' | 'number' | 'long_text';
+  fieldType: 'boolean' | 'number' | 'long_text' | 'multi_select';
   isRequired: boolean;
   order: number;
+  // For all field types
+  placeholder?: string;
   // Boolean validation
   expectedValueBoolean?: boolean;
   // Number validation  
   comparisonType?: 'equal_to' | 'less_than' | 'greater_than';
   expectedValueNumber?: number;
+  // Multi-select options
+  options?: string[];
 }
 
 const DEFAULT_STAGE: EditingStage = {
@@ -281,13 +287,31 @@ function ApprovalFieldForm({
   existingFields: any[];
 }) {
   const [fieldName, setFieldName] = useState("");
-  const [fieldType, setFieldType] = useState<"number" | "short_text" | "long_text" | "multi_select">("short_text");
+  const [fieldType, setFieldType] = useState<"boolean" | "number" | "long_text" | "multi_select">("boolean");
   const [isRequired, setIsRequired] = useState(false);
   const [placeholder, setPlaceholder] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
+  
+  // Boolean validation fields
+  const [expectedValueBoolean, setExpectedValueBoolean] = useState<boolean>(true);
+  
+  // Number validation fields
+  const [comparisonType, setComparisonType] = useState<"equal_to" | "less_than" | "greater_than">("equal_to");
+  const [expectedValueNumber, setExpectedValueNumber] = useState<number>(0);
 
   const handleSubmit = () => {
     if (!fieldName.trim()) {
+      return;
+    }
+
+    // Validation for required fields based on field type
+    if (fieldType === "boolean" && expectedValueBoolean === undefined) {
+      return;
+    }
+    if (fieldType === "number" && (!comparisonType || expectedValueNumber === undefined)) {
+      return;
+    }
+    if (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0) {
       return;
     }
 
@@ -297,6 +321,12 @@ function ApprovalFieldForm({
       fieldType,
       isRequired,
       placeholder: placeholder.trim() || undefined,
+      // Boolean validation
+      expectedValueBoolean: fieldType === "boolean" ? expectedValueBoolean : undefined,
+      // Number validation
+      comparisonType: fieldType === "number" ? comparisonType : undefined,
+      expectedValueNumber: fieldType === "number" ? expectedValueNumber : undefined,
+      // Multi-select options
       options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
       order: existingFields.length
     };
@@ -346,9 +376,9 @@ function ApprovalFieldForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="short_text">Short Text</SelectItem>
-              <SelectItem value="long_text">Long Text</SelectItem>
+              <SelectItem value="boolean">Boolean</SelectItem>
               <SelectItem value="number">Number</SelectItem>
+              <SelectItem value="long_text">Long Text</SelectItem>
               <SelectItem value="multi_select">Multi Select</SelectItem>
             </SelectContent>
           </Select>
@@ -376,6 +406,58 @@ function ApprovalFieldForm({
         <Label htmlFor="approval-field-required">Required field</Label>
       </div>
 
+      {/* Boolean field validation */}
+      {fieldType === "boolean" && (
+        <div className="space-y-2">
+          <Label>Expected Value for Approval</Label>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="expected-value-boolean"
+              checked={expectedValueBoolean}
+              onCheckedChange={setExpectedValueBoolean}
+              data-testid="switch-expected-value-boolean"
+            />
+            <Label htmlFor="expected-value-boolean">
+              Field must be {expectedValueBoolean ? "true" : "false"} for approval
+            </Label>
+          </div>
+        </div>
+      )}
+
+      {/* Number field validation */}
+      {fieldType === "number" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="comparison-type">Comparison Type</Label>
+            <Select
+              value={comparisonType}
+              onValueChange={(value: any) => setComparisonType(value)}
+            >
+              <SelectTrigger data-testid="select-comparison-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="equal_to">Equal to</SelectItem>
+                <SelectItem value="less_than">Less than</SelectItem>
+                <SelectItem value="greater_than">Greater than</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="expected-value-number">Expected Value</Label>
+            <Input
+              id="expected-value-number"
+              type="number"
+              value={expectedValueNumber}
+              onChange={(e) => setExpectedValueNumber(parseInt(e.target.value) || 0)}
+              placeholder="Enter expected value"
+              data-testid="input-expected-value-number"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Multi-select options */}
       {fieldType === "multi_select" && (
         <div className="space-y-2">
           <Label>Options</Label>
@@ -426,7 +508,12 @@ function ApprovalFieldForm({
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={!fieldName.trim() || (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0)}
+          disabled={
+            !fieldName.trim() || 
+            (fieldType === "boolean" && expectedValueBoolean === undefined) ||
+            (fieldType === "number" && (!comparisonType || expectedValueNumber === undefined)) ||
+            (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0)
+          }
           data-testid="button-save-approval-field"
         >
           Add Field
@@ -903,7 +990,9 @@ export default function ProjectTypeDetail() {
         await updateStageMutation.mutateAsync(editingStage);
       } else {
         const createdStage = await createStageMutation.mutateAsync(editingStage);
-        editingStage.id = createdStage.id;
+        if (createdStage && typeof createdStage === 'object' && 'id' in createdStage) {
+          editingStage.id = (createdStage as any).id;
+        }
       }
       
       // Handle stage-reason mappings if editing an existing stage
@@ -928,7 +1017,8 @@ export default function ProjectTypeDetail() {
       
       // Handle stage approval mapping
       if (editingStage.id && selectedStageApprovalId !== editingStage.stageApprovalId) {
-        const updateData = { ...editingStage, stageApprovalId: selectedStageApprovalId };
+        editingStage.stageApprovalId = selectedStageApprovalId || undefined;
+        const updateData = { ...editingStage, stageApprovalId: selectedStageApprovalId || undefined };
         await updateStageMutation.mutateAsync(updateData);
       }
       
