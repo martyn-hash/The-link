@@ -69,6 +69,18 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Magic link tokens table
+export const magicLinkTokens = pgTable("magic_link_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  token: varchar("token").notNull().unique(),
+  code: varchar("code", { length: 4 }).notNull(),
+  email: varchar("email").notNull(),
+  expiresAt: timestamp("expires_at").notNull().default(sql`now() + interval '15 minutes'`),
+  used: boolean("used").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Clients table
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -258,6 +270,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   bookkeepingProjects: many(projects, { relationName: "bookkeeper" }),
   managedProjects: many(projects, { relationName: "clientManager" }),
   chronologyEntries: many(projectChronology),
+  magicLinkTokens: many(magicLinkTokens),
+}));
+
+export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [magicLinkTokens.userId],
+    references: [users.id],
+  }),
 }));
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -371,6 +391,11 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertMagicLinkTokenSchema = createInsertSchema(magicLinkTokens).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const upsertUserSchema = createInsertSchema(users).omit({
@@ -688,6 +713,8 @@ export const csvProjectSchema = z.object({
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
+export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Project = typeof projects.$inferSelect;
