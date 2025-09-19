@@ -53,7 +53,7 @@ import {
 import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
-import { sendStageChangeNotificationEmail } from "./emailService";
+import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
 import { eq, desc, and, inArray, sql, sum, lt } from "drizzle-orm";
 
 export interface IStorage {
@@ -190,6 +190,9 @@ export interface IStorage {
   createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences>;
   updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences>;
   getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences>;
+  
+  // Bulk project notification handling
+  sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void>;
   
   // User role operations
   getUsersByRole(role: string): Promise<User[]>;
@@ -395,6 +398,164 @@ export class DatabaseStorage implements IStorage {
     };
 
     return await this.createUserNotificationPreferences(defaultPreferences);
+  }
+
+  async sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void> {
+    if (!createdProjects || createdProjects.length === 0) {
+      return;
+    }
+
+    // DEDUPLICATION CACHE: Check if we've already sent notifications for this batch recently
+    const batchKey = createdProjects.map(p => p.id).sort().join(',');
+    const now = Date.now();
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    
+    if (this.recentNotifications.has(batchKey)) {
+      const lastSent = this.recentNotifications.get(batchKey)!;
+      if (now - lastSent < CACHE_DURATION) {
+        console.log('Bulk notifications already sent recently for this batch, skipping to prevent duplicates');
+        return;
+      }
+    }
+    
+    // CRITICAL FIX: Group projects by ALL assignee types (not just clientManagerId)
+    const assigneeProjectCounts = new Map<string, number>();
+    
+    for (const project of createdProjects) {
+      // Include all three assignee types: bookkeeperId, clientManagerId, currentAssigneeId
+      const assigneeIds = [
+        project.bookkeeperId,
+        project.clientManagerId,
+        project.currentAssigneeId
+      ].filter((id): id is string => Boolean(id)); // Remove null/undefined values
+      
+      for (const assigneeId of assigneeIds) {
+        const currentCount = assigneeProjectCounts.get(assigneeId) || 0;
+        assigneeProjectCounts.set(assigneeId, currentCount + 1);
+      }
+    }
+
+    if (assigneeProjectCounts.size === 0) {
+      console.log('No valid assignees found for bulk project notifications');
+      return;
+    }
+
+    // PERFORMANCE FIX: Batch-load users and preferences using inArray
+    const allAssigneeIds = Array.from(assigneeProjectCounts.keys());
+    console.log(`Queuing bulk project notifications for ${allAssigneeIds.length} assignees (${createdProjects.length} projects total)`);
+    
+    // Batch load users
+    const assignees = await db.select().from(users).where(inArray(users.id, allAssigneeIds));
+    const assigneeMap = new Map(assignees.map(user => [user.id, user]));
+    
+    // Batch load notification preferences
+    const existingPreferences = await db
+      .select()
+      .from(userNotificationPreferences)
+      .where(inArray(userNotificationPreferences.userId, allAssigneeIds));
+    const preferencesMap = new Map(existingPreferences.map(pref => [pref.userId, pref]));
+
+    // Create default preferences for users who don't have them
+    const usersNeedingDefaults = allAssigneeIds.filter(id => !preferencesMap.has(id));
+    if (usersNeedingDefaults.length > 0) {
+      const defaultPreferences = usersNeedingDefaults.map(userId => ({
+        userId,
+        notifyStageChanges: true,
+        notifyNewProjects: true,
+      }));
+      
+      const createdDefaults = await db
+        .insert(userNotificationPreferences)
+        .values(defaultPreferences)
+        .returning();
+      
+      // Add to preferences map
+      createdDefaults.forEach(pref => preferencesMap.set(pref.userId, pref));
+    }
+
+    // Send summary emails to each assignee
+    const emailPromises: { promise: Promise<boolean>; userEmail: string; projectCount: number }[] = [];
+    let skippedCount = 0;
+    
+    for (const [assigneeId, projectCount] of Array.from(assigneeProjectCounts.entries())) {
+      try {
+        const assignee = assigneeMap.get(assigneeId);
+        if (!assignee) {
+          console.warn(`Assignee with ID ${assigneeId} not found for bulk notification`);
+          continue;
+        }
+
+        // EMAIL VALIDATION: Check that email exists before sending
+        if (!assignee.email || assignee.email.trim() === '') {
+          console.warn(`Assignee ${assignee.firstName} ${assignee.lastName} (ID: ${assigneeId}) has no email address, skipping notification`);
+          continue;
+        }
+
+        // Check notification preferences
+        const preferences = preferencesMap.get(assigneeId);
+        if (!preferences?.notifyNewProjects) {
+          console.log(`User ${assignee.email} has disabled new project notifications, skipping bulk notification`);
+          skippedCount++;
+          continue;
+        }
+
+        // Send bulk summary email
+        const emailPromise = sendBulkProjectAssignmentSummaryEmail(
+          assignee.email,
+          `${assignee.firstName} ${assignee.lastName}`.trim() || assignee.email,
+          projectCount
+        );
+
+        emailPromises.push({
+          promise: emailPromise,
+          userEmail: assignee.email,
+          projectCount
+        });
+        
+        console.log(`Queued bulk project assignment notification for ${assignee.email}: ${projectCount} projects`);
+      } catch (error) {
+        console.error(`Failed to queue bulk notification for assignee ${assigneeId}:`, error);
+      }
+    }
+
+    // LOGGING FIX: Wait for all emails and report actual delivery status
+    if (emailPromises.length > 0) {
+      console.log(`Processing ${emailPromises.length} bulk notification emails...`);
+      
+      const results = await Promise.allSettled(emailPromises.map(ep => ep.promise));
+      
+      // Count successes and failures
+      let successCount = 0;
+      let failureCount = 0;
+      
+      results.forEach((result, index) => {
+        const emailInfo = emailPromises[index];
+        if (result.status === 'fulfilled') {
+          successCount++;
+          console.log(`✓ Successfully delivered bulk notification to ${emailInfo.userEmail} (${emailInfo.projectCount} projects)`);
+        } else {
+          failureCount++;
+          console.error(`✗ Failed to deliver bulk notification to ${emailInfo.userEmail}:`, result.reason);
+        }
+      });
+      
+      console.log(`Bulk project notifications completed: ${successCount} delivered, ${failureCount} failed, ${skippedCount} skipped (preferences disabled)`);
+      
+      // Mark this batch as processed to prevent duplicates
+      this.recentNotifications.set(batchKey, now);
+      
+      // Clean up old cache entries (keep only last 100 entries)
+      if (this.recentNotifications.size > 100) {
+        const entries = Array.from(this.recentNotifications.entries());
+        entries.sort((a, b) => b[1] - a[1]); // Sort by timestamp descending
+        this.recentNotifications.clear();
+        entries.slice(0, 50).forEach(([key, timestamp]) => {
+          this.recentNotifications.set(key, timestamp);
+        });
+      }
+    } else {
+      console.log('No bulk project notifications to send after filtering');
+    }
   }
 
   // User impersonation operations (for admin testing)

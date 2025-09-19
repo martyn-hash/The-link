@@ -279,3 +279,70 @@ The Link Team
     html,
   });
 }
+
+export async function sendBulkProjectAssignmentSummaryEmail(
+  recipientEmail: string,
+  recipientName: string,
+  projectCount: number
+): Promise<boolean> {
+  const subject = `${projectCount} new projects assigned to you - The Link`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #4f46e5;">📋 New Projects Assigned</h2>
+      <p>Hello ${recipientName},</p>
+      <p>You have <strong>${projectCount}</strong> new projects awaiting your attention.</p>
+      
+      <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe; text-align: center;">
+        <div style="background-color: #4f46e5; color: white; display: inline-block; padding: 20px 30px; border-radius: 16px; box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);">
+          <div style="font-size: 48px; font-weight: 900; line-height: 1;">
+            ${projectCount}
+          </div>
+          <div style="font-size: 14px; margin-top: 8px; opacity: 0.9; font-weight: 600; letter-spacing: 1px;">
+            NEW PROJECTS
+          </div>
+        </div>
+        <p style="margin-top: 20px; font-size: 16px; color: #374151;">
+          Please log in to review and begin work on your new projects.
+        </p>
+      </div>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/projects" 
+           style="display: inline-block; background-color: #4f46e5; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);">
+          🚀 View Your Projects
+        </a>
+      </div>
+      
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+        You're receiving this summary notification because multiple projects were assigned to you at once. You can update your notification preferences in your account settings.
+      </p>
+      
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        The Link Team
+      </p>
+    </div>
+  `;
+
+  const text = `
+Hello ${recipientName},
+
+You have ${projectCount} new projects awaiting your attention. Please log in to review and begin work.
+
+Visit: ${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/projects
+
+You're receiving this summary notification because multiple projects were assigned to you at once. You can update your notification preferences in your account settings.
+
+Best regards,
+The Link Team
+  `;
+
+  return await sendEmail({
+    to: recipientEmail,
+    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
+    subject,
+    text,
+    html,
+  });
+}

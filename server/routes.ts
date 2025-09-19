@@ -808,6 +808,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Send bulk project assignment notifications if projects were created
+      if (result.createdProjects && result.createdProjects.length > 0) {
+        try {
+          await storage.sendBulkProjectAssignmentNotifications(result.createdProjects);
+          console.log(`Sent bulk project notifications for ${result.createdProjects.length} newly created projects`);
+        } catch (notificationError) {
+          console.error("Failed to send bulk project notifications:", notificationError);
+          // Don't fail the entire upload if notifications fail - projects were successfully created
+        }
+      }
+      
       res.json({ 
         message: `Successfully processed CSV upload`,
         summary: result.summary,
