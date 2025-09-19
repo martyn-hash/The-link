@@ -59,7 +59,7 @@ export default function MagicLinkVerify() {
       setTimeout(() => {
         setVerificationState({ status: "token_success", message: "Redirecting to dashboard..." });
         setTimeout(() => {
-          setLocation("/dashboard"); // Navigate to dashboard using client-side routing
+          setLocation("/"); // Navigate to dashboard using client-side routing
         }, 500);
       }, 1000);
     },
@@ -95,7 +95,7 @@ export default function MagicLinkVerify() {
       setTimeout(() => {
         setVerificationState({ status: "token_success", message: "Redirecting to dashboard..." });
         setTimeout(() => {
-          setLocation("/dashboard"); // Navigate to dashboard using client-side routing
+          setLocation("/"); // Navigate to dashboard using client-side routing
         }, 500);
       }, 1000);
     },

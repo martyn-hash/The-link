@@ -74,7 +74,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const isActive = (href: string) => {
     if (href === "/") {
-      return location === "/" || location === "/dashboard";
+      return location === "/";
     }
     return location === href;
   };
