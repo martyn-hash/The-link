@@ -389,6 +389,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
+      // SECURITY: Block profile updates during impersonation mode
+      if (req.user?.isImpersonating) {
+        return res.status(403).json({ 
+          message: "Profile updates are not allowed while impersonating another user",
+          code: "IMPERSONATION_PROFILE_UPDATE_BLOCKED"
+        });
+      }
+
       const { ...profileData } = req.body;
       
       // SECURITY: Explicitly remove sensitive fields from request to prevent injection
@@ -429,6 +437,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const effectiveUserId = req.user?.effectiveUserId;
       if (!effectiveUserId) {
         return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // SECURITY: Block password changes during impersonation mode
+      if (req.user?.isImpersonating) {
+        return res.status(403).json({ 
+          message: "Password changes are not allowed while impersonating another user",
+          code: "IMPERSONATION_PASSWORD_CHANGE_BLOCKED"
+        });
       }
 
       const { currentPassword, newPassword } = req.body;
