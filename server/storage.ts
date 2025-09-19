@@ -372,7 +372,7 @@ export class DatabaseStorage implements IStorage {
         fromStatus: null, // Initial entry has no previous status
         toStatus: project.currentStatus,
         assigneeId: project.currentAssigneeId,
-        changeReason: "Project Created",
+        changeReason: `${project.description} Created → ${project.currentStatus}`,
         timeInPreviousStage: null, // No previous stage for initial entry
         businessHoursInPreviousStage: null, // No previous stage for initial entry
       });
@@ -1100,7 +1100,7 @@ export class DatabaseStorage implements IStorage {
               fromStatus: null,
               toStatus: defaultStage.name,
               assigneeId: clientManager.id,
-              changeReason: "first_allocation_of_work",
+              changeReason: `${newProject.description} Created → ${defaultStage.name}`,
               notes: `New project created for month ${normalizedProjectMonth} and assigned to client manager`,
               timeInPreviousStage: 0,
             });
