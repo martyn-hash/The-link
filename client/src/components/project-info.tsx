@@ -1,4 +1,9 @@
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { ProjectWithRelations, User } from "@shared/schema";
 
 interface ProjectInfoProps {
@@ -29,6 +34,49 @@ const getCurrentTimeInStage = (project: ProjectWithRelations) => {
 };
 
 export default function ProjectInfo({ project, user }: ProjectInfoProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Check if user has permission to modify projects
+  const canModifyProject = () => {
+    return (
+      user.role === 'admin' ||
+      user.role === 'manager' ||
+      project.currentAssigneeId === user.id ||
+      (user.role === 'client_manager' && project.clientManagerId === user.id) ||
+      (user.role === 'bookkeeper' && project.bookkeeperId === user.id)
+    );
+  };
+
+  // Mutation for updating project inactive status
+  const updateProjectMutation = useMutation({
+    mutationFn: async (inactive: boolean) => {
+      return await apiRequest("PATCH", `/api/projects/${project.id}`, {
+        inactive
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: `Project ${project.inactive ? 'activated' : 'deactivated'} successfully`,
+      });
+      // Invalidate queries to refresh the project data
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update project status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleInactiveToggle = (checked: boolean) => {
+    updateProjectMutation.mutate(checked);
+  };
+
   return (
     <div className="space-y-6">
       {/* Progress Metrics Section - Row 1, Column 1 */}
@@ -70,6 +118,24 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
               {getCurrentTimeInStage(project)}
             </span>
           </div>
+          {canModifyProject() && (
+            <div className="flex justify-between items-center">
+              <Label 
+                htmlFor="inactive-toggle" 
+                className="text-muted-foreground cursor-pointer"
+              >
+                Mark as Inactive:
+              </Label>
+              <Switch
+                id="inactive-toggle"
+                checked={project.inactive || false}
+                onCheckedChange={handleInactiveToggle}
+                disabled={updateProjectMutation.isPending}
+                data-testid="switch-inactive-project"
+                className="ml-2"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

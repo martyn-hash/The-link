@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
+import { z } from "zod";
 import {
   insertUserSchema,
   insertKanbanStageSchema,
@@ -23,6 +24,7 @@ import {
   updateStageApprovalFieldSchema,
   insertStageApprovalResponseSchema,
   updateProjectStatusSchema,
+  updateProjectSchema,
   csvProjectSchema,
   insertUserNotificationPreferencesSchema,
   updateUserNotificationPreferencesSchema,
@@ -759,6 +761,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Failed to update project status" });
+      }
+    }
+  });
+
+  // General project update route
+  app.patch("/api/projects/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveRole = req.user?.effectiveRole;
+      
+      if (!effectiveUserId || !effectiveRole) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // SECURITY FIX: Only allow updating the inactive field to prevent privilege escalation
+      // Create constrained schema that only allows inactive field updates
+      const inactiveOnlyUpdateSchema = z.object({ 
+        inactive: z.boolean() 
+      });
+      const updateData = inactiveOnlyUpdateSchema.parse(req.body);
+      
+      // Verify user has permission to update this project
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check if effective user is authorized to update this project
+      const canUpdate = 
+        effectiveRole === 'admin' ||
+        effectiveRole === 'manager' ||
+        project.currentAssigneeId === effectiveUserId ||
+        (effectiveRole === 'client_manager' && project.clientManagerId === effectiveUserId) ||
+        (effectiveRole === 'bookkeeper' && project.bookkeeperId === effectiveUserId);
+
+      if (!canUpdate) {
+        return res.status(403).json({ message: "Not authorized to update this project" });
+      }
+
+      // Update the project
+      const updatedProject = await storage.updateProject(req.params.id, updateData);
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        console.error("Validation errors:", (error as any).issues);
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && error.message.includes("not found")) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to update project" });
       }
     }
   });

@@ -86,6 +86,7 @@ export interface IStorage {
   getAllProjects(): Promise<ProjectWithRelations[]>;
   getProjectsByUser(userId: string, role: string): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
+  updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
   
   // Chronology operations
@@ -808,6 +809,23 @@ export class DatabaseStorage implements IStorage {
         fieldResponses: c.fieldResponses || [],
       })),
     };
+  }
+
+  async updateProject(id: string, updateData: Partial<InsertProject>): Promise<Project> {
+    const [updatedProject] = await db
+      .update(projects)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, id))
+      .returning();
+
+    if (!updatedProject) {
+      throw new Error("Project not found");
+    }
+
+    return updatedProject;
   }
 
   async updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project> {
