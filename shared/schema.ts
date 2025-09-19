@@ -99,10 +99,11 @@ export const clients = pgTable("clients", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Projects table
+// Projects table (individual client work items)
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id),
+  projectTypeId: varchar("project_type_id").references(() => projectTypes.id), // links to project type configuration (temporarily nullable for migration)
   bookkeeperId: varchar("bookkeeper_id").notNull().references(() => users.id),
   clientManagerId: varchar("client_manager_id").notNull().references(() => users.id),
   description: text("description").notNull(),
@@ -133,10 +134,15 @@ export const projectChronology = pgTable("project_chronology", {
 // Stage approvals configuration table
 export const stageApprovals = pgTable("stage_approvals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull().unique(),
+  projectTypeId: varchar("project_type_id").references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type (temporarily nullable for migration)
+  name: varchar("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_stage_approvals_project_type_id").on(table.projectTypeId),
+  // Name must be unique within a project type
+  unique("unique_approval_name_per_project_type").on(table.projectTypeId, table.name),
+]);
 
 // Stage approval fields table - questions/fields for each stage approval
 export const stageApprovalFields = pgTable("stage_approval_fields", {
@@ -190,7 +196,8 @@ export const stageApprovalResponses = pgTable("stage_approval_responses", {
 // Kanban stages configuration table
 export const kanbanStages = pgTable("kanban_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull().unique(),
+  projectTypeId: varchar("project_type_id").references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type (temporarily nullable for migration)
+  name: varchar("name").notNull(),
   assignedRole: userRoleEnum("assigned_role"),
   order: integer("order").notNull(),
   color: varchar("color").default("#6b7280"),
@@ -198,23 +205,33 @@ export const kanbanStages = pgTable("kanban_stages", {
   maxTotalTime: integer("max_total_time"), // Maximum cumulative hours across all visits to this stage (optional)
   stageApprovalId: varchar("stage_approval_id").references(() => stageApprovals.id, { onDelete: "set null" }), // Optional stage approval
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_kanban_stages_project_type_id").on(table.projectTypeId),
+  // Name must be unique within a project type
+  unique("unique_stage_name_per_project_type").on(table.projectTypeId, table.name),
+]);
 
 // Change reasons configuration table
 export const changeReasons = pgTable("change_reasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  reason: varchar("reason").notNull().unique(),
+  projectTypeId: varchar("project_type_id").references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type (temporarily nullable for migration)
+  reason: varchar("reason").notNull(),
   description: varchar("description"),
   showCountInProject: boolean("show_count_in_project").default(false),
   countLabel: varchar("count_label"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_change_reasons_project_type_id").on(table.projectTypeId),
+  // Reason must be unique within a project type
+  unique("unique_reason_per_project_type").on(table.projectTypeId, table.reason),
+]);
 
-// Project descriptions configuration table
-export const projectDescriptions = pgTable("project_descriptions", {
+// Project types configuration table (renamed from project descriptions)
+export const projectTypes = pgTable("project_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull().unique(), // description name
-  active: boolean("active").default(true), // to enable/disable descriptions
+  name: varchar("name").notNull().unique(), // project type name (e.g. "Monthly Bookkeeping", "Payroll")
+  description: text("description"), // optional description of the project type
+  active: boolean("active").default(true), // to enable/disable project types
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -300,6 +317,10 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     fields: [projects.clientId],
     references: [clients.id],
   }),
+  projectType: one(projectTypes, {
+    fields: [projects.projectTypeId],
+    references: [projectTypes.id],
+  }),
   bookkeeper: one(users, {
     fields: [projects.bookkeeperId],
     references: [users.id],
@@ -331,6 +352,10 @@ export const projectChronologyRelations = relations(projectChronology, ({ one, m
 }));
 
 export const kanbanStagesRelations = relations(kanbanStages, ({ one, many }) => ({
+  projectType: one(projectTypes, {
+    fields: [kanbanStages.projectTypeId],
+    references: [projectTypes.id],
+  }),
   stageReasonMaps: many(stageReasonMaps),
   stageApproval: one(stageApprovals, {
     fields: [kanbanStages.stageApprovalId],
@@ -338,7 +363,11 @@ export const kanbanStagesRelations = relations(kanbanStages, ({ one, many }) => 
   }),
 }));
 
-export const changeReasonsRelations = relations(changeReasons, ({ many }) => ({
+export const changeReasonsRelations = relations(changeReasons, ({ one, many }) => ({
+  projectType: one(projectTypes, {
+    fields: [changeReasons.projectTypeId],
+    references: [projectTypes.id],
+  }),
   stageReasonMaps: many(stageReasonMaps),
   customFields: many(reasonCustomFields),
 }));
@@ -373,7 +402,11 @@ export const reasonFieldResponsesRelations = relations(reasonFieldResponses, ({ 
   }),
 }));
 
-export const stageApprovalsRelations = relations(stageApprovals, ({ many }) => ({
+export const stageApprovalsRelations = relations(stageApprovals, ({ one, many }) => ({
+  projectType: one(projectTypes, {
+    fields: [stageApprovals.projectTypeId],
+    references: [projectTypes.id],
+  }),
   fields: many(stageApprovalFields),
   linkedStages: many(kanbanStages),
 }));
@@ -432,6 +465,8 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   updatedAt: true,
 });
 
+export const updateProjectSchema = insertProjectSchema.partial();
+
 export const insertProjectChronologySchema = createInsertSchema(projectChronology).omit({
   id: true,
   timestamp: true,
@@ -478,10 +513,12 @@ export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({
 
 export const updateChangeReasonSchema = insertChangeReasonSchema.partial();
 
-export const insertProjectDescriptionSchema = createInsertSchema(projectDescriptions).omit({
+export const insertProjectTypeSchema = createInsertSchema(projectTypes).omit({
   id: true,
   createdAt: true,
 });
+
+export const updateProjectTypeSchema = insertProjectTypeSchema.partial();
 
 export const insertStageReasonMapSchema = createInsertSchema(stageReasonMaps).omit({
   id: true,
@@ -751,8 +788,18 @@ export type KanbanStage = typeof kanbanStages.$inferSelect;
 export type InsertKanbanStage = z.infer<typeof insertKanbanStageSchema>;
 export type ChangeReason = typeof changeReasons.$inferSelect;
 export type InsertChangeReason = z.infer<typeof insertChangeReasonSchema>;
-export type ProjectDescription = typeof projectDescriptions.$inferSelect;
-export type InsertProjectDescription = z.infer<typeof insertProjectDescriptionSchema>;
+// Project type definitions
+export const projectTypesRelations = relations(projectTypes, ({ many }) => ({
+  projects: many(projects),
+  kanbanStages: many(kanbanStages),
+  changeReasons: many(changeReasons),
+  stageApprovals: many(stageApprovals),
+}));
+
+// Type definitions
+export type ProjectType = typeof projectTypes.$inferSelect;
+export type InsertProjectType = z.infer<typeof insertProjectTypeSchema>;
+export type UpdateProjectType = z.infer<typeof updateProjectTypeSchema>;
 export type StageReasonMap = typeof stageReasonMaps.$inferSelect;
 export type InsertStageReasonMap = z.infer<typeof insertStageReasonMapSchema>;
 export type ReasonCustomField = typeof reasonCustomFields.$inferSelect;

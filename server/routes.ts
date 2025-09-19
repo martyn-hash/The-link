@@ -11,7 +11,7 @@ import {
   updateKanbanStageSchema,
   insertChangeReasonSchema,
   updateChangeReasonSchema,
-  insertProjectDescriptionSchema,
+  insertProjectTypeSchema,
   insertStageReasonMapSchema,
   insertReasonCustomFieldSchema,
   updateReasonCustomFieldSchema,
@@ -1290,7 +1290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Project descriptions configuration routes
   app.get("/api/config/project-descriptions", isAuthenticated, async (req, res) => {
     try {
-      const descriptions = await storage.getAllProjectDescriptions();
+      const descriptions = await storage.getAllProjectTypes();
       res.json(descriptions);
     } catch (error) {
       console.error("Error fetching project descriptions:", error);
@@ -1300,8 +1300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/config/project-descriptions", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const descriptionData = insertProjectDescriptionSchema.parse(req.body);
-      const description = await storage.createProjectDescription(descriptionData);
+      const descriptionData = insertProjectTypeSchema.parse(req.body);
+      const description = await storage.createProjectType(descriptionData);
       res.json(description);
     } catch (error) {
       console.error("Error creating project description:", error);
@@ -1311,7 +1311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/config/project-descriptions/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const description = await storage.updateProjectDescription(req.params.id, req.body);
+      const description = await storage.updateProjectType(req.params.id, req.body);
       res.json(description);
     } catch (error) {
       console.error("Error updating project description:", error);
@@ -1326,7 +1326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/config/project-descriptions/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      await storage.deleteProjectDescription(req.params.id);
+      await storage.deleteProjectType(req.params.id);
       res.json({ message: "Project description deleted successfully" });
     } catch (error) {
       console.error("Error deleting project description:", error);

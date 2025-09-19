@@ -5,7 +5,7 @@ import {
   projectChronology,
   kanbanStages,
   changeReasons,
-  projectDescriptions,
+  projectTypes,
   stageReasonMaps,
   reasonCustomFields,
   reasonFieldResponses,
@@ -28,8 +28,8 @@ import {
   type InsertKanbanStage,
   type ChangeReason,
   type InsertChangeReason,
-  type ProjectDescription,
-  type InsertProjectDescription,
+  type ProjectType,
+  type InsertProjectType,
   type StageReasonMap,
   type InsertStageReasonMap,
   type ReasonCustomField,
@@ -110,12 +110,12 @@ export interface IStorage {
   updateChangeReason(id: string, reason: Partial<InsertChangeReason>): Promise<ChangeReason>;
   deleteChangeReason(id: string): Promise<void>;
   
-  // Project description operations
-  getAllProjectDescriptions(): Promise<ProjectDescription[]>;
-  createProjectDescription(description: InsertProjectDescription): Promise<ProjectDescription>;
-  updateProjectDescription(id: string, description: Partial<InsertProjectDescription>): Promise<ProjectDescription>;
-  deleteProjectDescription(id: string): Promise<void>;
-  getProjectDescriptionByName(name: string): Promise<ProjectDescription | undefined>;
+  // Project type operations
+  getAllProjectTypes(): Promise<ProjectType[]>;
+  createProjectType(projectType: InsertProjectType): Promise<ProjectType>;
+  updateProjectType(id: string, projectType: Partial<InsertProjectType>): Promise<ProjectType>;
+  deleteProjectType(id: string): Promise<void>;
+  getProjectTypeByName(name: string): Promise<ProjectType | undefined>;
   
   // Bulk operations
   createProjectsFromCSV(projectsData: any[]): Promise<{
@@ -1181,20 +1181,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Project description operations
-  async getAllProjectDescriptions(): Promise<ProjectDescription[]> {
-    return await db.select().from(projectDescriptions).orderBy(projectDescriptions.order);
+  async getAllProjectTypes(): Promise<ProjectType[]> {
+    return await db.select().from(projectTypes).orderBy(projectTypes.name);
   }
 
-  async createProjectDescription(description: InsertProjectDescription): Promise<ProjectDescription> {
-    const [newDescription] = await db.insert(projectDescriptions).values(description).returning();
-    return newDescription;
+  async createProjectType(projectType: InsertProjectType): Promise<ProjectType> {
+    const [newProjectType] = await db.insert(projectTypes).values(projectType).returning();
+    return newProjectType;
   }
 
-  async updateProjectDescription(id: string, description: Partial<InsertProjectDescription>): Promise<ProjectDescription> {
+  async updateProjectType(id: string, projectType: Partial<InsertProjectType>): Promise<ProjectType> {
     const [updatedDescription] = await db
-      .update(projectDescriptions)
-      .set(description)
-      .where(eq(projectDescriptions.id, id))
+      .update(projectTypes)
+      .set(projectType)
+      .where(eq(projectTypes.id, id))
       .returning();
       
     if (!updatedDescription) {
@@ -1204,16 +1204,16 @@ export class DatabaseStorage implements IStorage {
     return updatedDescription;
   }
 
-  async deleteProjectDescription(id: string): Promise<void> {
-    const result = await db.delete(projectDescriptions).where(eq(projectDescriptions.id, id));
+  async deleteProjectType(id: string): Promise<void> {
+    const result = await db.delete(projectTypes).where(eq(projectTypes.id, id));
     if (result.rowCount === 0) {
       throw new Error("Project description not found");
     }
   }
 
-  async getProjectDescriptionByName(name: string): Promise<ProjectDescription | undefined> {
-    const [description] = await db.select().from(projectDescriptions).where(eq(projectDescriptions.name, name));
-    return description;
+  async getProjectTypeByName(name: string): Promise<ProjectType | undefined> {
+    const [projectType] = await db.select().from(projectTypes).where(eq(projectTypes.name, name));
+    return projectType;
   }
 
   // Bulk operations
@@ -1445,7 +1445,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Validate project descriptions against configured ones
-    const activeDescriptions = await db.select().from(projectDescriptions).where(eq(projectDescriptions.active, true));
+    const activeDescriptions = await db.select().from(projectTypes).where(eq(projectTypes.isActive, true));
     if (activeDescriptions.length === 0) {
       errors.push("No active project descriptions found. Please configure project descriptions in the admin area before importing projects.");
       return { isValid: false, errors };
