@@ -23,13 +23,13 @@ export default function Admin() {
     queryKey: ["/api/projects"],
     enabled: isAuthenticated && !!user,
     retry: false,
-  });
+  }) as { data: any[] | undefined, isLoading: boolean };
 
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
     enabled: isAuthenticated && !!user && user?.role === 'admin',
     retry: false,
-  });
+  }) as { data: any[] | undefined, isLoading: boolean };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -84,17 +84,20 @@ export default function Admin() {
   }
 
   // Calculate statistics
-  const totalProjects = (projects || []).length;
-  const totalUsers = (users || []).length;
-  const completedProjects = (projects || []).filter((p: any) => p.currentStatus === 'completed').length;
+  const projectsArray = Array.isArray(projects) ? projects : [];
+  const usersArray = Array.isArray(users) ? users : [];
+  
+  const totalProjects = projectsArray.length;
+  const totalUsers = usersArray.length;
+  const completedProjects = projectsArray.filter((p: any) => p.currentStatus === 'completed').length;
   const activeProjects = totalProjects - completedProjects;
 
-  const statusCounts = (projects || []).reduce((acc: any, project: any) => {
+  const statusCounts = projectsArray.reduce((acc: any, project: any) => {
     acc[project.currentStatus] = (acc[project.currentStatus] || 0) + 1;
     return acc;
   }, {});
 
-  const roleCounts = (users || []).reduce((acc: any, user: any) => {
+  const roleCounts = usersArray.reduce((acc: any, user: any) => {
     acc[user.role] = (acc[user.role] || 0) + 1;
     return acc;
   }, {});
@@ -291,7 +294,7 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {(projects || []).slice(0, 5).map((project: any) => {
+                  {projectsArray.slice(0, 5).map((project: any) => {
                     const lastActivity = project.chronology?.[0];
                     if (!lastActivity) return null;
                     
@@ -312,7 +315,7 @@ export default function Admin() {
                     );
                   })}
                   
-                  {!(projects || []).length && (
+                  {!projectsArray.length && (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       No recent activity
                     </p>
