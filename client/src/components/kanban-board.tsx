@@ -45,18 +45,27 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     setLocation(`/projects/${projectId}`);
   };
 
-  // Fetch kanban stages from API
-  const { 
-    data: stages, 
-    isLoading: stagesLoading, 
-    isError: stagesError, 
-    error, 
-    refetch: refetchStages 
-  } = useQuery<KanbanStage[]>({
-    queryKey: ["/api/config/stages"],
-    retry: 3,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-  });
+  // Get unique project types from the projects
+  const projectTypes = Array.from(new Set(projects.map(p => p.projectTypeId).filter(Boolean)));
+
+  // Fetch stages for all project types represented in the projects
+  const stageQueries = projectTypes.map(projectTypeId => 
+    useQuery<KanbanStage[]>({
+      queryKey: ['/api/config/project-types', projectTypeId, 'stages'],
+      enabled: !!projectTypeId,
+      staleTime: 5 * 60 * 1000,
+    })
+  );
+
+  // Combine all stages from different project types
+  const allStages = stageQueries.flatMap(query => query.data || []);
+  const stagesLoading = stageQueries.some(query => query.isLoading);
+  const stagesError = stageQueries.some(query => query.isError);
+  const error = stageQueries.find(query => query.error)?.error;
+  const refetchStages = () => stageQueries.forEach(query => query.refetch());
+  
+  // Use combined stages
+  const stages = allStages;
 
   // Transform stages to match expected structure
   const stageConfig = stages?.reduce((acc, stage, index) => {

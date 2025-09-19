@@ -39,9 +39,11 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch kanban stages to get colors
+  // Fetch kanban stages for this project's project type to get colors
   const { data: stages } = useQuery<KanbanStage[]>({
-    queryKey: ["/api/config/stages"],
+    queryKey: ["/api/config/project-types", project.projectTypeId, "stages"],
+    enabled: !!project.projectTypeId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Memoize sorted chronology to avoid re-sorting on every render

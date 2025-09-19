@@ -1342,7 +1342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project type management routes
-  app.get("/api/config/project-types", isAuthenticated, async (req, res) => {
+  app.get("/api/config/project-types", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const projectTypes = await storage.getAllProjectTypes();
       res.json(projectTypes);
@@ -1352,7 +1352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/config/project-types", isAuthenticated, requireAdmin, async (req, res) => {
+  app.post("/api/config/project-types", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const projectTypeData = insertProjectTypeSchema.parse(req.body);
       const projectType = await storage.createProjectType(projectTypeData);
@@ -1369,7 +1369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/config/project-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.patch("/api/config/project-types/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const updateData = updateProjectTypeSchema.parse(req.body);
       const projectType = await storage.updateProjectType(req.params.id, updateData);
@@ -1389,7 +1389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/config/project-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.delete("/api/config/project-types/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       await storage.deleteProjectType(req.params.id);
       res.json({ message: "Project type deleted successfully" });
@@ -1407,7 +1407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project-scoped configuration routes
-  app.get("/api/config/project-types/:projectTypeId/stages", isAuthenticated, async (req, res) => {
+  app.get("/api/config/project-types/:projectTypeId/stages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectTypeId } = req.params;
       const stages = await storage.getKanbanStagesByProjectTypeId(projectTypeId);
@@ -1418,7 +1418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/config/project-types/:projectTypeId/reasons", isAuthenticated, async (req, res) => {
+  app.get("/api/config/project-types/:projectTypeId/reasons", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectTypeId } = req.params;
       const reasons = await storage.getChangeReasonsByProjectTypeId(projectTypeId);
@@ -1429,7 +1429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/config/project-types/:projectTypeId/stage-approvals", isAuthenticated, async (req, res) => {
+  app.get("/api/config/project-types/:projectTypeId/stage-approvals", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectTypeId } = req.params;
       const stageApprovals = await storage.getStageApprovalsByProjectTypeId(projectTypeId);

@@ -18,7 +18,7 @@ import { Plus, Edit2, Trash2, Save, X, Settings, Link, Unlink } from "lucide-rea
 import type { 
   KanbanStage, 
   ChangeReason, 
-  ProjectDescription,
+  ProjectType,
   StageReasonMap,
   ReasonCustomField,
   StageApproval,
@@ -172,7 +172,7 @@ export default function SettingsPage() {
   });
 
   // Fetch project descriptions
-  const { data: descriptions, isLoading: descriptionsLoading } = useQuery<ProjectDescription[]>({
+  const { data: descriptions, isLoading: descriptionsLoading } = useQuery<ProjectType[]>({
     queryKey: ["/api/config/project-descriptions"],
   });
 
@@ -715,7 +715,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleEditDescription = (description: ProjectDescription) => {
+  const handleEditDescription = (description: ProjectType) => {
     setEditingDescription({
       id: description.id,
       name: description.name,
@@ -1894,11 +1894,11 @@ export default function SettingsPage() {
                                 <Label htmlFor="description-name">Description Name</Label>
                                 <Input
                                   id="description-name"
-                                  value={editingDescription.name}
-                                  onChange={(e) => setEditingDescription({
+                                  value={editingDescription?.name || ''}
+                                  onChange={(e) => setEditingDescription(editingDescription ? {
                                     ...editingDescription,
                                     name: e.target.value
-                                  })}
+                                  } : null)}
                                   data-testid="input-description-name"
                                 />
                               </div>
@@ -1908,11 +1908,11 @@ export default function SettingsPage() {
                                 <Input
                                   id="description-order"
                                   type="number"
-                                  value={editingDescription.order}
-                                  onChange={(e) => setEditingDescription({
+                                  value={editingDescription?.order || 0}
+                                  onChange={(e) => setEditingDescription(editingDescription ? {
                                     ...editingDescription,
                                     order: parseInt(e.target.value) || 0
-                                  })}
+                                  } : null)}
                                   data-testid="input-description-order"
                                 />
                               </div>
@@ -1923,11 +1923,11 @@ export default function SettingsPage() {
                                 <input
                                   type="checkbox"
                                   id="description-active"
-                                  checked={editingDescription.active}
-                                  onChange={(e) => setEditingDescription({
+                                  checked={editingDescription?.active || false}
+                                  onChange={(e) => setEditingDescription(editingDescription ? {
                                     ...editingDescription,
                                     active: e.target.checked
-                                  })}
+                                  } : null)}
                                   className="rounded border-input"
                                   data-testid="checkbox-description-active"
                                 />

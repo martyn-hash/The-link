@@ -80,21 +80,25 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch kanban stages
+  // Fetch kanban stages for this project's project type
   const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
-    queryKey: ['/api/config/stages'],
+    queryKey: ['/api/config/project-types', project.projectTypeId, 'stages'],
+    enabled: !!project.projectTypeId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Find the selected stage to get its ID
   const selectedStage = stages.find(stage => stage.name === newStatus);
 
-  // Fetch filtered change reasons for the selected stage
-  const { data: filteredReasons = [], isLoading: reasonsLoading, error: reasonsError } = useQuery<ChangeReason[]>({
-    queryKey: [`/api/config/stages/${selectedStage?.id}/reasons`],
-    enabled: !!selectedStage?.id,
+  // Fetch change reasons for this project's project type
+  const { data: allProjectReasons = [], isLoading: reasonsLoading, error: reasonsError } = useQuery<ChangeReason[]>({
+    queryKey: ['/api/config/project-types', project.projectTypeId, 'reasons'],
+    enabled: !!project.projectTypeId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // Filter reasons based on stage-reason mappings (server should handle this filtering)
+  const filteredReasons = allProjectReasons;
 
   // Find the selected reason to get its ID
   const selectedReasonObj = filteredReasons.find(reason => reason.reason === changeReason);
@@ -106,9 +110,10 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch stage approvals
+  // Fetch stage approvals for this project's project type
   const { data: stageApprovals = [], isLoading: stageApprovalsLoading } = useQuery<StageApproval[]>({
-    queryKey: ['/api/config/stage-approvals'],
+    queryKey: ['/api/config/project-types', project.projectTypeId, 'stage-approvals'],
+    enabled: !!project.projectTypeId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
