@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 
 // Extended user type to include impersonation metadata
 type UserWithImpersonation = User & {
@@ -12,9 +12,13 @@ type UserWithImpersonation = User & {
 };
 
 export function useAuth() {
-  const { data: user, isLoading } = useQuery<UserWithImpersonation>({
+  const { data: user, isLoading, error } = useQuery<UserWithImpersonation>({
     queryKey: ["/api/auth/user"],
+    queryFn: getQueryFn({ on401: "returnNull" }), // Return null on 401 instead of throwing
     retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    staleTime: 5 * 60 * 1000, // Consider auth data stale after 5 minutes
   });
 
   const startImpersonationMutation = useMutation({
@@ -27,10 +31,12 @@ export function useAuth() {
       return response.json();
     },
     onSuccess: () => {
-      // Refresh user data to get the impersonated user
+      // Only refresh specific queries to avoid loops
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      // Refresh all cached data since the user context has changed
-      queryClient.invalidateQueries();
+      // Refresh other user-dependent data
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
     },
   });
 
@@ -44,10 +50,12 @@ export function useAuth() {
       return response.json();
     },
     onSuccess: () => {
-      // Refresh user data to get back to original user
+      // Only refresh specific queries to avoid loops
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      // Refresh all cached data since the user context has changed
-      queryClient.invalidateQueries();
+      // Refresh other user-dependent data
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
     },
   });
 
