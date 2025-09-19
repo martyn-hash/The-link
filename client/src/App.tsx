@@ -32,14 +32,15 @@ function Router() {
 
   return (
     <Switch>
-      {!isAuthenticated ? (
+      {/* Public routes - always available */}
+      <Route path="/magic-link-verify" component={MagicLinkVerify} />
+      
+      {/* Home route - conditional based on auth */}
+      <Route path="/" component={isAuthenticated ? Dashboard : Landing} />
+      
+      {/* Protected routes - only when authenticated */}
+      {isAuthenticated && (
         <>
-          <Route path="/" component={Landing} />
-          <Route path="/magic-link-verify" component={MagicLinkVerify} />
-        </>
-      ) : (
-        <>
-          <Route path="/" component={Dashboard} />
           <Route path="/projects" component={Projects} />
           <Route path="/projects/:id" component={ProjectDetail} />
           <Route path="/all-projects" component={AllProjects} />
@@ -49,6 +50,8 @@ function Router() {
           <Route path="/upload" component={Upload} />
         </>
       )}
+      
+      {/* Catch-all NotFound route */}
       <Route component={NotFound} />
     </Switch>
   );
