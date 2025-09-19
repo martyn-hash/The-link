@@ -42,22 +42,18 @@ function Router() {
       {/* Home route - conditional based on auth */}
       <Route path="/" component={isAuthenticated ? Dashboard : Landing} />
       
-      {/* Protected routes - only when authenticated */}
-      {isAuthenticated && (
-        <>
-          <Route path="/projects" component={Projects} />
-          <Route path="/projects/:id" component={ProjectDetail} />
-          <Route path="/all-projects" component={AllProjects} />
-          <Route path="/clients" component={Clients} />
-          <Route path="/profile" component={Profile} />
-          <Route path="/settings" component={Settings} />
-          <Route path="/project-types" component={ProjectTypes} />
-          <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
-          <Route path="/users" component={Users} />
-          <Route path="/upload" component={Upload} />
-          <Route path="/admin" component={Admin} />
-        </>
-      )}
+      {/* Protected routes - render regardless of auth state, let components handle auth */}
+      <Route path="/projects" component={Projects} />
+      <Route path="/projects/:id" component={ProjectDetail} />
+      <Route path="/all-projects" component={AllProjects} />
+      <Route path="/clients" component={Clients} />
+      <Route path="/profile" component={Profile} />
+      <Route path="/settings" component={Settings} />
+      <Route path="/project-types" component={ProjectTypes} />
+      <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
+      <Route path="/users" component={Users} />
+      <Route path="/upload" component={Upload} />
+      <Route path="/admin" component={Admin} />
       
       {/* Catch-all NotFound route */}
       <Route component={NotFound} />
