@@ -797,6 +797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             clientManagerEmail: row['Client Manager Email'] || row.clientManagerEmail,
             priority: row['Priority'] || row.priority || 'medium',
             dueDate: row['Due Date'] || row.dueDate,
+            projectMonth: row['Project Month'] || row.projectMonth,
           });
           validatedProjects.push(projectData);
         } catch (error) {

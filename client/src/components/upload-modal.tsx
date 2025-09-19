@@ -146,9 +146,9 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
 
   const downloadTemplate = () => {
     const csvContent = `Client Name,Project Description,Bookkeeper Email,Client Manager Email,Priority,Due Date,Project Month
-Acme Corp Ltd,Monthly bookkeeping reconciliation,bookkeeper@example.com,manager@example.com,medium,2024-01-31,15/01/2025
-TechStart Inc,Quarterly VAT return preparation,bookkeeper@example.com,manager@example.com,high,2024-02-15,28/02/2025
-Global Solutions,Annual accounts preparation,bookkeeper@example.com,manager@example.com,urgent,2024-03-31,31/03/2025`;
+Acme Corp Ltd,Monthly Bookkeeping,bookkeeper@example.com,manager@example.com,medium,2024-01-31,15/01/2025
+TechStart Inc,Quarterly VAT Return,bookkeeper@example.com,manager@example.com,high,2024-02-15,28/02/2025
+Global Solutions,Annual Accounts,bookkeeper@example.com,manager@example.com,urgent,2024-03-31,31/03/2025`;
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -184,7 +184,7 @@ Global Solutions,Annual accounts preparation,bookkeeper@example.com,manager@exam
                 <p className="mb-2">Your CSV file should contain the following columns:</p>
                 <ul className="list-disc list-inside space-y-1">
                   <li>Client Name (required)</li>
-                  <li>Project Description (required - must be configured in Settings first)</li>
+                  <li>Project Description (required - must match a configured Project Type from Settings)</li>
                   <li>Bookkeeper Email (required)</li>
                   <li>Client Manager Email (required)</li>
                   <li>Priority (optional: low, medium, high, urgent)</li>
@@ -194,7 +194,7 @@ Global Solutions,Annual accounts preparation,bookkeeper@example.com,manager@exam
                 <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
                   <p className="text-blue-800 dark:text-blue-200 text-xs">
                     <strong>Note:</strong> Project Month uses UK date format (DD/MM/YYYY). 
-                    Each client can only appear once per upload.
+                    Each client can only appear once per upload. Project Description must exactly match a configured Project Type name.
                   </p>
                 </div>
               </div>

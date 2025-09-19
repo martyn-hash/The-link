@@ -76,9 +76,10 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
     onClose();
   };
 
-  // Fetch kanban stages
+  // Fetch kanban stages for this project's project type
   const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
-    queryKey: ['/api/config/stages'],
+    queryKey: ['/api/config/project-types', project.projectTypeId, 'stages'],
+    enabled: !!project.projectTypeId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -139,6 +140,8 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
         description: "Project status updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      // Also invalidate project-scoped configuration queries
+      queryClient.invalidateQueries({ queryKey: ['/api/config/project-types', project.projectTypeId] });
       onClose();
       // Reset form
       setNewStatus("");

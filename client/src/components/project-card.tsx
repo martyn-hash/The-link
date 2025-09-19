@@ -1,6 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MoreHorizontal, AlertCircle, Clock } from "lucide-react";
@@ -9,7 +10,7 @@ import { calculateCurrentInstanceTime } from "@shared/businessTime";
 
 interface ProjectCardProps {
   project: ProjectWithRelations;
-  stageConfig?: KanbanStage;
+  stageConfig?: KanbanStage; // Fallback for display purposes from kanban board
   onOpenModal: () => void;
   isDragging?: boolean;
 }
@@ -20,6 +21,18 @@ export default function ProjectCard({
   onOpenModal, 
   isDragging = false 
 }: ProjectCardProps) {
+  // Fetch project-specific stage configuration for business logic
+  const { data: projectStages = [] } = useQuery<KanbanStage[]>({
+    queryKey: ['/api/config/project-types', project.projectTypeId, 'stages'],
+    enabled: !!project.projectTypeId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Use project-specific stage config if available, otherwise fall back to prop
+  const effectiveStageConfig = useMemo(() => {
+    const projectSpecificStage = projectStages.find(s => s.name === project.currentStatus);
+    return projectSpecificStage || stageConfig;
+  }, [projectStages, project.currentStatus, stageConfig]);
   const {
     attributes,
     listeners,
@@ -102,16 +115,16 @@ export default function ProjectCard({
     }
   };
 
-  // Check if project is overdue based on stage configuration
+  // Check if project is overdue based on project-specific stage configuration
   const overdueStatus = useMemo(() => {
     // Handle edge case: maxInstanceTime = 0 means unlimited time (no overdue)
-    if (!stageConfig?.maxInstanceTime || stageConfig.maxInstanceTime === 0) {
+    if (!effectiveStageConfig?.maxInstanceTime || effectiveStageConfig.maxInstanceTime === 0) {
       return false; // No time limit configured or unlimited time
     }
     
     // Use >= for overdue threshold (inclusive) - projects are overdue when they meet or exceed the limit
-    return currentBusinessHours >= stageConfig.maxInstanceTime;
-  }, [currentBusinessHours, stageConfig?.maxInstanceTime]);
+    return currentBusinessHours >= effectiveStageConfig.maxInstanceTime;
+  }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime]);
 
   const formattedTimeInStage = formatBusinessHours(currentBusinessHours);
 
