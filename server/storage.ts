@@ -13,6 +13,7 @@ import {
   stageApprovalFields,
   stageApprovalResponses,
   magicLinkTokens,
+  userNotificationPreferences,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -43,6 +44,9 @@ import {
   type InsertStageApprovalResponse,
   type MagicLinkToken,
   type InsertMagicLinkToken,
+  type UserNotificationPreferences,
+  type InsertUserNotificationPreferences,
+  type UpdateUserNotificationPreferences,
   type ProjectWithRelations,
   type UpdateProjectStatus,
 } from "@shared/schema";
@@ -179,6 +183,12 @@ export interface IStorage {
   markMagicLinkTokenAsUsed(id: string): Promise<void>;
   cleanupExpiredMagicLinkTokens(): Promise<void>;
   getValidMagicLinkTokensForUser(userId: string): Promise<MagicLinkToken[]>;
+  
+  // User notification preferences operations
+  getUserNotificationPreferences(userId: string): Promise<UserNotificationPreferences | undefined>;
+  createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences>;
+  updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences>;
+  getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -314,6 +324,57 @@ export class DatabaseStorage implements IStorage {
       console.error("Error in atomic admin creation:", error);
       return { success: false, error: "Failed to create admin user" };
     }
+  }
+
+  // User notification preferences operations
+  async getUserNotificationPreferences(userId: string): Promise<UserNotificationPreferences | undefined> {
+    const [preferences] = await db
+      .select()
+      .from(userNotificationPreferences)
+      .where(eq(userNotificationPreferences.userId, userId));
+    return preferences;
+  }
+
+  async createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences> {
+    const [newPreferences] = await db
+      .insert(userNotificationPreferences)
+      .values(preferences)
+      .returning();
+    return newPreferences;
+  }
+
+  async updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences> {
+    const [updatedPreferences] = await db
+      .update(userNotificationPreferences)
+      .set({
+        ...preferences,
+        updatedAt: new Date(),
+      })
+      .where(eq(userNotificationPreferences.userId, userId))
+      .returning();
+    
+    if (!updatedPreferences) {
+      throw new Error("User notification preferences not found");
+    }
+    
+    return updatedPreferences;
+  }
+
+  async getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences> {
+    // First, try to get existing preferences
+    const existing = await this.getUserNotificationPreferences(userId);
+    if (existing) {
+      return existing;
+    }
+
+    // If no preferences exist, create default ones
+    const defaultPreferences: InsertUserNotificationPreferences = {
+      userId,
+      notifyStageChanges: true,
+      notifyNewProjects: true,
+    };
+
+    return await this.createUserNotificationPreferences(defaultPreferences);
   }
 
   // User impersonation operations (for admin testing)

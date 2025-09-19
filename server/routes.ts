@@ -23,6 +23,8 @@ import {
   insertStageApprovalResponseSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
+  insertUserNotificationPreferencesSchema,
+  updateUserNotificationPreferencesSchema,
   type User,
 } from "@shared/schema";
 
@@ -347,6 +349,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(400).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // User profile routes
+  app.get("/api/users/profile", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Get user profile
+      const user = await storage.getUser(effectiveUserId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get notification preferences (create defaults if they don't exist)
+      const notificationPreferences = await storage.getOrCreateDefaultNotificationPreferences(effectiveUserId);
+
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = user;
+
+      res.json({
+        ...sanitizedUser,
+        notificationPreferences
+      });
+    } catch (error) {
+      console.error("Error fetching user profile:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch user profile" });
+    }
+  });
+
+  app.put("/api/users/profile", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { ...profileData } = req.body;
+      
+      // SECURITY: Explicitly remove sensitive fields from request to prevent injection
+      delete profileData.passwordHash;
+      delete profileData.role;
+      delete profileData.id;
+      delete profileData.email;
+      
+      // Create safe schema that only allows certain profile fields
+      const safeProfileSchema = insertUserSchema.pick({
+        firstName: true,
+        lastName: true,
+        profileImageUrl: true,
+      }).partial();
+      
+      const validProfileData = safeProfileSchema.parse(profileData);
+      
+      const user = await storage.updateUser(effectiveUserId, validProfileData);
+      
+      // Get notification preferences
+      const notificationPreferences = await storage.getOrCreateDefaultNotificationPreferences(effectiveUserId);
+      
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = user;
+      
+      res.json({
+        ...userResponse,
+        notificationPreferences
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to update user profile" });
+    }
+  });
+
+  app.put("/api/users/password", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { currentPassword, newPassword } = req.body;
+
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current password and new password are required" });
+      }
+
+      if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
+      }
+
+      // Get current user to verify password
+      const user = await storage.getUser(effectiveUserId);
+      if (!user || !user.passwordHash) {
+        return res.status(400).json({ message: "User not found or no password set" });
+      }
+
+      // Verify current password
+      const bcrypt = await import('bcrypt');
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+
+      // Hash new password
+      const newPasswordHash = await bcrypt.hash(newPassword.trim(), 10);
+
+      // Update password
+      await storage.updateUser(effectiveUserId, { passwordHash: newPasswordHash });
+
+      res.json({ message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error updating password:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to update password" });
+    }
+  });
+
+  // User notification preferences routes
+  app.get("/api/users/notifications", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Get notification preferences (create defaults if they don't exist)
+      const notificationPreferences = await storage.getOrCreateDefaultNotificationPreferences(effectiveUserId);
+
+      res.json(notificationPreferences);
+    } catch (error) {
+      console.error("Error fetching notification preferences:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch notification preferences" });
+    }
+  });
+
+  app.put("/api/users/notifications", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const notificationData = req.body;
+      
+      // Validate notification preferences data
+      const validNotificationData = updateUserNotificationPreferencesSchema.parse(notificationData);
+      
+      // Check if preferences exist, if not create them first
+      let preferences = await storage.getUserNotificationPreferences(effectiveUserId);
+      if (!preferences) {
+        // Create default preferences first
+        preferences = await storage.getOrCreateDefaultNotificationPreferences(effectiveUserId);
+      }
+      
+      // Update preferences
+      const updatedPreferences = await storage.updateUserNotificationPreferences(effectiveUserId, validNotificationData);
+      
+      res.json(updatedPreferences);
+    } catch (error) {
+      console.error("Error updating notification preferences:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to update notification preferences" });
     }
   });
 
