@@ -55,7 +55,7 @@ export async function sendMagicLinkEmail(
   baseUrl: string
 ): Promise<boolean> {
   const magicLinkUrl = `${baseUrl}/magic-link-verify?token=${magicLinkToken}`;
-  const subject = "Your Magic Link Login - The Link";
+  const subject = `Your Magic Link Login - The Link (Code: ${fourDigitCode})`;
   
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
