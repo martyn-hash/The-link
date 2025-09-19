@@ -12,6 +12,7 @@ import {
   stageApprovals,
   stageApprovalFields,
   stageApprovalResponses,
+  magicLinkTokens,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -40,12 +41,15 @@ import {
   type InsertStageApprovalField,
   type StageApprovalResponse,
   type InsertStageApprovalResponse,
+  type MagicLinkToken,
+  type InsertMagicLinkToken,
   type ProjectWithRelations,
   type UpdateProjectStatus,
 } from "@shared/schema";
+import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
-import { eq, desc, and, inArray, sql, sum } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -167,11 +171,44 @@ export interface IStorage {
   
   // Stage approval validation
   validateStageApprovalResponses(approvalId: string, responses: InsertStageApprovalResponse[]): Promise<{ isValid: boolean; reason?: string; failedFields?: string[] }>;
+  
+  // Magic link operations
+  createMagicLinkToken(token: InsertMagicLinkToken): Promise<MagicLinkToken>;
+  getMagicLinkTokenByToken(token: string): Promise<MagicLinkToken | undefined>;
+  getMagicLinkTokenByCodeAndEmail(code: string, email: string): Promise<MagicLinkToken | undefined>;
+  markMagicLinkTokenAsUsed(id: string): Promise<void>;
+  cleanupExpiredMagicLinkTokens(): Promise<void>;
+  getValidMagicLinkTokensForUser(userId: string): Promise<MagicLinkToken[]>;
 }
 
 export class DatabaseStorage implements IStorage {
   // In-memory storage for impersonation state (dev/testing only)
   private impersonationStates = new Map<string, { originalUserId: string; impersonatedUserId: string }>();
+  // In-memory storage for verification attempts (basic DoS protection)
+  private verificationAttempts = new Map<string, { count: number; resetTime: number }>();
+
+  // Helper method to check verification rate limiting
+  private checkVerificationRateLimit(key: string): boolean {
+    const MAX_ATTEMPTS = 10; // Max 10 attempts per key per hour
+    const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+    const now = Date.now();
+    const existing = this.verificationAttempts.get(key);
+    
+    if (!existing || now > existing.resetTime) {
+      // First attempt or window expired
+      this.verificationAttempts.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    if (existing.count >= MAX_ATTEMPTS) {
+      return false; // Rate limited
+    }
+    
+    // Increment count
+    existing.count += 1;
+    return true;
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -1662,6 +1699,106 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { isValid: true };
+  }
+
+  // Magic link operations
+  async createMagicLinkToken(tokenData: InsertMagicLinkToken): Promise<MagicLinkToken> {
+    const [token] = await db.insert(magicLinkTokens).values(tokenData).returning();
+    return token;
+  }
+
+  async getMagicLinkTokenByToken(token: string): Promise<MagicLinkToken | undefined> {
+    // Rate limit verification attempts per token to prevent DoS
+    const rateLimitKey = `token_verify_${token.substring(0, 8)}`; // Use first 8 chars as key
+    if (!this.checkVerificationRateLimit(rateLimitKey)) {
+      return undefined; // Rate limited
+    }
+
+    // Get valid, unused, non-expired tokens, but limit to most recent 50 to prevent DoS
+    // Order by creation time descending so we check newest tokens first
+    const validTokens = await db
+      .select()
+      .from(magicLinkTokens)
+      .where(and(
+        eq(magicLinkTokens.used, false),
+        sql`${magicLinkTokens.expiresAt} > now()`
+      ))
+      .orderBy(desc(magicLinkTokens.createdAt))
+      .limit(50);
+    
+    // Compare provided token hash with stored hashes (limited set)
+    for (const storedToken of validTokens) {
+      const isValid = await bcrypt.compare(token, storedToken.tokenHash);
+      if (isValid) {
+        return storedToken;
+      }
+    }
+    
+    return undefined;
+  }
+
+  async getMagicLinkTokenByCodeAndEmail(code: string, email: string): Promise<MagicLinkToken | undefined> {
+    // Rate limit verification attempts per email+code to prevent DoS
+    const rateLimitKey = `code_verify_${email}_${code}`;
+    if (!this.checkVerificationRateLimit(rateLimitKey)) {
+      return undefined; // Rate limited
+    }
+
+    // Get valid, unused, non-expired tokens for this email, limited to most recent 10
+    // Since code+email should be more specific, we can limit to fewer tokens
+    const validTokens = await db
+      .select()
+      .from(magicLinkTokens)
+      .where(and(
+        eq(magicLinkTokens.email, email),
+        eq(magicLinkTokens.used, false),
+        sql`${magicLinkTokens.expiresAt} > now()`
+      ))
+      .orderBy(desc(magicLinkTokens.createdAt))
+      .limit(10);
+    
+    // Compare provided code hash with stored hashes (limited set)
+    for (const storedToken of validTokens) {
+      const isValid = await bcrypt.compare(code, storedToken.codeHash);
+      if (isValid) {
+        return storedToken;
+      }
+    }
+    
+    return undefined;
+  }
+
+  async markMagicLinkTokenAsUsed(id: string): Promise<void> {
+    // Use atomic conditional update to prevent race conditions
+    const result = await db
+      .update(magicLinkTokens)
+      .set({ used: true })
+      .where(and(
+        eq(magicLinkTokens.id, id),
+        eq(magicLinkTokens.used, false) // Only update if not already used
+      ));
+    
+    // Verify that exactly one row was affected
+    if (result.rowCount === 0) {
+      throw new Error("Magic link token has already been used or does not exist");
+    }
+  }
+
+  async cleanupExpiredMagicLinkTokens(): Promise<void> {
+    await db
+      .delete(magicLinkTokens)
+      .where(sql`${magicLinkTokens.expiresAt} < now()`);
+  }
+
+  async getValidMagicLinkTokensForUser(userId: string): Promise<MagicLinkToken[]> {
+    return await db
+      .select()
+      .from(magicLinkTokens)
+      .where(and(
+        eq(magicLinkTokens.userId, userId),
+        eq(magicLinkTokens.used, false),
+        sql`${magicLinkTokens.expiresAt} > now()`
+      ));
   }
 }
 

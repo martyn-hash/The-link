@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express, RequestHandler, Request, Response, NextFunction } from "express";
@@ -114,6 +115,201 @@ export async function setupAuth(app: Express) {
       res.clearCookie('connect.sid');
       res.json({ message: "Logout successful" });
     });
+  });
+
+  // Basic rate limiting for magic link requests (in-memory store)
+  const requestCounts = new Map<string, { count: number; resetTime: number }>();
+  const REQUEST_LIMIT = 5; // Max 5 requests per email per hour
+  const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+
+  // Helper function to check rate limit
+  const checkRateLimit = (email: string): boolean => {
+    const now = Date.now();
+    const key = email.toLowerCase();
+    const existing = requestCounts.get(key);
+    
+    if (!existing || now > existing.resetTime) {
+      // First request or window expired
+      requestCounts.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    if (existing.count >= REQUEST_LIMIT) {
+      return false; // Rate limited
+    }
+    
+    // Increment count
+    existing.count += 1;
+    return true;
+  };
+
+  // Magic link request route
+  app.post("/api/magic-link/request", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Check rate limiting
+      if (!checkRateLimit(normalizedEmail)) {
+        // Always return 200 to prevent enumeration, but don't process the request
+        return res.json({ 
+          message: "Magic link request created successfully",
+          expiresIn: "15 minutes"
+        });
+      }
+
+      // Clean up expired tokens first
+      await storage.cleanupExpiredMagicLinkTokens();
+
+      // Check if user exists (but don't reveal this in response)
+      const user = await storage.getUserByEmail(normalizedEmail);
+      
+      if (user) {
+        // Check for existing valid tokens for this user
+        const existingTokens = await storage.getValidMagicLinkTokensForUser(user.id);
+        if (existingTokens.length === 0) {
+          // Generate cryptographically secure 4-digit code (0000-9999)
+          const code = crypto.randomInt(0, 10000).toString().padStart(4, '0');
+          
+          // Generate secure random token
+          const token = crypto.randomBytes(32).toString('hex');
+
+          // Hash the token and code before storing
+          const saltRounds = 12;
+          const tokenHash = await bcrypt.hash(token, saltRounds);
+          const codeHash = await bcrypt.hash(code, saltRounds);
+
+          // Create magic link token in database with hashed values
+          await storage.createMagicLinkToken({
+            userId: user.id,
+            tokenHash,
+            codeHash,
+            email: normalizedEmail,
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+          });
+
+          // TODO: Send email with token and code (email service integration)
+          // Security: Never log actual token/code values in production
+          console.log(`Magic link created for ${normalizedEmail}`);
+        }
+      }
+      
+      // Always return success response to prevent user enumeration
+      res.json({ 
+        message: "Magic link request created successfully",
+        expiresIn: "15 minutes"
+      });
+    } catch (error) {
+      console.error("Magic link request error:", error);
+      res.status(500).json({ message: "Failed to create magic link request" });
+    }
+  });
+
+  // Basic rate limiting for magic link verification (in-memory store)
+  const verifyCounts = new Map<string, { count: number; resetTime: number }>();
+  const VERIFY_LIMIT = 15; // Max 15 verification attempts per hour (higher than request since brute force is harder)
+  const VERIFY_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+
+  // Helper function to check verification rate limit
+  const checkVerifyRateLimit = (key: string): boolean => {
+    const now = Date.now();
+    const existing = verifyCounts.get(key);
+    
+    if (!existing || now > existing.resetTime) {
+      // First attempt or window expired
+      verifyCounts.set(key, { count: 1, resetTime: now + VERIFY_RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    if (existing.count >= VERIFY_LIMIT) {
+      return false; // Rate limited
+    }
+    
+    // Increment count
+    existing.count += 1;
+    return true;
+  };
+
+  // Magic link verify route
+  app.post("/api/magic-link/verify", async (req, res) => {
+    try {
+      const { token, code, email } = req.body;
+
+      // Rate limiting to prevent brute force attacks
+      const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+      let rateLimitKey: string;
+      
+      if (token) {
+        rateLimitKey = `verify_${clientIP}_token_${token.substring(0, 8)}`;
+      } else if (code && email) {
+        rateLimitKey = `verify_${clientIP}_code_${email.toLowerCase()}`;
+      } else {
+        return res.status(400).json({ message: "Either token or both code and email are required" });
+      }
+
+      // Check rate limiting
+      if (!checkVerifyRateLimit(rateLimitKey)) {
+        return res.status(429).json({ 
+          message: "Too many verification attempts. Please try again later.",
+          retryAfter: "1 hour"
+        });
+      }
+
+      let magicLinkToken;
+
+      if (token) {
+        // Verify using token
+        magicLinkToken = await storage.getMagicLinkTokenByToken(token);
+        if (!magicLinkToken) {
+          return res.status(401).json({ message: "Invalid or expired magic link" });
+        }
+      } else if (code && email) {
+        // Verify using code and email
+        magicLinkToken = await storage.getMagicLinkTokenByCodeAndEmail(code, email.trim().toLowerCase());
+        if (!magicLinkToken) {
+          return res.status(401).json({ message: "Invalid or expired verification code" });
+        }
+      }
+
+      // Ensure we have a valid magic link token
+      if (!magicLinkToken) {
+        return res.status(401).json({ message: "Invalid or expired magic link" });
+      }
+
+      // Get user from database
+      const user = await storage.getUser(magicLinkToken.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Mark token as used (atomic operation that will fail if already used)
+      try {
+        await storage.markMagicLinkTokenAsUsed(magicLinkToken.id);
+      } catch (error) {
+        // Token was already used or doesn't exist
+        return res.status(401).json({ message: "Magic link has already been used or is invalid" });
+      }
+
+      // Set user session (same as login route)
+      req.session.userId = user.id;
+      req.session.userEmail = user.email;
+      req.session.userRole = user.role;
+
+      // Remove password hash from response
+      const { passwordHash, ...userResponse } = user;
+      res.json({ 
+        message: "Magic link authentication successful", 
+        user: userResponse 
+      });
+    } catch (error) {
+      console.error("Magic link verify error:", error);
+      res.status(500).json({ message: "Magic link verification failed" });
+    }
   });
 }
 

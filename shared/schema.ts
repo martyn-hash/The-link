@@ -73,8 +73,8 @@ export const users = pgTable("users", {
 export const magicLinkTokens = pgTable("magic_link_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  token: varchar("token").notNull().unique(),
-  code: varchar("code", { length: 4 }).notNull(),
+  tokenHash: varchar("token_hash").notNull().unique(),
+  codeHash: varchar("code_hash").notNull(),
   email: varchar("email").notNull(),
   expiresAt: timestamp("expires_at").notNull().default(sql`now() + interval '15 minutes'`),
   used: boolean("used").default(false),
