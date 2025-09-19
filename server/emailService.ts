@@ -63,30 +63,39 @@ export async function sendMagicLinkEmail(
       <p>Hello ${recipientName},</p>
       <p>You requested a magic link to sign in to your The Link account. You can use either of the following methods to log in:</p>
       
-      <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <h3 style="margin-top: 0; color: #374151;">Option 1: Click the Magic Link</h3>
-        <p style="margin-bottom: 15px;">Click the button below to log in automatically:</p>
-        <a href="${magicLinkUrl}" 
-           style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Sign In to The Link
-        </a>
-        <p style="margin-top: 15px; font-size: 12px; color: #6b7280;">
+      <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
+        <h3 style="margin-top: 0; color: #0369a1; font-size: 18px;">🔗 Option 1: Click the Magic Link</h3>
+        <p style="margin-bottom: 20px; font-size: 16px; color: #374151;">Click the button below to log in automatically:</p>
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${magicLinkUrl}" 
+             style="display: inline-block; background-color: #0369a1; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(3, 105, 161, 0.2);">
+            🚀 Sign In to The Link
+          </a>
+        </div>
+        <p style="margin-top: 20px; font-size: 12px; color: #6b7280; line-height: 1.5;">
           If the button doesn't work, copy and paste this link into your browser:<br>
-          <span style="word-break: break-all;">${magicLinkUrl}</span>
+          <span style="word-break: break-all; font-family: monospace; background-color: #f8fafc; padding: 4px 8px; border-radius: 4px; margin-top: 8px; display: inline-block;">${magicLinkUrl}</span>
         </p>
       </div>
       
-      <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <h3 style="margin-top: 0; color: #374151;">Option 2: Use Verification Code</h3>
-        <p>Alternatively, enter this 4-digit code on the login page:</p>
-        <div style="font-size: 32px; font-weight: bold; color: #4f46e5; letter-spacing: 8px; text-align: center; margin: 15px 0;">
-          ${fourDigitCode}
+      <div style="background-color: #f0fdf4; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #dcfce7;">
+        <h3 style="margin-top: 0; color: #166534; font-size: 18px;">🔢 Option 2: Use Verification Code</h3>
+        <p style="font-size: 16px; color: #374151; margin-bottom: 20px;">Alternatively, enter this 4-digit code on the login page:</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <div style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 20px 30px; border-radius: 16px; box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3); border: 3px solid #34d399;">
+            <div style="font-size: 48px; font-weight: 900; letter-spacing: 12px; line-height: 1; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
+              ${fourDigitCode}
+            </div>
+            <div style="font-size: 12px; margin-top: 8px; opacity: 0.9; font-weight: 600; letter-spacing: 1px;">
+              VERIFICATION CODE
+            </div>
+          </div>
         </div>
       </div>
       
-      <div style="background-color: #fef3cd; padding: 15px; border-radius: 6px; margin: 20px 0;">
-        <p style="margin: 0; color: #92400e; font-size: 14px;">
-          <strong>⏰ Important:</strong> This magic link and code will expire in 15 minutes for your security.
+      <div style="background-color: #fef3cd; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #f59e0b;">
+        <p style="margin: 0; color: #92400e; font-size: 15px; font-weight: 600; line-height: 1.4;">
+          <strong style="font-size: 16px;">⏰ Important:</strong> This magic link and code will expire in <strong style="color: #dc2626;">10 minutes</strong> for your security.
         </p>
       </div>
       
@@ -111,9 +120,11 @@ Copy and paste this link into your browser to log in automatically:
 ${magicLinkUrl}
 
 OPTION 2: Use Verification Code
-Enter this 4-digit code on the login page: ${fourDigitCode}
+Enter this 4-digit code on the login page: 
 
-IMPORTANT: This magic link and code will expire in 15 minutes for your security.
+>>> ${fourDigitCode} <<<
+
+IMPORTANT: This magic link and code will expire in 10 minutes for your security.
 
 If you didn't request this login link, please ignore this email. Your account remains secure.
 
