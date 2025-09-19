@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Columns3, List, Filter, Folder, Clock, AlertTriangle, Calendar, Archive } from "lucide-react";
+import { Columns3, List, Filter, Folder, Clock, AlertTriangle, Calendar, Archive, Power } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -32,9 +32,10 @@ export default function Projects() {
   const [filter, setFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
   const [showArchived, setShowArchived] = useState<boolean>(false);
+  const [showInactive, setShowInactive] = useState<boolean>(false);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery({
-    queryKey: ["/api/projects", { month: monthFilter, archived: showArchived }],
+    queryKey: ["/api/projects", { month: monthFilter, archived: showArchived, inactive: showInactive }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -198,6 +199,22 @@ export default function Projects() {
                   />
                   <Label htmlFor="show-archived" className="text-sm">
                     Show archived
+                  </Label>
+                </div>
+              </div>
+
+              {/* Inactive Toggle */}
+              <div className="flex items-center space-x-2">
+                <Power className="w-4 h-4 text-muted-foreground" />
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="show-inactive"
+                    checked={showInactive}
+                    onCheckedChange={setShowInactive}
+                    data-testid="switch-show-inactive"
+                  />
+                  <Label htmlFor="show-inactive" className="text-sm">
+                    Show inactive
                   </Label>
                 </div>
               </div>

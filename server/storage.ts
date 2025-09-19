@@ -665,7 +665,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getAllProjects(filters?: { month?: string; archived?: boolean }): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
     if (filters?.month) {
@@ -674,6 +674,10 @@ export class DatabaseStorage implements IStorage {
     
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    }
+    
+    if (filters?.inactive !== undefined) {
+      whereConditions.push(eq(projects.inactive, filters.inactive));
     }
     
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
@@ -711,7 +715,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean }): Promise<ProjectWithRelations[]> {
+  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]> {
     let userWhereCondition;
     
     switch (role) {
@@ -738,6 +742,10 @@ export class DatabaseStorage implements IStorage {
     
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    }
+    
+    if (filters?.inactive !== undefined) {
+      whereConditions.push(eq(projects.inactive, filters.inactive));
     }
     
     const whereClause = and(...whereConditions);
