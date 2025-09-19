@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit2, Trash2, Save, X } from "lucide-react";
-import type { KanbanStage, ChangeReason } from "@shared/schema";
+import type { KanbanStage, ChangeReason, ProjectType, StageApproval } from "@shared/schema";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -37,6 +37,14 @@ interface EditingReason {
   description: string;
 }
 
+interface EditingProjectType {
+  id?: string;
+  name: string;
+  description: string;
+  active: boolean;
+  order: number;
+}
+
 const DEFAULT_STAGE: EditingStage = {
   name: "",
   assignedRole: "client_manager",
@@ -47,6 +55,13 @@ const DEFAULT_STAGE: EditingStage = {
 const DEFAULT_REASON: EditingReason = {
   reason: "",
   description: "",
+};
+
+const DEFAULT_PROJECT_TYPE: EditingProjectType = {
+  name: "",
+  description: "",
+  active: true,
+  order: 0,
 };
 
 const ROLE_OPTIONS = [
@@ -65,6 +80,9 @@ const STAGE_COLORS = [
 ];
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const [selectedProjectTypeId, setSelectedProjectTypeId] = useState<string | null>(null);
+  const [editingProjectType, setEditingProjectType] = useState<EditingProjectType | null>(null);
+  const [isAddingProjectType, setIsAddingProjectType] = useState(false);
   const [editingStage, setEditingStage] = useState<EditingStage | null>(null);
   const [editingReason, setEditingReason] = useState<EditingReason | null>(null);
   const [isAddingStage, setIsAddingStage] = useState(false);
@@ -73,26 +91,107 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch stages
-  const { data: stages, isLoading: stagesLoading } = useQuery<KanbanStage[]>({
-    queryKey: ["/api/config/stages"],
+  // Fetch project types
+  const { data: projectTypes, isLoading: projectTypesLoading } = useQuery<ProjectType[]>({
+    queryKey: ["/api/config/project-types"],
     enabled: isOpen,
   });
 
-  // Fetch change reasons
+  // Set default project type when data loads
+  useEffect(() => {
+    if (projectTypes && projectTypes.length > 0 && !selectedProjectTypeId) {
+      // Default to "Monthly Bookkeeping" or first project type
+      const defaultType = projectTypes.find(pt => pt.name === "Monthly Bookkeeping") || projectTypes[0];
+      setSelectedProjectTypeId(defaultType.id);
+    }
+  }, [projectTypes, selectedProjectTypeId]);
+
+  // Fetch stages for selected project type
+  const { data: stages, isLoading: stagesLoading } = useQuery<KanbanStage[]>({
+    queryKey: ["/api/config/project-types", selectedProjectTypeId, "stages"],
+    enabled: isOpen && !!selectedProjectTypeId,
+  });
+
+  // Fetch change reasons for selected project type
   const { data: reasons, isLoading: reasonsLoading } = useQuery<ChangeReason[]>({
-    queryKey: ["/api/config/reasons"],
-    enabled: isOpen,
+    queryKey: ["/api/config/project-types", selectedProjectTypeId, "reasons"],
+    enabled: isOpen && !!selectedProjectTypeId,
+  });
+
+  // Fetch stage approvals for selected project type
+  const { data: stageApprovals, isLoading: stageApprovalsLoading } = useQuery<StageApproval[]>({
+    queryKey: ["/api/config/project-types", selectedProjectTypeId, "stage-approvals"],
+    enabled: isOpen && !!selectedProjectTypeId,
+  });
+
+  // Project Type mutations
+  const createProjectTypeMutation = useMutation({
+    mutationFn: async (projectType: Omit<EditingProjectType, 'id'>) => {
+      return await apiRequest("POST", "/api/config/project-types", projectType);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Project type created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      setIsAddingProjectType(false);
+      setEditingProjectType(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create project type",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateProjectTypeMutation = useMutation({
+    mutationFn: async ({ id, ...projectType }: EditingProjectType) => {
+      return await apiRequest("PATCH", `/api/config/project-types/${id}`, projectType);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Project type updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      setEditingProjectType(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update project type",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProjectTypeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/project-types/${id}`);
+    },
+    onSuccess: (_, deletedId) => {
+      toast({ title: "Success", description: "Project type deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      // Reset selected project type if it was deleted
+      if (selectedProjectTypeId === deletedId) {
+        setSelectedProjectTypeId(null);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete project type",
+        variant: "destructive",
+      });
+    },
   });
 
   // Stage mutations
   const createStageMutation = useMutation({
     mutationFn: async (stage: Omit<EditingStage, 'id'>) => {
-      return await apiRequest("POST", "/api/config/stages", stage);
+      if (!selectedProjectTypeId) throw new Error("No project type selected");
+      return await apiRequest("POST", `/api/config/project-types/${selectedProjectTypeId}/stages`, stage);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Stage created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/config/stages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "stages"] });
       setIsAddingStage(false);
       setEditingStage(null);
     },
@@ -107,11 +206,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, ...stage }: EditingStage) => {
-      return await apiRequest("PATCH", `/api/config/stages/${id}`, stage);
+      if (!selectedProjectTypeId) throw new Error("No project type selected");
+      return await apiRequest("PATCH", `/api/config/project-types/${selectedProjectTypeId}/stages/${id}`, stage);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Stage updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/config/stages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "stages"] });
       setEditingStage(null);
     },
     onError: (error: any) => {
@@ -125,11 +225,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const deleteStageMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("DELETE", `/api/config/stages/${id}`);
+      if (!selectedProjectTypeId) throw new Error("No project type selected");
+      return await apiRequest("DELETE", `/api/config/project-types/${selectedProjectTypeId}/stages/${id}`);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Stage deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/config/stages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "stages"] });
     },
     onError: (error: any) => {
       toast({
@@ -143,11 +244,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // Reason mutations
   const createReasonMutation = useMutation({
     mutationFn: async (reason: Omit<EditingReason, 'id'>) => {
-      return await apiRequest("POST", "/api/config/reasons", reason);
+      if (!selectedProjectTypeId) throw new Error("No project type selected");
+      return await apiRequest("POST", `/api/config/project-types/${selectedProjectTypeId}/reasons`, reason);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Change reason created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/config/reasons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "reasons"] });
       setIsAddingReason(false);
       setEditingReason(null);
     },
@@ -162,11 +264,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const updateReasonMutation = useMutation({
     mutationFn: async ({ id, ...reason }: EditingReason) => {
-      return await apiRequest("PATCH", `/api/config/reasons/${id}`, reason);
+      if (!selectedProjectTypeId) throw new Error("No project type selected");
+      return await apiRequest("PATCH", `/api/config/project-types/${selectedProjectTypeId}/reasons/${id}`, reason);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Change reason updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/config/reasons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "reasons"] });
       setEditingReason(null);
     },
     onError: (error: any) => {
@@ -180,11 +283,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const deleteReasonMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("DELETE", `/api/config/reasons/${id}`);
+      if (!selectedProjectTypeId) throw new Error("No project type selected");
+      return await apiRequest("DELETE", `/api/config/project-types/${selectedProjectTypeId}/reasons/${id}`);
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Change reason deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/config/reasons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "reasons"] });
     },
     onError: (error: any) => {
       toast({
@@ -195,9 +299,55 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     },
   });
 
+  // Handle project type operations
+  const handleSaveProjectType = () => {
+    if (!editingProjectType) return;
+
+    if (!editingProjectType.name) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a project type name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editingProjectType.id) {
+      updateProjectTypeMutation.mutate(editingProjectType);
+    } else {
+      const { id, ...projectTypeData } = editingProjectType;
+      createProjectTypeMutation.mutate(projectTypeData);
+    }
+  };
+
+  const handleEditProjectType = (projectType: ProjectType) => {
+    setEditingProjectType({
+      id: projectType.id,
+      name: projectType.name,
+      description: projectType.description || "",
+      active: projectType.active ?? true,
+      order: projectType.order,
+    });
+    setIsAddingProjectType(false);
+  };
+
+  const handleAddProjectType = () => {
+    const nextOrder = Math.max(0, ...(projectTypes?.map(pt => pt.order) || [])) + 1;
+    setEditingProjectType({ ...DEFAULT_PROJECT_TYPE, order: nextOrder });
+    setIsAddingProjectType(true);
+  };
+
   // Handle stage operations
   const handleSaveStage = () => {
     if (!editingStage) return;
+    if (!selectedProjectTypeId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a project type first",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!editingStage.name) {
       toast({
@@ -236,6 +386,14 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // Handle reason operations
   const handleSaveReason = () => {
     if (!editingReason) return;
+    if (!selectedProjectTypeId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a project type first",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!editingReason.reason) {
       toast({
@@ -271,6 +429,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
+      setEditingProjectType(null);
+      setIsAddingProjectType(false);
       setEditingStage(null);
       setEditingReason(null);
       setIsAddingStage(false);
@@ -285,20 +445,248 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <DialogTitle>System Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-4">
-          {/* Kanban Stages Configuration */}
-          <div>
+        <ScrollArea className="max-h-[calc(90vh-100px)] overflow-y-auto">
+          {/* Project Type Management */}
+          <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-foreground">Kanban Stages</h4>
+              <h3 className="text-lg font-semibold text-foreground">Project Types</h3>
               <Button
-                onClick={handleAddStage}
+                onClick={handleAddProjectType}
                 size="sm"
-                data-testid="button-add-stage"
+                data-testid="button-add-project-type"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Stage
+                Add Project Type
               </Button>
             </div>
+
+            {/* Project Type Selection */}
+            {projectTypes && projectTypes.length > 0 && (
+              <div className="mb-6">
+                <Label htmlFor="project-type-select">Current Project Type</Label>
+                <select
+                  id="project-type-select"
+                  value={selectedProjectTypeId || ""}
+                  onChange={(e) => setSelectedProjectTypeId(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-md mt-2"
+                  data-testid="select-project-type"
+                >
+                  <option value="">Select a project type...</option>
+                  {projectTypes.map(pt => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name} {!pt.active && "(Inactive)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Project Types List */}
+            <div className="space-y-3">
+              {projectTypesLoading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                </div>
+              ) : (
+                projectTypes?.map((projectType) => (
+                  <Card key={projectType.id} className="bg-background">
+                    <CardContent className="p-4">
+                      {editingProjectType?.id === projectType.id ? (
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="project-type-name">Project Type Name</Label>
+                            <Input
+                              id="project-type-name"
+                              value={editingProjectType.name}
+                              onChange={(e) => setEditingProjectType({
+                                ...editingProjectType,
+                                name: e.target.value
+                              })}
+                              data-testid="input-project-type-name"
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="project-type-description">Description</Label>
+                            <Input
+                              id="project-type-description"
+                              value={editingProjectType.description}
+                              onChange={(e) => setEditingProjectType({
+                                ...editingProjectType,
+                                description: e.target.value
+                              })}
+                              data-testid="input-project-type-description"
+                            />
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="project-type-active"
+                              checked={editingProjectType.active}
+                              onChange={(e) => setEditingProjectType({
+                                ...editingProjectType,
+                                active: e.target.checked
+                              })}
+                              data-testid="checkbox-project-type-active"
+                            />
+                            <Label htmlFor="project-type-active">Active</Label>
+                          </div>
+
+                          <div className="flex space-x-2">
+                            <Button
+                              onClick={handleSaveProjectType}
+                              size="sm"
+                              disabled={updateProjectTypeMutation.isPending}
+                              data-testid="button-save-project-type"
+                            >
+                              <Save className="w-4 h-4 mr-2" />
+                              Save
+                            </Button>
+                            <Button
+                              onClick={() => setEditingProjectType(null)}
+                              variant="outline"
+                              size="sm"
+                              data-testid="button-cancel-project-type"
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-medium">{projectType.name}</span>
+                              <Badge variant={projectType.active ? "default" : "secondary"} className="text-xs">
+                                {projectType.active ? "Active" : "Inactive"}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                Order: {projectType.order}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                onClick={() => handleEditProjectType(projectType)}
+                                variant="ghost"
+                                size="sm"
+                                data-testid={`button-edit-project-type-${projectType.id}`}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                onClick={() => deleteProjectTypeMutation.mutate(projectType.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                data-testid={`button-delete-project-type-${projectType.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          {projectType.description && (
+                            <p className="text-sm text-muted-foreground">
+                              {projectType.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+
+              {/* Add new project type form */}
+              {isAddingProjectType && editingProjectType && !editingProjectType.id && (
+                <Card className="bg-background border-dashed">
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="new-project-type-name">Project Type Name</Label>
+                        <Input
+                          id="new-project-type-name"
+                          value={editingProjectType.name}
+                          onChange={(e) => setEditingProjectType({
+                            ...editingProjectType,
+                            name: e.target.value
+                          })}
+                          placeholder="Enter project type name..."
+                          data-testid="input-new-project-type-name"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="new-project-type-description">Description</Label>
+                        <Input
+                          id="new-project-type-description"
+                          value={editingProjectType.description}
+                          onChange={(e) => setEditingProjectType({
+                            ...editingProjectType,
+                            description: e.target.value
+                          })}
+                          placeholder="Enter description..."
+                          data-testid="input-new-project-type-description"
+                        />
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <Button
+                          onClick={handleSaveProjectType}
+                          size="sm"
+                          disabled={createProjectTypeMutation.isPending}
+                          data-testid="button-create-project-type"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setIsAddingProjectType(false);
+                            setEditingProjectType(null);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          data-testid="button-cancel-new-project-type"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          <Separator className="my-8" />
+
+          {/* Configuration for Selected Project Type */}
+          {selectedProjectTypeId && (
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                Configuration for: {projectTypes?.find(pt => pt.id === selectedProjectTypeId)?.name}
+              </h3>
+            </div>
+          )}
+
+          {selectedProjectTypeId ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Kanban Stages Configuration */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-foreground">Kanban Stages</h4>
+                  <Button
+                    onClick={handleAddStage}
+                    size="sm"
+                    data-testid="button-add-stage"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Stage
+                  </Button>
+                </div>
 
             <ScrollArea className="h-96">
               <div className="space-y-3">
@@ -478,12 +866,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </CardContent>
                   </Card>
                 )}
-              </div>
-            </ScrollArea>
-          </div>
+                </div>
+              </ScrollArea>
+            </div>
 
-          {/* Change Reasons Configuration */}
-          <div>
+            {/* Change Reasons Configuration */}
+            <div>
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold text-foreground">Change Reasons</h4>
               <Button
@@ -657,10 +1045,19 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </CardContent>
                   </Card>
                 )}
-              </div>
-            </ScrollArea>
+                </div>
+              </ScrollArea>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="text-muted-foreground mb-4">
+              <h4 className="text-lg font-medium mb-2">No Project Type Selected</h4>
+              <p>Please select or create a project type above to manage stages and change reasons.</p>
+            </div>
+          </div>
+        )}
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
