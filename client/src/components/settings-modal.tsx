@@ -154,11 +154,31 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setEditingProjectType(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update project type",
-        variant: "destructive",
-      });
+      // Handle specific project type deactivation validation error
+      if (error.code === "PROJECTS_USING_TYPE") {
+        toast({
+          title: "Cannot Deactivate Project Type",
+          description: (
+            <div className="space-y-2">
+              <p>{error.message}</p>
+              <div className="text-sm font-medium">
+                📊 {error.activeProjectCount} active project{error.activeProjectCount === 1 ? '' : 's'} using "{error.projectTypeName}"
+              </div>
+              <div className="text-sm text-muted-foreground">
+                💡 To deactivate this project type, first complete, archive, or reassign the active projects.
+              </div>
+            </div>
+          ),
+          variant: "destructive",
+          duration: 8000, // Show longer for detailed message
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update project type",
+          variant: "destructive",
+        });
+      }
     },
   });
 

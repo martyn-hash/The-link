@@ -1426,8 +1426,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/config/project-types/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const updateData = updateProjectTypeSchema.parse(req.body);
-      const projectType = await storage.updateProjectType(req.params.id, updateData);
-      res.json(projectType);
+      
+      // Check if we're trying to deactivate the project type
+      if (updateData.active === false) {
+        // Get the current project type to check if it's currently active
+        const allProjectTypes = await storage.getAllProjectTypes();
+        const projectType = allProjectTypes.find(pt => pt.id === req.params.id);
+        
+        if (!projectType) {
+          return res.status(404).json({ message: "Project type not found" });
+        }
+        
+        // Only check for active projects if we're changing from active to inactive
+        if (projectType.active !== false) {
+          const activeProjectCount = await storage.countActiveProjectsUsingProjectType(req.params.id);
+          
+          if (activeProjectCount > 0) {
+            return res.status(409).json({ 
+              message: `Cannot deactivate project type "${projectType.name}" because ${activeProjectCount} active project${activeProjectCount === 1 ? '' : 's'} ${activeProjectCount === 1 ? 'is' : 'are'} currently using this template. Please complete, archive, or reassign these projects before deactivating the project type.`,
+              code: "PROJECTS_USING_TYPE",
+              activeProjectCount,
+              projectTypeName: projectType.name
+            });
+          }
+        }
+      }
+      
+      const updatedProjectType = await storage.updateProjectType(req.params.id, updateData);
+      res.json(updatedProjectType);
     } catch (error) {
       console.error("Error updating project type:", error);
       

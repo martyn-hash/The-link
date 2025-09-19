@@ -120,6 +120,7 @@ export interface IStorage {
   updateProjectType(id: string, projectType: Partial<InsertProjectType>): Promise<ProjectType>;
   deleteProjectType(id: string): Promise<void>;
   getProjectTypeByName(name: string): Promise<ProjectType | undefined>;
+  countActiveProjectsUsingProjectType(projectTypeId: string): Promise<number>;
   
   // Bulk operations
   createProjectsFromCSV(projectsData: any[]): Promise<{
@@ -1259,6 +1260,20 @@ export class DatabaseStorage implements IStorage {
   async getProjectTypeByName(name: string): Promise<ProjectType | undefined> {
     const [projectType] = await db.select().from(projectTypes).where(eq(projectTypes.name, name));
     return projectType;
+  }
+
+  async countActiveProjectsUsingProjectType(projectTypeId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.projectTypeId, projectTypeId),
+          eq(projects.archived, false),
+          eq(projects.inactive, false)
+        )
+      );
+    return result[0]?.count || 0;
   }
 
   // Bulk operations
