@@ -23,7 +23,7 @@ export async function sendEmail(params: EmailParams): Promise<boolean> {
     return false;
   }
 
-  const fromEmail = params.from || process.env.FROM_EMAIL || "noreply@bookflow.com";
+  const fromEmail = params.from || process.env.FROM_EMAIL || "link@growth-accountants.com";
   
   try {
     const emailData: any = {
@@ -95,7 +95,7 @@ BookFlow Team
 
   return await sendEmail({
     to: assigneeEmail,
-    from: process.env.FROM_EMAIL || "noreply@bookflow.com",
+    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
     subject,
     text,
     html,
