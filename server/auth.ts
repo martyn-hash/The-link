@@ -4,6 +4,7 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express, RequestHandler, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
+import { sendMagicLinkEmail } from "./emailService";
 import type { User } from "@shared/schema";
 
 // Extend express-session to include our custom session properties
@@ -193,9 +194,28 @@ export async function setupAuth(app: Express) {
             expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
           });
 
-          // TODO: Send email with token and code (email service integration)
-          // Security: Never log actual token/code values in production
-          console.log(`Magic link created for ${normalizedEmail}`);
+          // Send magic link email with plain token and code values
+          try {
+            const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+            const host = req.get('host') || 'localhost:5000';
+            const baseUrl = `${protocol}://${host}`;
+            
+            const recipientName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || normalizedEmail;
+            
+            await sendMagicLinkEmail(
+              normalizedEmail,
+              recipientName,
+              token, // plain token for email link
+              code,  // plain code for email display
+              baseUrl
+            );
+            
+            console.log(`Magic link email sent to ${normalizedEmail}`);
+          } catch (emailError) {
+            // Don't fail the entire request if email fails
+            // This prevents attackers from using email failures to enumerate users
+            console.error('Failed to send magic link email:', emailError);
+          }
         }
       }
       
