@@ -55,20 +55,20 @@ export async function sendMagicLinkEmail(
   baseUrl: string
 ): Promise<boolean> {
   const magicLinkUrl = `${baseUrl}/magic-link-verify?token=${magicLinkToken}`;
-  const subject = "Your Magic Link Login - BookFlow";
+  const subject = "Your Magic Link Login - The Link";
   
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #4f46e5;">Magic Link Login</h2>
       <p>Hello ${recipientName},</p>
-      <p>You requested a magic link to sign in to your BookFlow account. You can use either of the following methods to log in:</p>
+      <p>You requested a magic link to sign in to your The Link account. You can use either of the following methods to log in:</p>
       
       <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h3 style="margin-top: 0; color: #374151;">Option 1: Click the Magic Link</h3>
         <p style="margin-bottom: 15px;">Click the button below to log in automatically:</p>
         <a href="${magicLinkUrl}" 
            style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Sign In to BookFlow
+          Sign In to The Link
         </a>
         <p style="margin-top: 15px; font-size: 12px; color: #6b7280;">
           If the button doesn't work, copy and paste this link into your browser:<br>
@@ -96,7 +96,7 @@ export async function sendMagicLinkEmail(
       
       <p style="margin-top: 30px;">
         Best regards,<br>
-        BookFlow Team
+        The Link Team
       </p>
     </div>
   `;
@@ -104,7 +104,7 @@ export async function sendMagicLinkEmail(
   const text = `
 Hello ${recipientName},
 
-You requested a magic link to sign in to your BookFlow account. You can use either of the following methods to log in:
+You requested a magic link to sign in to your The Link account. You can use either of the following methods to log in:
 
 OPTION 1: Click the Magic Link
 Copy and paste this link into your browser to log in automatically:
@@ -118,7 +118,7 @@ IMPORTANT: This magic link and code will expire in 15 minutes for your security.
 If you didn't request this login link, please ignore this email. Your account remains secure.
 
 Best regards,
-BookFlow Team
+The Link Team
   `;
 
   return await sendEmail({
@@ -143,7 +143,7 @@ export async function sendTaskAssignmentEmail(
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #4f46e5;">New Task Assignment</h2>
       <p>Hello ${assigneeName},</p>
-      <p>You have been assigned a new task in the BookFlow system:</p>
+      <p>You have been assigned a new task in The Link system:</p>
       
       <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h3 style="margin-top: 0; color: #374151;">Project Details</h3>
@@ -152,11 +152,11 @@ export async function sendTaskAssignmentEmail(
         <p><strong>Status:</strong> ${newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
       </div>
       
-      <p>Please log into the BookFlow system to view the complete project details and take the necessary action.</p>
+      <p>Please log into The Link system to view the complete project details and take the necessary action.</p>
       
       <p style="margin-top: 30px;">
         Best regards,<br>
-        BookFlow Team
+        The Link Team
       </p>
     </div>
   `;
@@ -164,16 +164,16 @@ export async function sendTaskAssignmentEmail(
   const text = `
 Hello ${assigneeName},
 
-You have been assigned a new task in the BookFlow system:
+You have been assigned a new task in The Link system:
 
 Client: ${clientName}
 Description: ${projectDescription}
 Status: ${newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
 
-Please log into the BookFlow system to view the complete project details and take the necessary action.
+Please log into The Link system to view the complete project details and take the necessary action.
 
 Best regards,
-BookFlow Team
+The Link Team
   `;
 
   return await sendEmail({

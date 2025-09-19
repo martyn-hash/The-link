@@ -1,6 +1,6 @@
 # Overview
 
-BookFlow is a comprehensive bookkeeping project workflow management system designed to streamline the collaboration between client managers, bookkeepers, and administrative staff. The application provides role-based access control with four distinct user types (Admin, Manager, Client Manager, and Bookkeeper) and implements a kanban-style workflow to track bookkeeping projects through five defined stages: "No Latest Action," "Bookkeeping Work Required," "In Review," "Needs Input from Client," and "Completed."
+The Link is a comprehensive bookkeeping project workflow management system designed to streamline the collaboration between client managers, bookkeepers, and administrative staff. The application provides role-based access control with four distinct user types (Admin, Manager, Client Manager, and Bookkeeper) and implements a kanban-style workflow to track bookkeeping projects through five defined stages: "No Latest Action," "Bookkeeping Work Required," "In Review," "Needs Input from Client," and "Completed."
 
 The system facilitates project assignment, task tracking, status updates with mandatory change reasons, and automated email notifications. Administrators can bulk-upload client data via CSV files, which automatically creates initial tasks for client managers. The application features both kanban board and task list views, comprehensive project chronology tracking, time governance for SLA compliance monitoring, and a responsive design built with modern web technologies.
 
