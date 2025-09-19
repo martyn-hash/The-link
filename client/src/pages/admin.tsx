@@ -84,20 +84,20 @@ export default function Admin() {
   }
 
   // Calculate statistics
-  const totalProjects = projects?.length || 0;
-  const totalUsers = users?.length || 0;
-  const completedProjects = projects?.filter((p: any) => p.currentStatus === 'completed').length || 0;
+  const totalProjects = (projects || []).length;
+  const totalUsers = (users || []).length;
+  const completedProjects = (projects || []).filter((p: any) => p.currentStatus === 'completed').length;
   const activeProjects = totalProjects - completedProjects;
 
-  const statusCounts = projects?.reduce((acc: any, project: any) => {
+  const statusCounts = (projects || []).reduce((acc: any, project: any) => {
     acc[project.currentStatus] = (acc[project.currentStatus] || 0) + 1;
     return acc;
-  }, {}) || {};
+  }, {});
 
-  const roleCounts = users?.reduce((acc: any, user: any) => {
+  const roleCounts = (users || []).reduce((acc: any, user: any) => {
     acc[user.role] = (acc[user.role] || 0) + 1;
     return acc;
-  }, {}) || {};
+  }, {});
 
   return (
     <div className="flex h-screen bg-background">
@@ -291,7 +291,7 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {projects?.slice(0, 5).map((project: any) => {
+                  {(projects || []).slice(0, 5).map((project: any) => {
                     const lastActivity = project.chronology?.[0];
                     if (!lastActivity) return null;
                     
@@ -312,7 +312,7 @@ export default function Admin() {
                     );
                   })}
                   
-                  {!projects?.length && (
+                  {!(projects || []).length && (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       No recent activity
                     </p>

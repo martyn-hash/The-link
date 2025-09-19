@@ -16,6 +16,7 @@ import ProjectDetail from "@/pages/project-detail";
 import Profile from "@/pages/profile";
 import MagicLinkVerify from "@/pages/magic-link-verify";
 import Clients from "@/pages/clients";
+import Admin from "@/pages/admin";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -50,6 +51,7 @@ function Router() {
           <Route path="/settings" component={Settings} />
           <Route path="/users" component={Users} />
           <Route path="/upload" component={Upload} />
+          <Route path="/admin" component={Admin} />
         </>
       )}
       
