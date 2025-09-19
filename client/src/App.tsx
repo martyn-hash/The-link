@@ -8,6 +8,8 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Settings from "@/pages/settings";
+import ProjectTypes from "@/pages/project-types";
+import ProjectTypeDetail from "@/pages/project-type-detail";
 import Users from "@/pages/users";
 import Upload from "@/pages/upload";
 import AllProjects from "@/pages/all-projects";
@@ -49,6 +51,8 @@ function Router() {
           <Route path="/clients" component={Clients} />
           <Route path="/profile" component={Profile} />
           <Route path="/settings" component={Settings} />
+          <Route path="/project-types" component={ProjectTypes} />
+          <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
           <Route path="/users" component={Users} />
           <Route path="/upload" component={Upload} />
           <Route path="/admin" component={Admin} />
