@@ -277,6 +277,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Client management routes
+  app.get("/api/clients", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const clients = await storage.getAllClients();
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching clients:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
   app.post("/api/users", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const { password, ...userData } = req.body;
