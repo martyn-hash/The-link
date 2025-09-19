@@ -224,7 +224,7 @@ export default function ProjectDetail() {
           </div>
           
           <h1 className="text-3xl font-bold text-foreground" data-testid="text-project-title">
-            {project.client.name} - {project.description}
+            {project.client.name} - {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
           </h1>
         </div>
 

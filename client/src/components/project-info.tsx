@@ -53,10 +53,6 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
         <h4 className="font-semibold text-foreground mb-4">Project Details</h4>
         <div className="space-y-3">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Client:</span>
-            <span className="font-medium" data-testid="text-client-name">{project.client.name}</span>
-          </div>
-          <div className="flex justify-between">
             <span className="text-muted-foreground">Bookkeeper:</span>
             <span className="font-medium">
               {project.bookkeeper.firstName} {project.bookkeeper.lastName}
@@ -69,22 +65,10 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Current Status:</span>
-            <Badge variant="outline" data-testid="text-current-status">
-              {formatStageName(project.currentStatus)}
-            </Badge>
-          </div>
-          <div className="flex justify-between">
             <span className="text-muted-foreground">Time in Current Stage:</span>
             <span className="font-medium" data-testid="text-time-in-stage">
               {getCurrentTimeInStage(project)}
             </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Priority:</span>
-            <Badge variant={project.priority === "urgent" ? "destructive" : "secondary"}>
-              {project.priority?.toUpperCase()}
-            </Badge>
           </div>
         </div>
       </div>
