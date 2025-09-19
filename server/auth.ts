@@ -117,7 +117,7 @@ export async function setupAuth(app: Express) {
       
       // For GET requests, redirect to login page. For POST requests, return JSON.
       if (req.method === 'GET') {
-        res.redirect('/magic-link-login');
+        res.redirect('/');
       } else {
         res.json({ message: "Logout successful" });
       }
