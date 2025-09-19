@@ -634,8 +634,12 @@ export const insertStageApprovalFieldSchema = baseStageApprovalFieldSchema.refin
   if (data.fieldType === 'number' && (data.comparisonType == null || data.expectedValueNumber == null)) {
     return false;
   }
+  // Multi select fields must have options
+  if (data.fieldType === 'multi_select' && (!data.options || data.options.length === 0)) {
+    return false;
+  }
   // Long text fields should not have validation fields
-  if (data.fieldType === 'long_text' && (data.expectedValueBoolean != null || data.comparisonType != null || data.expectedValueNumber != null)) {
+  if (data.fieldType === 'long_text' && (data.expectedValueBoolean != null || data.comparisonType != null || data.expectedValueNumber != null || data.options != null)) {
     return false;
   }
   return true;
@@ -651,7 +655,10 @@ export const updateStageApprovalFieldSchema = baseStageApprovalFieldSchema.parti
   if (data.fieldType === 'number' && (data.comparisonType == null || data.expectedValueNumber == null)) {
     return false;
   }
-  if (data.fieldType === 'long_text' && (data.expectedValueBoolean != null || data.comparisonType != null || data.expectedValueNumber != null)) {
+  if (data.fieldType === 'multi_select' && (!data.options || data.options.length === 0)) {
+    return false;
+  }
+  if (data.fieldType === 'long_text' && (data.expectedValueBoolean != null || data.comparisonType != null || data.expectedValueNumber != null || data.options != null)) {
     return false;
   }
   return true;
