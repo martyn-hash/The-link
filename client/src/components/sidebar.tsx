@@ -17,6 +17,7 @@ import {
 import ImpersonationPanel from "@/components/impersonation-panel";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
+import logoPath from "@assets/resized_logo_1758262615320.png";
 
 interface SidebarProps {
   user: User;
@@ -103,12 +104,15 @@ export default function Sidebar({ user }: SidebarProps) {
       {/* Logo and Brand */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <BarChart3 className="text-primary-foreground text-sm" />
-          </div>
+          <img 
+            src={logoPath} 
+            alt="Growth Accountants Logo" 
+            className="h-8 w-auto"
+            data-testid="img-sidebar-logo"
+          />
           <div>
-            <h1 className="text-lg font-semibold text-foreground" data-testid="text-app-name">BookFlow</h1>
-            <p className="text-xs text-muted-foreground">Project Management</p>
+            <h1 className="text-lg font-semibold text-foreground" data-testid="text-app-name">The Link</h1>
+            <p className="text-xs text-muted-foreground">Growth Accountants</p>
           </div>
         </div>
       </div>

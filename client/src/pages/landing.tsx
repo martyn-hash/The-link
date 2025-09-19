@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { BarChart3, Users, Clock, CheckCircle, Settings, LogIn } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import logoPath from "@assets/resized_logo_1758262615320.png";
 
 export default function Landing() {
   const [adminFormOpen, setAdminFormOpen] = useState(false);
@@ -162,174 +163,87 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-accent">
-      <div className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <div className="flex items-center justify-center space-x-3 mb-6">
-            <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-              <BarChart3 className="text-primary-foreground text-xl" />
+    <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-screen">
+          {/* Left Column - Branding */}
+          <div className="flex flex-col justify-center space-y-8">
+            <div className="text-center lg:text-left">
+              <img 
+                src={logoPath} 
+                alt="Growth Accountants Logo" 
+                className="h-16 mx-auto lg:mx-0 mb-6"
+                data-testid="img-logo"
+              />
+              <h1 className="text-5xl font-bold text-foreground mb-4" data-testid="text-brand">The Link</h1>
+              <p className="text-xl text-muted-foreground">
+                Project Management System
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                by Growth Accountants
+              </p>
             </div>
-            <h1 className="text-4xl font-bold text-foreground">BookFlow</h1>
           </div>
-          <h2 className="text-2xl text-muted-foreground mb-4">
-            Streamline Your Bookkeeping Workflow
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Manage bookkeeping projects efficiently with role-based access, kanban boards, 
-            task tracking, and automated notifications.
-          </p>
-          
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle className="text-center flex items-center justify-center space-x-2">
-                <LogIn className="w-5 h-5" />
-                <span>Sign In</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    value={loginFormData.email}
-                    onChange={(e) => handleLoginInputChange('email', e.target.value)}
-                    required
-                    placeholder="Enter your email"
-                    data-testid="input-login-email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    value={loginFormData.password}
-                    onChange={(e) => handleLoginInputChange('password', e.target.value)}
-                    required
-                    placeholder="Enter your password"
-                    data-testid="input-login-password"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="w-full"
-                  data-testid="button-login"
-                >
-                  {isLoggingIn ? "Signing In..." : "Sign In"}
-                </Button>
-                
-                <div className="text-center mt-4">
+
+          {/* Right Column - Login Form */}
+          <div className="flex flex-col justify-center">
+            <Card className="w-full max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle className="text-center flex items-center justify-center space-x-2">
+                  <LogIn className="w-5 h-5" />
+                  <span>Sign In</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      value={loginFormData.email}
+                      onChange={(e) => handleLoginInputChange('email', e.target.value)}
+                      required
+                      placeholder="Enter your email"
+                      data-testid="input-login-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="login-password">Password</Label>
+                    <Input
+                      id="login-password"
+                      type="password"
+                      value={loginFormData.password}
+                      onChange={(e) => handleLoginInputChange('password', e.target.value)}
+                      required
+                      placeholder="Enter your password"
+                      data-testid="input-login-password"
+                    />
+                  </div>
                   <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    onClick={() => setResetFormOpen(true)}
-                    className="text-sm text-muted-foreground hover:text-foreground"
-                    data-testid="button-forgot-password"
+                    type="submit"
+                    disabled={isLoggingIn}
+                    className="w-full"
+                    data-testid="button-login"
                   >
-                    Forgot Password?
+                    {isLoggingIn ? "Signing In..." : "Sign In"}
                   </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Users className="w-5 h-5 text-primary" />
-                <span>Role-Based Access</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Four user roles - Admin, Manager, Client Manager, and Bookkeeper - each with 
-                appropriate access levels and responsibilities.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Clock className="w-5 h-5 text-primary" />
-                <span>Time Tracking</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Automatic time tracking for each project stage with detailed chronology 
-                and duration monitoring.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <CheckCircle className="w-5 h-5 text-primary" />
-                <span>Workflow Management</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Kanban boards with drag-and-drop functionality to move projects through 
-                defined stages with proper assignment rules.
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* How it Works */}
-        <div className="text-center">
-          <h3 className="text-2xl font-semibold mb-8">How BookFlow Works</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold">
-                1
-              </div>
-              <h4 className="font-semibold mb-2">Upload Projects</h4>
-              <p className="text-sm text-muted-foreground">
-                Admin uploads CSV with client data and assignments
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold">
-                2
-              </div>
-              <h4 className="font-semibold mb-2">Auto-Assignment</h4>
-              <p className="text-sm text-muted-foreground">
-                Projects automatically assigned to client managers
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold">
-                3
-              </div>
-              <h4 className="font-semibold mb-2">Workflow Tracking</h4>
-              <p className="text-sm text-muted-foreground">
-                Move projects through stages with time tracking
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold">
-                4
-              </div>
-              <h4 className="font-semibold mb-2">Completion</h4>
-              <p className="text-sm text-muted-foreground">
-                Projects marked complete with full audit trail
-              </p>
-            </div>
+                  
+                  <div className="text-center mt-4">
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => setResetFormOpen(true)}
+                      className="text-sm text-muted-foreground hover:text-foreground"
+                      data-testid="button-forgot-password"
+                    >
+                      Forgot Password?
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
