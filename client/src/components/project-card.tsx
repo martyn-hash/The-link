@@ -37,27 +37,6 @@ export default function ProjectCard({
     transition,
   };
 
-  const getStatusBadgeVariant = () => {
-    switch (project.currentStatus) {
-      case "no_latest_action": return "secondary";
-      case "bookkeeping_work_required": return "default";
-      case "in_review": return "outline";
-      case "needs_client_input": return "destructive";
-      case "completed": return "default";
-      default: return "secondary";
-    }
-  };
-
-  const getStatusLabel = () => {
-    const labels: Record<string, string> = {
-      no_latest_action: "New",
-      bookkeeping_work_required: "In Progress",
-      in_review: "Review",
-      needs_client_input: "Waiting",
-      completed: "Done",
-    };
-    return labels[project.currentStatus] || "Unknown";
-  };
 
   const assigneeInitials = project.currentAssignee
     ? `${project.currentAssignee.firstName?.charAt(0) || ''}${project.currentAssignee.lastName?.charAt(0) || ''}`
@@ -189,9 +168,6 @@ export default function ProjectCard({
               )}
             </div>
           </div>
-          <Badge variant={getStatusBadgeVariant()} className="text-xs">
-            {getStatusLabel()}
-          </Badge>
         </div>
       </CardContent>
     </Card>
