@@ -195,3 +195,87 @@ The Link Team
     html,
   });
 }
+
+export async function sendStageChangeNotificationEmail(
+  recipientEmail: string,
+  recipientName: string,
+  projectDescription: string,
+  clientName: string,
+  stageName: string,
+  fromStage?: string,
+  projectId?: string
+): Promise<boolean> {
+  const formattedStageName = stageName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const subject = `Project moved to ${formattedStageName} - Action required - The Link`;
+  
+  const stageTransition = fromStage 
+    ? `from "${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}" to "${formattedStageName}"`
+    : `to "${formattedStageName}"`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #4f46e5;">🔄 Project Stage Changed</h2>
+      <p>Hello ${recipientName},</p>
+      <p>A project has been moved ${stageTransition} and requires your attention.</p>
+      
+      <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
+        <h3 style="margin-top: 0; color: #0369a1; font-size: 18px;">📋 Project Details</h3>
+        <p style="margin-bottom: 12px;"><strong>Client:</strong> ${clientName}</p>
+        <p style="margin-bottom: 12px;"><strong>Description:</strong> ${projectDescription}</p>
+        <p style="margin-bottom: 0;"><strong>Current Stage:</strong> <span style="background-color: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 6px; font-weight: 600;">${formattedStageName}</span></p>
+      </div>
+      
+      <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #10b981;">
+        <h3 style="margin-top: 0; color: #166534; font-size: 16px;">✅ What's Next?</h3>
+        <p style="margin-bottom: 0; color: #374151; line-height: 1.6;">
+          This project has been assigned to your stage and is ready for your review and action. Please review the project details, complete any required tasks, and update the status as appropriate.
+        </p>
+      </div>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/projects${projectId ? `/${projectId}` : ''}" 
+           style="display: inline-block; background-color: #4f46e5; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);">
+          🚀 Review Project in The Link
+        </a>
+      </div>
+      
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+        You're receiving this notification because you have notifications enabled for stage changes. You can update your notification preferences in your account settings.
+      </p>
+      
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        The Link Team
+      </p>
+    </div>
+  `;
+
+  const text = `
+Hello ${recipientName},
+
+A project has been moved ${stageTransition} and requires your attention.
+
+PROJECT DETAILS:
+Client: ${clientName}
+Description: ${projectDescription}
+Current Stage: ${formattedStageName}
+
+WHAT'S NEXT:
+This project has been assigned to your stage and is ready for your review and action. Please review the project details, complete any required tasks, and update the status as appropriate.
+
+Please log into The Link system to review the project and take the necessary action.
+
+You're receiving this notification because you have notifications enabled for stage changes. You can update your notification preferences in your account settings.
+
+Best regards,
+The Link Team
+  `;
+
+  return await sendEmail({
+    to: recipientEmail,
+    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
+    subject,
+    text,
+    html,
+  });
+}

@@ -53,6 +53,7 @@ import {
 import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
+import { sendStageChangeNotificationEmail } from "./emailService";
 import { eq, desc, and, inArray, sql, sum, lt } from "drizzle-orm";
 
 export interface IStorage {
@@ -189,6 +190,12 @@ export interface IStorage {
   createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences>;
   updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences>;
   getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences>;
+  
+  // User role operations
+  getUsersByRole(role: string): Promise<User[]>;
+  
+  // Stage change notification operations
+  sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -196,6 +203,8 @@ export class DatabaseStorage implements IStorage {
   private impersonationStates = new Map<string, { originalUserId: string; impersonatedUserId: string }>();
   // In-memory storage for verification attempts (basic DoS protection)
   private verificationAttempts = new Map<string, { count: number; resetTime: number }>();
+  // PERFORMANCE FIX: In-memory deduplication cache for notifications
+  private recentNotifications = new Map<string, number>();
 
   // Helper method to check verification rate limiting
   private checkVerificationRateLimit(key: string): boolean {
@@ -290,6 +299,17 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  async getUsersByRole(role: string): Promise<User[]> {
+    // TYPE FIX: Use proper TypeScript typing instead of 'as any'
+    // Validate role against defined enum values to prevent runtime errors
+    const validRoles = ['admin', 'manager', 'client_manager', 'bookkeeper'] as const;
+    if (!validRoles.includes(role as any)) {
+      console.warn(`Invalid role provided to getUsersByRole: ${role}`);
+      return [];
+    }
+    return await db.select().from(users).where(eq(users.role, role as typeof validRoles[number]));
   }
 
   // Atomic admin creation to prevent race conditions
@@ -631,6 +651,9 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Project not found");
     }
 
+    // CRITICAL FIX: Capture the old status before any transaction to ensure reliable scope
+    const oldStatus = project.currentStatus;
+
     // Validate the new status using the centralized validation method
     const validation = await this.validateProjectStatus(update.newStatus);
     if (!validation.isValid) {
@@ -773,7 +796,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Use a transaction to ensure chronology and field responses are created atomically
-    return await db.transaction(async (tx) => {
+    const updatedProject = await db.transaction(async (tx) => {
       // Create chronology entry
       const [chronologyEntry] = await tx.insert(projectChronology).values({
         projectId: update.projectId,
@@ -820,6 +843,13 @@ export class DatabaseStorage implements IStorage {
 
       return updatedProject;
     });
+
+    // Send stage change notifications after successful project update
+    // This is done outside the transaction to avoid affecting the project update if notifications fail
+    // CRITICAL FIX: Use captured oldStatus instead of project.currentStatus to avoid scope issues
+    await this.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
+
+    return updatedProject;
   }
 
   // Chronology operations
@@ -1860,6 +1890,161 @@ export class DatabaseStorage implements IStorage {
         eq(magicLinkTokens.used, false),
         sql`${magicLinkTokens.expiresAt} > now()`
       ));
+  }
+
+  async sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void> {
+    try {
+      // Only send notifications if the stage actually changed
+      if (oldStageName && oldStageName === newStageName) {
+        return;
+      }
+
+      // PERFORMANCE FIX: Basic deduplication per (projectId, newStageName)
+      const deduplicationKey = `${projectId}:${newStageName}`;
+      const now = Date.now();
+      const lastNotification = this.recentNotifications.get(deduplicationKey);
+      
+      // Skip if same notification was sent within the last 30 seconds
+      if (lastNotification && (now - lastNotification) < 30000) {
+        console.log(`Skipping duplicate notification for project ${projectId} to stage ${newStageName}`);
+        return;
+      }
+      
+      // Record this notification
+      this.recentNotifications.set(deduplicationKey, now);
+      
+      // Clean up old entries periodically (keep only last 1000 entries)
+      if (this.recentNotifications.size > 1000) {
+        const entries = Array.from(this.recentNotifications.entries());
+        entries.sort((a, b) => b[1] - a[1]); // Sort by timestamp, newest first
+        this.recentNotifications.clear();
+        // Keep only the 500 most recent entries
+        entries.slice(0, 500).forEach(([key, timestamp]) => {
+          this.recentNotifications.set(key, timestamp);
+        });
+      }
+
+      // Get the project with all related data
+      const project = await this.getProject(projectId);
+      if (!project) {
+        console.warn(`Project ${projectId} not found for stage change notifications`);
+        return;
+      }
+
+      // Get the new kanban stage to find the assigned role
+      const [newStage] = await db
+        .select()
+        .from(kanbanStages)
+        .where(eq(kanbanStages.name, newStageName));
+
+      if (!newStage) {
+        console.warn(`Kanban stage '${newStageName}' not found for notifications`);
+        return;
+      }
+
+      // If no role is assigned to this stage, no notifications to send
+      if (!newStage.assignedRole) {
+        console.log(`No role assigned to stage '${newStageName}', skipping notifications`);
+        return;
+      }
+
+      // Get users with the assigned role
+      const usersWithRole = await this.getUsersByRole(newStage.assignedRole);
+      if (usersWithRole.length === 0) {
+        console.log(`No users found with role '${newStage.assignedRole}' for stage '${newStageName}'`);
+        return;
+      }
+
+      // Get project with client information for email
+      const projectWithClient = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+        with: {
+          client: true,
+        },
+      });
+
+      if (!projectWithClient) {
+        console.warn(`Project with client data not found for ${projectId}`);
+        return;
+      }
+
+      // PERFORMANCE FIX: Batch-load notification preferences for all users at once
+      const userIds = usersWithRole.map(user => user.id);
+      const allPreferences = await db
+        .select()
+        .from(userNotificationPreferences)
+        .where(inArray(userNotificationPreferences.userId, userIds));
+      
+      // Create a map for quick preference lookup
+      const preferencesMap = new Map<string, UserNotificationPreferences>();
+      allPreferences.forEach(pref => {
+        preferencesMap.set(pref.userId, pref);
+      });
+
+      // Filter users who need notifications and validate their data
+      const usersToNotify = usersWithRole.filter(user => {
+        // Get preferences or use defaults
+        const preferences = preferencesMap.get(user.id);
+        const notifyStageChanges = preferences?.notifyStageChanges ?? true; // Default to true
+        
+        if (!notifyStageChanges) {
+          console.log(`User ${user.email} has stage change notifications disabled, skipping`);
+          return false;
+        }
+
+        // Validate user has required fields for email
+        if (!user.email || !user.firstName) {
+          console.warn(`User ${user.id} missing email or name, skipping notification`);
+          return false;
+        }
+
+        return true;
+      });
+
+      if (usersToNotify.length === 0) {
+        console.log(`No users to notify for project ${projectId} stage change to ${newStageName}`);
+        return;
+      }
+
+      // PERFORMANCE FIX: Send emails concurrently using Promise.allSettled for better error handling
+      const emailPromises = usersToNotify.map(async (user) => {
+        try {
+          // TypeScript doesn't know we've filtered out null emails, so we use non-null assertion
+          const emailSent = await sendStageChangeNotificationEmail(
+            user.email!,
+            `${user.firstName} ${user.lastName || ''}`.trim(),
+            projectWithClient.description,
+            projectWithClient.client.name,
+            newStageName,
+            oldStageName,
+            projectId  // URL FIX: Pass projectId for deep linking
+          );
+
+          if (emailSent) {
+            console.log(`Stage change notification sent to ${user.email} for project ${projectId}`);
+            return { success: true, email: user.email };
+          } else {
+            console.warn(`Failed to send stage change notification to ${user.email} for project ${projectId}`);
+            return { success: false, email: user.email, error: 'Email sending failed' };
+          }
+        } catch (error) {
+          console.error(`Error sending stage change notification to user ${user.id}:`, error);
+          return { success: false, email: user.email, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+      });
+
+      // Use Promise.allSettled to handle failures gracefully without stopping other emails
+      const results = await Promise.allSettled(emailPromises);
+      
+      // Log summary of notification results
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+      const failed = results.length - successful;
+      console.log(`Stage change notifications for project ${projectId}: ${successful} successful, ${failed} failed`);
+      
+    } catch (error) {
+      console.error(`Error in sendStageChangeNotifications for project ${projectId}:`, error);
+      // Don't throw error to avoid breaking the main project update flow
+    }
   }
 }
 
