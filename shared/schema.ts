@@ -112,6 +112,7 @@ export const projects = pgTable("projects", {
   priority: varchar("priority").default("medium"), // low, medium, high, urgent
   dueDate: timestamp("due_date"),
   archived: boolean("archived").default(false), // to hide completed monthly cycles
+  inactive: boolean("inactive").default(false), // to mark projects as inactive
   projectMonth: varchar("project_month"), // DD/MM/YYYY format to track which month each project belongs to
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
