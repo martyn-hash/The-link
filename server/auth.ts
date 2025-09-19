@@ -106,17 +106,26 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Logout route
-  app.post("/api/logout", (req, res) => {
-    req.session.destroy((err) => {
+  // Logout routes (both GET and POST for flexibility)
+  const logoutHandler = (req: any, res: any) => {
+    req.session.destroy((err: any) => {
       if (err) {
         console.error("Logout error:", err);
         return res.status(500).json({ message: "Logout failed" });
       }
       res.clearCookie('connect.sid');
-      res.json({ message: "Logout successful" });
+      
+      // For GET requests, redirect to login page. For POST requests, return JSON.
+      if (req.method === 'GET') {
+        res.redirect('/magic-link-login');
+      } else {
+        res.json({ message: "Logout successful" });
+      }
     });
-  });
+  };
+
+  app.post("/api/logout", logoutHandler);
+  app.get("/api/auth/logout", logoutHandler);
 
   // Basic rate limiting for magic link requests (in-memory store)
   const requestCounts = new Map<string, { count: number; resetTime: number }>();

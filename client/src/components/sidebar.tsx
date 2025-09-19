@@ -84,7 +84,7 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    window.location.href = "/api/auth/logout";
   };
 
   const getUserInitials = () => {
