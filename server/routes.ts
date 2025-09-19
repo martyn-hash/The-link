@@ -278,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Client management routes
-  app.get("/api/clients", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+  app.get("/api/clients", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const clients = await storage.getAllClients();
       res.json(clients);
