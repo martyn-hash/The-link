@@ -16,14 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   Form,
   FormControl,
   FormField,
@@ -62,7 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Settings, Edit, Trash2, Users, Briefcase } from "lucide-react";
+import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X } from "lucide-react";
 
 // Form schemas
 const createServiceFormSchema = insertServiceSchema.extend({
@@ -83,16 +75,18 @@ interface WorkRoleWithUsage extends WorkRole {
   serviceCount: number;
 }
 
+// View mode types
+type ViewMode = 'list' | 'create-service' | 'edit-service' | 'create-role' | 'edit-role';
+type TabMode = 'services' | 'roles';
+
 export default function Services() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Dialog states
-  const [isCreateServiceDialogOpen, setIsCreateServiceDialogOpen] = useState(false);
-  const [isCreateRoleDialogOpen, setIsCreateRoleDialogOpen] = useState(false);
-  const [isEditServiceDialogOpen, setIsEditServiceDialogOpen] = useState(false);
-  const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false);
+  // View state management
+  const [currentTab, setCurrentTab] = useState<TabMode>('services');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [deleteServiceId, setDeleteServiceId] = useState<string | null>(null);
   const [deleteRoleId, setDeleteRoleId] = useState<string | null>(null);
   
@@ -177,7 +171,7 @@ export default function Services() {
       toast({ title: "Success", description: "Service created successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/services"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles"] });
-      setIsCreateServiceDialogOpen(false);
+      setViewMode('list');
       serviceForm.reset();
     },
     onError: (error: Error) => {
@@ -224,7 +218,7 @@ export default function Services() {
       toast({ title: "Success", description: "Service updated successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/services"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles"] });
-      setIsEditServiceDialogOpen(false);
+      setViewMode('list');
       setEditingService(null);
       serviceForm.reset();
     },
@@ -265,7 +259,7 @@ export default function Services() {
       toast({ title: "Success", description: "Work role created successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles", "all"] });
-      setIsCreateRoleDialogOpen(false);
+      setViewMode('list');
       roleForm.reset();
     },
     onError: (error: Error) => {
@@ -288,7 +282,7 @@ export default function Services() {
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles", "all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/services"] });
-      setIsEditRoleDialogOpen(false);
+      setViewMode('list');
       setEditingRole(null);
       roleForm.reset();
     },
@@ -339,7 +333,7 @@ export default function Services() {
       projectTypeId: service.projectTypeId,
       roleIds: service.roles.map(role => role.id),
     });
-    setIsEditServiceDialogOpen(true);
+    setViewMode('edit-service');
   };
 
   const handleCreateRole = (data: CreateWorkRoleFormData) => {
@@ -351,13 +345,32 @@ export default function Services() {
     updateRoleMutation.mutate({ ...data, id: editingRole.id });
   };
 
+  // Navigation helpers
+  const handleStartCreateService = () => {
+    serviceForm.reset();
+    setViewMode('create-service');
+  };
+
+  const handleStartCreateRole = () => {
+    roleForm.reset();
+    setViewMode('create-role');
+  };
+
+  const handleCancelForm = () => {
+    serviceForm.reset();
+    roleForm.reset();
+    setEditingService(null);
+    setEditingRole(null);
+    setViewMode('list');
+  };
+
   const handleEditRole = (role: WorkRoleWithUsage) => {
     setEditingRole(role);
     roleForm.reset({
       name: role.name,
       description: role.description ?? "",
     });
-    setIsEditRoleDialogOpen(true);
+    setViewMode('edit-role');
   };
 
   // Auth and error handling
@@ -430,7 +443,7 @@ export default function Services() {
 
         {/* Content with tabs */}
         <div className="flex-1 overflow-auto">
-          <Tabs defaultValue="services" className="h-full">
+          <Tabs value={currentTab} onValueChange={(value) => { setCurrentTab(value as TabMode); setViewMode('list'); }} className="h-full">
             <div className="border-b border-border bg-card px-6">
               <TabsList className="grid w-full max-w-md grid-cols-2">
                 <TabsTrigger value="services" className="flex items-center" data-testid="tab-services">
@@ -446,568 +459,643 @@ export default function Services() {
 
             {/* Services Tab */}
             <TabsContent value="services" className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Services</h2>
-                  <p className="text-muted-foreground">Manage services and their associated project types and roles</p>
-                </div>
-                <Dialog open={isCreateServiceDialogOpen} onOpenChange={setIsCreateServiceDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button data-testid="button-add-service">
+              {/* Services List View */}
+              {currentTab === 'services' && viewMode === 'list' && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold">Services</h2>
+                      <p className="text-muted-foreground">Manage services and their associated project types and roles</p>
+                    </div>
+                    <Button onClick={handleStartCreateService} data-testid="button-add-service">
                       <Plus className="w-4 h-4 mr-2" />
                       Add Service
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[525px]">
-                    <DialogHeader>
-                      <DialogTitle>Create New Service</DialogTitle>
-                      <DialogDescription>
-                        Add a new service with associated project type and roles
-                      </DialogDescription>
-                    </DialogHeader>
-                    <Form {...serviceForm}>
-                      <form onSubmit={serviceForm.handleSubmit(handleCreateService)} className="space-y-4">
-                        <FormField
-                          control={serviceForm.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Name</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="e.g., Monthly Bookkeeping Service"
-                                  data-testid="input-service-name"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={serviceForm.control}
-                          name="description"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Describe this service..."
-                                  data-testid="textarea-service-description"
-                                  {...field}
-                                  value={field.value || ""}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={serviceForm.control}
-                          name="projectTypeId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Project Type</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value} data-testid="select-project-type">
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a project type" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {projectTypes?.map((type) => (
-                                    <SelectItem key={type.id} value={type.id}>
-                                      {type.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={serviceForm.control}
-                          name="roleIds"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Work Roles</FormLabel>
-                              <FormControl>
-                                <div className="space-y-2">
-                                  {allWorkRoles?.map((role) => (
-                                    <div key={role.id} className="flex items-center space-x-2">
-                                      <input
-                                        type="checkbox"
-                                        id={role.id}
-                                        checked={field.value.includes(role.id)}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            field.onChange([...field.value, role.id]);
-                                          } else {
-                                            field.onChange(field.value.filter(id => id !== role.id));
-                                          }
-                                        }}
-                                        data-testid={`checkbox-role-${role.id}`}
-                                      />
-                                      <label htmlFor={role.id} className="text-sm font-medium">
-                                        {role.name}
-                                      </label>
-                                    </div>
-                                  ))}
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="flex justify-end space-x-2 pt-4">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsCreateServiceDialogOpen(false)}
-                            data-testid="button-cancel-create-service"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="submit"
-                            disabled={createServiceMutation.isPending}
-                            data-testid="button-save-service"
-                          >
-                            {createServiceMutation.isPending ? "Creating..." : "Create Service"}
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              {/* Services Table */}
-              <div className="border rounded-lg">
-                {servicesLoading ? (
-                  <div className="p-4">
-                    {[...Array(3)].map((_, i) => (
-                      <div key={i} className="flex items-center space-x-4 mb-4">
-                        <Skeleton className="h-12 w-12 rounded" />
-                        <div className="space-y-2 flex-1">
-                          <Skeleton className="h-4 w-[250px]" />
-                          <Skeleton className="h-4 w-[200px]" />
-                        </div>
-                      </div>
-                    ))}
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Project Type</TableHead>
-                        <TableHead>Mapped Roles</TableHead>
-                        <TableHead className="w-20">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {services?.map((service) => (
-                        <TableRow key={service.id} data-testid={`row-service-${service.id}`}>
-                          <TableCell className="font-medium">{service.name}</TableCell>
-                          <TableCell>{service.description || "—"}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{service.projectType.name}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {service.roles.map((role) => (
-                                <Badge key={role.id} variant="outline" className="text-xs">
-                                  {role.name}
-                                </Badge>
-                              ))}
-                              {service.roles.length === 0 && <span className="text-muted-foreground">No roles</span>}
+
+                  {/* Services Table */}
+                  <div className="border rounded-lg">
+                    {servicesLoading ? (
+                      <div className="p-4">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-4 mb-4">
+                            <Skeleton className="h-12 w-12 rounded" />
+                            <div className="space-y-2 flex-1">
+                              <Skeleton className="h-4 w-[250px]" />
+                              <Skeleton className="h-4 w-[200px]" />
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleEditService(service)}
-                                data-testid={`button-edit-service-${service.id}`}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setDeleteServiceId(service.id)}
-                                data-testid={`button-delete-service-${service.id}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {services?.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            No services found. Create your first service to get started.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Project Type</TableHead>
+                            <TableHead>Mapped Roles</TableHead>
+                            <TableHead className="w-20">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {services?.map((service) => (
+                            <TableRow key={service.id} data-testid={`row-service-${service.id}`}>
+                              <TableCell className="font-medium">{service.name}</TableCell>
+                              <TableCell>{service.description || "—"}</TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{service.projectType.name}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  {service.roles.map((role) => (
+                                    <Badge key={role.id} variant="outline" className="text-xs">
+                                      {role.name}
+                                    </Badge>
+                                  ))}
+                                  {service.roles.length === 0 && <span className="text-muted-foreground">No roles</span>}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleEditService(service)}
+                                    data-testid={`button-edit-service-${service.id}`}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setDeleteServiceId(service.id)}
+                                    data-testid={`button-delete-service-${service.id}`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {services?.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                No services found. Create your first service to get started.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Create Service Form View */}
+              {currentTab === 'services' && viewMode === 'create-service' && (
+                <>
+                  <div className="flex items-center space-x-4 mb-6">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCancelForm}
+                      data-testid="button-back-to-services"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <div>
+                      <h2 className="text-xl font-semibold">Create New Service</h2>
+                      <p className="text-muted-foreground">Add a new service with associated project type and roles</p>
+                    </div>
+                  </div>
+                  <Card className="max-w-2xl">
+                    <CardHeader>
+                      <CardTitle>Service Details</CardTitle>
+                      <CardDescription>Enter the information for your new service</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Form {...serviceForm}>
+                        <form onSubmit={serviceForm.handleSubmit(handleCreateService)} className="space-y-4">
+                          <FormField
+                            control={serviceForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Name</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="e.g., Monthly Bookkeeping Service"
+                                    data-testid="input-service-name"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={serviceForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Description</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Describe this service..."
+                                    data-testid="textarea-service-description"
+                                    {...field}
+                                    value={field.value || ""}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={serviceForm.control}
+                            name="projectTypeId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Project Type</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} data-testid="select-project-type">
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a project type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {projectTypes?.map((type) => (
+                                      <SelectItem key={type.id} value={type.id}>
+                                        {type.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={serviceForm.control}
+                            name="roleIds"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Work Roles</FormLabel>
+                                <FormControl>
+                                  <div className="space-y-2">
+                                    {allWorkRoles?.map((role) => (
+                                      <div key={role.id} className="flex items-center space-x-2">
+                                        <input
+                                          type="checkbox"
+                                          id={role.id}
+                                          checked={field.value.includes(role.id)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              field.onChange([...field.value, role.id]);
+                                            } else {
+                                              field.onChange(field.value.filter(id => id !== role.id));
+                                            }
+                                          }}
+                                          data-testid={`checkbox-role-${role.id}`}
+                                        />
+                                        <label htmlFor={role.id} className="text-sm font-medium">
+                                          {role.name}
+                                        </label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end space-x-2 pt-4">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCancelForm}
+                              data-testid="button-cancel-create-service"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={createServiceMutation.isPending}
+                              data-testid="button-save-service"
+                            >
+                              {createServiceMutation.isPending ? "Creating..." : "Create Service"}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
+              {/* Edit Service Form View */}
+              {currentTab === 'services' && viewMode === 'edit-service' && editingService && (
+                <>
+                  <div className="flex items-center space-x-4 mb-6">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCancelForm}
+                      data-testid="button-back-to-services"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <div>
+                      <h2 className="text-xl font-semibold">Edit Service</h2>
+                      <p className="text-muted-foreground">Update the service information</p>
+                    </div>
+                  </div>
+                  <Card className="max-w-2xl">
+                    <CardHeader>
+                      <CardTitle>Edit Service: {editingService.name}</CardTitle>
+                      <CardDescription>Modify the service details below</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Form {...serviceForm}>
+                        <form onSubmit={serviceForm.handleSubmit(handleUpdateService)} className="space-y-4">
+                          <FormField
+                            control={serviceForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Name</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="e.g., Monthly Bookkeeping Service"
+                                    data-testid="input-service-name"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={serviceForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Description</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Describe this service..."
+                                    data-testid="textarea-service-description"
+                                    {...field}
+                                    value={field.value || ""}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={serviceForm.control}
+                            name="projectTypeId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Project Type</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} data-testid="select-project-type">
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a project type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {projectTypes?.map((type) => (
+                                      <SelectItem key={type.id} value={type.id}>
+                                        {type.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={serviceForm.control}
+                            name="roleIds"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Work Roles</FormLabel>
+                                <FormControl>
+                                  <div className="space-y-2">
+                                    {allWorkRoles?.map((role) => (
+                                      <div key={role.id} className="flex items-center space-x-2">
+                                        <input
+                                          type="checkbox"
+                                          id={role.id}
+                                          checked={field.value.includes(role.id)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              field.onChange([...field.value, role.id]);
+                                            } else {
+                                              field.onChange(field.value.filter(id => id !== role.id));
+                                            }
+                                          }}
+                                          data-testid={`checkbox-role-${role.id}`}
+                                        />
+                                        <label htmlFor={role.id} className="text-sm font-medium">
+                                          {role.name}
+                                        </label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end space-x-2 pt-4">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCancelForm}
+                              data-testid="button-cancel-edit-service"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={updateServiceMutation.isPending}
+                              data-testid="button-update-service"
+                            >
+                              {updateServiceMutation.isPending ? "Updating..." : "Update Service"}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
 
             {/* Roles Tab */}
             <TabsContent value="roles" className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Work Roles</h2>
-                  <p className="text-muted-foreground">Manage work roles that can be assigned to services</p>
-                </div>
-                <Dialog open={isCreateRoleDialogOpen} onOpenChange={setIsCreateRoleDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button data-testid="button-add-role">
+              {/* Roles List View */}
+              {currentTab === 'roles' && viewMode === 'list' && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold">Work Roles</h2>
+                      <p className="text-muted-foreground">Manage work roles that can be assigned to services</p>
+                    </div>
+                    <Button onClick={handleStartCreateRole} data-testid="button-add-role">
                       <Plus className="w-4 h-4 mr-2" />
                       Add Role
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[525px]">
-                    <DialogHeader>
-                      <DialogTitle>Create New Work Role</DialogTitle>
-                      <DialogDescription>
-                        Add a new work role that can be assigned to services
-                      </DialogDescription>
-                    </DialogHeader>
-                    <Form {...roleForm}>
-                      <form onSubmit={roleForm.handleSubmit(handleCreateRole)} className="space-y-4">
-                        <FormField
-                          control={roleForm.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Name</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="e.g., Senior Bookkeeper"
-                                  data-testid="input-role-name"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={roleForm.control}
-                          name="description"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Describe this work role..."
-                                  data-testid="textarea-role-description"
-                                  {...field}
-                                  value={field.value || ""}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="flex justify-end space-x-2 pt-4">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsCreateRoleDialogOpen(false)}
-                            data-testid="button-cancel-create-role"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="submit"
-                            disabled={createRoleMutation.isPending}
-                            data-testid="button-save-role"
-                          >
-                            {createRoleMutation.isPending ? "Creating..." : "Create Role"}
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              {/* Roles Table */}
-              <div className="border rounded-lg">
-                {rolesLoading ? (
-                  <div className="p-4">
-                    {[...Array(3)].map((_, i) => (
-                      <div key={i} className="flex items-center space-x-4 mb-4">
-                        <Skeleton className="h-12 w-12 rounded" />
-                        <div className="space-y-2 flex-1">
-                          <Skeleton className="h-4 w-[250px]" />
-                          <Skeleton className="h-4 w-[200px]" />
-                        </div>
-                      </div>
-                    ))}
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Used in Services</TableHead>
-                        <TableHead className="w-20">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {workRoles?.map((role) => (
-                        <TableRow key={role.id} data-testid={`row-role-${role.id}`}>
-                          <TableCell className="font-medium">{role.name}</TableCell>
-                          <TableCell>{role.description || "—"}</TableCell>
-                          <TableCell>
-                            <Badge variant={role.serviceCount > 0 ? "default" : "secondary"}>
-                              {role.serviceCount} service{role.serviceCount !== 1 ? 's' : ''}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleEditRole(role)}
-                                data-testid={`button-edit-role-${role.id}`}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setDeleteRoleId(role.id)}
-                                data-testid={`button-delete-role-${role.id}`}
-                                disabled={role.serviceCount > 0}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+
+                  {/* Roles Table */}
+                  <div className="border rounded-lg">
+                    {rolesLoading ? (
+                      <div className="p-4">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-4 mb-4">
+                            <Skeleton className="h-12 w-12 rounded" />
+                            <div className="space-y-2 flex-1">
+                              <Skeleton className="h-4 w-[250px]" />
+                              <Skeleton className="h-4 w-[200px]" />
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {workRoles?.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                            No work roles found. Create your first role to get started.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Used in Services</TableHead>
+                            <TableHead className="w-20">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {workRoles?.map((role) => (
+                            <TableRow key={role.id} data-testid={`row-role-${role.id}`}>
+                              <TableCell className="font-medium">{role.name}</TableCell>
+                              <TableCell>{role.description || "—"}</TableCell>
+                              <TableCell>
+                                <Badge variant={role.serviceCount > 0 ? "default" : "secondary"}>
+                                  {role.serviceCount} service{role.serviceCount !== 1 ? 's' : ''}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleEditRole(role)}
+                                    data-testid={`button-edit-role-${role.id}`}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setDeleteRoleId(role.id)}
+                                    data-testid={`button-delete-role-${role.id}`}
+                                    disabled={role.serviceCount > 0}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {workRoles?.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                                No work roles found. Create your first role to get started.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Create Role Form View */}
+              {currentTab === 'roles' && viewMode === 'create-role' && (
+                <>
+                  <div className="flex items-center space-x-4 mb-6">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCancelForm}
+                      data-testid="button-back-to-roles"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <div>
+                      <h2 className="text-xl font-semibold">Create New Work Role</h2>
+                      <p className="text-muted-foreground">Add a new work role that can be assigned to services</p>
+                    </div>
+                  </div>
+                  <Card className="max-w-2xl">
+                    <CardHeader>
+                      <CardTitle>Role Details</CardTitle>
+                      <CardDescription>Enter the information for your new work role</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Form {...roleForm}>
+                        <form onSubmit={roleForm.handleSubmit(handleCreateRole)} className="space-y-4">
+                          <FormField
+                            control={roleForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Name</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="e.g., Senior Bookkeeper"
+                                    data-testid="input-role-name"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={roleForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Description</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Describe this work role..."
+                                    data-testid="textarea-role-description"
+                                    {...field}
+                                    value={field.value || ""}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end space-x-2 pt-4">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCancelForm}
+                              data-testid="button-cancel-create-role"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={createRoleMutation.isPending}
+                              data-testid="button-save-role"
+                            >
+                              {createRoleMutation.isPending ? "Creating..." : "Create Role"}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
+              {/* Edit Role Form View */}
+              {currentTab === 'roles' && viewMode === 'edit-role' && editingRole && (
+                <>
+                  <div className="flex items-center space-x-4 mb-6">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCancelForm}
+                      data-testid="button-back-to-roles"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <div>
+                      <h2 className="text-xl font-semibold">Edit Work Role</h2>
+                      <p className="text-muted-foreground">Update the work role information</p>
+                    </div>
+                  </div>
+                  <Card className="max-w-2xl">
+                    <CardHeader>
+                      <CardTitle>Edit Role: {editingRole.name}</CardTitle>
+                      <CardDescription>Modify the role details below</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Form {...roleForm}>
+                        <form onSubmit={roleForm.handleSubmit(handleUpdateRole)} className="space-y-4">
+                          <FormField
+                            control={roleForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Name</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="e.g., Senior Bookkeeper"
+                                    data-testid="input-role-name"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={roleForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Description</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Describe this work role..."
+                                    data-testid="textarea-role-description"
+                                    {...field}
+                                    value={field.value || ""}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end space-x-2 pt-4">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCancelForm}
+                              data-testid="button-cancel-edit-role"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={updateRoleMutation.isPending}
+                              data-testid="button-update-role"
+                            >
+                              {updateRoleMutation.isPending ? "Updating..." : "Update Role"}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </div>
       </div>
 
-      {/* Edit Service Dialog */}
-      <Dialog open={isEditServiceDialogOpen} onOpenChange={setIsEditServiceDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle>Edit Service</DialogTitle>
-            <DialogDescription>
-              Update service details, project type, and role assignments
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...serviceForm}>
-            <form onSubmit={serviceForm.handleSubmit(handleUpdateService)} className="space-y-4">
-              <FormField
-                control={serviceForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g., Monthly Bookkeeping Service"
-                        data-testid="input-edit-service-name"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={serviceForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describe this service..."
-                        data-testid="textarea-edit-service-description"
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={serviceForm.control}
-                name="projectTypeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} data-testid="select-edit-project-type">
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a project type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {projectTypes?.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
-                            {type.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={serviceForm.control}
-                name="roleIds"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Work Roles</FormLabel>
-                    <FormControl>
-                      <div className="space-y-2">
-                        {allWorkRoles?.map((role) => (
-                          <div key={role.id} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`edit-${role.id}`}
-                              checked={field.value.includes(role.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  field.onChange([...field.value, role.id]);
-                                } else {
-                                  field.onChange(field.value.filter(id => id !== role.id));
-                                }
-                              }}
-                              data-testid={`checkbox-edit-role-${role.id}`}
-                            />
-                            <label htmlFor={`edit-${role.id}`} className="text-sm font-medium">
-                              {role.name}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditServiceDialogOpen(false)}
-                  data-testid="button-cancel-edit-service"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={updateServiceMutation.isPending}
-                  data-testid="button-update-service"
-                >
-                  {updateServiceMutation.isPending ? "Updating..." : "Update Service"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Role Dialog */}
-      <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle>Edit Work Role</DialogTitle>
-            <DialogDescription>
-              Update work role details
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...roleForm}>
-            <form onSubmit={roleForm.handleSubmit(handleUpdateRole)} className="space-y-4">
-              <FormField
-                control={roleForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g., Senior Bookkeeper"
-                        data-testid="input-edit-role-name"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={roleForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describe this work role..."
-                        data-testid="textarea-edit-role-description"
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditRoleDialogOpen(false)}
-                  data-testid="button-cancel-edit-role"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={updateRoleMutation.isPending}
-                  data-testid="button-update-role"
-                >
-                  {updateRoleMutation.isPending ? "Updating..." : "Update Role"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Service Confirmation */}
       <AlertDialog open={!!deleteServiceId} onOpenChange={() => setDeleteServiceId(null)}>
