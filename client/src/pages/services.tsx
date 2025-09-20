@@ -814,7 +814,7 @@ export default function Services() {
                                 <FormLabel>Work Roles</FormLabel>
                                 <FormControl>
                                   <div className="space-y-2">
-                                    {allWorkRoles?.map((role) => (
+                                    {allWorkRoles?.filter(role => role && role.id && role.name).map((role) => (
                                       <div key={role.id} className="flex items-center space-x-2">
                                         <input
                                           type="checkbox"
@@ -960,7 +960,7 @@ export default function Services() {
                                 <FormLabel>Work Roles</FormLabel>
                                 <FormControl>
                                   <div className="space-y-2">
-                                    {allWorkRoles?.map((role) => (
+                                    {allWorkRoles?.filter(role => role && role.id && role.name).map((role) => (
                                       <div key={role.id} className="flex items-center space-x-2">
                                         <input
                                           type="checkbox"
