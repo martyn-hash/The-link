@@ -263,6 +263,13 @@ export interface IStorage {
   resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string): Promise<User | undefined>;
   getFallbackUser(): Promise<User | undefined>;
   setFallbackUser(userId: string): Promise<User>;
+  resolveProjectAssignments(clientId: string, projectTypeId: string): Promise<{
+    bookkeeperId: string;
+    clientManagerId: string;
+    currentAssigneeId: string;
+    usedFallback: boolean;
+    fallbackRoles: string[];
+  }>;
 
   // Validation Methods
   validateClientServiceRoleCompleteness(clientId: string, serviceId: string): Promise<{ isComplete: boolean; missingRoles: string[]; assignedRoles: { roleName: string; userName: string }[] }>;
@@ -707,6 +714,72 @@ export class DatabaseStorage implements IStorage {
     const validation = await this.validateProjectStatus(finalProjectData.currentStatus);
     if (!validation.isValid) {
       throw new Error(validation.reason || "Invalid project status");
+    }
+
+    // Check if project type is mapped to a service for role-based assignments
+    const service = await this.getServiceByProjectTypeId(finalProjectData.projectTypeId);
+    
+    if (service) {
+      // Project type is mapped to a service - use role-based assignments
+      try {
+        const clientService = await this.getClientServiceByClientAndProjectType(
+          finalProjectData.clientId, 
+          finalProjectData.projectTypeId
+        );
+        
+        if (clientService) {
+          // Use role-based assignment logic
+          const roleAssignments = await this.resolveProjectAssignments(
+            finalProjectData.clientId, 
+            finalProjectData.projectTypeId
+          );
+          
+          // Override the user assignments with role-based assignments
+          finalProjectData.bookkeeperId = roleAssignments.bookkeeperId;
+          finalProjectData.clientManagerId = roleAssignments.clientManagerId;
+          finalProjectData.currentAssigneeId = roleAssignments.currentAssigneeId;
+          
+          if (roleAssignments.usedFallback) {
+            console.warn(
+              `Project creation used fallback user for roles: ${roleAssignments.fallbackRoles.join(', ')}`
+            );
+          }
+        } else {
+          // Service exists but client doesn't have service mapping
+          console.warn(
+            `Project type ${finalProjectData.projectTypeId} is service-mapped but client ${finalProjectData.clientId} has no service assignment. Using direct user assignments.`
+          );
+          
+          // Validate that required fields are present for direct assignment
+          if (!finalProjectData.bookkeeperId || !finalProjectData.clientManagerId) {
+            throw new Error("Project type is service-mapped but client has no service assignment. Direct user assignments (bookkeeperId, clientManagerId) are required.");
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('cannot use role-based assignments')) {
+          // Role-based assignment failed, fallback to direct assignment
+          console.warn(
+            `Role-based assignment failed for project type ${finalProjectData.projectTypeId}: ${error.message}. Using direct user assignments.`
+          );
+          
+          // Validate that required fields are present for direct assignment
+          if (!finalProjectData.bookkeeperId || !finalProjectData.clientManagerId) {
+            throw new Error("Role-based assignment failed and direct user assignments (bookkeeperId, clientManagerId) are missing.");
+          }
+        } else {
+          throw error; // Re-throw other errors
+        }
+      }
+    } else {
+      // Project type is NOT mapped to a service - use direct user assignments (existing logic)
+      if (!finalProjectData.bookkeeperId || !finalProjectData.clientManagerId) {
+        throw new Error("Project type is not service-mapped. Direct user assignments (bookkeeperId, clientManagerId) are required.");
+      }
+    }
+
+    // Ensure currentAssigneeId is set if not already assigned
+    if (!finalProjectData.currentAssigneeId) {
+      finalProjectData.currentAssigneeId = finalProjectData.clientManagerId;
     }
     
     // Use a database transaction to ensure both project and chronology entry are created atomically
@@ -1409,12 +1482,83 @@ export class DatabaseStorage implements IStorage {
               client = newClient;
             }
 
-            // Find bookkeeper and client manager
-            const bookkeeper = await this.getUserByEmail(data.bookkeeperEmail);
-            const clientManager = await this.getUserByEmail(data.clientManagerEmail);
+            // Determine user assignments - check if project type is service-mapped
+            let finalBookkeeperId: string;
+            let finalClientManagerId: string;
+            let finalCurrentAssigneeId: string;
+            let usedRoleBasedAssignment = false;
 
-            if (!bookkeeper || !clientManager) {
-              throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
+            const service = await this.getServiceByProjectTypeId(projectType.id);
+            
+            if (service) {
+              // Project type is mapped to a service - try role-based assignments
+              try {
+                const clientService = await this.getClientServiceByClientAndProjectType(client.id, projectType.id);
+                
+                if (clientService) {
+                  // Use role-based assignment logic
+                  const roleAssignments = await this.resolveProjectAssignments(client.id, projectType.id);
+                  
+                  finalBookkeeperId = roleAssignments.bookkeeperId;
+                  finalClientManagerId = roleAssignments.clientManagerId;
+                  finalCurrentAssigneeId = roleAssignments.currentAssigneeId;
+                  usedRoleBasedAssignment = true;
+                  
+                  if (roleAssignments.usedFallback) {
+                    console.warn(
+                      `CSV import used fallback user for roles: ${roleAssignments.fallbackRoles.join(', ')} for client ${data.clientName}`
+                    );
+                  }
+                } else {
+                  // Service exists but client doesn't have service mapping - fallback to CSV user emails
+                  console.warn(
+                    `Project type '${data.projectDescription}' is service-mapped but client '${data.clientName}' has no service assignment. Using CSV email assignments.`
+                  );
+                  
+                  const bookkeeper = await this.getUserByEmail(data.bookkeeperEmail);
+                  const clientManager = await this.getUserByEmail(data.clientManagerEmail);
+                  
+                  if (!bookkeeper || !clientManager) {
+                    throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
+                  }
+                  
+                  finalBookkeeperId = bookkeeper.id;
+                  finalClientManagerId = clientManager.id;
+                  finalCurrentAssigneeId = clientManager.id;
+                }
+              } catch (error) {
+                if (error instanceof Error && error.message.includes('cannot use role-based assignments')) {
+                  // Role-based assignment failed, fallback to CSV user emails
+                  console.warn(
+                    `Role-based assignment failed for project type '${data.projectDescription}': ${error.message}. Using CSV email assignments.`
+                  );
+                  
+                  const bookkeeper = await this.getUserByEmail(data.bookkeeperEmail);
+                  const clientManager = await this.getUserByEmail(data.clientManagerEmail);
+                  
+                  if (!bookkeeper || !clientManager) {
+                    throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
+                  }
+                  
+                  finalBookkeeperId = bookkeeper.id;
+                  finalClientManagerId = clientManager.id;
+                  finalCurrentAssigneeId = clientManager.id;
+                } else {
+                  throw error; // Re-throw other errors
+                }
+              }
+            } else {
+              // Project type is NOT mapped to a service - use CSV email assignments (existing logic)
+              const bookkeeper = await this.getUserByEmail(data.bookkeeperEmail);
+              const clientManager = await this.getUserByEmail(data.clientManagerEmail);
+              
+              if (!bookkeeper || !clientManager) {
+                throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
+              }
+              
+              finalBookkeeperId = bookkeeper.id;
+              finalClientManagerId = clientManager.id;
+              finalCurrentAssigneeId = clientManager.id;
             }
 
             // CRITICAL: Check for existing project with same (client, description, projectMonth) triplet
@@ -1465,7 +1609,7 @@ export class DatabaseStorage implements IStorage {
                   projectId: existingProject.id,
                   fromStatus: existingProject.currentStatus,
                   toStatus: "Not Completed in Time",
-                  assigneeId: existingProject.currentAssigneeId || clientManager.id,
+                  assigneeId: existingProject.currentAssigneeId || finalClientManagerId,
                   changeReason: "clarifications_needed",
                   notes: `Project moved to 'Not Completed in Time' due to new monthly cycle. Previous status: ${existingProject.currentStatus}`,
                   timeInPreviousStage,
@@ -1475,7 +1619,7 @@ export class DatabaseStorage implements IStorage {
                 const [updatedProject] = await tx.update(projects)
                   .set({
                     currentStatus: "Not Completed in Time",
-                    currentAssigneeId: existingProject.currentAssigneeId || clientManager.id,
+                    currentAssigneeId: existingProject.currentAssigneeId || finalClientManagerId,
                     archived: true,
                     updatedAt: new Date(),
                   })
@@ -1504,13 +1648,13 @@ export class DatabaseStorage implements IStorage {
               notCompletedStage = [newStage];
             }
 
-            // Create new project for this month
+            // Create new project for this month using resolved user assignments
             const [newProject] = await tx.insert(projects).values({
               clientId: client.id,
               projectTypeId: projectType.id,
-              bookkeeperId: bookkeeper.id,
-              clientManagerId: clientManager.id,
-              currentAssigneeId: clientManager.id,
+              bookkeeperId: finalBookkeeperId,
+              clientManagerId: finalClientManagerId,
+              currentAssigneeId: finalCurrentAssigneeId,
               description: data.projectDescription,
               currentStatus: defaultStage.name,
               priority: data.priority || "medium",
@@ -1524,9 +1668,9 @@ export class DatabaseStorage implements IStorage {
               projectId: newProject.id,
               fromStatus: null,
               toStatus: defaultStage.name,
-              assigneeId: clientManager.id,
+              assigneeId: finalCurrentAssigneeId,
               changeReason: `${newProject.description} Created → ${defaultStage.name}`,
-              notes: `New project created for month ${normalizedProjectMonth} and assigned to client manager`,
+              notes: `New project created for month ${normalizedProjectMonth}${usedRoleBasedAssignment ? ' using role-based assignments' : ' using CSV email assignments'}`,
               timeInPreviousStage: 0,
             });
 
@@ -3104,6 +3248,100 @@ export class DatabaseStorage implements IStorage {
       
       return user;
     });
+  }
+
+  async resolveProjectAssignments(clientId: string, projectTypeId: string): Promise<{
+    bookkeeperId: string;
+    clientManagerId: string;
+    currentAssigneeId: string;
+    usedFallback: boolean;
+    fallbackRoles: string[];
+  }> {
+    let usedFallback = false;
+    const fallbackRoles: string[] = [];
+
+    // Check if project type is mapped to a service
+    const service = await this.getServiceByProjectTypeId(projectTypeId);
+    if (!service) {
+      throw new Error('Project type is not mapped to a service - cannot use role-based assignments');
+    }
+
+    // Get client service mapping
+    const clientService = await this.getClientServiceByClientAndProjectType(clientId, projectTypeId);
+    if (!clientService) {
+      throw new Error(`Client does not have service mapping for this project type`);
+    }
+
+    // Get fallback user for when role assignments are missing
+    const fallbackUser = await this.getFallbackUser();
+    if (!fallbackUser) {
+      throw new Error('No fallback user configured - please set a fallback user for role-based assignments');
+    }
+
+    // Resolve bookkeeper role
+    let bookkeeper = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, 'bookkeeper');
+    if (!bookkeeper) {
+      console.warn(`No bookkeeper assignment found for client ${clientId}, using fallback user`);
+      bookkeeper = fallbackUser;
+      usedFallback = true;
+      fallbackRoles.push('bookkeeper');
+    }
+
+    // Resolve client manager role
+    let clientManager = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, 'client_manager');
+    if (!clientManager) {
+      console.warn(`No client_manager assignment found for client ${clientId}, using fallback user`);
+      clientManager = fallbackUser;
+      usedFallback = true;
+      fallbackRoles.push('client_manager');
+    }
+
+    // Get the default stage to determine initial current assignee
+    const defaultStage = await this.getDefaultStage();
+    let currentAssignee = clientManager; // Default to client manager
+
+    if (defaultStage?.assignedRole) {
+      switch (defaultStage.assignedRole) {
+        case "bookkeeper":
+          currentAssignee = bookkeeper;
+          break;
+        case "client_manager":
+          currentAssignee = clientManager;
+          break;
+        case "admin":
+        case "manager":
+          // Try to find admin/manager role assignment, fallback to client manager
+          const adminManager = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, defaultStage.assignedRole);
+          if (adminManager) {
+            currentAssignee = adminManager;
+          } else {
+            console.warn(`No ${defaultStage.assignedRole} assignment found for client ${clientId}, using client manager`);
+            currentAssignee = clientManager;
+          }
+          break;
+        default:
+          // For any other role, try to resolve it, fallback to client manager
+          const roleAssignee = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, defaultStage.assignedRole);
+          if (roleAssignee) {
+            currentAssignee = roleAssignee;
+          } else {
+            console.warn(`No ${defaultStage.assignedRole} assignment found for client ${clientId}, using client manager`);
+            currentAssignee = clientManager;
+          }
+      }
+    }
+
+    if (usedFallback) {
+      console.log(`Used fallback user for roles: ${fallbackRoles.join(', ')} when creating project for client ${clientId}`);
+    }
+
+    return {
+      bookkeeperId: bookkeeper.id,
+      clientManagerId: clientManager.id,
+      currentAssigneeId: currentAssignee.id,
+      usedFallback,
+      fallbackRoles,
+    };
   }
 
   // Validation Methods
