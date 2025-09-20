@@ -568,8 +568,9 @@ export function ClientCreationWizard({
               const companyData = await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
               const officersData = await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
               
-              // Validate the returned data directly
-              if (!companyData || !companyData.companyNumber) {
+              // Validate the returned data directly (extract from API response structure)
+              const actualCompanyData = companyData?.data?.companyData;
+              if (!actualCompanyData || !actualCompanyData.company_number) {
                 toast({
                   title: "Company Lookup Failed",
                   description: "Unable to retrieve valid company data. Please check the company number and try again.",
@@ -579,9 +580,10 @@ export function ClientCreationWizard({
               }
 
               // Data is valid, proceed with successful lookup data
+              const actualOfficersData = officersData?.data?.transformedPeopleData;
               toast({
                 title: "Company Data Retrieved",
-                description: `Successfully loaded ${companyData.companyName} with ${officersData?.length || 0} officer(s)`,
+                description: `Successfully loaded ${actualCompanyData.company_name} with ${actualOfficersData?.length || 0} officer(s)`,
               });
             } catch (error) {
               // Block advancement if lookup fails
