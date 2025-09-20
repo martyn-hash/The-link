@@ -488,7 +488,7 @@ export function ClientCreationWizard({
           // Include other fields that might be useful
           ...person
         };
-      }).filter(officer => officer.fullName && officer.fullName.trim() !== '');
+      }).filter((officer: any) => officer.fullName && officer.fullName.trim() !== '');
       
       setCompaniesHouseOfficers(officersData);
       toast({
