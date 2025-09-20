@@ -7,13 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { MoreHorizontal, AlertCircle, Clock } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
+import { useAuth } from "@/hooks/useAuth";
 
 // Type for role assignee API response
 interface RoleAssigneeResponse {
-  user: User;
+  user: User | null;
   roleUsed: string | null;
   usedFallback: boolean;
-  source: 'role_assignment' | 'fallback_user' | 'direct_assignment';
+  source: 'role_assignment' | 'fallback_user' | 'direct_assignment' | 'none';
 }
 
 interface ProjectCardProps {
@@ -29,10 +30,13 @@ export default function ProjectCard({
   onOpenModal, 
   isDragging = false 
 }: ProjectCardProps) {
+  // Get authentication state
+  const { isAuthenticated, user } = useAuth();
+
   // Fetch project-specific stage configuration for business logic
   const { data: projectStages = [] } = useQuery<KanbanStage[]>({
     queryKey: ['/api/config/project-types', project.projectTypeId, 'stages'],
-    enabled: !!project.projectTypeId,
+    enabled: !!project.projectTypeId && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -49,7 +53,7 @@ export default function ProjectCard({
     error: roleAssigneeError 
   } = useQuery<RoleAssigneeResponse>({
     queryKey: ['/api/projects', project.id, 'role-assignee'],
-    enabled: !!project.id,
+    enabled: !!project.id && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2, // Retry failed requests up to 2 times
     retryDelay: 1000, // Wait 1 second between retries
@@ -86,7 +90,10 @@ export default function ProjectCard({
 
     // If role assignment API call failed, fallback to direct assignment
     if (roleAssigneeError) {
-      console.warn(`Role assignment API failed for project ${project.id}:`, roleAssigneeError);
+      // Only log errors for non-authentication issues to reduce noise
+      if (roleAssigneeError.message && !roleAssigneeError.message.includes('401')) {
+        console.warn(`Role assignment API failed for project ${project.id}:`, roleAssigneeError);
+      }
       // Fallback to direct assignment when role-based assignment fails
       if (project.currentAssignee) {
         return {
@@ -114,15 +121,43 @@ export default function ProjectCard({
       };
     }
 
-    // Use role-based assignment if available
-    if (roleAssigneeData?.user) {
-      const user = roleAssigneeData.user;
-      return {
-        initials: `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`,
-        source: roleAssigneeData.source,
-        usedFallback: roleAssigneeData.usedFallback,
-        roleUsed: roleAssigneeData.roleUsed
-      };
+    // Use role-based assignment if available (including null responses)
+    if (roleAssigneeData) {
+      if (roleAssigneeData.user) {
+        const user = roleAssigneeData.user;
+        return {
+          initials: `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`,
+          source: roleAssigneeData.source,
+          usedFallback: roleAssigneeData.usedFallback,
+          roleUsed: roleAssigneeData.roleUsed
+        };
+      } else if (roleAssigneeData.source === 'none') {
+        // Handle 'none' source gracefully - no assignment found
+        if (project.currentAssignee) {
+          return {
+            initials: `${project.currentAssignee.firstName?.charAt(0) || ''}${project.currentAssignee.lastName?.charAt(0) || ''}`,
+            source: "direct_assignment" as const,
+            usedFallback: false,
+            roleUsed: null
+          };
+        }
+        
+        if (project.clientManager) {
+          return {
+            initials: `${project.clientManager.firstName?.charAt(0) || ''}${project.clientManager.lastName?.charAt(0) || ''}`,
+            source: "direct_assignment" as const,
+            usedFallback: false,
+            roleUsed: null
+          };
+        }
+
+        return {
+          initials: "?",
+          source: "none" as const,
+          usedFallback: false,
+          roleUsed: null
+        };
+      }
     }
 
     // Final fallback to direct assignment (for backward compatibility)

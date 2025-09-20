@@ -2824,7 +2824,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             source: 'direct_assignment'
           });
         } else {
-          // No direct assignee found, try fallback user before returning 404
+          // No direct assignee found, try fallback user
           const fallbackUser = await storage.getFallbackUser();
           if (fallbackUser) {
             const { passwordHash, ...sanitizedUser } = fallbackUser;
@@ -2835,9 +2835,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               source: 'fallback_user'
             });
           } else {
-            return res.status(404).json({ 
-              message: "No assignee found, no role configured for current stage, and no fallback user configured",
-              code: "NO_ASSIGNEE_OR_FALLBACK"
+            // CRITICAL FIX: Return 200 with null user instead of 404
+            return res.json({ 
+              user: null, 
+              roleUsed: null,
+              usedFallback: false,
+              source: 'none'
             });
           }
         }
@@ -2860,9 +2863,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source = 'fallback_user';
         
         if (!resolvedUser) {
-          return res.status(404).json({ 
-            message: "No user assigned to role and no fallback user configured",
-            code: "NO_ASSIGNEE_OR_FALLBACK"
+          // CRITICAL FIX: Return 200 with null user instead of 404
+          return res.json({ 
+            user: null, 
+            roleUsed: currentStage.assignedRole,
+            usedFallback: false,
+            source: 'none'
           });
         }
       }

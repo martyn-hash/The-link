@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, AlertCircle, RefreshCw } from "lucide-react";
 import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 
 interface KanbanBoardProps {
   projects: ProjectWithRelations[];
@@ -40,6 +41,9 @@ const getColorStyle = (hexColor: string): { backgroundColor: string } => {
 export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [location, setLocation] = useLocation();
+  
+  // Get authentication state
+  const { isAuthenticated, user: authUser } = useAuth();
 
   const navigateToProject = (projectId: string) => {
     setLocation(`/projects/${projectId}`);
@@ -52,7 +56,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const stageQueries = projectTypes.map(projectTypeId => 
     useQuery<KanbanStage[]>({
       queryKey: ['/api/config/project-types', projectTypeId, 'stages'],
-      enabled: !!projectTypeId,
+      enabled: !!projectTypeId && isAuthenticated && !!authUser,
       staleTime: 5 * 60 * 1000,
     })
   );
