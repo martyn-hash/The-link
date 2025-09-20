@@ -1406,8 +1406,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectTypes = await storage.getAllProjectTypes();
       
       // Apply inactive filter if specified
-      const filteredProjectTypes = filters.inactive !== undefined 
-        ? projectTypes.filter(pt => filters.inactive ? !pt.active : pt.active)
+      const filteredProjectTypes = filters.inactive === true 
+        ? projectTypes // Show all project types (both active and inactive)
         : projectTypes.filter(pt => pt.active); // By default, only show active project types
 
       res.json(filteredProjectTypes);
