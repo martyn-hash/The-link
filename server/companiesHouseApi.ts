@@ -6,6 +6,7 @@
  */
 
 import { z } from "zod";
+import { insertClientSchema, insertPeopleSchema, insertClientPeopleSchema, type InsertClient, type InsertPeople, type InsertClientPeople } from "../shared/schema.js";
 
 // ===========================================
 // TypeScript Interfaces for API Responses
@@ -183,19 +184,29 @@ export class CompaniesHouseAPI {
   /**
    * Handle HTTP response and convert errors to appropriate error types
    */
-  private async handleResponse<T>(response: Response, companyNumber?: string): Promise<T> {
-    if (response.ok) {
-      return await response.json();
+  private async handleResponse<T>(response: unknown, companyNumber?: string): Promise<T> {
+    const res = response as any; // Type assertion to access Response methods
+    if (res.ok) {
+      return await res.json();
     }
 
     let errorData: any;
     try {
-      errorData = await response.json();
+      // Check if response has content-type application/json before parsing
+      const contentType = res.headers?.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        errorData = await res.json();
+      } else {
+        // Fall back to text for non-JSON responses
+        const textResponse = await res.text();
+        errorData = { error: textResponse || 'Unknown error response' };
+      }
     } catch {
+      // Final fallback if JSON/text parsing fails
       errorData = { error: 'Failed to parse error response' };
     }
 
-    switch (response.status) {
+    switch (res.status) {
       case 404:
         if (companyNumber) {
           throw new CompaniesHouseNotFoundError(companyNumber);
@@ -203,7 +214,7 @@ export class CompaniesHouseAPI {
         throw new CompaniesHouseAPIError('Resource not found', 404, 'not-found', errorData);
       
       case 429:
-        const retryAfter = response.headers.get('Retry-After');
+        const retryAfter = res.headers.get('Retry-After');
         throw new CompaniesHouseRateLimitError(retryAfter ? parseInt(retryAfter) : undefined);
       
       case 401:
@@ -216,12 +227,12 @@ export class CompaniesHouseAPI {
       case 502:
       case 503:
       case 504:
-        throw new CompaniesHouseAPIError('Companies House API server error', response.status, 'server-error', errorData);
+        throw new CompaniesHouseAPIError('Companies House API server error', res.status, 'server-error', errorData);
       
       default:
         throw new CompaniesHouseAPIError(
-          errorData.error || `HTTP ${response.status}: ${response.statusText}`,
-          response.status,
+          errorData.error || `HTTP ${res.status}: ${res.statusText}`,
+          res.status,
           'unknown',
           errorData
         );
@@ -256,8 +267,11 @@ export class CompaniesHouseAPI {
         if (error.name === 'AbortError') {
           throw new CompaniesHouseAPIError('Request timeout', 408, 'timeout', error);
         }
-        if (error.message.includes('fetch')) {
+        if (error.message.includes('fetch') || error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
           throw new CompaniesHouseAPIError('Network error or connection failed', 0, 'network', error);
+        }
+        if (error.name === 'TimeoutError') {
+          throw new CompaniesHouseAPIError('Request timeout', 408, 'timeout', error);
         }
       }
 
@@ -286,8 +300,13 @@ export class CompaniesHouseAPI {
       );
     }
 
-    // Pad with leading zeros to 8 digits for consistency
-    return sanitized.padStart(8, '0');
+    // Only pad with leading zeros if the company number is purely numeric
+    // Leave alphanumeric IDs (e.g. SC123456, NI123456) unpadded
+    if (/^[0-9]+$/.test(sanitized)) {
+      return sanitized.padStart(8, '0');
+    }
+    
+    return sanitized;
   }
 
   /**
@@ -301,13 +320,44 @@ export class CompaniesHouseAPI {
   }
 
   /**
-   * Fetch officers/directors data from Companies House API
+   * Fetch officers/directors data from Companies House API with pagination support
    */
   async getOfficers(companyNumber: string): Promise<CompaniesHouseOfficersResponse> {
     const validatedCompanyNumber = this.validateCompanyNumber(companyNumber);
-    const endpoint = `/company/${validatedCompanyNumber}/officers`;
     
-    return await this.makeRequest<CompaniesHouseOfficersResponse>(endpoint, validatedCompanyNumber);
+    let allOfficers: CompaniesHouseOfficer[] = [];
+    let startIndex = 0;
+    const itemsPerPage = 35; // Default items per page for Companies House API
+    let totalResults = 0;
+    let hasMorePages = true;
+    
+    while (hasMorePages) {
+      const endpoint = `/company/${validatedCompanyNumber}/officers?items_per_page=${itemsPerPage}&start_index=${startIndex}`;
+      const response = await this.makeRequest<CompaniesHouseOfficersResponse>(endpoint, validatedCompanyNumber);
+      
+      // Add officers from this page
+      allOfficers = allOfficers.concat(response.items);
+      
+      // Update pagination info
+      totalResults = response.total_results;
+      startIndex += response.items_per_page;
+      
+      // Check if we have more pages
+      hasMorePages = startIndex < totalResults;
+    }
+    
+    // Return a consolidated response with all officers
+    return {
+      etag: '', // We lose the etag when combining pages
+      items: allOfficers,
+      items_per_page: allOfficers.length,
+      kind: 'officer-list',
+      links: {
+        self: `/company/${validatedCompanyNumber}/officers`
+      },
+      start_index: 0,
+      total_results: totalResults,
+    };
   }
 }
 
@@ -318,7 +368,7 @@ export class CompaniesHouseAPI {
 /**
  * Transform Companies House company data to our clients table format
  */
-export function transformCompanyData(apiResponse: CompaniesHouseCompanyResponse): any {
+export function transformCompanyData(apiResponse: CompaniesHouseCompanyResponse): InsertClient {
   const registeredAddress = apiResponse.registered_office_address;
   
   return {
@@ -374,10 +424,22 @@ export function transformCompanyData(apiResponse: CompaniesHouseCompanyResponse)
 }
 
 /**
- * Transform Companies House officers data to our people table format
- * Returns an array of people records
+ * Extended type for officer data that includes junction table information
  */
-export function transformOfficersData(apiResponse: CompaniesHouseOfficersResponse): any[] {
+export interface OfficerTransformResult {
+  person: InsertPeople;
+  clientPeopleData: {
+    officerRole: string;
+    appointedOn: Date | null;
+    resignedOn: Date | null;
+  };
+}
+
+/**
+ * Transform Companies House officers data to our people table format
+ * Returns an array of people records with associated client-people junction data
+ */
+export function transformOfficersData(apiResponse: CompaniesHouseOfficersResponse): OfficerTransformResult[] {
   return apiResponse.items.map(officer => {
     const address = officer.address;
     
@@ -386,18 +448,45 @@ export function transformOfficersData(apiResponse: CompaniesHouseOfficersRespons
     let lastName: string | null = null;
     let fullName = officer.name;
     
-    // Basic name parsing - split on last space for first/last name
-    if (fullName && !fullName.includes(',')) {
-      const nameParts = fullName.trim().split(' ');
-      if (nameParts.length >= 2) {
-        lastName = nameParts.pop() || null;
-        firstName = nameParts.join(' ') || null;
+    // Improved name parsing to handle "SURNAME, FORENAME" format
+    if (fullName) {
+      const trimmedName = fullName.trim();
+      
+      if (trimmedName.includes(',')) {
+        // Handle "SURNAME, FORENAME" format
+        const parts = trimmedName.split(',').map(part => part.trim());
+        if (parts.length >= 2) {
+          lastName = parts[0] || null;
+          firstName = parts.slice(1).join(' ').trim() || null;
+        } else {
+          // Fallback if comma parsing fails
+          lastName = trimmedName;
+        }
       } else {
-        lastName = fullName;
+        // Handle normal "FORENAME SURNAME" format
+        const nameParts = trimmedName.split(/\s+/);
+        if (nameParts.length >= 2) {
+          lastName = nameParts.pop() || null;
+          firstName = nameParts.join(' ') || null;
+        } else {
+          // Single name goes to lastName
+          lastName = trimmedName;
+        }
       }
     }
     
-    return {
+    // Extract officer_id from appointments link if available
+    let personNumber: string | null = null;
+    if (officer.links?.officer?.appointments) {
+      // Extract officer ID from URL like "/officers/ABC123DEF456/appointments"
+      const appointmentsUrl = officer.links.officer.appointments;
+      const match = appointmentsUrl.match(/\/officers\/([^\/]+)\/appointments/);
+      if (match && match[1]) {
+        personNumber = match[1];
+      }
+    }
+    
+    const person: InsertPeople = {
       // Basic information
       firstName,
       lastName,
@@ -418,7 +507,7 @@ export function transformOfficersData(apiResponse: CompaniesHouseOfficersRespons
       postalCode: address?.postal_code || null,
       
       // Companies House specific fields
-      personNumber: null, // Not provided in officers endpoint
+      personNumber, // Extracted from appointments link
       nationality: officer.nationality || null,
       countryOfResidence: officer.country_of_residence || null,
       occupation: officer.occupation || null,
@@ -438,11 +527,17 @@ export function transformOfficersData(apiResponse: CompaniesHouseOfficersRespons
       // Metadata
       isFromCompaniesHouse: true,
       companiesHouseData: officer,
-      
-      // Officer role information (for clientPeople junction table)
-      _officerRole: officer.officer_role,
-      _appointedOn: officer.appointed_on ? new Date(officer.appointed_on) : null,
-      _resignedOn: officer.resigned_on ? new Date(officer.resigned_on) : null,
+    };
+    
+    const clientPeopleData = {
+      officerRole: officer.officer_role,
+      appointedOn: officer.appointed_on ? new Date(officer.appointed_on) : null,
+      resignedOn: officer.resigned_on ? new Date(officer.resigned_on) : null,
+    };
+    
+    return {
+      person,
+      clientPeopleData,
     };
   });
 }
@@ -458,7 +553,15 @@ export const companyNumberSchema = z.string()
   .min(1, 'Company number is required')
   .max(8, 'Company number must be 8 characters or less')
   .regex(/^[0-9A-Z]+$/, 'Company number must contain only alphanumeric characters')
-  .transform(val => val.trim().toUpperCase().padStart(8, '0'));
+  .transform(val => {
+    const sanitized = val.trim().toUpperCase();
+    // Only pad with leading zeros if the company number is purely numeric
+    // Leave alphanumeric IDs (e.g. SC123456, NI123456) unpadded
+    if (/^[0-9]+$/.test(sanitized)) {
+      return sanitized.padStart(8, '0');
+    }
+    return sanitized;
+  });
 
 // ===========================================
 // Default Export
