@@ -356,6 +356,9 @@ export default function Services() {
     mutationFn: async (data: CreateServiceFormData & { id: string }) => {
       const { roleIds, id, ...serviceData } = data;
       
+      // Filter out any null, undefined, or empty roleIds
+      const validRoleIds = roleIds.filter(roleId => roleId && roleId.trim() !== "");
+      
       // Update service
       const serviceResponse = await apiRequest("PATCH", `/api/services/${id}`, serviceData);
       const service = await serviceResponse.json() as Service;
@@ -366,7 +369,7 @@ export default function Services() {
       const currentRoleIds = currentRoles.map(role => role.id);
       
       // Remove roles not in new list
-      const rolesToRemove = currentRoleIds.filter(roleId => !roleIds.includes(roleId));
+      const rolesToRemove = currentRoleIds.filter(roleId => !validRoleIds.includes(roleId));
       await Promise.all(
         rolesToRemove.map(roleId =>
           apiRequest("DELETE", `/api/services/${id}/roles/${roleId}`)
@@ -374,7 +377,7 @@ export default function Services() {
       );
       
       // Add new roles
-      const rolesToAdd = roleIds.filter(roleId => !currentRoleIds.includes(roleId));
+      const rolesToAdd = validRoleIds.filter(roleId => !currentRoleIds.includes(roleId));
       await Promise.all(
         rolesToAdd.map(roleId =>
           apiRequest("POST", `/api/services/${id}/roles`, { roleId })
