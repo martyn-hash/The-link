@@ -362,7 +362,7 @@ export function ClientCreationWizard({
       step4Form.reset(initialWizardData.step4);
       step5Form.reset(initialWizardData.step5);
     }
-  }, [open, step1Form, step2Form, step3Form, step4Form, step5Form]);
+  }, [open]);
 
   // Programmatic validation for Step 2: selectedPeopleIds based on clientType
   useEffect(() => {
@@ -386,7 +386,7 @@ export function ClientCreationWizard({
     });
     
     return () => subscription.unsubscribe();
-  }, [wizardData.step1.clientType, currentStep, step2Form]);
+  }, [wizardData.step1.clientType, currentStep]);
 
   // Programmatic validation for Step 5: roleAssignments for each service
   useEffect(() => {
@@ -428,7 +428,7 @@ export function ClientCreationWizard({
     });
     
     return () => subscription.unsubscribe();
-  }, [wizardData.step4.selectedServiceIds, services, currentStep, step5Form]);
+  }, [wizardData.step4.selectedServiceIds, services, currentStep]);
 
   // Companies House company lookup
   const lookupCompanyMutation = useMutation({
