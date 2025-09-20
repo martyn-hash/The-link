@@ -18,6 +18,7 @@ import ProjectDetail from "@/pages/project-detail";
 import Profile from "@/pages/profile";
 import MagicLinkVerify from "@/pages/magic-link-verify";
 import Clients from "@/pages/clients";
+import Services from "@/pages/services";
 import Admin from "@/pages/admin";
 
 function Router() {
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/project-types" component={ProjectTypes} />
       <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
       <Route path="/users" component={Users} />
+      <Route path="/services" component={Services} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
       
