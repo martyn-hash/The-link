@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -463,6 +464,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden" data-testid="settings-modal">
         <DialogHeader>
           <DialogTitle>System Settings</DialogTitle>
+          <DialogDescription>
+            Configure project types, stages, and change reasons for your system workflows.
+          </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)] overflow-y-auto">

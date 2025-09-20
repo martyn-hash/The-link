@@ -95,6 +95,8 @@ export interface IStorage {
   createClient(client: InsertClient): Promise<Client>;
   getClientByName(name: string): Promise<Client | undefined>;
   getAllClients(): Promise<Client[]>;
+  updateClient(id: string, client: Partial<InsertClient>): Promise<Client>;
+  deleteClient(id: string): Promise<void>;
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
@@ -694,6 +696,72 @@ export class DatabaseStorage implements IStorage {
 
   async getAllClients(): Promise<Client[]> {
     return await db.select().from(clients);
+  }
+
+  async updateClient(id: string, clientData: Partial<InsertClient>): Promise<Client> {
+    const [client] = await db
+      .update(clients)
+      .set(clientData)
+      .where(eq(clients.id, id))
+      .returning();
+    
+    if (!client) {
+      throw new Error(`Client with ID '${id}' not found`);
+    }
+    
+    return client;
+  }
+
+  async deleteClient(id: string): Promise<void> {
+    // Check if client exists first
+    const existingClient = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.id, id))
+      .limit(1);
+    
+    if (existingClient.length === 0) {
+      throw new Error(`Client with ID '${id}' not found`);
+    }
+    
+    // Check if client has any projects (should prevent deletion if there are projects)
+    const clientProjects = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.clientId, id))
+      .limit(1);
+    
+    if (clientProjects.length > 0) {
+      throw new Error(`Cannot delete client: client has existing projects`);
+    }
+    
+    // Delete client services and role assignments first (cascade cleanup)
+    const clientServicesResult = await db
+      .select()
+      .from(clientServices)
+      .where(eq(clientServices.clientId, id));
+    
+    for (const clientService of clientServicesResult) {
+      // Delete role assignments for this client service
+      await db
+        .delete(clientServiceRoleAssignments)
+        .where(eq(clientServiceRoleAssignments.clientServiceId, clientService.id));
+    }
+    
+    // Delete client services
+    await db
+      .delete(clientServices)
+      .where(eq(clientServices.clientId, id));
+    
+    // Finally delete the client
+    const result = await db
+      .delete(clients)
+      .where(eq(clients.id, id))
+      .returning();
+    
+    if (result.length === 0) {
+      throw new Error(`Failed to delete client with ID '${id}'`);
+    }
   }
 
   // Project operations

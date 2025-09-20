@@ -5,16 +5,20 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type Client } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Search, Building2, Mail } from "lucide-react";
+import { ClientManagementModal } from "@/components/client-management-modal";
+import { AlertCircle, Search, Building2, Mail, Plus, Edit } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Clients() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   const { data: clients, isLoading: clientsLoading, error } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
@@ -58,6 +62,30 @@ export default function Clients() {
     (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
   ) || [];
 
+  // Handle create client
+  const handleCreateClient = () => {
+    setSelectedClient(null);
+    setShowClientModal(true);
+  };
+
+  // Handle edit client
+  const handleEditClient = (client: Client) => {
+    setSelectedClient(client);
+    setShowClientModal(true);
+  };
+
+  // Handle modal close
+  const handleModalClose = () => {
+    setShowClientModal(false);
+    setSelectedClient(null);
+  };
+
+  // Handle successful client operation
+  const handleClientSuccess = () => {
+    // The modal will handle closing and cache invalidation
+    handleModalClose();
+  };
+
   if (authLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -81,6 +109,12 @@ export default function Clients() {
                 <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Clients</h1>
                 <p className="text-muted-foreground">Manage your client relationships</p>
               </div>
+              {user?.role === 'admin' && (
+                <Button onClick={handleCreateClient} data-testid="button-create-client">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Client
+                </Button>
+              )}
             </div>
             
             {/* Search */}
@@ -144,16 +178,22 @@ export default function Clients() {
                 <>
                   <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2" data-testid="text-no-clients">No clients yet</h3>
-                  <p className="text-muted-foreground text-center max-w-md">
+                  <p className="text-muted-foreground text-center max-w-md mb-4">
                     There are no clients in the system yet. Clients will appear here as they are added to the system.
                   </p>
+                  {user?.role === 'admin' && (
+                    <Button onClick={handleCreateClient} data-testid="button-create-first-client">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Your First Client
+                    </Button>
+                  )}
                 </>
               )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredClients.map((client) => (
-                <Card key={client.id} className="hover:shadow-md transition-shadow" data-testid={`card-client-${client.id}`}>
+                <Card key={client.id} className="hover:shadow-md transition-shadow group" data-testid={`card-client-${client.id}`}>
                   <CardHeader>
                     <div className="flex items-center space-x-4">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
@@ -172,6 +212,20 @@ export default function Clients() {
                           </CardDescription>
                         )}
                       </div>
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClient(client);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          data-testid={`button-edit-client-${client.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -187,6 +241,14 @@ export default function Clients() {
           )}
         </div>
       </div>
+      
+      {/* Client Management Modal */}
+      <ClientManagementModal
+        open={showClientModal}
+        onOpenChange={setShowClientModal}
+        client={selectedClient}
+        onSuccess={handleClientSuccess}
+      />
     </div>
   );
 }

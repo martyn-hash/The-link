@@ -32,6 +32,7 @@ import {
   updateServiceSchema,
   insertWorkRoleSchema,
   insertServiceRoleSchema,
+  insertClientSchema,
   insertClientServiceSchema,
   insertClientServiceRoleAssignmentSchema,
   type User,
@@ -338,6 +339,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching clients:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
+  // POST /api/clients - Create new client (admin only)
+  app.post("/api/clients", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validationResult = insertClientSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid client data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const clientData = validationResult.data;
+      const client = await storage.createClient(clientData);
+      res.status(201).json(client);
+    } catch (error) {
+      console.error("Error creating client:", error instanceof Error ? error.message : error);
+      
+      // Handle duplicate name case
+      if (error instanceof Error && error.message.includes("duplicate") || error.message.includes("unique")) {
+        return res.status(409).json({ 
+          message: "A client with this name already exists" 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to create client" });
+    }
+  });
+
+  // PUT /api/clients/:id - Update client (admin only)
+  app.put("/api/clients/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const validationResult = insertClientSchema.partial().safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid client data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const { id } = req.params;
+      const clientData = validationResult.data;
+      
+      // CRITICAL FIX: Check role completeness BEFORE updating client
+      try {
+        // Get all client services for this client
+        const clientServices = await storage.getClientServicesByClientId(id);
+        
+        // Check role completeness for each service
+        const completenessResults = [];
+        for (const clientService of clientServices) {
+          const completeness = await storage.validateClientServiceRoleCompleteness(
+            id, 
+            clientService.service.id
+          );
+          
+          completenessResults.push({
+            clientServiceId: clientService.id,
+            serviceName: clientService.service.name,
+            serviceId: clientService.service.id,
+            isComplete: completeness.isComplete,
+            missingRoles: completeness.missingRoles,
+            assignedRoles: completeness.assignedRoles
+          });
+        }
+        
+        // Check if all services have complete role assignments
+        const incompleteServices = completenessResults.filter(result => !result.isComplete);
+        if (incompleteServices.length > 0) {
+          return res.status(409).json({ 
+            message: `Cannot update client: ${incompleteServices.length} service(s) have incomplete role assignments`,
+            code: "INCOMPLETE_ROLE_ASSIGNMENTS",
+            incompleteServices: incompleteServices.map(service => ({
+              serviceName: service.serviceName,
+              missingRoles: service.missingRoles.map(role => role.name)
+            }))
+          });
+        }
+      } catch (completenessError) {
+        console.error("Error checking role completeness:", completenessError instanceof Error ? completenessError.message : completenessError);
+        // If completeness check fails, don't allow the update for safety
+        return res.status(500).json({ 
+          message: "Could not verify role completeness before update" 
+        });
+      }
+      
+      // Only update client AFTER validation passes
+      const client = await storage.updateClient(id, clientData);
+      res.json(client);
+    } catch (error) {
+      console.error("Error updating client:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      
+      // Handle duplicate name case
+      if (error instanceof Error && error.message.includes("duplicate") || error.message.includes("unique")) {
+        return res.status(409).json({ 
+          message: "A client with this name already exists" 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to update client" });
+    }
+  });
+
+  // DELETE /api/clients/:id - Delete client (admin only)
+  app.delete("/api/clients/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = req.params;
+      await storage.deleteClient(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting client:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("not found")) {
+          return res.status(404).json({ message: "Client not found" });
+        }
+        if (error.message.includes("has existing projects")) {
+          return res.status(409).json({ 
+            message: "Cannot delete client with existing projects",
+            code: "CLIENT_HAS_PROJECTS"
+          });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to delete client" });
     }
   });
 

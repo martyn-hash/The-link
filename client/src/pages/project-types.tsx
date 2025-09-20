@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -225,6 +225,9 @@ export default function ProjectTypes() {
                 <DialogContent className="sm:max-w-[525px]">
                   <DialogHeader>
                     <DialogTitle>Create New Project Type</DialogTitle>
+                    <DialogDescription>
+                      Create a new project type to define workflow stages and optional service mappings for role-based assignments.
+                    </DialogDescription>
                   </DialogHeader>
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(handleCreateSubmit)} className="space-y-4">
@@ -282,7 +285,7 @@ export default function ProjectTypes() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="">No service mapping</SelectItem>
+                                <SelectItem value="none">No service mapping</SelectItem>
                                 {unmappedServices.map((service) => (
                                   <SelectItem key={service.id} value={service.id} data-testid={`option-service-${service.id}`}>
                                     <div className="flex flex-col">

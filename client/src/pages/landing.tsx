@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -273,6 +273,9 @@ export default function Landing() {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Reset Password</DialogTitle>
+              <DialogDescription>
+                Enter your email and new password to reset your account password.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handlePasswordReset} className="space-y-4">
               <div className="space-y-2">
@@ -343,6 +346,9 @@ export default function Landing() {
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Create Initial Admin User</DialogTitle>
+                <DialogDescription>
+                  Create the first admin user account to set up your system. This will enable full access to all features.
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAdminCreation} className="space-y-4">
                 <div className="space-y-2">

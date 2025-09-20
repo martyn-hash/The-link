@@ -75,7 +75,7 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
 
-  const { data: users, isLoading: usersLoading } = useQuery({
+  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
@@ -247,7 +247,7 @@ export default function UserManagement() {
     );
   }
 
-  if (!isAuthenticated || user.role !== 'admin') {
+  if (!isAuthenticated || !user || user.role !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -260,7 +260,7 @@ export default function UserManagement() {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <Sidebar user={user} />
+      <Sidebar user={user!} />
       
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
