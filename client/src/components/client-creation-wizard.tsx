@@ -383,7 +383,7 @@ export function ClientCreationWizard({
     });
     
     return () => subscription.unsubscribe();
-  }, [step2Form, wizardData.step1.clientType]);
+  }, [wizardData.step1.clientType]);
 
   // Programmatic validation for Step 5: roleAssignments for each service
   useEffect(() => {
@@ -422,7 +422,7 @@ export function ClientCreationWizard({
     });
     
     return () => subscription.unsubscribe();
-  }, [step5Form, wizardData.step4.selectedServiceIds, services]);
+  }, [wizardData.step4.selectedServiceIds, services]);
 
   // Companies House company lookup
   const lookupCompanyMutation = useMutation({
