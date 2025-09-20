@@ -17,6 +17,8 @@ import {
   services,
   workRoles,
   serviceRoles,
+  clientServices,
+  clientServiceRoleAssignments,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -56,6 +58,10 @@ import {
   type InsertWorkRole,
   type ServiceRole,
   type InsertServiceRole,
+  type ClientService,
+  type InsertClientService,
+  type ClientServiceRoleAssignment,
+  type InsertClientServiceRoleAssignment,
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
@@ -234,6 +240,34 @@ export interface IStorage {
   getServiceRolesByServiceId(serviceId: string): Promise<ServiceRole[]>;
   addRoleToService(serviceId: string, roleId: string): Promise<ServiceRole>;
   removeRoleFromService(serviceId: string, roleId: string): Promise<void>;
+
+  // Client Services CRUD
+  getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } })[]>;
+  getClientServiceById(id: string): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } }) | undefined>;
+  getClientServicesByClientId(clientId: string): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]>;
+  getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]>;
+  createClientService(clientService: InsertClientService): Promise<ClientService>;
+  updateClientService(id: string, clientService: Partial<InsertClientService>): Promise<ClientService>;
+  deleteClientService(id: string): Promise<void>;
+  getClientServiceByClientAndProjectType(clientId: string, projectTypeId: string): Promise<ClientService | undefined>;
+
+  // Client Service Role Assignments CRUD
+  getClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]>;
+  getActiveClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]>;
+  createClientServiceRoleAssignment(assignment: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment>;
+  updateClientServiceRoleAssignment(id: string, assignment: Partial<InsertClientServiceRoleAssignment>): Promise<ClientServiceRoleAssignment>;
+  deactivateClientServiceRoleAssignment(id: string): Promise<ClientServiceRoleAssignment>;
+  deleteClientServiceRoleAssignment(id: string): Promise<void>;
+
+  // Role Resolution for Project Creation
+  resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string): Promise<User | undefined>;
+  getFallbackUser(): Promise<User | undefined>;
+  setFallbackUser(userId: string): Promise<User>;
+
+  // Validation Methods
+  validateClientServiceRoleCompleteness(clientId: string, serviceId: string): Promise<{ isComplete: boolean; missingRoles: string[]; assignedRoles: { roleName: string; userName: string }[] }>;
+  checkClientServiceMappingExists(clientId: string, serviceId: string): Promise<boolean>;
+  validateAssignedRolesAgainstService(serviceId: string, roleIds: string[]): Promise<{ isValid: boolean; invalidRoles: string[]; allowedRoles: string[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2489,6 +2523,702 @@ export class DatabaseStorage implements IStorage {
     if (result.rowCount === 0) {
       throw new Error("Service-role mapping not found");
     }
+  }
+
+  // Client Services CRUD operations
+  async getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } })[]> {
+    const results = await db
+      .select({
+        id: clientServices.id,
+        clientId: clientServices.clientId,
+        serviceId: clientServices.serviceId,
+        createdAt: clientServices.createdAt,
+        clientId_data: clients.id,
+        clientName: clients.name,
+        clientEmail: clients.email,
+        clientCreatedAt: clients.createdAt,
+        serviceId_data: services.id,
+        serviceName: services.name,
+        serviceDescription: services.description,
+        serviceProjectTypeId: services.projectTypeId,
+        serviceUdfDefinitions: services.udfDefinitions,
+        serviceCreatedAt: services.createdAt,
+        projectTypeId: projectTypes.id,
+        projectTypeName: projectTypes.name,
+        projectTypeDescription: projectTypes.description,
+        projectTypeActive: projectTypes.active,
+        projectTypeOrder: projectTypes.order,
+        projectTypeCreatedAt: projectTypes.createdAt,
+      })
+      .from(clientServices)
+      .innerJoin(clients, eq(clientServices.clientId, clients.id))
+      .innerJoin(services, eq(clientServices.serviceId, services.id))
+      .innerJoin(projectTypes, eq(services.projectTypeId, projectTypes.id));
+    
+    return results.map(result => ({
+      id: result.id,
+      clientId: result.clientId,
+      serviceId: result.serviceId,
+      createdAt: result.createdAt,
+      client: {
+        id: result.clientId_data,
+        name: result.clientName,
+        email: result.clientEmail,
+        createdAt: result.clientCreatedAt,
+      },
+      service: {
+        id: result.serviceId_data,
+        name: result.serviceName,
+        description: result.serviceDescription,
+        projectTypeId: result.serviceProjectTypeId,
+        udfDefinitions: result.serviceUdfDefinitions,
+        createdAt: result.serviceCreatedAt,
+        projectType: {
+          id: result.projectTypeId,
+          name: result.projectTypeName,
+          description: result.projectTypeDescription,
+          active: result.projectTypeActive,
+          order: result.projectTypeOrder,
+          createdAt: result.projectTypeCreatedAt,
+        },
+      },
+    }));
+  }
+
+  async getClientServiceById(id: string): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } }) | undefined> {
+    const [result] = await db
+      .select({
+        id: clientServices.id,
+        clientId: clientServices.clientId,
+        serviceId: clientServices.serviceId,
+        createdAt: clientServices.createdAt,
+        clientId_data: clients.id,
+        clientName: clients.name,
+        clientEmail: clients.email,
+        clientCreatedAt: clients.createdAt,
+        serviceId_data: services.id,
+        serviceName: services.name,
+        serviceDescription: services.description,
+        serviceProjectTypeId: services.projectTypeId,
+        serviceUdfDefinitions: services.udfDefinitions,
+        serviceCreatedAt: services.createdAt,
+        projectTypeId: projectTypes.id,
+        projectTypeName: projectTypes.name,
+        projectTypeDescription: projectTypes.description,
+        projectTypeActive: projectTypes.active,
+        projectTypeOrder: projectTypes.order,
+        projectTypeCreatedAt: projectTypes.createdAt,
+      })
+      .from(clientServices)
+      .innerJoin(clients, eq(clientServices.clientId, clients.id))
+      .innerJoin(services, eq(clientServices.serviceId, services.id))
+      .innerJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .where(eq(clientServices.id, id));
+    
+    if (!result) {
+      return undefined;
+    }
+    
+    return {
+      id: result.id,
+      clientId: result.clientId,
+      serviceId: result.serviceId,
+      createdAt: result.createdAt,
+      client: {
+        id: result.clientId_data,
+        name: result.clientName,
+        email: result.clientEmail,
+        createdAt: result.clientCreatedAt,
+      },
+      service: {
+        id: result.serviceId_data,
+        name: result.serviceName,
+        description: result.serviceDescription,
+        projectTypeId: result.serviceProjectTypeId,
+        udfDefinitions: result.serviceUdfDefinitions,
+        createdAt: result.serviceCreatedAt,
+        projectType: {
+          id: result.projectTypeId,
+          name: result.projectTypeName,
+          description: result.projectTypeDescription,
+          active: result.projectTypeActive,
+          order: result.projectTypeOrder,
+          createdAt: result.projectTypeCreatedAt,
+        },
+      },
+    };
+  }
+
+  async getClientServicesByClientId(clientId: string): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]> {
+    const results = await db
+      .select({
+        id: clientServices.id,
+        clientId: clientServices.clientId,
+        serviceId: clientServices.serviceId,
+        createdAt: clientServices.createdAt,
+        serviceId_data: services.id,
+        serviceName: services.name,
+        serviceDescription: services.description,
+        serviceProjectTypeId: services.projectTypeId,
+        serviceUdfDefinitions: services.udfDefinitions,
+        serviceCreatedAt: services.createdAt,
+        projectTypeId: projectTypes.id,
+        projectTypeName: projectTypes.name,
+        projectTypeDescription: projectTypes.description,
+        projectTypeActive: projectTypes.active,
+        projectTypeOrder: projectTypes.order,
+        projectTypeCreatedAt: projectTypes.createdAt,
+      })
+      .from(clientServices)
+      .innerJoin(services, eq(clientServices.serviceId, services.id))
+      .innerJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .where(eq(clientServices.clientId, clientId));
+    
+    return results.map(result => ({
+      id: result.id,
+      clientId: result.clientId,
+      serviceId: result.serviceId,
+      createdAt: result.createdAt,
+      service: {
+        id: result.serviceId_data,
+        name: result.serviceName,
+        description: result.serviceDescription,
+        projectTypeId: result.serviceProjectTypeId,
+        udfDefinitions: result.serviceUdfDefinitions,
+        createdAt: result.serviceCreatedAt,
+        projectType: {
+          id: result.projectTypeId,
+          name: result.projectTypeName,
+          description: result.projectTypeDescription,
+          active: result.projectTypeActive,
+          order: result.projectTypeOrder,
+          createdAt: result.projectTypeCreatedAt,
+        },
+      },
+    }));
+  }
+
+  async getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]> {
+    return await db
+      .select({
+        id: clientServices.id,
+        clientId: clientServices.clientId,
+        serviceId: clientServices.serviceId,
+        createdAt: clientServices.createdAt,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          createdAt: clients.createdAt,
+        },
+      })
+      .from(clientServices)
+      .innerJoin(clients, eq(clientServices.clientId, clients.id))
+      .where(eq(clientServices.serviceId, serviceId));
+  }
+
+  async createClientService(clientServiceData: InsertClientService): Promise<ClientService> {
+    // Validate that client exists
+    const client = await this.getUser(clientServiceData.clientId);
+    if (!client) {
+      throw new Error(`Client with ID '${clientServiceData.clientId}' not found`);
+    }
+
+    // Validate that service exists
+    const service = await this.getServiceById(clientServiceData.serviceId);
+    if (!service) {
+      throw new Error(`Service with ID '${clientServiceData.serviceId}' not found`);
+    }
+
+    // Check if mapping already exists
+    const mappingExists = await this.checkClientServiceMappingExists(clientServiceData.clientId, clientServiceData.serviceId);
+    if (mappingExists) {
+      const clientName = client.firstName && client.lastName 
+        ? `${client.firstName} ${client.lastName}` 
+        : client.email || `ID: ${client.id}`;
+      throw new Error(`Client-service mapping already exists between client '${clientName}' and service '${service.name}'. Each client can only be mapped to a service once.`);
+    }
+
+    const [clientService] = await db
+      .insert(clientServices)
+      .values(clientServiceData)
+      .returning();
+    
+    return clientService;
+  }
+
+  async updateClientService(id: string, clientServiceData: Partial<InsertClientService>): Promise<ClientService> {
+    // Validate that the client service exists
+    const existing = await this.getClientServiceById(id);
+    if (!existing) {
+      throw new Error(`Client service with ID '${id}' not found`);
+    }
+
+    // If updating clientId or serviceId, validate the new values and check for conflicts
+    if (clientServiceData.clientId || clientServiceData.serviceId) {
+      const newClientId = clientServiceData.clientId || existing.clientId;
+      const newServiceId = clientServiceData.serviceId || existing.serviceId;
+
+      // Validate new client exists (if changing)
+      if (clientServiceData.clientId && clientServiceData.clientId !== existing.clientId) {
+        const client = await this.getUser(clientServiceData.clientId);
+        if (!client) {
+          throw new Error(`Client with ID '${clientServiceData.clientId}' not found`);
+        }
+      }
+
+      // Validate new service exists (if changing)
+      if (clientServiceData.serviceId && clientServiceData.serviceId !== existing.serviceId) {
+        const service = await this.getServiceById(clientServiceData.serviceId);
+        if (!service) {
+          throw new Error(`Service with ID '${clientServiceData.serviceId}' not found`);
+        }
+      }
+
+      // Check for conflicts if the client-service combination is changing
+      if ((clientServiceData.clientId && clientServiceData.clientId !== existing.clientId) ||
+          (clientServiceData.serviceId && clientServiceData.serviceId !== existing.serviceId)) {
+        const mappingExists = await this.checkClientServiceMappingExists(newClientId, newServiceId);
+        if (mappingExists) {
+          throw new Error(`Client-service mapping already exists for the new client-service combination. Each client can only be mapped to a service once.`);
+        }
+      }
+    }
+
+    const [updatedClientService] = await db
+      .update(clientServices)
+      .set(clientServiceData)
+      .where(eq(clientServices.id, id))
+      .returning();
+    
+    if (!updatedClientService) {
+      throw new Error("Failed to update client service");
+    }
+    
+    return updatedClientService;
+  }
+
+  async getClientServiceByClientAndProjectType(clientId: string, projectTypeId: string): Promise<ClientService | undefined> {
+    // Find the service for this project type
+    const service = await this.getServiceByProjectTypeId(projectTypeId);
+    if (!service) {
+      return undefined;
+    }
+
+    // Find the client-service mapping
+    const [clientService] = await db
+      .select()
+      .from(clientServices)
+      .where(and(
+        eq(clientServices.clientId, clientId),
+        eq(clientServices.serviceId, service.id)
+      ));
+    
+    return clientService;
+  }
+
+  async deleteClientService(id: string): Promise<void> {
+    // Use transaction to ensure cascade delete is atomic
+    await db.transaction(async (tx) => {
+      // First check if the client service exists
+      const [clientService] = await tx
+        .select()
+        .from(clientServices)
+        .where(eq(clientServices.id, id));
+      
+      if (!clientService) {
+        throw new Error("Client service not found");
+      }
+
+      // Delete all role assignments for this client service (cascade delete)
+      await tx
+        .delete(clientServiceRoleAssignments)
+        .where(eq(clientServiceRoleAssignments.clientServiceId, id));
+
+      // Delete the client service
+      await tx.delete(clientServices).where(eq(clientServices.id, id));
+    });
+  }
+
+  // Client Service Role Assignments CRUD operations
+  async getClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]> {
+    return await db
+      .select({
+        id: clientServiceRoleAssignments.id,
+        clientServiceId: clientServiceRoleAssignments.clientServiceId,
+        workRoleId: clientServiceRoleAssignments.workRoleId,
+        userId: clientServiceRoleAssignments.userId,
+        isActive: clientServiceRoleAssignments.isActive,
+        createdAt: clientServiceRoleAssignments.createdAt,
+        workRole: {
+          id: workRoles.id,
+          name: workRoles.name,
+          description: workRoles.description,
+          createdAt: workRoles.createdAt,
+        },
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+          role: users.role,
+          passwordHash: users.passwordHash,
+          isFallbackUser: users.isFallbackUser,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        },
+      })
+      .from(clientServiceRoleAssignments)
+      .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
+      .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+      .where(eq(clientServiceRoleAssignments.clientServiceId, clientServiceId));
+  }
+
+  async getActiveClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]> {
+    return await db
+      .select({
+        id: clientServiceRoleAssignments.id,
+        clientServiceId: clientServiceRoleAssignments.clientServiceId,
+        workRoleId: clientServiceRoleAssignments.workRoleId,
+        userId: clientServiceRoleAssignments.userId,
+        isActive: clientServiceRoleAssignments.isActive,
+        createdAt: clientServiceRoleAssignments.createdAt,
+        workRole: {
+          id: workRoles.id,
+          name: workRoles.name,
+          description: workRoles.description,
+          createdAt: workRoles.createdAt,
+        },
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+          role: users.role,
+          passwordHash: users.passwordHash,
+          isFallbackUser: users.isFallbackUser,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        },
+      })
+      .from(clientServiceRoleAssignments)
+      .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
+      .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+      .where(and(
+        eq(clientServiceRoleAssignments.clientServiceId, clientServiceId),
+        eq(clientServiceRoleAssignments.isActive, true)
+      ));
+  }
+
+  async createClientServiceRoleAssignment(assignmentData: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment> {
+    // Use transaction to ensure only one active user per role per client-service
+    return await db.transaction(async (tx) => {
+      if (assignmentData.isActive !== false) {
+        // Deactivate any existing active assignments for this role and client-service
+        await tx
+          .update(clientServiceRoleAssignments)
+          .set({ isActive: false })
+          .where(and(
+            eq(clientServiceRoleAssignments.clientServiceId, assignmentData.clientServiceId),
+            eq(clientServiceRoleAssignments.workRoleId, assignmentData.workRoleId),
+            eq(clientServiceRoleAssignments.isActive, true)
+          ));
+      }
+
+      const [assignment] = await tx
+        .insert(clientServiceRoleAssignments)
+        .values(assignmentData)
+        .returning();
+      
+      return assignment;
+    });
+  }
+
+  async updateClientServiceRoleAssignment(id: string, assignmentData: Partial<InsertClientServiceRoleAssignment>): Promise<ClientServiceRoleAssignment> {
+    return await db.transaction(async (tx) => {
+      // If setting to active, deactivate other assignments for same role/client-service
+      if (assignmentData.isActive === true) {
+        const [existing] = await tx
+          .select()
+          .from(clientServiceRoleAssignments)
+          .where(eq(clientServiceRoleAssignments.id, id));
+        
+        if (existing) {
+          await tx
+            .update(clientServiceRoleAssignments)
+            .set({ isActive: false })
+            .where(and(
+              eq(clientServiceRoleAssignments.clientServiceId, existing.clientServiceId),
+              eq(clientServiceRoleAssignments.workRoleId, existing.workRoleId),
+              eq(clientServiceRoleAssignments.isActive, true)
+            ));
+        }
+      }
+
+      const [assignment] = await tx
+        .update(clientServiceRoleAssignments)
+        .set(assignmentData)
+        .where(eq(clientServiceRoleAssignments.id, id))
+        .returning();
+      
+      if (!assignment) {
+        throw new Error("Client service role assignment not found");
+      }
+      
+      return assignment;
+    });
+  }
+
+  async deactivateClientServiceRoleAssignment(id: string): Promise<ClientServiceRoleAssignment> {
+    const [assignment] = await db
+      .update(clientServiceRoleAssignments)
+      .set({ isActive: false })
+      .where(eq(clientServiceRoleAssignments.id, id))
+      .returning();
+    
+    if (!assignment) {
+      throw new Error("Client service role assignment not found");
+    }
+    
+    return assignment;
+  }
+
+  async deleteClientServiceRoleAssignment(id: string): Promise<void> {
+    const result = await db.delete(clientServiceRoleAssignments).where(eq(clientServiceRoleAssignments.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Client service role assignment not found");
+    }
+  }
+
+  // Role Resolution for Project Creation
+  async resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string): Promise<User | undefined> {
+    try {
+      // Find the service for this project type
+      const [service] = await db
+        .select()
+        .from(services)
+        .where(eq(services.projectTypeId, projectTypeId));
+      
+      if (!service) {
+        console.warn(`No service found for project type ID: ${projectTypeId}`);
+        return undefined;
+      }
+
+      // Find the client-service mapping
+      const [clientService] = await db
+        .select()
+        .from(clientServices)
+        .where(and(
+          eq(clientServices.clientId, clientId),
+          eq(clientServices.serviceId, service.id)
+        ));
+      
+      if (!clientService) {
+        console.warn(`No client-service mapping found for client ID: ${clientId} and service ID: ${service.id}`);
+        return undefined;
+      }
+
+      // Find the work role by name
+      const [workRole] = await db
+        .select()
+        .from(workRoles)
+        .where(eq(workRoles.name, roleName));
+      
+      if (!workRole) {
+        console.warn(`No work role found with name: ${roleName}`);
+        return undefined;
+      }
+
+      // Find ALL active role assignments and pick most recent (deterministic selection)
+      const assignments = await db
+        .select({
+          user: {
+            id: users.id,
+            email: users.email,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            profileImageUrl: users.profileImageUrl,
+            role: users.role,
+            passwordHash: users.passwordHash,
+            isFallbackUser: users.isFallbackUser,
+            createdAt: users.createdAt,
+            updatedAt: users.updatedAt,
+          },
+          assignmentCreatedAt: clientServiceRoleAssignments.createdAt,
+        })
+        .from(clientServiceRoleAssignments)
+        .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+        .where(and(
+          eq(clientServiceRoleAssignments.clientServiceId, clientService.id),
+          eq(clientServiceRoleAssignments.workRoleId, workRole.id),
+          eq(clientServiceRoleAssignments.isActive, true)
+        ))
+        .orderBy(desc(clientServiceRoleAssignments.createdAt));
+      
+      if (assignments.length === 0) {
+        console.warn(`No active role assignment found for client ${clientId}, role ${roleName}`);
+        return undefined;
+      }
+
+      if (assignments.length > 1) {
+        console.warn(`Multiple active assignments found for client ${clientId}, role ${roleName}. Selecting most recent assignment.`);
+      }
+      
+      // Return the most recent assignment (deterministic selection)
+      return assignments[0].user;
+    } catch (error) {
+      console.error(`Error resolving role assignee for client ${clientId}, project type ${projectTypeId}, role ${roleName}:`, error);
+      return undefined;
+    }
+  }
+
+  async getFallbackUser(): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.isFallbackUser, true));
+    
+    return user;
+  }
+
+  async setFallbackUser(userId: string): Promise<User> {
+    return await db.transaction(async (tx) => {
+      // Remove fallback flag from all users
+      await tx
+        .update(users)
+        .set({ isFallbackUser: false })
+        .where(eq(users.isFallbackUser, true));
+
+      // Set the new fallback user
+      const [user] = await tx
+        .update(users)
+        .set({ isFallbackUser: true })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      if (!user) {
+        throw new Error("User not found");
+      }
+      
+      return user;
+    });
+  }
+
+  // Validation Methods
+  async validateClientServiceRoleCompleteness(clientId: string, serviceId: string): Promise<{ isComplete: boolean; missingRoles: string[]; assignedRoles: { roleName: string; userName: string }[] }> {
+    // Find the client-service mapping
+    const [clientService] = await db
+      .select()
+      .from(clientServices)
+      .where(and(
+        eq(clientServices.clientId, clientId),
+        eq(clientServices.serviceId, serviceId)
+      ));
+    
+    if (!clientService) {
+      throw new Error("Client-service mapping not found");
+    }
+
+    // Get all required roles for this service
+    const requiredRoles = await db
+      .select({
+        roleId: workRoles.id,
+        roleName: workRoles.name,
+      })
+      .from(serviceRoles)
+      .innerJoin(workRoles, eq(serviceRoles.roleId, workRoles.id))
+      .where(eq(serviceRoles.serviceId, serviceId));
+
+    // Get all active role assignments for this client-service
+    const activeAssignments = await db
+      .select({
+        roleId: clientServiceRoleAssignments.workRoleId,
+        roleName: workRoles.name,
+        userName: sql<string>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email})`,
+      })
+      .from(clientServiceRoleAssignments)
+      .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
+      .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+      .where(and(
+        eq(clientServiceRoleAssignments.clientServiceId, clientService.id),
+        eq(clientServiceRoleAssignments.isActive, true)
+      ));
+
+    // Find missing roles
+    const assignedRoleIds = new Set(activeAssignments.map(a => a.roleId));
+    const missingRoles = requiredRoles
+      .filter(role => !assignedRoleIds.has(role.roleId))
+      .map(role => role.roleName);
+
+    // Format assigned roles
+    const assignedRoles = activeAssignments.map(assignment => ({
+      roleName: assignment.roleName,
+      userName: assignment.userName,
+    }));
+
+    return {
+      isComplete: missingRoles.length === 0,
+      missingRoles,
+      assignedRoles,
+    };
+  }
+
+  // Additional validation helper methods
+  async checkClientServiceMappingExists(clientId: string, serviceId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(clientServices)
+      .where(and(
+        eq(clientServices.clientId, clientId),
+        eq(clientServices.serviceId, serviceId)
+      ))
+      .limit(1);
+    
+    return !!existing;
+  }
+
+  async validateAssignedRolesAgainstService(serviceId: string, roleIds: string[]): Promise<{ isValid: boolean; invalidRoles: string[]; allowedRoles: string[] }> {
+    if (!roleIds || roleIds.length === 0) {
+      return { isValid: true, invalidRoles: [], allowedRoles: [] };
+    }
+
+    // Get all allowed roles for this service
+    const allowedRoles = await db
+      .select({
+        roleId: workRoles.id,
+        roleName: workRoles.name,
+      })
+      .from(serviceRoles)
+      .innerJoin(workRoles, eq(serviceRoles.roleId, workRoles.id))
+      .where(eq(serviceRoles.serviceId, serviceId));
+
+    const allowedRoleIds = new Set(allowedRoles.map(r => r.roleId));
+    const allowedRoleNames = allowedRoles.map(r => r.roleName);
+
+    // Find invalid role IDs
+    const invalidRoleIds = roleIds.filter(roleId => !allowedRoleIds.has(roleId));
+    
+    // Get names for invalid roles for better error messages
+    let invalidRoleNames: string[] = [];
+    if (invalidRoleIds.length > 0) {
+      const invalidRoles = await db
+        .select({
+          roleId: workRoles.id,
+          roleName: workRoles.name,
+        })
+        .from(workRoles)
+        .where(inArray(workRoles.id, invalidRoleIds));
+      
+      invalidRoleNames = invalidRoles.map(r => r.roleName);
+    }
+
+    return {
+      isValid: invalidRoleIds.length === 0,
+      invalidRoles: invalidRoleNames,
+      allowedRoles: allowedRoleNames,
+    };
   }
 }
 
