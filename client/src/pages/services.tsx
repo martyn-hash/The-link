@@ -378,22 +378,11 @@ export default function Services() {
       
       // Add new roles
       const rolesToAdd = validRoleIds.filter(roleId => !currentRoleIds.includes(roleId));
-      console.log("Attempting to add roles:", rolesToAdd);
-      
-      for (const roleId of rolesToAdd) {
-        try {
-          console.log(`Adding role ${roleId} to service ${id}`);
-          await apiRequest("POST", `/api/services/${id}/roles`, { roleId });
-          console.log(`Successfully added role ${roleId}`);
-        } catch (error) {
-          console.error(`Failed to add role ${roleId}:`, error);
-          // Get more details about the error
-          if (error instanceof Error) {
-            console.error("Error message:", error.message);
-          }
-          throw error;
-        }
-      }
+      await Promise.all(
+        rolesToAdd.map(roleId =>
+          apiRequest("POST", `/api/services/${id}/roles`, { roleId })
+        )
+      );
       
       return service;
     },
