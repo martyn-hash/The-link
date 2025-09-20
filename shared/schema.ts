@@ -68,6 +68,7 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").notNull().default("bookkeeper"),
   passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
+  isFallbackUser: boolean("is_fallback_user").default(false), // Only one user can be the fallback user
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -313,6 +314,35 @@ export const services = pgTable("services", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Client services table - links clients to services
+export const clientServices = pgTable("client_services", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_client_services_client_id").on(table.clientId),
+  index("idx_client_services_service_id").on(table.serviceId),
+  unique("unique_client_service").on(table.clientId, table.serviceId),
+]);
+
+// Client service role assignments table - maps users to roles for client services
+export const clientServiceRoleAssignments = pgTable("client_service_role_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientServiceId: varchar("client_service_id").notNull().references(() => clientServices.id, { onDelete: "cascade" }),
+  workRoleId: varchar("work_role_id").notNull().references(() => workRoles.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_client_service_role_assignments_client_service_id").on(table.clientServiceId),
+  index("idx_client_service_role_assignments_work_role_id").on(table.workRoleId),
+  index("idx_client_service_role_assignments_user_id").on(table.userId),
+  index("idx_client_service_role_assignments_active").on(table.clientServiceId, table.workRoleId, table.isActive),
+  // Note: Partial unique constraint will be created separately using raw SQL
+  // Only one active user per role per client-service constraint enforced at database level
+]);
+
 // Work roles table
 export const workRoles = pgTable("work_roles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -341,6 +371,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   chronologyEntries: many(projectChronology),
   magicLinkTokens: many(magicLinkTokens),
   notificationPreferences: one(userNotificationPreferences),
+  clientServiceRoleAssignments: many(clientServiceRoleAssignments),
 }));
 
 export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => ({
@@ -352,6 +383,7 @@ export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => 
 
 export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
+  clientServices: many(clientServices),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -744,6 +776,18 @@ export const insertServiceRoleSchema = createInsertSchema(serviceRoles).omit({
   createdAt: true,
 });
 
+// Client services schema
+export const insertClientServiceSchema = createInsertSchema(clientServices).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Client service role assignments schema
+export const insertClientServiceRoleAssignmentSchema = createInsertSchema(clientServiceRoleAssignments).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
@@ -883,10 +927,39 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
     references: [projectTypes.id],
   }),
   serviceRoles: many(serviceRoles),
+  clientServices: many(clientServices),
+}));
+
+export const clientServicesRelations = relations(clientServices, ({ one, many }) => ({
+  client: one(clients, {
+    fields: [clientServices.clientId],
+    references: [clients.id],
+  }),
+  service: one(services, {
+    fields: [clientServices.serviceId],
+    references: [services.id],
+  }),
+  roleAssignments: many(clientServiceRoleAssignments),
 }));
 
 export const workRolesRelations = relations(workRoles, ({ many }) => ({
   serviceRoles: many(serviceRoles),
+  clientServiceRoleAssignments: many(clientServiceRoleAssignments),
+}));
+
+export const clientServiceRoleAssignmentsRelations = relations(clientServiceRoleAssignments, ({ one }) => ({
+  clientService: one(clientServices, {
+    fields: [clientServiceRoleAssignments.clientServiceId],
+    references: [clientServices.id],
+  }),
+  workRole: one(workRoles, {
+    fields: [clientServiceRoleAssignments.workRoleId],
+    references: [workRoles.id],
+  }),
+  user: one(users, {
+    fields: [clientServiceRoleAssignments.userId],
+    references: [users.id],
+  }),
 }));
 
 export const serviceRolesRelations = relations(serviceRoles, ({ one }) => ({
@@ -931,6 +1004,10 @@ export type ServiceRole = typeof serviceRoles.$inferSelect;
 export type InsertServiceRole = z.infer<typeof insertServiceRoleSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
+export type ClientService = typeof clientServices.$inferSelect;
+export type InsertClientService = z.infer<typeof insertClientServiceSchema>;
+export type ClientServiceRoleAssignment = typeof clientServiceRoleAssignments.$inferSelect;
+export type InsertClientServiceRoleAssignment = z.infer<typeof insertClientServiceRoleAssignmentSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
