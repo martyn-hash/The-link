@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ClientManagementModal } from "@/components/client-management-modal";
+import { ClientCreationWizard } from "@/components/client-creation-wizard";
 import { AlertCircle, Search, Building2, Mail, Plus, Edit } from "lucide-react";
 import { format } from "date-fns";
 
@@ -242,11 +242,10 @@ export default function Clients() {
         </div>
       </div>
       
-      {/* Client Management Modal */}
-      <ClientManagementModal
+      {/* Client Creation Wizard */}
+      <ClientCreationWizard
         open={showClientModal}
         onOpenChange={setShowClientModal}
-        client={selectedClient}
         onSuccess={handleClientSuccess}
       />
     </div>
