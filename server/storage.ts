@@ -2319,7 +2319,40 @@ export class DatabaseStorage implements IStorage {
 
   // Services CRUD operations
   async getAllServices(): Promise<Service[]> {
-    return await db.select().from(services);
+    const servicesData = await db
+      .select({
+        service: services,
+        projectType: projectTypes,
+      })
+      .from(services)
+      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id));
+
+    // Get all service roles in one query
+    const allServiceRoles = await db
+      .select({
+        serviceId: serviceRoles.serviceId,
+        role: workRoles,
+      })
+      .from(serviceRoles)
+      .leftJoin(workRoles, eq(serviceRoles.roleId, workRoles.id));
+
+    // Group roles by service ID
+    const rolesByServiceId = allServiceRoles.reduce((acc, item) => {
+      if (!acc[item.serviceId]) {
+        acc[item.serviceId] = [];
+      }
+      if (item.role) {
+        acc[item.serviceId].push(item.role);
+      }
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    // Combine services with their project types and roles
+    return servicesData.map(({ service, projectType }) => ({
+      ...service,
+      projectType: projectType!,
+      roles: rolesByServiceId[service.id] || [],
+    })) as any[];
   }
 
   async getServiceById(id: string): Promise<Service | undefined> {
