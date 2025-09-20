@@ -1974,10 +1974,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SERVICES API ROUTES
   // ==================================================
   
-  // GET /api/services - Get all services
+  // GET /api/services - Get all services (supports ?active=true filter)
   app.get("/api/services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      const services = await storage.getAllServices();
+      const { active } = req.query;
+      const services = active === 'true' 
+        ? await storage.getActiveServices()
+        : await storage.getAllServices();
       res.json(services);
     } catch (error) {
       console.error("Error fetching services:", error instanceof Error ? error.message : error);

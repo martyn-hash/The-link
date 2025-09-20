@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { nanoid } from "nanoid";
 
 // Form schemas
@@ -255,6 +256,7 @@ export default function Services() {
   // View state management
   const [currentTab, setCurrentTab] = useState<TabMode>('services');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [deleteServiceId, setDeleteServiceId] = useState<string | null>(null);
   const [deleteRoleId, setDeleteRoleId] = useState<string | null>(null);
   
@@ -284,7 +286,18 @@ export default function Services() {
 
   // Data fetching
   const { data: services, isLoading: servicesLoading, error: servicesError } = useQuery<ServiceWithDetails[]>({
-    queryKey: ["/api/services"],
+    queryKey: ["/api/services", { active: showActiveOnly }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (showActiveOnly) {
+        params.append('active', 'true');
+      }
+      const response = await fetch(`/api/services?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch services');
+      }
+      return response.json();
+    },
     enabled: isAuthenticated && user?.role === "admin",
     retry: false,
   });
@@ -640,10 +653,23 @@ export default function Services() {
                       <h2 className="text-xl font-semibold">Services</h2>
                       <p className="text-muted-foreground">Manage services and their associated project types and roles</p>
                     </div>
-                    <Button onClick={handleStartCreateService} data-testid="button-add-service">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Service
-                    </Button>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="active-filter"
+                          checked={showActiveOnly}
+                          onCheckedChange={setShowActiveOnly}
+                          data-testid="switch-active-filter"
+                        />
+                        <label htmlFor="active-filter" className="text-sm font-medium">
+                          Show active only
+                        </label>
+                      </div>
+                      <Button onClick={handleStartCreateService} data-testid="button-add-service">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Service
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Services Table */}
@@ -667,6 +693,7 @@ export default function Services() {
                             <TableHead>Name</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Project Type</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Mapped Roles</TableHead>
                             <TableHead className="w-20">Actions</TableHead>
                           </TableRow>
@@ -678,6 +705,15 @@ export default function Services() {
                               <TableCell>{service.description || "—"}</TableCell>
                               <TableCell>
                                 <Badge variant="secondary">{service.projectType?.name || "—"}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={service.projectType ? "default" : "secondary"} 
+                                  className={service.projectType ? "bg-green-500 text-white" : "bg-gray-500 text-white"}
+                                  data-testid={`status-${service.id}`}
+                                >
+                                  {service.projectType ? "Active" : "Inactive"}
+                                </Badge>
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
