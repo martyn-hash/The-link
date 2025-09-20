@@ -31,9 +31,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Plus, Edit, Trash2, Mail, Calendar } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings } from "lucide-react";
 import type { User } from "@shared/schema";
 
 const createUserFormSchema = z.object({
@@ -78,6 +96,14 @@ export default function UserManagement() {
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  // Fallback user queries and mutations
+  const { data: fallbackUser, isLoading: fallbackUserLoading } = useQuery<User>({
+    queryKey: ["/api/config/fallback-user"],
+    retry: false, // Don't retry on 404 when no fallback user is set
+  });
+
+  const [selectedFallbackUserId, setSelectedFallbackUserId] = useState<string>("");
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(selectedUser ? editUserFormSchema : createUserFormSchema),
@@ -192,6 +218,28 @@ export default function UserManagement() {
     },
   });
 
+  const setFallbackUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest("POST", "/api/config/fallback-user", { userId });
+    },
+    onSuccess: (data: User) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/fallback-user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Success",
+        description: `${data.firstName} ${data.lastName} has been set as the fallback user`,
+      });
+      setSelectedFallbackUserId("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to set fallback user",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (data: UserFormData) => {
     if (selectedUser) {
       updateUserMutation.mutate(data);
@@ -220,6 +268,29 @@ export default function UserManagement() {
     if (confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}?`)) {
       deleteUserMutation.mutate(user.id);
     }
+  };
+
+  const handleSetFallbackUser = () => {
+    if (!selectedFallbackUserId) {
+      toast({
+        title: "Error",
+        description: "Please select a user to set as fallback",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selectedUser = users?.find(u => u.id === selectedFallbackUserId);
+    if (!selectedUser) {
+      toast({
+        title: "Error",
+        description: "Selected user not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setFallbackUserMutation.mutate(selectedFallbackUserId);
   };
 
   const getRoleColor = (role: string) => {
@@ -275,6 +346,124 @@ export default function UserManagement() {
             </div>
           </div>
 
+          {/* Fallback User Settings */}
+          <Card className="mb-8" data-testid="card-fallback-user-settings">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Fallback User Settings
+              </CardTitle>
+              <CardDescription>
+                Set a fallback user to handle role assignments when no specific user is assigned to a required role.
+                This helps reduce 404 rates in role-based assignments.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium mb-2 block">Current Fallback User</label>
+                  {fallbackUserLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      Loading...
+                    </div>
+                  ) : fallbackUser ? (
+                    <div className="flex items-center gap-3 p-3 bg-muted rounded-lg" data-testid="current-fallback-user">
+                      <Shield className="w-4 h-4 text-primary" />
+                      <div>
+                        <div className="font-medium">
+                          {fallbackUser.firstName} {fallbackUser.lastName}
+                        </div>
+                        <div className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          {fallbackUser.email}
+                        </div>
+                      </div>
+                      <Badge className={getRoleColor(fallbackUser.role)}>
+                        {getRoleLabel(fallbackUser.role)}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-muted-foreground p-3 bg-muted rounded-lg" data-testid="no-fallback-user">
+                      <Settings className="w-4 h-4" />
+                      No fallback user configured
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-end gap-4">
+                <div className="flex-1">
+                  <label htmlFor="fallback-user-select" className="text-sm font-medium mb-2 block">
+                    Set New Fallback User
+                  </label>
+                  <Select 
+                    value={selectedFallbackUserId} 
+                    onValueChange={setSelectedFallbackUserId}
+                    data-testid="select-fallback-user"
+                  >
+                    <SelectTrigger id="fallback-user-select">
+                      <SelectValue placeholder="Select a user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users?.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{user.firstName} {user.lastName}</span>
+                            <span className="text-sm text-muted-foreground">({user.email})</span>
+                            <Badge className={getRoleColor(user.role)} variant="outline">
+                              {getRoleLabel(user.role)}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      disabled={!selectedFallbackUserId || setFallbackUserMutation.isPending}
+                      data-testid="button-set-fallback-user"
+                    >
+                      {setFallbackUserMutation.isPending ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      ) : (
+                        <Shield className="w-4 h-4 mr-2" />
+                      )}
+                      Set Fallback User
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent data-testid="dialog-confirm-fallback-user">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Confirm Fallback User Change</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {selectedFallbackUserId && users ? (
+                          <>
+                            Are you sure you want to set <strong>
+                              {users.find(u => u.id === selectedFallbackUserId)?.firstName} {users.find(u => u.id === selectedFallbackUserId)?.lastName}
+                            </strong> as the fallback user? This user will be assigned to roles when no specific user assignment exists.
+                          </>
+                        ) : (
+                          'Please select a user first.'
+                        )}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-testid="button-cancel-fallback-user">Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleSetFallbackUser}
+                        data-testid="button-confirm-fallback-user"
+                      >
+                        Set as Fallback User
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex gap-6">
             {/* User List */}
             <div className="flex-1 flex flex-col min-h-0">
@@ -309,7 +498,19 @@ export default function UserManagement() {
                       {users?.map((user: User) => (
                         <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                           <TableCell className="font-medium">
-                            {user.firstName} {user.lastName}
+                            <div className="flex items-center gap-2">
+                              <span>{user.firstName} {user.lastName}</span>
+                              {fallbackUser?.id === user.id && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                                  data-testid={`badge-fallback-user-${user.id}`}
+                                >
+                                  <Shield className="w-3 h-3 mr-1" />
+                                  Fallback
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">

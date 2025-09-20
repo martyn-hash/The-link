@@ -2735,6 +2735,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Configuration endpoints for fallback user management
+  
+  // GET /api/config/fallback-user - Get current fallback user (admin only)
+  app.get("/api/config/fallback-user", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const fallbackUser = await storage.getFallbackUser();
+      
+      if (!fallbackUser) {
+        return res.status(404).json({ 
+          message: "No fallback user is currently configured",
+          code: "NO_FALLBACK_USER"
+        });
+      }
+
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = fallbackUser;
+      res.json(sanitizedUser);
+    } catch (error) {
+      console.error("Error fetching fallback user:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch fallback user" });
+    }
+  });
+
+  // POST /api/config/fallback-user - Set fallback user (admin only, with userId in body)
+  app.post("/api/config/fallback-user", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate request body with Zod schema
+      const fallbackUserBodySchema = z.object({
+        userId: z.string().min(1, "User ID is required")
+      });
+
+      const bodyValidation = fallbackUserBodySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid request body",
+          errors: bodyValidation.error.issues
+        });
+      }
+
+      const { userId } = bodyValidation.data;
+
+      // Check if user exists
+      const existingUser = await storage.getUser(userId);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const fallbackUser = await storage.setFallbackUser(userId);
+      
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = fallbackUser;
+      res.json(sanitizedUser);
+    } catch (error) {
+      console.error("Error setting fallback user:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to set fallback user" });
+    }
+  });
+
   // GET /api/projects/:projectId/role-assignee - Get the user assigned to the current stage's role for a project
   app.get("/api/projects/:projectId/role-assignee", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -2766,7 +2824,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             source: 'direct_assignment'
           });
         } else {
-          return res.status(404).json({ message: "No assignee found and no role configured for current stage" });
+          // No direct assignee found, try fallback user before returning 404
+          const fallbackUser = await storage.getFallbackUser();
+          if (fallbackUser) {
+            const { passwordHash, ...sanitizedUser } = fallbackUser;
+            return res.json({ 
+              user: sanitizedUser, 
+              roleUsed: null,
+              usedFallback: true,
+              source: 'fallback_user'
+            });
+          } else {
+            return res.status(404).json({ 
+              message: "No assignee found, no role configured for current stage, and no fallback user configured",
+              code: "NO_ASSIGNEE_OR_FALLBACK"
+            });
+          }
         }
       }
 
