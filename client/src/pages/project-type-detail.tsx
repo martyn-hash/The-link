@@ -568,7 +568,7 @@ export default function ProjectTypeDetail() {
   const { data: projectType, isLoading: projectTypeLoading, error: projectTypeError } = useQuery<ProjectType>({
     queryKey: ["/api/config/project-types", projectTypeId],
     queryFn: async () => {
-      const response = await fetch(`/api/config/project-types`);
+      const response = await fetch(`/api/config/project-types?inactive=true`);
       if (!response.ok) throw new Error("Failed to fetch project types");
       const allTypes = await response.json();
       const type = allTypes.find((pt: ProjectType) => pt.id === projectTypeId);
