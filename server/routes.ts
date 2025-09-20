@@ -28,6 +28,9 @@ import {
   csvProjectSchema,
   insertUserNotificationPreferencesSchema,
   updateUserNotificationPreferencesSchema,
+  insertServiceSchema,
+  insertWorkRoleSchema,
+  insertServiceRoleSchema,
   type User,
 } from "@shared/schema";
 
@@ -359,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       await storage.deleteUser(req.params.id);
-      res.json({ message: "User deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(400).json({ message: "Failed to delete user" });
@@ -563,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const adminUserId = req.user!.id;
       await storage.stopImpersonation(adminUserId);
-      res.json({ message: "Impersonation stopped successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error stopping impersonation:", error);
       res.status(400).json({ message: "Failed to stop impersonation" });
@@ -965,7 +968,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/stages/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteKanbanStage(req.params.id);
-      res.json({ message: "Stage deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage:", error);
       
@@ -1068,7 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/reasons/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteChangeReason(req.params.id);
-      res.json({ message: "Change reason deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting change reason:", error);
       res.status(400).json({ message: "Failed to delete change reason" });
@@ -1178,7 +1181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/stage-approvals/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteStageApproval(req.params.id);
-      res.json({ message: "Stage approval deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage approval:", error);
       
@@ -1260,7 +1263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/stage-approval-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteStageApprovalField(req.params.id);
-      res.json({ message: "Stage approval field deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage approval field:", error);
       
@@ -1383,7 +1386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/project-descriptions/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteProjectType(req.params.id);
-      res.json({ message: "Project description deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting project description:", error);
       
@@ -1483,7 +1486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/project-types/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       await storage.deleteProjectType(req.params.id);
-      res.json({ message: "Project type deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting project type:", error);
       
@@ -1586,7 +1589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/stage-reason-maps/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteStageReasonMap(req.params.id);
-      res.json({ message: "Stage-reason mapping deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage-reason mapping:", error);
       if ((error instanceof Error ? error.message : null) && error instanceof Error && error.message && error.message.includes("not found")) {
@@ -1652,7 +1655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/config/custom-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteReasonCustomField(req.params.id);
-      res.json({ message: "Custom field deleted successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting custom field:", error);
       if ((error instanceof Error ? error.message : null) && error instanceof Error && error.message && error.message.includes("not found")) {
@@ -1708,6 +1711,318 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching field responses for project:", error);
       res.status(500).json({ message: "Failed to fetch field responses for project" });
+    }
+  });
+
+  // ==================================================
+  // SERVICES API ROUTES
+  // ==================================================
+  
+  // GET /api/services - Get all services
+  app.get("/api/services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const services = await storage.getAllServices();
+      res.json(services);
+    } catch (error) {
+      console.error("Error fetching services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch services" });
+    }
+  });
+
+  // GET /api/services/:id - Get service by ID
+  app.get("/api/services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const service = await storage.getServiceById(id);
+      
+      if (!service) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      console.error("Error fetching service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch service" });
+    }
+  });
+
+  // POST /api/services - Create new service
+  app.post("/api/services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validServiceData = insertServiceSchema.parse(req.body);
+      const service = await storage.createService(validServiceData);
+      res.status(201).json(service);
+    } catch (error) {
+      console.error("Error creating service:", error instanceof Error ? error.message : error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid service data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create service" });
+    }
+  });
+
+  // PATCH /api/services/:id - Update service
+  app.patch("/api/services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if service exists
+      const existingService = await storage.getServiceById(id);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      const validUpdateData = insertServiceSchema.partial().parse(req.body);
+      const service = await storage.updateService(id, validUpdateData);
+      res.json(service);
+    } catch (error) {
+      console.error("Error updating service:", error instanceof Error ? error.message : error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid service data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update service" });
+    }
+  });
+
+  // DELETE /api/services/:id - Delete service
+  app.delete("/api/services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if service exists
+      const existingService = await storage.getServiceById(id);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      await storage.deleteService(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to delete service" });
+    }
+  });
+
+  // GET /api/services/by-project-type/:projectTypeId - Get service by project type ID
+  app.get("/api/services/by-project-type/:projectTypeId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { projectTypeId } = req.params;
+      const service = await storage.getServiceByProjectTypeId(projectTypeId);
+      
+      if (!service) {
+        return res.status(404).json({ message: "Service not found for this project type" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      console.error("Error fetching service by project type:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch service by project type" });
+    }
+  });
+
+  // ==================================================
+  // WORK ROLES API ROUTES
+  // ==================================================
+
+  // GET /api/work-roles - Get all work roles
+  app.get("/api/work-roles", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const workRoles = await storage.getAllWorkRoles();
+      res.json(workRoles);
+    } catch (error) {
+      console.error("Error fetching work roles:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch work roles" });
+    }
+  });
+
+  // GET /api/work-roles/:id - Get work role by ID
+  app.get("/api/work-roles/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const workRole = await storage.getWorkRoleById(id);
+      
+      if (!workRole) {
+        return res.status(404).json({ message: "Work role not found" });
+      }
+      
+      res.json(workRole);
+    } catch (error) {
+      console.error("Error fetching work role:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch work role" });
+    }
+  });
+
+  // POST /api/work-roles - Create new work role
+  app.post("/api/work-roles", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validWorkRoleData = insertWorkRoleSchema.parse(req.body);
+      const workRole = await storage.createWorkRole(validWorkRoleData);
+      res.status(201).json(workRole);
+    } catch (error) {
+      console.error("Error creating work role:", error instanceof Error ? error.message : error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid work role data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create work role" });
+    }
+  });
+
+  // PATCH /api/work-roles/:id - Update work role
+  app.patch("/api/work-roles/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if work role exists
+      const existingWorkRole = await storage.getWorkRoleById(id);
+      if (!existingWorkRole) {
+        return res.status(404).json({ message: "Work role not found" });
+      }
+
+      const validUpdateData = insertWorkRoleSchema.partial().parse(req.body);
+      const workRole = await storage.updateWorkRole(id, validUpdateData);
+      res.json(workRole);
+    } catch (error) {
+      console.error("Error updating work role:", error instanceof Error ? error.message : error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid work role data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update work role" });
+    }
+  });
+
+  // DELETE /api/work-roles/:id - Delete work role
+  app.delete("/api/work-roles/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if work role exists
+      const existingWorkRole = await storage.getWorkRoleById(id);
+      if (!existingWorkRole) {
+        return res.status(404).json({ message: "Work role not found" });
+      }
+
+      await storage.deleteWorkRole(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting work role:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to delete work role" });
+    }
+  });
+
+  // ==================================================
+  // SERVICE-ROLE MAPPING API ROUTES
+  // ==================================================
+
+  // GET /api/services/:serviceId/roles - Get roles for a service
+  app.get("/api/services/:serviceId/roles", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { serviceId } = req.params;
+      
+      // Check if service exists
+      const existingService = await storage.getServiceById(serviceId);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      const serviceRoles = await storage.getServiceRolesByServiceId(serviceId);
+      res.json(serviceRoles);
+    } catch (error) {
+      console.error("Error fetching service roles:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch service roles" });
+    }
+  });
+
+  // POST /api/services/:serviceId/roles - Add role to service
+  app.post("/api/services/:serviceId/roles", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { serviceId } = req.params;
+      
+      // Explicitly enforce z.object({ roleId: z.string() }) validation
+      const roleValidationSchema = z.object({ roleId: z.string() });
+      const validationResult = roleValidationSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid request body", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const { roleId } = validationResult.data;
+
+      // Check if service exists
+      const existingService = await storage.getServiceById(serviceId);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      // Check if work role exists
+      const existingWorkRole = await storage.getWorkRoleById(roleId);
+      if (!existingWorkRole) {
+        return res.status(404).json({ message: "Work role not found" });
+      }
+
+      const serviceRole = await storage.addRoleToService(serviceId, roleId);
+      res.status(201).json(serviceRole);
+    } catch (error) {
+      console.error("Error adding role to service:", error instanceof Error ? error.message : error);
+      
+      // Handle duplicate mapping case (unique constraint violation)
+      if (error instanceof Error && (error as any).code === '23505' && (error as any).constraint_name === 'unique_service_role') {
+        return res.status(409).json({ 
+          message: "This role is already mapped to this service",
+          code: "DUPLICATE_SERVICE_ROLE_MAPPING"
+        });
+      }
+      
+      // Check for duplicate key error (alternative constraint format)
+      if (error instanceof Error && error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        if (error.message.includes('unique_service_role')) {
+          return res.status(409).json({ 
+            message: "This role is already mapped to this service",
+            code: "DUPLICATE_SERVICE_ROLE_MAPPING"
+          });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to add role to service" });
+    }
+  });
+
+  // DELETE /api/services/:serviceId/roles/:roleId - Remove role from service
+  app.delete("/api/services/:serviceId/roles/:roleId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { serviceId, roleId } = req.params;
+      
+      // Check if service exists
+      const existingService = await storage.getServiceById(serviceId);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      // Check if work role exists
+      const existingWorkRole = await storage.getWorkRoleById(roleId);
+      if (!existingWorkRole) {
+        return res.status(404).json({ message: "Work role not found" });
+      }
+
+      await storage.removeRoleFromService(serviceId, roleId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing role from service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to remove role from service" });
     }
   });
 
