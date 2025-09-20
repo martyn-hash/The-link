@@ -674,16 +674,16 @@ export default function Services() {
                               <TableCell className="font-medium">{service.name}</TableCell>
                               <TableCell>{service.description || "—"}</TableCell>
                               <TableCell>
-                                <Badge variant="secondary">{service.projectType.name}</Badge>
+                                <Badge variant="secondary">{service.projectType?.name || "—"}</Badge>
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
-                                  {service.roles.map((role) => (
+                                  {service.roles.filter(role => role && role.id && role.name).map((role) => (
                                     <Badge key={role.id} variant="outline" className="text-xs">
                                       {role.name}
                                     </Badge>
                                   ))}
-                                  {service.roles.length === 0 && <span className="text-muted-foreground">No roles</span>}
+                                  {service.roles.filter(role => role && role.id && role.name).length === 0 && <span className="text-muted-foreground">No roles</span>}
                                 </div>
                               </TableCell>
                               <TableCell>
