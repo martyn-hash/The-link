@@ -2162,8 +2162,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Service not found" });
       }
 
-      const serviceRoles = await storage.getServiceRolesByServiceId(serviceId);
-      res.json(serviceRoles);
+      // Get service-role mappings and then fetch the actual work roles
+      const serviceRoleMappings = await storage.getServiceRolesByServiceId(serviceId);
+      const workRoles = await Promise.all(
+        serviceRoleMappings.map(async (mapping) => {
+          const workRole = await storage.getWorkRoleById(mapping.roleId);
+          return workRole;
+        })
+      );
+      
+      // Filter out any null results (in case some roles were deleted)
+      const validWorkRoles = workRoles.filter(role => role !== undefined);
+      
+      res.json(validWorkRoles);
     } catch (error) {
       console.error("Error fetching service roles:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch service roles" });
