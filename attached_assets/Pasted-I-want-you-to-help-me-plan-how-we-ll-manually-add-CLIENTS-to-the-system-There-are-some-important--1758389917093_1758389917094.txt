@@ -1,0 +1,59 @@
+I want you to help me plan how we’ll manually add CLIENTS to the system. 
+
+There are some important new features here, so let’s plan them carefully.
+
+
+The creation flow of forms will be like this: 
+
+SECTION 1 - Client type & Company Number 
+
+1) User presses ‘+ Client’ button, from the ‘Clients’ view. 
+2) User Picks ‘Client Type’ from a drop down of: 
+	- Limited Company
+	- Partnership 
+	- Sole Trader
+	- Personal Tax Client
+
+NOTE: For now, we’re going to focus exclusively on the ‘Limited Company’ route. 
+
+The system should then be prompted to add a company number into the system. 
+
+Once added, the system takes the company numbers and retrieves from the Companies House api information about the company, including full name & registered office address.
+
+The user either confirms it is the right company (and moves on) or presses to say it’s not, and they go back to adding the company number.
+
+SECTION 2 - Director Details & Choosing People
+
+The system shows the directors (as imported into the system via the API). 
+The user picks which people from this list are to be added to the PEOPLE table as connections to this CLIENT. 
+
+There should be a button that says ‘Add Other Person to this Company. 
+
+What is selected at this point impacts the forms that are shown in section 3. 
+
+SECTION 3 -  Adding Details (same form rotates for each director and any additional people)
+
+These forms have all the additional fields for the person. If it’s a director we’ve pulled in from companies house, we should show their name, and we then should add extra information about the person, including:
+
+- Address 1,2,3,4 & Postcode
+- Telephone
+- Email 
+
+(NOTE: We’ll add plenty more to this later). 
+
+These PEOPLE should be stored in the PEOPLE object, with a field confirming if they are directors (from companies house) or related parties. 
+
+SECTION 4 - Services
+
+The System should show a list of SERVICES that have been created in the admin area as a multi-select list. 
+Choosing SERVICES from the list this, will create the next flow of forms. 
+
+
+SECTION 5 - SERVICE DETAILS
+
+For every service that been selected, we should show a form for the user to complete that captures, the frequency, next start date, and the user defined fields. 
+
+
+Now, I also want to put in your mind that the same companies house api that we’ll pull in the company and director data, is actually going to be used to create the next due dates for some services. 
+
+All services have a next due date and a next creation date, but some will have these dates populated from the companies house api - for example, annual accounts - the year date, and accounts due date will be synced from companies house in order to populate the dates we’ll use for the scheduling. We’ll build this later, but just so you’re aware. 
