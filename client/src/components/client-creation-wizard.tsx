@@ -964,7 +964,15 @@ export function ClientCreationWizard({
                           <CardContent className="space-y-2">
                             <div><strong>Name:</strong> {companiesHouseCompany.company_name}</div>
                             <div><strong>Status:</strong> {companiesHouseCompany.company_status}</div>
-                            <div><strong>Type:</strong> {companiesHouseCompany.type}</div>
+                            <div><strong>Registered Office:</strong> {
+                              [
+                                companiesHouseCompany.registered_office_address?.premises,
+                                companiesHouseCompany.registered_office_address?.address_line_1,
+                                companiesHouseCompany.registered_office_address?.address_line_2,
+                                companiesHouseCompany.registered_office_address?.locality,
+                                companiesHouseCompany.registered_office_address?.postal_code
+                              ].filter(Boolean).join(', ')
+                            }</div>
                             {companiesHouseCompany.date_of_creation && (
                               <div><strong>Incorporated:</strong> {new Date(companiesHouseCompany.date_of_creation).toLocaleDateString()}</div>
                             )}
