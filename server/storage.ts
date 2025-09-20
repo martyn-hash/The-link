@@ -216,7 +216,7 @@ export interface IStorage {
   sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void>;
   
   // Services CRUD
-  getAllServices(): Promise<Service[]>;
+  getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
   createService(service: InsertService): Promise<Service>;
   updateService(id: string, service: Partial<InsertService>): Promise<Service>;
@@ -2318,7 +2318,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Services CRUD operations
-  async getAllServices(): Promise<Service[]> {
+  async getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
     const servicesData = await db
       .select({
         service: services,
@@ -2345,14 +2345,14 @@ export class DatabaseStorage implements IStorage {
         acc[item.serviceId].push(item.role);
       }
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, WorkRole[]>);
 
     // Combine services with their project types and roles
     return servicesData.map(({ service, projectType }) => ({
       ...service,
       projectType: projectType!,
       roles: rolesByServiceId[service.id] || [],
-    })) as any[];
+    }));
   }
 
   async getServiceById(id: string): Promise<Service | undefined> {
