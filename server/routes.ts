@@ -32,8 +32,54 @@ import {
   updateServiceSchema,
   insertWorkRoleSchema,
   insertServiceRoleSchema,
+  insertClientServiceSchema,
+  insertClientServiceRoleAssignmentSchema,
   type User,
 } from "@shared/schema";
+
+// Resource-specific parameter validation schemas for consistent error responses
+// Users: Allow flexible ID format (Replit Auth generates short string IDs like "uOBWFr")
+const paramUserIdSchema = z.object({ 
+  userId: z.string().min(1, "User ID is required")
+});
+
+// Generic ID schema for users (used in routes like /api/users/:id)
+const paramUserIdAsIdSchema = z.object({ 
+  id: z.string().min(1, "User ID is required")
+});
+
+// Database-generated entities: Enforce UUID validation since they use gen_random_uuid()
+const paramUuidSchema = z.object({ 
+  id: z.string().min(1, "ID is required").uuid("Invalid ID format") 
+});
+
+const paramClientIdSchema = z.object({ 
+  clientId: z.string().min(1, "Client ID is required").uuid("Invalid client ID format") 
+});
+
+const paramServiceIdSchema = z.object({ 
+  serviceId: z.string().min(1, "Service ID is required").uuid("Invalid service ID format") 
+});
+
+const paramProjectTypeIdSchema = z.object({ 
+  projectTypeId: z.string().min(1, "Project type ID is required").uuid("Invalid project type ID format") 
+});
+
+const paramClientServiceIdSchema = z.object({ 
+  clientServiceId: z.string().min(1, "Client service ID is required").uuid("Invalid client service ID format") 
+});
+
+const paramApprovalIdSchema = z.object({ 
+  approvalId: z.string().min(1, "Approval ID is required").uuid("Invalid approval ID format") 
+});
+
+// Helper function for parameter validation
+const validateParams = <T>(schema: z.ZodSchema<T>, params: any): { success: true; data: T } | { success: false; errors: any[] } => {
+  const result = schema.safeParse(params);
+  return result.success 
+    ? { success: true, data: result.data }
+    : { success: false, errors: result.error.issues };
+};
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -331,6 +377,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUserIdAsIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
       const { password, ...userData } = req.body;
       
       // SECURITY: Explicitly remove passwordHash from request to prevent injection
@@ -362,6 +417,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUserIdAsIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
       await storage.deleteUser(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -552,6 +616,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User impersonation routes (admin only)
   app.post("/api/auth/impersonate/:userId", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUserIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
       const adminUserId = req.user!.id;
       const targetUserId = req.params.userId;
 
@@ -2024,6 +2097,489 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error removing role from service:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to remove role from service" });
+    }
+  });
+
+  // ==================================================
+  // CLIENT SERVICES API ROUTES  
+  // ==================================================
+
+  // GET /api/client-services - Get all client services (admin only)
+  app.get("/api/client-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const clientServices = await storage.getAllClientServices();
+      res.json(clientServices);
+    } catch (error) {
+      console.error("Error fetching client services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client services" });
+    }
+  });
+
+  // GET /api/client-services/client/:clientId - Get services for a specific client
+  app.get("/api/client-services/client/:clientId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { clientId } = req.params;
+
+      const clientServices = await storage.getClientServicesByClientId(clientId);
+      res.json(clientServices);
+    } catch (error) {
+      console.error("Error fetching client services by client:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client services" });
+    }
+  });
+
+  // GET /api/client-services/service/:serviceId - Get clients for a specific service
+  app.get("/api/client-services/service/:serviceId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramServiceIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { serviceId } = req.params;
+
+      const clientServices = await storage.getClientServicesByServiceId(serviceId);
+      res.json(clientServices);
+    } catch (error) {
+      console.error("Error fetching client services by service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client services" });
+    }
+  });
+
+  // POST /api/client-services - Create new client-service mapping (admin only)
+  app.post("/api/client-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validationResult = insertClientServiceSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid client service data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const clientServiceData = validationResult.data;
+      
+      // Check if client-service mapping already exists
+      const mappingExists = await storage.checkClientServiceMappingExists(
+        clientServiceData.clientId, 
+        clientServiceData.serviceId
+      );
+      
+      if (mappingExists) {
+        return res.status(409).json({ 
+          message: "Client service mapping already exists",
+          code: "DUPLICATE_CLIENT_SERVICE_MAPPING"
+        });
+      }
+
+      const clientService = await storage.createClientService(clientServiceData);
+      res.status(201).json(clientService);
+    } catch (error) {
+      console.error("Error creating client service:", error instanceof Error ? error.message : error);
+      
+      // Handle duplicate mapping case (unique constraint violation)
+      if (error instanceof Error && (error as any).code === '23505') {
+        return res.status(409).json({ 
+          message: "Client service mapping already exists",
+          code: "DUPLICATE_CLIENT_SERVICE_MAPPING"
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to create client service" });
+    }
+  });
+
+  // PUT /api/client-services/:id - Update client service (admin only)
+  app.put("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = req.params;
+
+      // Check if client service exists
+      const existingClientService = await storage.getClientServiceById(id);
+      if (!existingClientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      const validationResult = insertClientServiceSchema.partial().safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid client service data", 
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const clientService = await storage.updateClientService(id, validationResult.data);
+      res.json(clientService);
+    } catch (error) {
+      console.error("Error updating client service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to update client service" });
+    }
+  });
+
+  // DELETE /api/client-services/:id - Delete client service (admin only)
+  app.delete("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = req.params;
+
+      // Check if client service exists
+      const existingClientService = await storage.getClientServiceById(id);
+      if (!existingClientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      await storage.deleteClientService(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting client service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to delete client service" });
+    }
+  });
+
+  // ==================================================
+  // CLIENT SERVICE ROLE ASSIGNMENT API ROUTES
+  // ==================================================
+
+  // GET /api/client-services/:clientServiceId/role-assignments - Get role assignments for client service
+  app.get("/api/client-services/:clientServiceId/role-assignments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramClientServiceIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { clientServiceId } = req.params;
+
+      // Check if client service exists
+      const existingClientService = await storage.getClientServiceById(clientServiceId);
+      if (!existingClientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      const roleAssignments = await storage.getClientServiceRoleAssignments(clientServiceId);
+      res.json(roleAssignments);
+    } catch (error) {
+      console.error("Error fetching role assignments:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch role assignments" });
+    }
+  });
+
+  // POST /api/client-services/:clientServiceId/role-assignments - Create role assignment
+  app.post("/api/client-services/:clientServiceId/role-assignments", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramClientServiceIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { clientServiceId } = req.params;
+
+      // Check if client service exists
+      const existingClientService = await storage.getClientServiceById(clientServiceId);
+      if (!existingClientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      const validationResult = insertClientServiceRoleAssignmentSchema.safeParse({
+        ...req.body,
+        clientServiceId
+      });
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid role assignment data", 
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const roleAssignment = await storage.createClientServiceRoleAssignment(validationResult.data);
+      res.status(201).json(roleAssignment);
+    } catch (error) {
+      console.error("Error creating role assignment:", error instanceof Error ? error.message : error);
+      
+      // Handle duplicate assignment case (unique constraint violation)
+      if (error instanceof Error && (error as any).code === '23505') {
+        return res.status(409).json({ 
+          message: "Role assignment already exists for this client service and work role",
+          code: "DUPLICATE_ROLE_ASSIGNMENT"
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to create role assignment" });
+    }
+  });
+
+  // PUT /api/role-assignments/:id - Update role assignment
+  app.put("/api/role-assignments/:id", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = req.params;
+
+      const validationResult = insertClientServiceRoleAssignmentSchema.partial().safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid role assignment data", 
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const roleAssignment = await storage.updateClientServiceRoleAssignment(id, validationResult.data);
+      res.json(roleAssignment);
+    } catch (error) {
+      console.error("Error updating role assignment:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Role assignment not found" });
+      }
+      
+      res.status(500).json({ message: "Failed to update role assignment" });
+    }
+  });
+
+  // DELETE /api/role-assignments/:id - Delete role assignment
+  app.delete("/api/role-assignments/:id", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = req.params;
+
+      await storage.deleteClientServiceRoleAssignment(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting role assignment:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Role assignment not found" });
+      }
+      
+      res.status(500).json({ message: "Failed to delete role assignment" });
+    }
+  });
+
+  // POST /api/role-assignments/:id/deactivate - Deactivate role assignment
+  app.post("/api/role-assignments/:id/deactivate", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = req.params;
+
+      const roleAssignment = await storage.deactivateClientServiceRoleAssignment(id);
+      res.json(roleAssignment);
+    } catch (error) {
+      console.error("Error deactivating role assignment:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error && error.message.includes("not found")) {
+        return res.status(404).json({ message: "Role assignment not found" });
+      }
+      
+      res.status(500).json({ message: "Failed to deactivate role assignment" });
+    }
+  });
+
+  // ==================================================
+  // VALIDATION AND HELPER API ROUTES
+  // ==================================================
+
+  // GET /api/clients/:clientId/service-role-completeness - Check if client has complete role assignments
+  app.get("/api/clients/:clientId/service-role-completeness", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      
+      if (!clientId || typeof clientId !== 'string') {
+        return res.status(400).json({ message: "Valid client ID is required" });
+      }
+
+      // Get all client services for this client
+      const clientServices = await storage.getClientServicesByClientId(clientId);
+      
+      const completenessResults = [];
+      
+      for (const clientService of clientServices) {
+        const completeness = await storage.validateClientServiceRoleCompleteness(
+          clientId, 
+          clientService.service.id
+        );
+        
+        completenessResults.push({
+          clientServiceId: clientService.id,
+          serviceName: clientService.service.name,
+          serviceId: clientService.service.id,
+          isComplete: completeness.isComplete,
+          missingRoles: completeness.missingRoles,
+          assignedRoles: completeness.assignedRoles
+        });
+      }
+      
+      const overallComplete = completenessResults.every(result => result.isComplete);
+      
+      res.json({
+        clientId,
+        overallComplete,
+        services: completenessResults
+      });
+    } catch (error) {
+      console.error("Error checking service role completeness:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to check service role completeness" });
+    }
+  });
+
+  // POST /api/clients/:clientId/validate-service-roles - Validate client's service role assignments
+  app.post("/api/clients/:clientId/validate-service-roles", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      
+      if (!clientId || typeof clientId !== 'string') {
+        return res.status(400).json({ message: "Valid client ID is required" });
+      }
+
+      const validationSchema = z.object({
+        serviceId: z.string(),
+        roleIds: z.array(z.string())
+      });
+
+      const validationResult = validationSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid validation request data", 
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const { serviceId, roleIds } = validationResult.data;
+
+      // Check if client service mapping exists
+      const mappingExists = await storage.checkClientServiceMappingExists(clientId, serviceId);
+      if (!mappingExists) {
+        return res.status(404).json({ 
+          message: "Client service mapping not found",
+          code: "CLIENT_SERVICE_NOT_MAPPED"
+        });
+      }
+
+      // Validate assigned roles against service requirements
+      const roleValidation = await storage.validateAssignedRolesAgainstService(serviceId, roleIds);
+
+      res.json({
+        clientId,
+        serviceId,
+        isValid: roleValidation.isValid,
+        invalidRoles: roleValidation.invalidRoles,
+        allowedRoles: roleValidation.allowedRoles
+      });
+    } catch (error) {
+      console.error("Error validating service roles:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to validate service roles" });
+    }
+  });
+
+  // GET /api/fallback-user - Get current fallback user (admin only)
+  app.get("/api/fallback-user", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const fallbackUser = await storage.getFallbackUser();
+      
+      if (!fallbackUser) {
+        return res.status(404).json({ 
+          message: "No fallback user is currently configured",
+          code: "NO_FALLBACK_USER"
+        });
+      }
+
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = fallbackUser;
+      res.json(sanitizedUser);
+    } catch (error) {
+      console.error("Error fetching fallback user:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch fallback user" });
+    }
+  });
+
+  // POST /api/users/:userId/set-fallback - Set user as fallback (admin only)
+  app.post("/api/users/:userId/set-fallback", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { userId } = req.params;
+      
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({ message: "Valid user ID is required" });
+      }
+
+      // Check if user exists
+      const existingUser = await storage.getUser(userId);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const fallbackUser = await storage.setFallbackUser(userId);
+      
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = fallbackUser;
+      res.json(sanitizedUser);
+    } catch (error) {
+      console.error("Error setting fallback user:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to set fallback user" });
     }
   });
 
