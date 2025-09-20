@@ -890,6 +890,45 @@ export default function ProjectTypeDetail() {
     },
   });
   
+  // Project Type Active Status Mutation
+  const updateProjectTypeActiveMutation = useMutation({
+    mutationFn: async (active: boolean) => {
+      if (!projectTypeId) throw new Error("No project type ID");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, {
+        active
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Project type status updated successfully",
+      });
+      // Invalidate queries to refresh the project type data
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
+    },
+    onError: (error: any) => {
+      // Handle the special 409 error case when trying to deactivate with active projects
+      if (error.status === 409 && error.code === "PROJECTS_USING_TYPE") {
+        toast({
+          title: "Cannot Deactivate Project Type",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update project type status",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  const handleActiveToggle = (checked: boolean) => {
+    updateProjectTypeActiveMutation.mutate(checked);
+  };
+  
   // Stage approval field mutations
   const createApprovalFieldMutation = useMutation({
     mutationFn: async (field: any) => {
@@ -1075,10 +1114,28 @@ export default function ProjectTypeDetail() {
 
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-semibold text-foreground flex items-center" data-testid="text-project-type-name">
-                  <Settings className="w-6 h-6 mr-3 text-primary" />
-                  {projectType.name}
-                </h1>
+                <div className="flex items-center space-x-4">
+                  <h1 className="text-2xl font-semibold text-foreground flex items-center" data-testid="text-project-type-name">
+                    <Settings className="w-6 h-6 mr-3 text-primary" />
+                    {projectType.name}
+                  </h1>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="active-toggle"
+                      checked={projectType.active !== false}
+                      onCheckedChange={handleActiveToggle}
+                      disabled={updateProjectTypeActiveMutation.isPending}
+                      data-testid="switch-active-project-type"
+                    />
+                    <Label 
+                      htmlFor="active-toggle" 
+                      className="text-sm font-medium cursor-pointer"
+                      data-testid="label-active-project-type"
+                    >
+                      {projectType.active !== false ? "Active" : "Inactive"}
+                    </Label>
+                  </div>
+                </div>
                 {projectType.description && (
                   <p className="text-muted-foreground mt-1" data-testid="text-project-type-description">
                     {projectType.description}
