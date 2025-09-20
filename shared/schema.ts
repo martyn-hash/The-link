@@ -300,6 +300,35 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
   `),
 ]);
 
+// Services table
+export const services = pgTable("services", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  description: text("description"),
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }).unique(), // 1:1 relationship
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Work roles table
+export const workRoles = pgTable("work_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Service-Role junction table (many-to-many)
+export const serviceRoles = pgTable("service_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  roleId: varchar("role_id").notNull().references(() => workRoles.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_service_roles_service_id").on(table.serviceId),
+  index("idx_service_roles_role_id").on(table.roleId),
+  unique("unique_service_role").on(table.serviceId, table.roleId),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
   assignedProjects: many(projects, { relationName: "assignee" }),
@@ -680,6 +709,24 @@ export const insertUserNotificationPreferencesSchema = createInsertSchema(userNo
 
 export const updateUserNotificationPreferencesSchema = insertUserNotificationPreferencesSchema.partial();
 
+// Services schema
+export const insertServiceSchema = createInsertSchema(services).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Work roles schema  
+export const insertWorkRoleSchema = createInsertSchema(workRoles).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Service roles schema
+export const insertServiceRoleSchema = createInsertSchema(serviceRoles).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
@@ -805,11 +852,35 @@ export type InsertKanbanStage = z.infer<typeof insertKanbanStageSchema>;
 export type ChangeReason = typeof changeReasons.$inferSelect;
 export type InsertChangeReason = z.infer<typeof insertChangeReasonSchema>;
 // Project type definitions
-export const projectTypesRelations = relations(projectTypes, ({ many }) => ({
+export const projectTypesRelations = relations(projectTypes, ({ many, one }) => ({
   projects: many(projects),
   kanbanStages: many(kanbanStages),
   changeReasons: many(changeReasons),
   stageApprovals: many(stageApprovals),
+  service: one(services), // 1:1 relationship with services
+}));
+
+export const servicesRelations = relations(services, ({ one, many }) => ({
+  projectType: one(projectTypes, {
+    fields: [services.projectTypeId],
+    references: [projectTypes.id],
+  }),
+  serviceRoles: many(serviceRoles),
+}));
+
+export const workRolesRelations = relations(workRoles, ({ many }) => ({
+  serviceRoles: many(serviceRoles),
+}));
+
+export const serviceRolesRelations = relations(serviceRoles, ({ one }) => ({
+  service: one(services, {
+    fields: [serviceRoles.serviceId],
+    references: [services.id],
+  }),
+  role: one(workRoles, {
+    fields: [serviceRoles.roleId],
+    references: [workRoles.id],
+  }),
 }));
 
 // Type definitions
@@ -833,6 +904,12 @@ export type InsertStageApprovalResponse = z.infer<typeof insertStageApprovalResp
 export type UserNotificationPreferences = typeof userNotificationPreferences.$inferSelect;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
+export type Service = typeof services.$inferSelect;
+export type InsertService = z.infer<typeof insertServiceSchema>;
+export type WorkRole = typeof workRoles.$inferSelect;
+export type InsertWorkRole = z.infer<typeof insertWorkRoleSchema>;
+export type ServiceRole = typeof serviceRoles.$inferSelect;
+export type InsertServiceRole = z.infer<typeof insertServiceRoleSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 
