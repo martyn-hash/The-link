@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -275,6 +275,11 @@ export function ClientCreationWizard({
     step5: { serviceConfigurations: {} },
   });
 
+  // UI state for form watchers (prevents infinite re-renders)
+  const [currentClientType, setCurrentClientType] = useState<"company" | "individual">("company");
+  const [selectedPeopleCount, setSelectedPeopleCount] = useState(0);
+  const [selectedServicesCount, setSelectedServicesCount] = useState(0);
+
   // API data state
   const [companiesHouseCompany, setCompaniesHouseCompany] = useState<any>(null);
   const [companiesHouseOfficers, setCompaniesHouseOfficers] = useState<CompaniesHouseOfficer[]>([]);
@@ -318,8 +323,8 @@ export function ClientCreationWizard({
     mode: "onChange", // Enable real-time validation
   });
 
-  // Get current step form
-  const getCurrentStepForm = () => {
+  // Get current step form (memoized to prevent re-computation)
+  const currentStepForm = useMemo(() => {
     switch (currentStep) {
       case 1: return step1Form;
       case 2: return step2Form;
@@ -328,9 +333,7 @@ export function ClientCreationWizard({
       case 5: return step5Form;
       default: return step1Form;
     }
-  };
-
-  const currentStepForm = getCurrentStepForm();
+  }, [currentStep, step1Form, step2Form, step3Form, step4Form, step5Form]);
 
   // Fetch users for role assignments in step 5
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
@@ -355,6 +358,11 @@ export function ClientCreationWizard({
       setCompaniesHouseOfficers([]);
       setCompanyLookupError(null);
       
+      // Reset UI state
+      setCurrentClientType("company");
+      setSelectedPeopleCount(0);
+      setSelectedServicesCount(0);
+      
       // Reset all forms
       step1Form.reset(initialWizardData.step1);
       step2Form.reset(initialWizardData.step2);
@@ -364,71 +372,112 @@ export function ClientCreationWizard({
     }
   }, [open]);
 
+  // Track Step 1 form changes for UI state
+  useEffect(() => {
+    const subscription = step1Form.watch((value) => {
+      if (value.clientType && value.clientType !== currentClientType) {
+        setCurrentClientType(value.clientType);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [currentClientType]);
+
+  // Track Step 4 form changes for UI state
+  useEffect(() => {
+    const subscription = step4Form.watch((value) => {
+      const selectedCount = value.selectedServiceIds?.length || 0;
+      if (selectedCount !== selectedServicesCount) {
+        setSelectedServicesCount(selectedCount);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [selectedServicesCount]);
+
   // Programmatic validation for Step 2: selectedPeopleIds based on clientType
   useEffect(() => {
+    // Only perform validation if we're on step 2 to avoid unnecessary processing
+    if (currentStep !== 2) return;
+    
     const subscription = step2Form.watch((value, { name }) => {
       const selectedPeopleIds = value.selectedPeopleIds || [];
       const clientType = wizardData.step1.clientType;
       
-      // Only perform validation if we're on step 2 to avoid unnecessary processing
-      if (currentStep !== 2) return;
+      // Update UI state
+      setSelectedPeopleCount(selectedPeopleIds.length);
       
-      // Clear any existing errors first
-      step2Form.clearErrors('selectedPeopleIds');
-      
-      // Apply validation logic
-      if (clientType === 'company' && selectedPeopleIds.length === 0) {
-        step2Form.setError('selectedPeopleIds', {
-          message: 'Please select at least one director'
-        });
-      }
-      // For individual clients or when people are selected, errors are already cleared above
+      // Use timeout to prevent immediate re-render cycles
+      setTimeout(() => {
+        step2Form.clearErrors('selectedPeopleIds');
+        
+        if (clientType === 'company' && selectedPeopleIds.length === 0) {
+          step2Form.setError('selectedPeopleIds', {
+            message: 'Please select at least one director'
+          });
+        }
+      }, 0);
     });
     
     return () => subscription.unsubscribe();
-  }, [wizardData.step1.clientType, currentStep]);
+  }, [currentStep]); // Removed wizardData.step1.clientType to prevent circular dependency
 
   // Programmatic validation for Step 5: roleAssignments for each service
   useEffect(() => {
-    const subscription = step5Form.watch((value, { name }) => {
+    // Only perform validation if we're on step 5 and have services data
+    if (currentStep !== 5 || !services) return;
+    
+    let isProcessing = false; // Prevent recursive calls
+    
+    const subscription = step5Form.watch((value, { name, type }) => {
+      // Skip if we're already processing to prevent recursion
+      if (isProcessing) return;
+      
+      // Only process actual user changes, not programmatic setValue calls
+      if (type !== 'change') return;
+      
       const serviceConfigurations = value.serviceConfigurations || {};
       const selectedServiceIds = wizardData.step4.selectedServiceIds || [];
       
-      // Only perform validation if we're on step 5 and have services data
-      if (currentStep !== 5 || !services) return;
+      isProcessing = true;
       
-      // Clear all role assignment errors first
-      selectedServiceIds.forEach(serviceId => {
-        const service = services?.find(s => s.id === serviceId);
-        if (service) {
-          service.roles.forEach(role => {
-            step5Form.clearErrors(`serviceConfigurations.${serviceId}.roleAssignments.${role.id}`);
-          });
-        }
-      });
-      
-      // Apply validation for each selected service and required role
-      selectedServiceIds.forEach(serviceId => {
-        const service = services?.find(s => s.id === serviceId);
-        const serviceConfig = serviceConfigurations[serviceId];
-        
-        if (service && serviceConfig) {
-          service.roles.forEach(role => {
-            const roleAssignment = serviceConfig.roleAssignments?.[role.id];
-            
-            // If role assignment is empty, set error
-            if (!roleAssignment || roleAssignment.trim() === '') {
-              step5Form.setError(`serviceConfigurations.${serviceId}.roleAssignments.${role.id}`, {
-                message: 'This role is required'
+      // Use requestAnimationFrame to prevent immediate re-render cycles
+      requestAnimationFrame(() => {
+        try {
+          // Clear all role assignment errors first
+          selectedServiceIds.forEach(serviceId => {
+            const service = services?.find(s => s.id === serviceId);
+            if (service) {
+              service.roles.forEach(role => {
+                step5Form.clearErrors(`serviceConfigurations.${serviceId}.roleAssignments.${role.id}`);
               });
             }
           });
+          
+          // Apply validation for each selected service and required role
+          selectedServiceIds.forEach(serviceId => {
+            const service = services?.find(s => s.id === serviceId);
+            const serviceConfig = serviceConfigurations[serviceId];
+            
+            if (service && serviceConfig) {
+              service.roles.forEach(role => {
+                const roleAssignment = serviceConfig.roleAssignments?.[role.id];
+                
+                // If role assignment is empty, set error
+                if (!roleAssignment || roleAssignment.trim() === '') {
+                  step5Form.setError(`serviceConfigurations.${serviceId}.roleAssignments.${role.id}`, {
+                    message: 'This role is required'
+                  });
+                }
+              });
+            }
+          });
+        } finally {
+          isProcessing = false;
         }
       });
     });
     
     return () => subscription.unsubscribe();
-  }, [wizardData.step4.selectedServiceIds, services, currentStep]);
+  }, [currentStep, services]); // Removed wizardData.step4.selectedServiceIds to prevent circular dependency
 
   // Companies House company lookup
   const lookupCompanyMutation = useMutation({
@@ -754,7 +803,12 @@ export function ClientCreationWizard({
         }
         
         // Update step5 form with updated configurations (preserving existing data)
-        step5Form.setValue('serviceConfigurations', updatedServiceConfigs);
+        // Use shouldValidate: false to prevent triggering watchers and validation
+        step5Form.setValue('serviceConfigurations', updatedServiceConfigs, { 
+          shouldValidate: false, 
+          shouldTouch: false, 
+          shouldDirty: false 
+        });
         setWizardData(prev => ({ ...prev, step5: { serviceConfigurations: updatedServiceConfigs } }));
         break;
       }
@@ -1015,7 +1069,7 @@ export function ClientCreationWizard({
                     </div>
                   )}
 
-                    {step1Form.watch("clientType") === "individual" && (
+                    {currentClientType === "individual" && (
                     <div className="space-y-4">
                         <FormField
                           control={step1Form.control}
@@ -1155,11 +1209,11 @@ export function ClientCreationWizard({
                     </div>
                   )}
                   
-                  {wizardData.step1.clientType === "company" && step2Form.watch("selectedPeopleIds").length > 0 && (
+                  {wizardData.step1.clientType === "company" && selectedPeopleCount > 0 && (
                     <Alert>
                       <CheckCircle className="h-4 w-4" />
                       <AlertDescription>
-                        {step2Form.watch("selectedPeopleIds").length} person(s) selected for this client.
+                        {selectedPeopleCount} person(s) selected for this client.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -1346,11 +1400,11 @@ export function ClientCreationWizard({
                     />
                   )}
                   
-                  {step4Form.watch("selectedServiceIds").length > 0 && (
+                  {selectedServicesCount > 0 && (
                     <Alert>
                       <CheckCircle className="h-4 w-4" />
                       <AlertDescription>
-                        {step4Form.watch("selectedServiceIds").length} service(s) selected for this client.
+                        {selectedServicesCount} service(s) selected for this client.
                       </AlertDescription>
                     </Alert>
                     )}
