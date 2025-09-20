@@ -10,7 +10,8 @@ import type {
   KanbanStage, 
   ChangeReason, 
   StageApproval,
-  StageApprovalField
+  StageApprovalField,
+  WorkRole
 } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
@@ -90,7 +91,8 @@ const DEFAULT_STAGE_APPROVAL_FIELD: EditingStageApprovalField = {
   stageApprovalId: "", fieldName: "", fieldType: "boolean", isRequired: false, order: 0 
 };
 
-const ROLE_OPTIONS = [
+// System roles fallback for backward compatibility
+const SYSTEM_ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
   { value: "client_manager", label: "Client Manager" },
@@ -596,6 +598,24 @@ export default function ProjectTypeDetail() {
     queryKey: ["/api/config/project-types", projectTypeId, "stage-approvals"],
     enabled: !!projectTypeId && isAuthenticated && !!user,
   });
+
+  // Fetch roles for this project type (service-specific roles if mapped, empty array if not)
+  const { data: projectTypeRoles, isLoading: rolesLoading } = useQuery<WorkRole[]>({
+    queryKey: ["/api/config/project-types", projectTypeId, "roles"],
+    enabled: !!projectTypeId && isAuthenticated && !!user,
+  });
+
+  // Use service-specific roles if available, otherwise fall back to system roles
+  const availableRoles = projectTypeRoles && projectTypeRoles.length > 0 
+    ? projectTypeRoles.map(role => ({ value: role.name.toLowerCase().replace(/\s+/g, '_'), label: role.name }))
+    : SYSTEM_ROLE_OPTIONS;
+
+  // Helper function to get role label from role value
+  const getRoleLabel = (roleValue: string | null | undefined) => {
+    if (!roleValue) return "Unknown";
+    const role = availableRoles.find(r => r.value === roleValue);
+    return role ? role.label : roleValue;
+  };
 
   // Fetch all stage approval fields (needed for managing approval fields)
   const { data: allStageApprovalFields, isLoading: stageApprovalFieldsLoading } = useQuery<StageApprovalField[]>({
@@ -1212,7 +1232,7 @@ export default function ProjectTypeDetail() {
                             {stage.name}
                           </CardTitle>
                           <Badge variant="secondary" data-testid={`badge-stage-role-${stage.id}`}>
-                            {ROLE_OPTIONS.find(r => r.value === stage.assignedRole)?.label || stage.assignedRole}
+                            {getRoleLabel(stage.assignedRole)}
                           </Badge>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -1306,18 +1326,24 @@ export default function ProjectTypeDetail() {
                         <Select
                           value={editingStage?.assignedRole || "client_manager"}
                           onValueChange={(value) => setEditingStage(prev => ({ ...prev!, assignedRole: value }))}
+                          disabled={rolesLoading}
                         >
                           <SelectTrigger data-testid="select-stage-role">
-                            <SelectValue />
+                            <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select role"} />
                           </SelectTrigger>
                           <SelectContent>
-                            {ROLE_OPTIONS.map(role => (
+                            {availableRoles.map(role => (
                               <SelectItem key={role.value} value={role.value}>
                                 {role.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {projectTypeRoles && projectTypeRoles.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Using service-specific roles
+                          </p>
+                        )}
                       </div>
 
                       <div className="space-y-2">

@@ -1760,6 +1760,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get roles for a specific project type (service-specific roles if mapped, empty array if not)
+  app.get("/api/config/project-types/:projectTypeId/roles", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectTypeIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid request parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { projectTypeId } = paramValidation.data;
+
+      // Find the service mapped to this project type
+      const service = await storage.getServiceByProjectTypeId(projectTypeId);
+      
+      if (!service) {
+        // No service mapped to this project type, return empty array for backward compatibility
+        return res.json([]);
+      }
+
+      // Get work roles for this service
+      const workRoles = await storage.getWorkRolesByServiceId(service.id);
+      res.json(workRoles);
+    } catch (error) {
+      console.error("Error fetching project type roles:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch project type roles" });
+    }
+  });
+
   // Stage-Reason Mapping Routes
   app.get("/api/config/stage-reason-maps", isAuthenticated, async (req, res) => {
     try {

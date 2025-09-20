@@ -240,6 +240,8 @@ export interface IStorage {
 
   // Service-Role Mappings
   getServiceRolesByServiceId(serviceId: string): Promise<ServiceRole[]>;
+  getServiceByProjectTypeId(projectTypeId: string): Promise<Service | undefined>;
+  getWorkRolesByServiceId(serviceId: string): Promise<WorkRole[]>;
   addRoleToService(serviceId: string, roleId: string): Promise<ServiceRole>;
   removeRoleFromService(serviceId: string, roleId: string): Promise<void>;
 
@@ -2681,6 +2683,19 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(serviceRoles)
+      .where(eq(serviceRoles.serviceId, serviceId));
+  }
+
+  async getWorkRolesByServiceId(serviceId: string): Promise<WorkRole[]> {
+    return await db
+      .select({
+        id: workRoles.id,
+        name: workRoles.name,
+        description: workRoles.description,
+        createdAt: workRoles.createdAt,
+      })
+      .from(serviceRoles)
+      .innerJoin(workRoles, eq(serviceRoles.roleId, workRoles.id))
       .where(eq(serviceRoles.serviceId, serviceId));
   }
 
