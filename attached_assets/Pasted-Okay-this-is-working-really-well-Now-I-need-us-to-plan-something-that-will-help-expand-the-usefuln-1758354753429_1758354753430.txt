@@ -1,0 +1,51 @@
+Okay, this is working really well. Now I need us to plan something that will help expand the usefulness of the system considerably. 
+
+Let me explain: 
+
+The final structure should look like this: 
+
+Top level is CLIENT (which we have, but will expand later)
+A CLIENT has a relationship to PEOPLE (which we have, but will expand later)
+A CLIENT can have SERVICES associated with them (which we do not have currently, but are about to build). 
+
+SERVICES will be another definable field in a new admin restricted section.
+
+When the use is creating the CLIENT at the front end, they will be prompted to select the SERVICES that relate to the CLIENT. 
+
+When selecting a SERVICE during the creation process for a client, the user will define the frequency and the next start date. 
+
+‘Weekly’, ‘Fortnightly’, ‘Monthly’, ‘Quarterly’, ‘Annually’
+
+SERVICES will have a relationship to PROJECTS
+
+For example: 
+
+1) User creates CLIENT
+2) User Assigns CLIENT with Bookkeeping SERVICE. 
+3) The Bookkeeping SERVICE has already been mapped to the Monthly Bookkeeping PROJECT
+
+The system (later, when we build it) will run a nightly process to check if any SERVICES are due to commence that day, and will create the appropriate PROJECT. 
+
+When the system has created the PROJECT, it will set the Next Start Date for this SERVICE in the CLIENT view. 
+
+Later, we will add the idea of ROLES into the system. So against a SERVICE will have ROLES defined. 
+
+For example, these could be ‘Bookkeeper’, ‘Client Manager’, ‘Quality Checker’
+
+And when we create the PROJECT linked to the SERVICE, rather than specifying individual users, we will map kanban stage to a ROLE. 
+
+When a CLIENT is created and SERVICES are picked, as part of the creation process, the user would have to define which users are linked to the ROLES. 
+
+This would mean that when the system checks overnight which SERVICES are due to be scheduled and it creates the appropriate PROJECTS, it would assign the tasks and send notifications to the users that perform that ROLE for individual CLIENT. 
+
+So for next task, I would like: 
+
+1) A new menu added to the left hand menu called ’Services’. 
+2) When I click into it, I see 2 tabs ‘Services’ & ‘Roles’. 
+3) When I create a SERVICE, I would map it to ROLES at this point. 
+4) When I create A SERVICE in this area, I would also map it to a PROJECT TYPE
+
+Then later when we create a CLIENT, and we pick the SERVICES, as well as picking the frequency of the SERVICE, I’ll need to complete the USERS you are mapped to the ROLES for this SERVICE. (But we’ll build this out later) 
+
+
+When we have done this, we’ll revisit the idea of ROLES inside PROJECT TYPES, but we’ll come to this later. For now I just want to place that part in your thinking - that in the future, rather than having a kanban stage mapped to a specific user, we might have the option of mapping it to a ROLE instead, which would find the USER, with this ROLE for this SERVICE, for the CLIENT.
