@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import { type Service, type WorkRole, type ProjectType, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
+import { type Service, type WorkRole, type ProjectType, type UDFDefinition, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { nanoid } from "nanoid";
 
 // Form schemas
 const createServiceFormSchema = insertServiceSchema.extend({
@@ -79,6 +81,172 @@ interface WorkRoleWithUsage extends WorkRole {
 type ViewMode = 'list' | 'create-service' | 'edit-service' | 'create-role' | 'edit-role';
 type TabMode = 'services' | 'roles';
 
+// UDF Editor Component
+interface UDFEditorProps {
+  control: any;
+  name: string;
+}
+
+function UDFEditor({ control, name }: UDFEditorProps) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name,
+  });
+
+  const addUDF = () => {
+    append({
+      id: nanoid(),
+      name: "",
+      type: "short_text" as const,
+      required: false,
+      placeholder: "",
+    });
+  };
+
+  const udfTypes = [
+    { value: "short_text", label: "Short Text" },
+    { value: "number", label: "Number" },
+    { value: "date", label: "Date" },
+    { value: "boolean", label: "Boolean" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="font-medium">User Defined Fields</h4>
+          <p className="text-sm text-muted-foreground">
+            Define custom fields that will be available when creating clients for this service
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addUDF}
+          data-testid="button-add-udf"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Field
+        </Button>
+      </div>
+
+      {fields.length > 0 && (
+        <div className="space-y-3">
+          {fields.map((field, index) => (
+            <Card key={field.id} className="p-4" data-testid={`card-udf-${index}`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <FormField
+                  control={control}
+                  name={`${name}.${index}.name`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Field Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., Tax ID"
+                          data-testid={`input-udf-name-${index}`}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={control}
+                  name={`${name}.${index}.type`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Field Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} data-testid={`select-udf-type-${index}`}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {udfTypes.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={control}
+                  name={`${name}.${index}.placeholder`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Placeholder</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., Enter tax ID..."
+                          data-testid={`input-udf-placeholder-${index}`}
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex items-center space-x-4">
+                  <FormField
+                    control={control}
+                    name={`${name}.${index}.required`}
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid={`checkbox-udf-required-${index}`}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Required</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => remove(index)}
+                    data-testid={`button-remove-udf-${index}`}
+                    className="shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {fields.length === 0 && (
+        <Card className="p-6" data-testid="card-no-udfs">
+          <div className="text-center text-muted-foreground">
+            <p className="text-sm">No custom fields defined</p>
+            <p className="text-xs mt-1">Click "Add Field" to create custom fields for this service</p>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function Services() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -102,6 +270,7 @@ export default function Services() {
       description: "",
       projectTypeId: "",
       roleIds: [],
+      udfDefinitions: [],
     },
   });
 
@@ -332,6 +501,7 @@ export default function Services() {
       description: service.description ?? "",
       projectTypeId: service.projectTypeId,
       roleIds: service.roles.map(role => role.id),
+      udfDefinitions: Array.isArray(service.udfDefinitions) ? service.udfDefinitions : [],
     });
     setViewMode('edit-service');
   };
@@ -670,6 +840,10 @@ export default function Services() {
                               </FormItem>
                             )}
                           />
+                          
+                          {/* UDF Editor Section */}
+                          <UDFEditor control={serviceForm.control} name="udfDefinitions" />
+                          
                           <div className="flex justify-end space-x-2 pt-4">
                             <Button
                               type="button"
@@ -812,6 +986,10 @@ export default function Services() {
                               </FormItem>
                             )}
                           />
+                          
+                          {/* UDF Editor Section */}
+                          <UDFEditor control={serviceForm.control} name="udfDefinitions" />
+                          
                           <div className="flex justify-end space-x-2 pt-4">
                             <Button
                               type="button"
