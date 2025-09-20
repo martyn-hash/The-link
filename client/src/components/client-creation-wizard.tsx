@@ -468,8 +468,27 @@ export function ClientCreationWizard({
       // Backend returns: { data: { transformedPeopleData: [{ person: {...}, clientPeopleData: {...} }] } }
       const rawOfficersData = data.data?.transformedPeopleData || data.transformedPeopleData || [];
       
-      // Extract the person objects from the wrapped structure
-      const officersData = rawOfficersData.map((item: any) => item.person || item).filter(Boolean);
+      // Extract and merge person + clientPeopleData into flat structure for frontend
+      const officersData = rawOfficersData.map((item: any) => {
+        const person = item.person || item;
+        const clientPeopleData = item.clientPeopleData || {};
+        
+        return {
+          // Use personNumber as ID if available, otherwise create one from fullName
+          id: person.personNumber || person.fullName?.replace(/\s+/g, '_').toLowerCase() || 'unknown',
+          fullName: person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim(),
+          firstName: person.firstName,
+          lastName: person.lastName,
+          officerRole: clientPeopleData.officerRole || 'Unknown Role',
+          appointedOn: clientPeopleData.appointedOn,
+          resignedOn: clientPeopleData.resignedOn,
+          nationality: person.nationality,
+          email: person.email,
+          telephone: person.telephone,
+          // Include other fields that might be useful
+          ...person
+        };
+      }).filter(officer => officer.fullName && officer.fullName.trim() !== '');
       
       setCompaniesHouseOfficers(officersData);
       toast({
