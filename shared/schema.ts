@@ -139,7 +139,10 @@ export const clients = pgTable("clients", {
   
   // Metadata
   companiesHouseData: jsonb("companies_house_data"), // Full JSON response from Companies House API
-});
+}, (table) => [
+  // Unique index on companyNumber to prevent duplicate clients and enable lookups
+  unique("unique_company_number").on(table.companyNumber),
+]);
 
 // People table for Companies House officers and contacts
 export const people = pgTable("people", {
@@ -184,7 +187,10 @@ export const people = pgTable("people", {
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Unique index on personNumber to prevent duplicate officer records from Companies House
+  unique("unique_person_number").on(table.personNumber),
+]);
 
 // Client-People junction table for Companies House officers and relationships
 export const clientPeople = pgTable("client_people", {
