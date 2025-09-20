@@ -9,6 +9,7 @@ import {
   List, 
   Folder, 
   Settings, 
+  Settings2,
   Upload, 
   Users, 
   LogOut,
@@ -63,6 +64,12 @@ export default function Sidebar({ user }: SidebarProps) {
       label: "Project Types",
       href: "/project-types",
       icon: Settings,
+      roles: ["admin"],
+    },
+    {
+      label: "Services",
+      href: "/services",
+      icon: Settings2,
       roles: ["admin"],
     },
     {
