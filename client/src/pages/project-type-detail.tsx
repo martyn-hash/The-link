@@ -616,7 +616,7 @@ export default function ProjectTypeDetail() {
   });
 
 
-  // Handle errors
+  // Handle unauthorized errors only - project not found is handled inline
   useEffect(() => {
     if (projectTypeError && isUnauthorizedError(projectTypeError)) {
       toast({
@@ -629,16 +629,7 @@ export default function ProjectTypeDetail() {
       }, 500);
       return;
     }
-    
-    if (projectTypeError) {
-      toast({
-        title: "Error",
-        description: "Project type not found",
-        variant: "destructive",
-      });
-      navigate("/settings");
-    }
-  }, [projectTypeError, toast, navigate]);
+  }, [projectTypeError, toast]);
 
   // Stage mutations - create stages for this project type
   const createStageMutation = useMutation({
