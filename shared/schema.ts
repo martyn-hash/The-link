@@ -56,6 +56,9 @@ export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["
 // Comparison type enum for number fields in stage approvals
 export const comparisonTypeEnum = pgEnum("comparison_type", ["equal_to", "less_than", "greater_than"]);
 
+// UDF type enum for services
+export const udfTypeEnum = pgEnum("udf_type", ["number", "date", "boolean", "short_text"]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -306,6 +309,7 @@ export const services = pgTable("services", {
   name: varchar("name").notNull().unique(),
   description: text("description"),
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }).unique(), // 1:1 relationship
+  udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`), // Array of UDF definitions
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -709,11 +713,24 @@ export const insertUserNotificationPreferencesSchema = createInsertSchema(userNo
 
 export const updateUserNotificationPreferencesSchema = insertUserNotificationPreferencesSchema.partial();
 
+// UDF definition schema
+export const udfDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Field name is required"),
+  type: z.enum(["number", "date", "boolean", "short_text"]),
+  required: z.boolean(),
+  placeholder: z.string().optional(),
+});
+
 // Services schema
 export const insertServiceSchema = createInsertSchema(services).omit({
   id: true,
   createdAt: true,
+}).extend({
+  udfDefinitions: z.array(udfDefinitionSchema).optional().default([]),
 });
+
+export const updateServiceSchema = insertServiceSchema.partial();
 
 // Work roles schema  
 export const insertWorkRoleSchema = createInsertSchema(workRoles).omit({
@@ -904,8 +921,10 @@ export type InsertStageApprovalResponse = z.infer<typeof insertStageApprovalResp
 export type UserNotificationPreferences = typeof userNotificationPreferences.$inferSelect;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
+export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;
 export type Service = typeof services.$inferSelect;
 export type InsertService = z.infer<typeof insertServiceSchema>;
+export type UpdateService = z.infer<typeof updateServiceSchema>;
 export type WorkRole = typeof workRoles.$inferSelect;
 export type InsertWorkRole = z.infer<typeof insertWorkRoleSchema>;
 export type ServiceRole = typeof serviceRoles.$inferSelect;
