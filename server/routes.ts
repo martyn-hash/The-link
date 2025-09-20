@@ -2735,6 +2735,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/projects/:projectId/role-assignee - Get the user assigned to the current stage's role for a project
+  app.get("/api/projects/:projectId/role-assignee", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { projectId } = req.params;
+      
+      if (!projectId || typeof projectId !== 'string') {
+        return res.status(400).json({ message: "Valid project ID is required" });
+      }
+
+      // Get the project with its current stage and client information
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Get the current stage configuration to find the assigned role
+      const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+      const currentStage = stages.find(stage => stage.name === project.currentStatus);
+      
+      if (!currentStage || !currentStage.assignedRole) {
+        // If no stage found or no role assigned to stage, fallback to client manager or current assignee
+        const assignee = project.currentAssignee || project.clientManager;
+        if (assignee) {
+          const { passwordHash, ...sanitizedUser } = assignee;
+          return res.json({ 
+            user: sanitizedUser, 
+            roleUsed: null,
+            usedFallback: false,
+            source: 'direct_assignment'
+          });
+        } else {
+          return res.status(404).json({ message: "No assignee found and no role configured for current stage" });
+        }
+      }
+
+      // Try to resolve the user assigned to this role for this client
+      let resolvedUser = await storage.resolveRoleAssigneeForClient(
+        project.clientId, 
+        project.projectTypeId, 
+        currentStage.assignedRole
+      );
+
+      let usedFallback = false;
+      let source = 'role_assignment';
+
+      // If no role assignment found, use fallback user
+      if (!resolvedUser) {
+        resolvedUser = await storage.getFallbackUser();
+        usedFallback = true;
+        source = 'fallback_user';
+        
+        if (!resolvedUser) {
+          return res.status(404).json({ 
+            message: "No user assigned to role and no fallback user configured",
+            code: "NO_ASSIGNEE_OR_FALLBACK"
+          });
+        }
+      }
+
+      // Strip password hash from response for security
+      const { passwordHash, ...sanitizedUser } = resolvedUser;
+      
+      res.json({
+        user: sanitizedUser,
+        roleUsed: currentStage.assignedRole,
+        usedFallback,
+        source
+      });
+    } catch (error) {
+      console.error("Error resolving project role assignee:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to resolve project role assignee" });
+    }
+  });
+
   // Test email endpoint (development only)
   if (process.env.NODE_ENV === 'development') {
     app.post("/api/test-email", isAuthenticated, requireAdmin, async (req: any, res) => {

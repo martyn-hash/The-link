@@ -5,8 +5,16 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MoreHorizontal, AlertCircle, Clock } from "lucide-react";
-import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
+import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
+
+// Type for role assignee API response
+interface RoleAssigneeResponse {
+  user: User;
+  roleUsed: string | null;
+  usedFallback: boolean;
+  source: 'role_assignment' | 'fallback_user' | 'direct_assignment';
+}
 
 interface ProjectCardProps {
   project: ProjectWithRelations;
@@ -33,6 +41,20 @@ export default function ProjectCard({
     const projectSpecificStage = projectStages.find(s => s.name === project.currentStatus);
     return projectSpecificStage || stageConfig;
   }, [projectStages, project.currentStatus, stageConfig]);
+
+  // Fetch role-based assignee for this project
+  const { 
+    data: roleAssigneeData, 
+    isLoading: isLoadingAssignee, 
+    error: roleAssigneeError 
+  } = useQuery<RoleAssigneeResponse>({
+    queryKey: ['/api/projects', project.id, 'role-assignee'],
+    enabled: !!project.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2, // Retry failed requests up to 2 times
+    retryDelay: 1000, // Wait 1 second between retries
+  });
+
   const {
     attributes,
     listeners,
@@ -50,12 +72,85 @@ export default function ProjectCard({
     transition,
   };
 
+  // Calculate assignee info using role-based assignment with fallback to direct assignment
+  const assigneeInfo = useMemo(() => {
+    // If still loading role assignment, use a loading placeholder
+    if (isLoadingAssignee) {
+      return {
+        initials: "...",
+        source: "loading" as const,
+        usedFallback: false,
+        roleUsed: null
+      };
+    }
 
-  const assigneeInitials = project.currentAssignee
-    ? `${project.currentAssignee.firstName?.charAt(0) || ''}${project.currentAssignee.lastName?.charAt(0) || ''}`
-    : project.clientManager
-    ? `${project.clientManager.firstName?.charAt(0) || ''}${project.clientManager.lastName?.charAt(0) || ''}`
-    : "?";
+    // If role assignment API call failed, fallback to direct assignment
+    if (roleAssigneeError) {
+      console.warn(`Role assignment API failed for project ${project.id}:`, roleAssigneeError);
+      // Fallback to direct assignment when role-based assignment fails
+      if (project.currentAssignee) {
+        return {
+          initials: `${project.currentAssignee.firstName?.charAt(0) || ''}${project.currentAssignee.lastName?.charAt(0) || ''}`,
+          source: "direct_assignment_fallback" as const,
+          usedFallback: false,
+          roleUsed: null
+        };
+      }
+      
+      if (project.clientManager) {
+        return {
+          initials: `${project.clientManager.firstName?.charAt(0) || ''}${project.clientManager.lastName?.charAt(0) || ''}`,
+          source: "direct_assignment_fallback" as const,
+          usedFallback: false,
+          roleUsed: null
+        };
+      }
+
+      return {
+        initials: "?",
+        source: "error" as const,
+        usedFallback: false,
+        roleUsed: null
+      };
+    }
+
+    // Use role-based assignment if available
+    if (roleAssigneeData?.user) {
+      const user = roleAssigneeData.user;
+      return {
+        initials: `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`,
+        source: roleAssigneeData.source,
+        usedFallback: roleAssigneeData.usedFallback,
+        roleUsed: roleAssigneeData.roleUsed
+      };
+    }
+
+    // Final fallback to direct assignment (for backward compatibility)
+    if (project.currentAssignee) {
+      return {
+        initials: `${project.currentAssignee.firstName?.charAt(0) || ''}${project.currentAssignee.lastName?.charAt(0) || ''}`,
+        source: "direct_assignment" as const,
+        usedFallback: false,
+        roleUsed: null
+      };
+    }
+    
+    if (project.clientManager) {
+      return {
+        initials: `${project.clientManager.firstName?.charAt(0) || ''}${project.clientManager.lastName?.charAt(0) || ''}`,
+        source: "direct_assignment" as const,
+        usedFallback: false,
+        roleUsed: null
+      };
+    }
+
+    return {
+      initials: "?",
+      source: "none" as const,
+      usedFallback: false,
+      roleUsed: null
+    };
+  }, [isLoadingAssignee, roleAssigneeError, roleAssigneeData, project.currentAssignee, project.clientManager, project.id]);
 
   // Memoized calculation of current business hours in stage using shared calculateCurrentInstanceTime function
   const currentBusinessHours = useMemo(() => {
@@ -158,8 +253,26 @@ export default function ProjectCard({
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center space-x-3 text-muted-foreground">
             <span className="flex items-center space-x-1">
-              <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-xs font-medium">
-                {assigneeInitials}
+              <div 
+                className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium ${
+                  assigneeInfo.source === 'loading' 
+                    ? 'bg-muted animate-pulse' 
+                    : assigneeInfo.usedFallback 
+                    ? 'bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400' 
+                    : 'bg-accent'
+                }`}
+                data-testid={`assignee-avatar-${project.id}`}
+                title={
+                  assigneeInfo.source === 'loading' 
+                    ? 'Loading assignee...'
+                    : assigneeInfo.usedFallback 
+                    ? `Fallback user (role: ${assigneeInfo.roleUsed})` 
+                    : assigneeInfo.roleUsed 
+                    ? `Role-based assignment (${assigneeInfo.roleUsed})` 
+                    : 'Direct assignment'
+                }
+              >
+                {assigneeInfo.initials}
               </div>
             </span>
             <div className="flex items-center space-x-2">
