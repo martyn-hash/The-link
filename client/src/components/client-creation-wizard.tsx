@@ -276,7 +276,7 @@ export function ClientCreationWizard({
   });
 
   // API data state
-  const [companiesHouseCompany, setCompaniesHouseCompany] = useState<CompaniesHouseCompany | null>(null);
+  const [companiesHouseCompany, setCompaniesHouseCompany] = useState<any>(null);
   const [companiesHouseOfficers, setCompaniesHouseOfficers] = useState<CompaniesHouseOfficer[]>([]);
   const [isLoadingCompanyData, setIsLoadingCompanyData] = useState(false);
   const [companyLookupError, setCompanyLookupError] = useState<string | null>(null);
@@ -430,12 +430,14 @@ export function ClientCreationWizard({
       const response = await apiRequest("GET", `/api/companies-house/company/${companyNumber}`);
       return await response.json();
     },
-    onSuccess: (data: CompaniesHouseCompany) => {
-      setCompaniesHouseCompany(data);
+    onSuccess: (data: any) => {
+      // Extract the company data from the API response structure
+      const companyData = data.data.companyData;
+      setCompaniesHouseCompany(companyData);
       setCompanyLookupError(null);
       toast({
         title: "Company found",
-        description: `Successfully loaded data for ${data.companyName}`,
+        description: `Successfully loaded data for ${companyData.company_name}`,
       });
     },
     onError: (error: Error) => {
@@ -455,11 +457,13 @@ export function ClientCreationWizard({
       const response = await apiRequest("GET", `/api/companies-house/company/${companyNumber}/officers`);
       return await response.json();
     },
-    onSuccess: (data: CompaniesHouseOfficer[]) => {
-      setCompaniesHouseOfficers(data);
+    onSuccess: (data: any) => {
+      // Extract the officers data from the API response structure
+      const officersData = data.data.transformedPeopleData;
+      setCompaniesHouseOfficers(officersData);
       toast({
         title: "Officers loaded",
-        description: `Found ${data.length} officer(s) for this company`,
+        description: `Found ${officersData.length} officer(s) for this company`,
       });
     },
     onError: (error: Error) => {
@@ -557,7 +561,7 @@ export function ClientCreationWizard({
           }
 
           // Lookup company data before proceeding - use return values directly
-          if (!companiesHouseCompany || companiesHouseCompany.companyNumber !== step1Data.companyNumber) {
+          if (!companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber) {
             setIsLoadingCompanyData(true);
             try {
               // Get actual return data from mutations instead of relying on component state
@@ -958,11 +962,11 @@ export function ClientCreationWizard({
                             <CardTitle className="text-base">Company Information</CardTitle>
                           </CardHeader>
                           <CardContent className="space-y-2">
-                            <div><strong>Name:</strong> {companiesHouseCompany.companyName}</div>
-                            <div><strong>Status:</strong> {companiesHouseCompany.companyStatus}</div>
-                            <div><strong>Type:</strong> {companiesHouseCompany.companyType}</div>
-                            {companiesHouseCompany.dateOfCreation && (
-                              <div><strong>Incorporated:</strong> {new Date(companiesHouseCompany.dateOfCreation).toLocaleDateString()}</div>
+                            <div><strong>Name:</strong> {companiesHouseCompany.company_name}</div>
+                            <div><strong>Status:</strong> {companiesHouseCompany.company_status}</div>
+                            <div><strong>Type:</strong> {companiesHouseCompany.type}</div>
+                            {companiesHouseCompany.date_of_creation && (
+                              <div><strong>Incorporated:</strong> {new Date(companiesHouseCompany.date_of_creation).toLocaleDateString()}</div>
                             )}
                           </CardContent>
                         </Card>
