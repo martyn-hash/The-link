@@ -370,6 +370,9 @@ export function ClientCreationWizard({
       const selectedPeopleIds = value.selectedPeopleIds || [];
       const clientType = wizardData.step1.clientType;
       
+      // Only perform validation if we're on step 2 to avoid unnecessary processing
+      if (currentStep !== 2) return;
+      
       // Clear any existing errors first
       step2Form.clearErrors('selectedPeopleIds');
       
@@ -383,13 +386,16 @@ export function ClientCreationWizard({
     });
     
     return () => subscription.unsubscribe();
-  }, [wizardData.step1.clientType]);
+  }, [wizardData.step1.clientType, currentStep, step2Form]);
 
   // Programmatic validation for Step 5: roleAssignments for each service
   useEffect(() => {
     const subscription = step5Form.watch((value, { name }) => {
       const serviceConfigurations = value.serviceConfigurations || {};
       const selectedServiceIds = wizardData.step4.selectedServiceIds || [];
+      
+      // Only perform validation if we're on step 5 and have services data
+      if (currentStep !== 5 || !services) return;
       
       // Clear all role assignment errors first
       selectedServiceIds.forEach(serviceId => {
@@ -422,7 +428,7 @@ export function ClientCreationWizard({
     });
     
     return () => subscription.unsubscribe();
-  }, [wizardData.step4.selectedServiceIds, services]);
+  }, [wizardData.step4.selectedServiceIds, services, currentStep, step5Form]);
 
   // Companies House company lookup
   const lookupCompanyMutation = useMutation({
@@ -459,7 +465,12 @@ export function ClientCreationWizard({
     },
     onSuccess: (data: any) => {
       // Extract the officers data from the API response structure
-      const officersData = data.data.transformedPeopleData;
+      // Backend returns: { data: { transformedPeopleData: [{ person: {...}, clientPeopleData: {...} }] } }
+      const rawOfficersData = data.data?.transformedPeopleData || data.transformedPeopleData || [];
+      
+      // Extract the person objects from the wrapped structure
+      const officersData = rawOfficersData.map((item: any) => item.person || item).filter(Boolean);
+      
       setCompaniesHouseOfficers(officersData);
       toast({
         title: "Officers loaded",
@@ -580,7 +591,8 @@ export function ClientCreationWizard({
               }
 
               // Data is valid, proceed with successful lookup data
-              const actualOfficersData = officersData?.data?.transformedPeopleData;
+              const rawOfficersData = officersData?.data?.transformedPeopleData || officersData?.transformedPeopleData || [];
+              const actualOfficersData = rawOfficersData.map((item: any) => item.person || item).filter(Boolean);
               toast({
                 title: "Company Data Retrieved",
                 description: `Successfully loaded ${actualCompanyData.company_name} with ${actualOfficersData?.length || 0} officer(s)`,
