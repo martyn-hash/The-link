@@ -9,6 +9,7 @@ import { type ProjectType, type KanbanStage } from "@shared/schema";
 import Sidebar from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Search, Settings, Plus, ChevronRight, Activity, Layers, CheckCircle, XCircle } from "lucide-react";
+import { AlertCircle, Search, Settings, Plus, ChevronRight, Activity, Layers, CheckCircle, XCircle, Power } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,6 +38,7 @@ export default function ProjectTypes() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState<boolean>(false);
 
   // Form for creating new project type
   const form = useForm<CreateProjectTypeForm>({
@@ -51,7 +53,7 @@ export default function ProjectTypes() {
 
   // Fetch project types
   const { data: projectTypes, isLoading: projectTypesLoading, error } = useQuery<ProjectType[]>({
-    queryKey: ["/api/config/project-types"],
+    queryKey: ["/api/config/project-types", { inactive: showInactive }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -164,13 +166,30 @@ export default function ProjectTypes() {
                 <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Project Types</h1>
                 <p className="text-muted-foreground">Manage project type configurations and their stages</p>
               </div>
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button data-testid="button-add-project-type">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add New Project Type
-                  </Button>
-                </DialogTrigger>
+              <div className="flex items-center space-x-4">
+                {/* Show Inactive Toggle */}
+                <div className="flex items-center space-x-2">
+                  <Power className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="show-inactive"
+                      checked={showInactive}
+                      onCheckedChange={setShowInactive}
+                      data-testid="switch-show-inactive"
+                    />
+                    <Label htmlFor="show-inactive" className="text-sm text-muted-foreground">
+                      Show inactive
+                    </Label>
+                  </div>
+                </div>
+                
+                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-add-project-type">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New Project Type
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="sm:max-w-[525px]">
                   <DialogHeader>
                     <DialogTitle>Create New Project Type</DialogTitle>
@@ -253,6 +272,7 @@ export default function ProjectTypes() {
                   </Form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
             
             {/* Search */}

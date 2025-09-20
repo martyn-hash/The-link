@@ -1398,8 +1398,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Project type management routes
   app.get("/api/config/project-types", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
+      // Extract query parameters for filtering
+      const filters = {
+        inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
+      };
+
       const projectTypes = await storage.getAllProjectTypes();
-      res.json(projectTypes);
+      
+      // Apply inactive filter if specified
+      const filteredProjectTypes = filters.inactive !== undefined 
+        ? projectTypes.filter(pt => filters.inactive ? !pt.active : pt.active)
+        : projectTypes.filter(pt => pt.active); // By default, only show active project types
+
+      res.json(filteredProjectTypes);
     } catch (error) {
       console.error("Error fetching project types:", error);
       res.status(500).json({ message: "Failed to fetch project types" });
