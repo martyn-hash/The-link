@@ -14,6 +14,9 @@ import {
   stageApprovalResponses,
   magicLinkTokens,
   userNotificationPreferences,
+  services,
+  workRoles,
+  serviceRoles,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -47,6 +50,12 @@ import {
   type UserNotificationPreferences,
   type InsertUserNotificationPreferences,
   type UpdateUserNotificationPreferences,
+  type Service,
+  type InsertService,
+  type WorkRole,
+  type InsertWorkRole,
+  type ServiceRole,
+  type InsertServiceRole,
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
@@ -205,6 +214,26 @@ export interface IStorage {
   
   // Stage change notification operations
   sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void>;
+  
+  // Services CRUD
+  getAllServices(): Promise<Service[]>;
+  getServiceById(id: string): Promise<Service | undefined>;
+  createService(service: InsertService): Promise<Service>;
+  updateService(id: string, service: Partial<InsertService>): Promise<Service>;
+  deleteService(id: string): Promise<void>;
+  getServiceByProjectTypeId(projectTypeId: string): Promise<Service | undefined>;
+
+  // Work Roles CRUD  
+  getAllWorkRoles(): Promise<WorkRole[]>;
+  getWorkRoleById(id: string): Promise<WorkRole | undefined>;
+  createWorkRole(role: InsertWorkRole): Promise<WorkRole>;
+  updateWorkRole(id: string, role: Partial<InsertWorkRole>): Promise<WorkRole>;
+  deleteWorkRole(id: string): Promise<void>;
+
+  // Service-Role Mappings
+  getServiceRolesByServiceId(serviceId: string): Promise<ServiceRole[]>;
+  addRoleToService(serviceId: string, roleId: string): Promise<ServiceRole>;
+  removeRoleFromService(serviceId: string, roleId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2285,6 +2314,147 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error in sendStageChangeNotifications for project ${projectId}:`, error);
       // Don't throw error to avoid breaking the main project update flow
+    }
+  }
+
+  // Services CRUD operations
+  async getAllServices(): Promise<Service[]> {
+    return await db.select().from(services);
+  }
+
+  async getServiceById(id: string): Promise<Service | undefined> {
+    const [service] = await db.select().from(services).where(eq(services.id, id));
+    return service;
+  }
+
+  async createService(service: InsertService): Promise<Service> {
+    const [newService] = await db.insert(services).values(service).returning();
+    return newService;
+  }
+
+  async updateService(id: string, service: Partial<InsertService>): Promise<Service> {
+    const [updatedService] = await db
+      .update(services)
+      .set(service)
+      .where(eq(services.id, id))
+      .returning();
+    
+    if (!updatedService) {
+      throw new Error("Service not found");
+    }
+    
+    return updatedService;
+  }
+
+  async deleteService(id: string): Promise<void> {
+    const result = await db.delete(services).where(eq(services.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Service not found");
+    }
+  }
+
+  async getServiceByProjectTypeId(projectTypeId: string): Promise<Service | undefined> {
+    const [service] = await db
+      .select()
+      .from(services)
+      .where(eq(services.projectTypeId, projectTypeId));
+    return service;
+  }
+
+  // Work Roles CRUD operations
+  async getAllWorkRoles(): Promise<WorkRole[]> {
+    return await db.select().from(workRoles);
+  }
+
+  async getWorkRoleById(id: string): Promise<WorkRole | undefined> {
+    const [workRole] = await db.select().from(workRoles).where(eq(workRoles.id, id));
+    return workRole;
+  }
+
+  async createWorkRole(role: InsertWorkRole): Promise<WorkRole> {
+    const [newWorkRole] = await db.insert(workRoles).values(role).returning();
+    return newWorkRole;
+  }
+
+  async updateWorkRole(id: string, role: Partial<InsertWorkRole>): Promise<WorkRole> {
+    const [updatedWorkRole] = await db
+      .update(workRoles)
+      .set(role)
+      .where(eq(workRoles.id, id))
+      .returning();
+    
+    if (!updatedWorkRole) {
+      throw new Error("Work role not found");
+    }
+    
+    return updatedWorkRole;
+  }
+
+  async deleteWorkRole(id: string): Promise<void> {
+    const result = await db.delete(workRoles).where(eq(workRoles.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("Work role not found");
+    }
+  }
+
+  // Service-Role Mappings operations
+  async getServiceRolesByServiceId(serviceId: string): Promise<ServiceRole[]> {
+    return await db
+      .select()
+      .from(serviceRoles)
+      .where(eq(serviceRoles.serviceId, serviceId));
+  }
+
+  async addRoleToService(serviceId: string, roleId: string): Promise<ServiceRole> {
+    // Pre-check that both serviceId and roleId exist for clearer error messages
+    const service = await this.getServiceById(serviceId);
+    if (!service) {
+      throw new Error(`Service with id '${serviceId}' not found`);
+    }
+    
+    const workRole = await this.getWorkRoleById(roleId);
+    if (!workRole) {
+      throw new Error(`Work role with id '${roleId}' not found`);
+    }
+    
+    // Insert with conflict handling to gracefully handle duplicate insertions
+    const [serviceRole] = await db
+      .insert(serviceRoles)
+      .values({ serviceId, roleId })
+      .onConflictDoNothing()
+      .returning();
+    
+    // If no rows were returned, the mapping already exists
+    if (!serviceRole) {
+      // Fetch the existing mapping to return it
+      const [existingMapping] = await db
+        .select()
+        .from(serviceRoles)
+        .where(and(
+          eq(serviceRoles.serviceId, serviceId),
+          eq(serviceRoles.roleId, roleId)
+        ));
+      
+      if (!existingMapping) {
+        throw new Error("Failed to create or retrieve service-role mapping");
+      }
+      
+      return existingMapping;
+    }
+    
+    return serviceRole;
+  }
+
+  async removeRoleFromService(serviceId: string, roleId: string): Promise<void> {
+    const result = await db
+      .delete(serviceRoles)
+      .where(and(
+        eq(serviceRoles.serviceId, serviceId),
+        eq(serviceRoles.roleId, roleId)
+      ));
+    
+    if (result.rowCount === 0) {
+      throw new Error("Service-role mapping not found");
     }
   }
 }
