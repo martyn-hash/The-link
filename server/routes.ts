@@ -29,6 +29,7 @@ import {
   insertUserNotificationPreferencesSchema,
   updateUserNotificationPreferencesSchema,
   insertServiceSchema,
+  updateServiceSchema,
   insertWorkRoleSchema,
   insertServiceRoleSchema,
   type User,
@@ -1775,7 +1776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Service not found" });
       }
 
-      const validUpdateData = insertServiceSchema.partial().parse(req.body);
+      const validUpdateData = updateServiceSchema.parse(req.body);
       const service = await storage.updateService(id, validUpdateData);
       res.json(service);
     } catch (error) {
