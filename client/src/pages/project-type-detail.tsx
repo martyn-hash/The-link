@@ -631,8 +631,11 @@ export default function ProjectTypeDetail() {
   
   // Fetch all custom fields for reasons
   const { data: allCustomFields } = useQuery<any[]>({
-    queryKey: ["/api/config/reason-custom-fields"],
+    queryKey: ["/api/config/custom-fields"],
     enabled: isAuthenticated && !!user,
+    staleTime: 0, // Always consider data stale so it refetches
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
 
@@ -855,10 +858,14 @@ export default function ProjectTypeDetail() {
   // Custom field mutations
   const createCustomFieldMutation = useMutation({
     mutationFn: async (field: any) => {
-      return await apiRequest("POST", "/api/config/reason-custom-fields", field);
+      return await apiRequest("POST", "/api/config/custom-fields", field);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/config/reason-custom-fields"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/config/custom-fields"] });
+      toast({
+        title: "Success",
+        description: "Custom field added successfully",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -871,10 +878,10 @@ export default function ProjectTypeDetail() {
   
   const updateCustomFieldMutation = useMutation({
     mutationFn: async ({ id, ...field }: any) => {
-      return await apiRequest("PATCH", `/api/config/reason-custom-fields/${id}`, field);
+      return await apiRequest("PATCH", `/api/config/custom-fields/${id}`, field);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/config/reason-custom-fields"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/custom-fields"] });
     },
     onError: (error: any) => {
       toast({
@@ -887,10 +894,14 @@ export default function ProjectTypeDetail() {
   
   const deleteCustomFieldMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("DELETE", `/api/config/reason-custom-fields/${id}`);
+      return await apiRequest("DELETE", `/api/config/custom-fields/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/config/reason-custom-fields"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/config/custom-fields"] });
+      toast({
+        title: "Success",
+        description: "Custom field deleted successfully",
+      });
     },
     onError: (error: any) => {
       toast({
