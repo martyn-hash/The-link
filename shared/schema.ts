@@ -177,6 +177,7 @@ export const projects = pgTable("projects", {
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id), // links to project type configuration
   bookkeeperId: varchar("bookkeeper_id").notNull().references(() => users.id),
   clientManagerId: varchar("client_manager_id").notNull().references(() => users.id),
+  projectOwnerId: varchar("project_owner_id").references(() => users.id), // Service owner becomes project owner - temporarily nullable for migration
   description: text("description").notNull(),
   currentStatus: varchar("current_status").notNull().default("No Latest Action"),
   currentAssigneeId: varchar("current_assignee_id").references(() => users.id),
@@ -187,7 +188,9 @@ export const projects = pgTable("projects", {
   projectMonth: varchar("project_month"), // DD/MM/YYYY format to track which month each project belongs to
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_projects_project_owner_id").on(table.projectOwnerId),
+]);
 
 // Project chronology table
 export const projectChronology = pgTable("project_chronology", {
@@ -377,19 +380,24 @@ export const services = pgTable("services", {
   name: varchar("name").notNull().unique(),
   description: text("description"),
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }).unique(), // 1:1 relationship
+  serviceOwnerId: varchar("service_owner_id").references(() => users.id), // Default service owner - temporarily nullable for migration
   udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`), // Array of UDF definitions
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_services_service_owner_id").on(table.serviceOwnerId),
+]);
 
 // Client services table - links clients to services
 export const clientServices = pgTable("client_services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Optional: override default service owner for this client
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_client_services_client_id").on(table.clientId),
   index("idx_client_services_service_id").on(table.serviceId),
+  index("idx_client_services_service_owner_id").on(table.serviceOwnerId),
   unique("unique_client_service").on(table.clientId, table.serviceId),
 ]);
 
@@ -435,6 +443,9 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   assignedProjects: many(projects, { relationName: "assignee" }),
   bookkeepingProjects: many(projects, { relationName: "bookkeeper" }),
   managedProjects: many(projects, { relationName: "clientManager" }),
+  ownedProjects: many(projects, { relationName: "projectOwner" }),
+  ownedServices: many(services, { relationName: "serviceOwner" }),
+  ownedClientServices: many(clientServices, { relationName: "clientServiceOwner" }),
   chronologyEntries: many(projectChronology),
   magicLinkTokens: many(magicLinkTokens),
   notificationPreferences: one(userNotificationPreferences),
@@ -487,6 +498,11 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     fields: [projects.clientManagerId],
     references: [users.id],
     relationName: "clientManager",
+  }),
+  projectOwner: one(users, {
+    fields: [projects.projectOwnerId],
+    references: [users.id],
+    relationName: "projectOwner",
   }),
   currentAssignee: one(users, {
     fields: [projects.currentAssigneeId],
@@ -619,13 +635,11 @@ export const insertClientSchema = createInsertSchema(clients).omit({
 export const insertPersonSchema = createInsertSchema(people).omit({
   id: true,
   createdAt: true,
-  updatedAt: true,
 });
 
 export const insertClientPersonSchema = createInsertSchema(clientPeople).omit({
   id: true,
   createdAt: true,
-  updatedAt: true,
 });
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -1021,6 +1035,11 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
     fields: [services.projectTypeId],
     references: [projectTypes.id],
   }),
+  serviceOwner: one(users, {
+    fields: [services.serviceOwnerId],
+    references: [users.id],
+    relationName: "serviceOwner",
+  }),
   serviceRoles: many(serviceRoles),
   clientServices: many(clientServices),
 }));
@@ -1033,6 +1052,11 @@ export const clientServicesRelations = relations(clientServices, ({ one, many })
   service: one(services, {
     fields: [clientServices.serviceId],
     references: [services.id],
+  }),
+  serviceOwner: one(users, {
+    fields: [clientServices.serviceOwnerId],
+    references: [users.id],
+    relationName: "clientServiceOwner",
   }),
   roleAssignments: many(clientServiceRoleAssignments),
 }));
