@@ -2328,6 +2328,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validUpdateData = updateServiceSchema.parse(req.body);
+      
+      // Check if there's actually data to update
+      if (Object.keys(validUpdateData).length === 0) {
+        return res.status(400).json({ message: "No data provided for update" });
+      }
+      
       const service = await storage.updateService(id, validUpdateData);
       res.json(service);
     } catch (error) {
