@@ -380,19 +380,16 @@ export const services = pgTable("services", {
   name: varchar("name").notNull().unique(),
   description: text("description"),
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }).unique(), // 1:1 relationship
-  serviceOwnerId: varchar("service_owner_id").references(() => users.id), // Default service owner - temporarily nullable for migration
   udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`), // Array of UDF definitions
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_services_service_owner_id").on(table.serviceOwnerId),
-]);
+});
 
 // Client services table - links clients to services
 export const clientServices = pgTable("client_services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
-  serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Optional: override default service owner for this client
+  serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Service owner assigned for this client-service mapping
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_client_services_client_id").on(table.clientId),
@@ -1034,11 +1031,6 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   projectType: one(projectTypes, {
     fields: [services.projectTypeId],
     references: [projectTypes.id],
-  }),
-  serviceOwner: one(users, {
-    fields: [services.serviceOwnerId],
-    references: [users.id],
-    relationName: "serviceOwner",
   }),
   serviceRoles: many(serviceRoles),
   clientServices: many(clientServices),

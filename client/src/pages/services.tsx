@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import { type Service, type WorkRole, type ProjectType, type UDFDefinition, type User, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
+import { type Service, type WorkRole, type ProjectType, type UDFDefinition, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,7 +73,6 @@ type CreateWorkRoleFormData = z.infer<typeof createWorkRoleFormSchema>;
 interface ServiceWithDetails extends Service {
   projectType: ProjectType;
   roles: WorkRole[];
-  serviceOwner?: User;
 }
 
 interface WorkRoleWithUsage extends WorkRole {
@@ -302,7 +301,6 @@ export default function Services() {
       name: "",
       description: "",
       projectTypeId: "",
-      serviceOwnerId: "",
       roleIds: [],
       udfDefinitions: [],
     },
@@ -363,29 +361,12 @@ export default function Services() {
     retry: false,
   });
 
-  // Fetch users for service owner selection
-  const { data: users } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-    enabled: isAuthenticated && user?.role === "admin",
-    retry: false,
-  });
-
-  // Create users lookup map for efficient service owner display
-  const usersById = useMemo(() => {
-    if (!users) return {};
-    return users.reduce((acc, user) => ({ ...acc, [user.id]: user }), {} as Record<string, User>);
-  }, [users]);
 
   // Mutations
   const createServiceMutation = useMutation({
     mutationFn: async (data: CreateServiceFormData) => {
       const { roleIds, ...serviceData } = data;
-      // Sanitize serviceOwnerId: convert empty string to undefined
-      const sanitizedData = {
-        ...serviceData,
-        serviceOwnerId: serviceData.serviceOwnerId?.trim() || undefined
-      };
-      const response = await apiRequest("POST", "/api/services", sanitizedData);
+      const response = await apiRequest("POST", "/api/services", serviceData);
       const service = await response.json() as Service;
       
       // Add roles to service
@@ -422,14 +403,8 @@ export default function Services() {
       // Filter out any null, undefined, or empty roleIds
       const validRoleIds = roleIds.filter(roleId => roleId && roleId.trim() !== "");
       
-      // Sanitize serviceOwnerId: convert empty string to undefined
-      const sanitizedData = {
-        ...serviceData,
-        serviceOwnerId: serviceData.serviceOwnerId?.trim() || undefined
-      };
-      
       // Update service
-      const serviceResponse = await apiRequest("PATCH", `/api/services/${id}`, sanitizedData);
+      const serviceResponse = await apiRequest("PATCH", `/api/services/${id}`, serviceData);
       const service = await serviceResponse.json() as Service;
       
       // Get current roles
@@ -572,7 +547,6 @@ export default function Services() {
       name: service.name,
       description: service.description ?? "",
       projectTypeId: service.projectTypeId,
-      serviceOwnerId: service.serviceOwnerId || "",
       roleIds: service.roles.map(role => role.id),
       udfDefinitions: Array.isArray(service.udfDefinitions) ? service.udfDefinitions : [],
     });
@@ -750,7 +724,6 @@ export default function Services() {
                             <TableHead>Name</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Project Type</TableHead>
-                            <TableHead>Service Owner</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Mapped Roles</TableHead>
                             <TableHead className="w-20">Actions</TableHead>
@@ -763,13 +736,6 @@ export default function Services() {
                               <TableCell>{service.description || "—"}</TableCell>
                               <TableCell>
                                 <Badge variant="secondary">{service.projectType?.name || "—"}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                {service.serviceOwnerId && usersById[service.serviceOwnerId] ? (
-                                  `${usersById[service.serviceOwnerId].firstName} ${usersById[service.serviceOwnerId].lastName}`
-                                ) : (
-                                  <span className="text-muted-foreground">No owner</span>
-                                )}
                               </TableCell>
                               <TableCell>
                                 <Badge 
@@ -814,7 +780,7 @@ export default function Services() {
                           ))}
                           {services?.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                 No services found. Create your first service to get started.
                               </TableCell>
                             </TableRow>
@@ -910,35 +876,7 @@ export default function Services() {
                               </FormItem>
                             )}
                           />
-                          <FormField
-                            control={serviceForm.control}
-                            name="serviceOwnerId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Service Owner</FormLabel>
-                                <Select
-                                  onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
-                                  value={field.value || "none"}
-                                  data-testid="select-service-owner"
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a service owner (optional)" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="none">No owner assigned</SelectItem>
-                                    {users?.map((owner) => (
-                                      <SelectItem key={owner.id} value={owner.id}>
-                                        {owner.firstName} {owner.lastName} ({owner.email})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+
                           <FormField
                             control={serviceForm.control}
                             name="roleIds"
@@ -1085,35 +1023,7 @@ export default function Services() {
                               </FormItem>
                             )}
                           />
-                          <FormField
-                            control={serviceForm.control}
-                            name="serviceOwnerId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Service Owner</FormLabel>
-                                <Select
-                                  onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
-                                  value={field.value || "none"}
-                                  data-testid="select-service-owner"
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a service owner (optional)" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="none">No owner assigned</SelectItem>
-                                    {users?.map((owner) => (
-                                      <SelectItem key={owner.id} value={owner.id}>
-                                        {owner.firstName} {owner.lastName} ({owner.email})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+
                           <FormField
                             control={serviceForm.control}
                             name="roleIds"

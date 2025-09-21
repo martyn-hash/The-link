@@ -2960,18 +2960,12 @@ export class DatabaseStorage implements IStorage {
     return service;
   }
 
-  // Service Owner Resolution - resolve effective service owner for a client and project type
+  // Service Owner Resolution - resolve service owner from client-service mapping only
   async resolveServiceOwner(clientId: string, projectTypeId: string): Promise<User | undefined> {
-    // First, try to get service owner from client-service override
+    // Get service owner from client-service mapping
     const clientService = await this.getClientServiceByClientAndProjectType(clientId, projectTypeId);
     if (clientService && clientService.serviceOwnerId) {
       return await this.getUser(clientService.serviceOwnerId);
-    }
-    
-    // Fallback to service default owner
-    const service = await this.getServiceByProjectTypeId(projectTypeId);
-    if (service && service.serviceOwnerId) {
-      return await this.getUser(service.serviceOwnerId);
     }
     
     return undefined;
@@ -3104,7 +3098,7 @@ export class DatabaseStorage implements IStorage {
         serviceName: services.name,
         serviceDescription: services.description,
         serviceProjectTypeId: services.projectTypeId,
-        serviceServiceOwnerId: services.serviceOwnerId,
+
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3136,7 +3130,7 @@ export class DatabaseStorage implements IStorage {
         name: result.serviceName,
         description: result.serviceDescription,
         projectTypeId: result.serviceProjectTypeId,
-        serviceOwnerId: result.serviceServiceOwnerId,
+
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
         projectType: {
@@ -3167,7 +3161,7 @@ export class DatabaseStorage implements IStorage {
         serviceName: services.name,
         serviceDescription: services.description,
         serviceProjectTypeId: services.projectTypeId,
-        serviceServiceOwnerId: services.serviceOwnerId,
+
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3204,7 +3198,7 @@ export class DatabaseStorage implements IStorage {
         name: result.serviceName,
         description: result.serviceDescription,
         projectTypeId: result.serviceProjectTypeId,
-        serviceOwnerId: result.serviceServiceOwnerId,
+
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
         projectType: {
@@ -3231,7 +3225,7 @@ export class DatabaseStorage implements IStorage {
         serviceName: services.name,
         serviceDescription: services.description,
         serviceProjectTypeId: services.projectTypeId,
-        serviceServiceOwnerId: services.serviceOwnerId,
+
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3257,7 +3251,7 @@ export class DatabaseStorage implements IStorage {
         name: result.serviceName,
         description: result.serviceDescription,
         projectTypeId: result.serviceProjectTypeId,
-        serviceOwnerId: result.serviceServiceOwnerId,
+
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
         projectType: {
