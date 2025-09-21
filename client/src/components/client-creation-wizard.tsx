@@ -818,52 +818,6 @@ function PersonForm({
         </div>
       </div>
 
-      {/* Navigation buttons */}
-      <div className="flex justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handlePrevious}
-          disabled={isFirstPerson}
-          data-testid={`button-person-${personIndex}-previous`}
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Previous
-        </Button>
-
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            data-testid={`button-person-${personIndex}-cancel`}
-          >
-            <X className="w-4 h-4 mr-2" />
-            Cancel
-          </Button>
-          
-          <Button
-            type="button"
-            onClick={handleNext}
-            disabled={!canProceedToNext()}
-            data-testid={`button-person-${personIndex}-next`}
-            className={!canProceedToNext() ? "opacity-60" : ""}
-            title={!canProceedToNext() ? "Please complete all required fields before proceeding" : ""}
-          >
-            {!canProceedToNext() ? (
-              <>
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                Complete Required Fields
-              </>
-            ) : (
-              <>
-                Next
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2229,10 +2183,22 @@ export function ClientCreationWizard({
             data-testid="button-previous"
           >
             <ArrowLeft className="w-4 h-4" />
-            Previous
+            {currentStep === 3 && wizardData.step3.people && wizardData.step3.currentPersonIndex > 0 ? 
+              `Previous Person` : 
+              "Previous"}
           </Button>
 
           <div className="flex gap-2">
+            {currentStep === 3 && wizardData.step3.people && wizardData.step3.people.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground bg-muted/30 rounded-md">
+                <UserCheck className="w-4 h-4" />
+                Person {wizardData.step3.currentPersonIndex + 1} of {wizardData.step3.people.length}
+                {wizardData.step3.people[wizardData.step3.currentPersonIndex]?.completed && (
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                )}
+              </div>
+            )}
+
             <Button
               type="button"
               variant="outline"
@@ -2247,14 +2213,16 @@ export function ClientCreationWizard({
               <Button
                 type="button"
                 onClick={handleNext}
-                disabled={isLoading}
+                disabled={isLoading || (currentStep === 3 && wizardData.step3.people && wizardData.step3.people[wizardData.step3.currentPersonIndex] && !wizardData.step3.people[wizardData.step3.currentPersonIndex].completed)}
                 data-testid="button-next"
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
-                    Next
+                    {currentStep === 3 && wizardData.step3.people && wizardData.step3.currentPersonIndex < wizardData.step3.people.length - 1 ? 
+                      "Next Person" : 
+                      "Next"}
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
