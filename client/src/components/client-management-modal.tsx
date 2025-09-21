@@ -96,6 +96,7 @@ export function ClientManagementModal({
   const [step, setStep] = useState<'details' | 'services'>('details');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [roleAssignments, setRoleAssignments] = useState<Record<string, Record<string, string>>>({});
+  const [serviceOwnerAssignments, setServiceOwnerAssignments] = useState<Record<string, string>>({});
   const [validationErrors, setValidationErrors] = useState<ServiceRoleCompleteness[]>([]);
 
   const isEditing = !!client;
@@ -125,6 +126,7 @@ export function ClientManagementModal({
       setStep('details'); // Start on details step for creation
       setSelectedServices([]);
       setRoleAssignments({});
+      setServiceOwnerAssignments({});
       setValidationErrors([]);
     }
   }, [client, form]);
@@ -157,10 +159,19 @@ export function ClientManagementModal({
     retry: false,
   });
 
-  // Set existing services, role assignments, and validation errors when data loads
+  // Set existing services, role assignments, service owner assignments, and validation errors when data loads
   useEffect(() => {
     if (existingClientServices && !selectedServices.length) {
       setSelectedServices(existingClientServices.map(cs => cs.serviceId));
+      
+      // Initialize service owner assignments from existing client services
+      const initialServiceOwnerAssignments: Record<string, string> = {};
+      existingClientServices.forEach(cs => {
+        if (cs.serviceOwnerId) {
+          initialServiceOwnerAssignments[cs.serviceId] = cs.serviceOwnerId;
+        }
+      });
+      setServiceOwnerAssignments(initialServiceOwnerAssignments);
     }
     if (roleCompleteness) {
       const incompleteServices = roleCompleteness.services.filter(s => !s.isComplete);
@@ -197,12 +208,20 @@ export function ClientManagementModal({
       if (selectedServices.length > 0) {
         try {
           // Create all client-service mappings in parallel
-          const clientServicePromises = selectedServices.map(serviceId =>
-            apiRequest("POST", "/api/client-services", {
+          const clientServicePromises = selectedServices.map(serviceId => {
+            const payload: any = {
               clientId: newClient.id,
               serviceId,
-            })
-          );
+            };
+            
+            // Add serviceOwnerId if assigned for this service
+            const assignedOwnerId = serviceOwnerAssignments[serviceId];
+            if (assignedOwnerId && assignedOwnerId.trim() !== "") {
+              payload.serviceOwnerId = assignedOwnerId;
+            }
+            
+            return apiRequest("POST", "/api/client-services", payload);
+          });
           
           await Promise.all(clientServicePromises);
           
@@ -585,6 +604,44 @@ export function ClientManagementModal({
                                   </Badge>
                                 ))}
                               </div>
+                              
+                              {/* Service Owner Selection - only show for selected services */}
+                              {selectedServices.includes(service.id) && (
+                                <div className="mt-3 pt-3 border-t">
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                      Service Owner Override (Optional)
+                                    </label>
+                                    <Select
+                                      value={serviceOwnerAssignments[service.id] || ""}
+                                      onValueChange={(value) => {
+                                        setServiceOwnerAssignments(prev => ({
+                                          ...prev,
+                                          [service.id]: value || ""
+                                        }));
+                                      }}
+                                      data-testid={`select-service-owner-${service.id}`}
+                                    >
+                                      <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
+                                        <SelectValue placeholder="Choose service owner (optional)" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="" key="none">No override (use service default)</SelectItem>
+                                        {users?.map((user) => (
+                                          <SelectItem key={user.id} value={user.id}>
+                                            {user.firstName} {user.lastName}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {service.serviceOwnerId && (
+                                      <p className="text-xs text-muted-foreground">
+                                        Default: {users?.find(u => u.id === service.serviceOwnerId)?.firstName} {users?.find(u => u.id === service.serviceOwnerId)?.lastName || "Unknown"}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
                         ))}
