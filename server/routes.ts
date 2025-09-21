@@ -719,6 +719,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/clients/:id/services - Get all services for a client (alias for /api/client-services/client/:clientId)
+  app.get("/api/clients/:id/services", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate UUID parameter
+      const paramValidation = z.object({
+        id: z.string().uuid("Invalid client ID format")
+      }).safeParse(req.params);
+      
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.error.errors 
+        });
+      }
+      
+      const { id: clientId } = paramValidation.data;
+
+      const clientServices = await storage.getClientServicesByClientId(clientId);
+      res.json(clientServices);
+    } catch (error) {
+      console.error("Error fetching client services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client services" });
+    }
+  });
+
   // GET /api/clients/:id/people - Get people related to a specific client
   app.get("/api/clients/:id/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

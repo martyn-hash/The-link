@@ -40,6 +40,7 @@ function Router() {
     <Switch>
       {/* Public routes - always available */}
       <Route path="/magic-link-verify" component={MagicLinkVerify} />
+      <Route path="/login" component={() => <Landing />} />
       
       {/* Home route - conditional based on auth */}
       <Route path="/" component={isAuthenticated ? Dashboard : Landing} />
