@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { type Client, type Service, type WorkRole, type User, type ClientService, type ClientServiceRoleAssignment } from "@shared/schema";
@@ -158,6 +159,7 @@ export function CompaniesHouseClientModal({
 }: CompaniesHouseClientModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'services'>('ch-search');
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
   const [selectedOfficers, setSelectedOfficers] = useState<number[]>([]);
@@ -293,15 +295,12 @@ export function CompaniesHouseClientModal({
       });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       
-      // Move to services step if services are available
-      if (services && services.length > 0) {
-        setStep('services');
-        // Set the created client for service assignment
-        // Note: We would need to modify the modal to handle the newly created client
-      } else {
-        onSuccess?.();
-        onOpenChange(false);
-      }
+      // Close the modal and navigate to client detail view
+      onSuccess?.();
+      onOpenChange(false);
+      
+      // Navigate to the client detail page
+      setLocation(`/clients/${data.client.id}`);
     },
     onError: (error: any) => {
       console.error("Error creating client:", error);

@@ -348,6 +348,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/clients/:id - Get single client by ID
+  app.get("/api/clients/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { id } = paramValidation.data;
+      const client = await storage.getClientById(id);
+      
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      
+      res.json(client);
+    } catch (error) {
+      console.error("Error fetching client:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client" });
+    }
+  });
+
   // POST /api/clients - Create new client (admin only)
   app.post("/api/clients", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
