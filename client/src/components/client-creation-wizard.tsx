@@ -643,28 +643,9 @@ export function ClientCreationWizard({
           if (!companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber) {
             setIsLoadingCompanyData(true);
             try {
-              // Get actual return data from mutations instead of relying on component state
-              const companyData = await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
-              const officersData = await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
-              
-              // Validate the returned data directly (extract from API response structure)
-              const actualCompanyData = companyData?.data?.companyData;
-              if (!actualCompanyData || !actualCompanyData.company_number) {
-                toast({
-                  title: "Company Lookup Failed",
-                  description: "Unable to retrieve valid company data. Please check the company number and try again.",
-                  variant: "destructive",
-                });
-                return;
-              }
-
-              // Data is valid, proceed with successful lookup data
-              const rawOfficersData = officersData?.data?.transformedPeopleData || officersData?.transformedPeopleData || [];
-              const actualOfficersData = rawOfficersData.map((item: any) => item.person || item).filter(Boolean);
-              toast({
-                title: "Company Data Retrieved",
-                description: `Successfully loaded ${actualCompanyData.company_name} with ${actualOfficersData?.length || 0} officer(s)`,
-              });
+              // Execute the mutations - onSuccess callbacks will handle state updates and toasts
+              await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
+              await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
             } catch (error) {
               // Block advancement if lookup fails
               toast({
