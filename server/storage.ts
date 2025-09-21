@@ -308,6 +308,9 @@ export interface IStorage {
   validateClientServiceRoleCompleteness(clientId: string, serviceId: string): Promise<{ isComplete: boolean; missingRoles: string[]; assignedRoles: { roleName: string; userName: string }[] }>;
   checkClientServiceMappingExists(clientId: string, serviceId: string): Promise<boolean>;
   validateAssignedRolesAgainstService(serviceId: string, roleIds: string[]): Promise<{ isValid: boolean; invalidRoles: string[]; allowedRoles: string[] }>;
+  
+  // Service Owner Resolution
+  resolveServiceOwner(clientId: string, projectTypeId: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2944,6 +2947,23 @@ export class DatabaseStorage implements IStorage {
     return service;
   }
 
+  // Service Owner Resolution - resolve effective service owner for a client and project type
+  async resolveServiceOwner(clientId: string, projectTypeId: string): Promise<User | undefined> {
+    // First, try to get service owner from client-service override
+    const clientService = await this.getClientServiceByClientAndProjectType(clientId, projectTypeId);
+    if (clientService && clientService.serviceOwnerId) {
+      return await this.getUser(clientService.serviceOwnerId);
+    }
+    
+    // Fallback to service default owner
+    const service = await this.getServiceByProjectTypeId(projectTypeId);
+    if (service && service.serviceOwnerId) {
+      return await this.getUser(service.serviceOwnerId);
+    }
+    
+    return undefined;
+  }
+
   // Work Roles CRUD operations
   async getAllWorkRoles(): Promise<WorkRole[]> {
     return await db.select().from(workRoles);
@@ -3061,6 +3081,7 @@ export class DatabaseStorage implements IStorage {
         id: clientServices.id,
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
+        serviceOwnerId: clientServices.serviceOwnerId,
         createdAt: clientServices.createdAt,
         clientId_data: clients.id,
         clientName: clients.name,
@@ -3070,6 +3091,7 @@ export class DatabaseStorage implements IStorage {
         serviceName: services.name,
         serviceDescription: services.description,
         serviceProjectTypeId: services.projectTypeId,
+        serviceServiceOwnerId: services.serviceOwnerId,
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3088,6 +3110,7 @@ export class DatabaseStorage implements IStorage {
       id: result.id,
       clientId: result.clientId,
       serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
       createdAt: result.createdAt,
       client: {
         id: result.clientId_data,
@@ -3100,6 +3123,7 @@ export class DatabaseStorage implements IStorage {
         name: result.serviceName,
         description: result.serviceDescription,
         projectTypeId: result.serviceProjectTypeId,
+        serviceOwnerId: result.serviceServiceOwnerId,
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
         projectType: {
@@ -3120,6 +3144,7 @@ export class DatabaseStorage implements IStorage {
         id: clientServices.id,
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
+        serviceOwnerId: clientServices.serviceOwnerId,
         createdAt: clientServices.createdAt,
         clientId_data: clients.id,
         clientName: clients.name,
@@ -3129,6 +3154,7 @@ export class DatabaseStorage implements IStorage {
         serviceName: services.name,
         serviceDescription: services.description,
         serviceProjectTypeId: services.projectTypeId,
+        serviceServiceOwnerId: services.serviceOwnerId,
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3152,6 +3178,7 @@ export class DatabaseStorage implements IStorage {
       id: result.id,
       clientId: result.clientId,
       serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
       createdAt: result.createdAt,
       client: {
         id: result.clientId_data,
@@ -3164,6 +3191,7 @@ export class DatabaseStorage implements IStorage {
         name: result.serviceName,
         description: result.serviceDescription,
         projectTypeId: result.serviceProjectTypeId,
+        serviceOwnerId: result.serviceServiceOwnerId,
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
         projectType: {
@@ -3184,11 +3212,13 @@ export class DatabaseStorage implements IStorage {
         id: clientServices.id,
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
+        serviceOwnerId: clientServices.serviceOwnerId,
         createdAt: clientServices.createdAt,
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
         serviceProjectTypeId: services.projectTypeId,
+        serviceServiceOwnerId: services.serviceOwnerId,
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3207,12 +3237,14 @@ export class DatabaseStorage implements IStorage {
       id: result.id,
       clientId: result.clientId,
       serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
       createdAt: result.createdAt,
       service: {
         id: result.serviceId_data,
         name: result.serviceName,
         description: result.serviceDescription,
         projectTypeId: result.serviceProjectTypeId,
+        serviceOwnerId: result.serviceServiceOwnerId,
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
         projectType: {
@@ -3233,6 +3265,7 @@ export class DatabaseStorage implements IStorage {
         id: clientServices.id,
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
+        serviceOwnerId: clientServices.serviceOwnerId,
         createdAt: clientServices.createdAt,
         client: {
           id: clients.id,
