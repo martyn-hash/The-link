@@ -304,9 +304,9 @@ interface PersonFormProps {
   personIndex: number;
   totalPeople: number;
   onPersonUpdate: (updatedPerson: PersonDraft) => void;
-  onBack: () => void;
+  onPrevious: () => void;
   onNext: () => void;
-  onSaveAndNext: () => void;
+  onCancel: () => void;
   isFirstPerson: boolean;
   isLastPerson: boolean;
 }
@@ -317,9 +317,9 @@ function PersonForm({
   personIndex,
   totalPeople,
   onPersonUpdate,
-  onBack,
+  onPrevious,
   onNext,
-  onSaveAndNext,
+  onCancel,
   isFirstPerson,
   isLastPerson,
 }: PersonFormProps) {
@@ -358,17 +358,24 @@ function PersonForm({
     }
   }, [person, personForm]);
 
-  const handleSaveAndNext = () => {
-    personForm.trigger().then((isValid) => {
-      if (isValid) {
-        const updatedPerson = {
-          ...personForm.getValues(),
-          completed: true,
-        };
-        onPersonUpdate(updatedPerson);
-        onSaveAndNext();
-      }
-    });
+  // Auto-save helper function
+  const autoSave = () => {
+    const updatedPerson = {
+      ...personForm.getValues(),
+      completed: false, // Remove explicit completion tracking
+    };
+    onPersonUpdate(updatedPerson);
+  };
+
+  // Navigation handlers with auto-save
+  const handlePrevious = () => {
+    autoSave();
+    onPrevious();
+  };
+
+  const handleNext = () => {
+    autoSave();
+    onNext();
   };
 
   return (
@@ -689,33 +696,32 @@ function PersonForm({
         <Button
           type="button"
           variant="outline"
-          onClick={onBack}
+          onClick={handlePrevious}
           disabled={isFirstPerson}
-          data-testid={`button-person-${personIndex}-back`}
+          data-testid={`button-person-${personIndex}-previous`}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Previous Person
+          Previous
         </Button>
 
         <div className="flex gap-2">
-          {!isLastPerson && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onNext}
-              data-testid={`button-person-${personIndex}-next`}
-            >
-              Next Person
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            data-testid={`button-person-${personIndex}-cancel`}
+          >
+            <X className="w-4 h-4 mr-2" />
+            Cancel
+          </Button>
           
           <Button
             type="button"
-            onClick={handleSaveAndNext}
-            data-testid={`button-person-${personIndex}-save-next`}
+            onClick={handleNext}
+            disabled={isLastPerson}
+            data-testid={`button-person-${personIndex}-next`}
           >
-            {isLastPerson ? 'Save & Continue' : 'Save & Next Person'}
+            Next
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
@@ -1826,7 +1832,7 @@ export function ClientCreationWizard({
                         }));
                         step3Form.setValue('people', updatedPeople);
                       }}
-                      onBack={() => {
+                      onPrevious={() => {
                         if (wizardData.step3.people && wizardData.step3.currentPersonIndex > 0) {
                           const newIndex = wizardData.step3.currentPersonIndex - 1;
                           setWizardData(prev => ({
@@ -1850,24 +1856,14 @@ export function ClientCreationWizard({
                             }
                           }));
                           step3Form.setValue('currentPersonIndex', newIndex);
-                        }
-                      }}
-                      onSaveAndNext={() => {
-                        // Save current person as completed and move to next or continue to step 4
-                        if (wizardData.step3.people && wizardData.step3.currentPersonIndex < wizardData.step3.people.length - 1) {
-                          const newIndex = wizardData.step3.currentPersonIndex + 1;
-                          setWizardData(prev => ({
-                            ...prev,
-                            step3: {
-                              ...prev.step3,
-                              currentPersonIndex: newIndex
-                            }
-                          }));
-                          step3Form.setValue('currentPersonIndex', newIndex);
                         } else {
-                          // All people completed, trigger step navigation
+                          // Last person reached, trigger step navigation to move to next step
                           handleNext();
                         }
+                      }}
+                      onCancel={() => {
+                        // Close the entire wizard
+                        onOpenChange(false);
                       }}
                       isFirstPerson={wizardData.step3.currentPersonIndex === 0}
                       isLastPerson={wizardData.step3.people ? wizardData.step3.currentPersonIndex === wizardData.step3.people.length - 1 : true}
