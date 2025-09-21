@@ -2845,15 +2845,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Services CRUD operations
-  async getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+  // Services CRUD operations  
+  async getAllServices(): Promise<(Service & { roles: WorkRole[] })[]> {
+    // Services no longer have direct project type references
     const servicesData = await db
-      .select({
-        service: services,
-        projectType: projectTypes,
-      })
-      .from(services)
-      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id));
+      .select()
+      .from(services);
 
     // Get all service roles in one query
     const allServiceRoles = await db
@@ -2875,23 +2872,18 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their project types and roles
-    return servicesData.map(({ service, projectType }) => ({
+    // Combine services with their roles
+    return servicesData.map((service) => ({
       ...service,
-      projectType: projectType!,
       roles: rolesByServiceId[service.id] || [],
     }));
   }
 
-  async getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+  async getActiveServices(): Promise<(Service & { roles: WorkRole[] })[]> {
+    // Services no longer have project type references - just return all services
     const servicesData = await db
-      .select({
-        service: services,
-        projectType: projectTypes,
-      })
-      .from(services)
-      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
-      .where(sql`${services.projectTypeId} IS NOT NULL`);
+      .select()
+      .from(services);
 
     // Get all service roles in one query
     const allServiceRoles = await db
@@ -2913,10 +2905,9 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their project types and roles
-    return servicesData.map(({ service, projectType }) => ({
+    // Combine services with their roles
+    return servicesData.map((service) => ({
       ...service,
-      projectType: projectType!,
       roles: rolesByServiceId[service.id] || [],
     }));
   }
@@ -2953,10 +2944,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServiceByProjectTypeId(projectTypeId: string): Promise<Service | undefined> {
+    // With inverted relationship: get project type first, then its associated service
+    const [projectType] = await db
+      .select()
+      .from(projectTypes)
+      .where(eq(projectTypes.id, projectTypeId));
+    
+    if (!projectType || !projectType.serviceId) {
+      return undefined;
+    }
+    
     const [service] = await db
       .select()
       .from(services)
-      .where(eq(services.projectTypeId, projectTypeId));
+      .where(eq(services.id, projectType.serviceId));
     return service;
   }
 

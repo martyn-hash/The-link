@@ -314,6 +314,7 @@ export const projectTypes = pgTable("project_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(), // project type name (e.g. "Monthly Bookkeeping", "Payroll")
   description: text("description"), // optional description of the project type
+  serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }), // Optional reference to service for role inheritance
   active: boolean("active").default(true), // to enable/disable project types
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
@@ -379,7 +380,6 @@ export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(),
   description: text("description"),
-  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }).unique(), // 1:1 relationship
   udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`), // Array of UDF definitions
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -1024,14 +1024,13 @@ export const projectTypesRelations = relations(projectTypes, ({ many, one }) => 
   kanbanStages: many(kanbanStages),
   changeReasons: many(changeReasons),
   stageApprovals: many(stageApprovals),
-  service: one(services), // 1:1 relationship with services
+  service: one(services, {
+    fields: [projectTypes.serviceId],
+    references: [services.id],
+  }), // Optional relationship with services
 }));
 
 export const servicesRelations = relations(services, ({ one, many }) => ({
-  projectType: one(projectTypes, {
-    fields: [services.projectTypeId],
-    references: [projectTypes.id],
-  }),
   serviceRoles: many(serviceRoles),
   clientServices: many(clientServices),
 }));

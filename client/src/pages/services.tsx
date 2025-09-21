@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import { type Service, type WorkRole, type ProjectType, type UDFDefinition, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
+import { type Service, type WorkRole, type UDFDefinition, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +71,6 @@ type CreateServiceFormData = z.infer<typeof createServiceFormSchema>;
 type CreateWorkRoleFormData = z.infer<typeof createWorkRoleFormSchema>;
 
 interface ServiceWithDetails extends Service {
-  projectType: ProjectType;
   roles: WorkRole[];
 }
 
@@ -300,7 +299,6 @@ export default function Services() {
     defaultValues: {
       name: "",
       description: "",
-      projectTypeId: "",
       roleIds: [],
       udfDefinitions: [],
     },
@@ -349,11 +347,7 @@ export default function Services() {
     };
   }) || [];
 
-  const { data: projectTypes } = useQuery<ProjectType[]>({
-    queryKey: ["/api/config/project-types"],
-    enabled: isAuthenticated && user?.role === "admin",
-    retry: false,
-  });
+  // Project types no longer needed for service creation
 
   const { data: allWorkRoles } = useQuery<WorkRole[]>({
     queryKey: ["/api/work-roles"],
@@ -546,7 +540,6 @@ export default function Services() {
     serviceForm.reset({
       name: service.name,
       description: service.description ?? "",
-      projectTypeId: service.projectTypeId,
       roleIds: service.roles.map(role => role.id),
       udfDefinitions: Array.isArray(service.udfDefinitions) ? service.udfDefinitions : [],
     });
@@ -723,7 +716,6 @@ export default function Services() {
                           <TableRow>
                             <TableHead>Name</TableHead>
                             <TableHead>Description</TableHead>
-                            <TableHead>Project Type</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Mapped Roles</TableHead>
                             <TableHead className="w-20">Actions</TableHead>
@@ -735,15 +727,12 @@ export default function Services() {
                               <TableCell className="font-medium">{service.name}</TableCell>
                               <TableCell>{service.description || "—"}</TableCell>
                               <TableCell>
-                                <Badge variant="secondary">{service.projectType?.name || "—"}</Badge>
-                              </TableCell>
-                              <TableCell>
                                 <Badge 
-                                  variant={service.projectType ? "default" : "secondary"} 
-                                  className={service.projectType ? "bg-green-500 text-white" : "bg-gray-500 text-white"}
+                                  variant="default" 
+                                  className="bg-green-500 text-white"
                                   data-testid={`status-${service.id}`}
                                 >
-                                  {service.projectType ? "Active" : "Inactive"}
+                                  Active
                                 </Badge>
                               </TableCell>
                               <TableCell>
@@ -852,30 +841,7 @@ export default function Services() {
                               </FormItem>
                             )}
                           />
-                          <FormField
-                            control={serviceForm.control}
-                            name="projectTypeId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Project Type</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} data-testid="select-project-type">
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a project type" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {projectTypes?.map((type) => (
-                                      <SelectItem key={type.id} value={type.id}>
-                                        {type.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+
 
                           <FormField
                             control={serviceForm.control}
@@ -999,30 +965,7 @@ export default function Services() {
                               </FormItem>
                             )}
                           />
-                          <FormField
-                            control={serviceForm.control}
-                            name="projectTypeId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Project Type</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} data-testid="select-project-type">
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a project type" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {projectTypes?.map((type) => (
-                                      <SelectItem key={type.id} value={type.id}>
-                                        {type.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+
 
                           <FormField
                             control={serviceForm.control}
