@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type ProjectWithRelations, type User } from "@shared/schema";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { Button } from "@/components/ui/button";
@@ -148,8 +148,8 @@ export default function AllProjects() {
 
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

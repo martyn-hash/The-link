@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import UploadModal from "@/components/upload-modal";
@@ -34,8 +34,8 @@ export default function UploadProjects() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto">

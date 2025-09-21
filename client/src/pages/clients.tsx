@@ -5,7 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type Client } from "@shared/schema";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
+import ClientSearch from "@/components/client-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +19,17 @@ import { format } from "date-fns";
 export default function Clients() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Parse URL search parameter on mount and location changes
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const searchParam = urlParams.get('search');
+    if (searchParam) {
+      setSearchTerm(searchParam);
+    }
+  }, [location]);
   const [showClientModal, setShowClientModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
@@ -101,8 +111,8 @@ export default function Clients() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="border-b border-border bg-card">
@@ -121,17 +131,12 @@ export default function Clients() {
             </div>
             
             {/* Search */}
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                type="text"
-                placeholder="Search clients..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-clients"
-              />
-            </div>
+            <ClientSearch 
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Search clients..." 
+              className="max-w-sm"
+            />
           </div>
         </div>
 

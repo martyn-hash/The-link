@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import { type Service, type WorkRole, type ProjectType, type UDFDefinition, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -250,7 +251,36 @@ function UDFEditor({ control, name }: UDFEditorProps) {
 
 export default function Services() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+  }, [isAuthenticated, authLoading, toast]);
+
+  // Redirect non-admin users
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to access this page.",
+        variant: "destructive",
+      });
+      setLocation('/');
+      return;
+    }
+  }, [user, toast, setLocation]);
   const queryClient = useQueryClient();
   
   // View state management
@@ -612,8 +642,8 @@ export default function Services() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="border-b border-border bg-card">

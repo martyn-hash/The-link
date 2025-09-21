@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -60,8 +60,8 @@ export default function TeamOverview() {
   } : null;
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">

@@ -3,8 +3,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -89,7 +90,36 @@ type UserFormData = CreateUserFormData | EditUserFormData;
 
 export default function UserManagement() {
   const { user, isLoading, isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+  }, [isAuthenticated, isLoading, toast]);
+
+  // Redirect non-admin users
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to access this page.",
+        variant: "destructive",
+      });
+      setLocation('/');
+      return;
+    }
+  }, [user, toast, setLocation]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
 
@@ -330,8 +360,8 @@ export default function UserManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar user={user!} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user!} />
       
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">

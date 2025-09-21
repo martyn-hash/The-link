@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import UploadModal from "@/components/upload-modal";
 import SettingsModal from "@/components/settings-modal";
 import UserManagementModal from "@/components/user-management-modal";
@@ -103,8 +103,8 @@ export default function Admin() {
   }, {});
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

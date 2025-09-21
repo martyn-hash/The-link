@@ -13,7 +13,7 @@ import type {
   StageApprovalField,
   WorkRole
 } from "@shared/schema";
-import Sidebar from "@/components/sidebar";
+import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -986,8 +986,8 @@ export default function ProjectTypeDetail() {
 
   if (projectTypeLoading) {
     return (
-      <div className="min-h-screen bg-background flex">
-        <Sidebar user={user} />
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="border-b border-border bg-card p-6">
             <div className="space-y-4">
@@ -1013,8 +1013,8 @@ export default function ProjectTypeDetail() {
 
   if (!projectType) {
     return (
-      <div className="min-h-screen bg-background flex">
-        <Sidebar user={user} />
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -1098,8 +1098,8 @@ export default function ProjectTypeDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar user={user} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with breadcrumbs */}
         <div className="border-b border-border bg-card">
