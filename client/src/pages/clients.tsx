@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -17,6 +18,7 @@ import { format } from "date-fns";
 export default function Clients() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [showClientModal, setShowClientModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -71,8 +73,8 @@ export default function Clients() {
 
   // Handle edit client
   const handleEditClient = (client: Client) => {
-    setSelectedClient(client);
-    setShowClientModal(true);
+    // Navigate to client detail view
+    setLocation(`/clients/${client.id}`);
   };
 
   // Handle modal close
