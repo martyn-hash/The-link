@@ -1199,17 +1199,18 @@ export function ClientCreationWizard({
                 fullName: officer.fullName || '',
                 firstName: officer.firstName || undefined,
                 lastName: officer.lastName || undefined,
-                telephone: officer.telephone || undefined,
-                email: officer.email || undefined,
+                // Contact fields should be empty for each new person
+                telephone: '',
+                email: '',
                 notes: '',
-                // Address fields from officer data
-                address1: officer.address1 || undefined,
-                address2: officer.address2 || undefined,
-                address3: officer.address3 || undefined,
-                locality: officer.locality || undefined,
-                region: officer.region || undefined,
-                country: officer.country || undefined,
-                postalCode: officer.postalCode || undefined,
+                // Address fields should be empty for each new person
+                address1: '',
+                address2: '',
+                address3: '',
+                locality: '',
+                region: '',
+                country: '',
+                postalCode: '',
                 completed: false,
               });
             }
@@ -1224,9 +1225,11 @@ export function ClientCreationWizard({
             fullName: individualData.individualName || '',
             firstName: individualData.individualName?.split(' ')[0] || '',
             lastName: individualData.individualName?.split(' ').slice(1).join(' ') || '',
-            email: individualData.individualEmail,
+            // Contact fields should be empty for individual clients too
+            email: '',
             telephone: '',
             notes: '',
+            // Address fields should be empty for individual clients
             address1: '',
             address2: '',
             address3: '',
