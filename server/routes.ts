@@ -646,9 +646,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch company data from Companies House
       const companyData = await companiesHouseService.getCompanyProfile(companyNumber);
-      const officersData = selectedOfficers.length > 0 ? 
-        await companiesHouseService.getCompanyOfficers(companyNumber) : 
-        { officers: [] };
+      
+      // Always fetch all officers to save directors automatically
+      const allOfficersData = await companiesHouseService.getCompanyOfficers(companyNumber);
+      console.log(`Fetched ${allOfficersData?.length || 0} officers for company ${companyNumber}`);
+      
+      // Filter for directors only (not resigned officers)
+      const directors = (allOfficersData || []).filter((officer: any) => 
+        officer.officer_role && 
+        officer.officer_role.toLowerCase().includes('director') &&
+        !officer.resigned_on // Only active directors
+      );
+      console.log(`Found ${directors.length} active directors to save`);
       
       // Transform CH data to internal client format
       const clientData = companiesHouseService.transformCompanyToClient(companyData);
@@ -656,12 +665,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create or update client with CH data
       const client = await storage.upsertClientFromCH(clientData);
       
-      // Create people from selected officers and link them to client
+      // Create people from all directors and link them to client
       const createdPeople = [];
-      for (const officerIndex of selectedOfficers) {
-        if (officersData.officers && officersData.officers[officerIndex]) {
-          const officer = officersData.officers[officerIndex];
-          const personData = companiesHouseService.transformOfficerToPerson(officer);
+      for (const officer of directors) {
+        try {
+          const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
           
           // Create or update person
           const person = await storage.upsertPersonFromCH(personData);
@@ -678,6 +686,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...person,
             officerRole: officer.officer_role
           });
+        } catch (personError) {
+          console.warn(`Failed to create person for officer ${officer.name}:`, personError);
+          // Continue with other officers
         }
       }
       
@@ -705,6 +716,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(500).json({ message: "Failed to create client from Companies House data" });
+    }
+  });
+
+  // GET /api/clients/:id/people - Get people related to a specific client
+  app.get("/api/clients/:id/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate UUID parameter
+      const paramValidation = z.object({
+        id: z.string().uuid("Invalid client ID format")
+      }).safeParse(req.params);
+      
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID format", 
+          errors: paramValidation.error.issues 
+        });
+      }
+      
+      const { id } = paramValidation.data;
+      
+      // Check if client exists
+      const client = await storage.getClientById(id);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      
+      // Get related people with their roles, ordered by primary contact and name
+      const clientPeople = await storage.getClientPeopleByClientId(id);
+      
+      // Sort by primary contact first, then by name
+      const sortedPeople = clientPeople.sort((a, b) => {
+        if (a.isPrimaryContact !== b.isPrimaryContact) {
+          return b.isPrimaryContact ? 1 : -1;
+        }
+        return a.person.fullName.localeCompare(b.person.fullName);
+      });
+      
+      res.status(200).json(sortedPeople);
+      
+    } catch (error) {
+      console.error("Error fetching client people:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client people" });
     }
   });
 

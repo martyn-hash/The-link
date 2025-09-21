@@ -7,7 +7,9 @@ import { Building2, MapPin, Calendar, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn } from "@/lib/queryClient";
-import type { Client } from "@shared/schema";
+import type { Client, Person, ClientPerson } from "@shared/schema";
+
+type ClientPersonWithPerson = ClientPerson & { person: Person };
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -16,6 +18,14 @@ export default function ClientDetail() {
     queryKey: [`/api/clients/${id}`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id,
+  });
+
+  // Fetch related people/directors
+  const { data: relatedPeople, isLoading: peopleLoading, error: peopleError } = useQuery<ClientPersonWithPerson[]>({
+    queryKey: [`/api/clients/${id}/people`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!id && !!client,
+    retry: 1, // Retry once on failure
   });
 
   if (isLoading) {
@@ -204,10 +214,77 @@ export default function ClientDetail() {
                 <CardTitle>Related People</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8" data-testid="section-related-people">
-                  <p className="text-muted-foreground">
-                    Related people will be displayed here once they are added to the system.
-                  </p>
+                <div data-testid="section-related-people">
+                  {peopleLoading ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : peopleError ? (
+                    <div className="text-center py-8">
+                      <p className="text-destructive mb-2">
+                        Failed to load related people
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        Please try refreshing the page or contact support if the issue persists.
+                      </p>
+                    </div>
+                  ) : relatedPeople && relatedPeople.length > 0 ? (
+                    <div className="space-y-4">
+                      {relatedPeople.map((clientPerson) => (
+                        <div 
+                          key={clientPerson.id} 
+                          className="flex items-start space-x-4 p-4 rounded-lg border bg-card"
+                          data-testid={`person-${clientPerson.person.id}`}
+                        >
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="font-medium text-foreground" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                                {clientPerson.person.fullName}
+                              </h4>
+                              {clientPerson.officerRole && (
+                                <Badge variant="secondary" data-testid={`badge-role-${clientPerson.person.id}`}>
+                                  {clientPerson.officerRole}
+                                </Badge>
+                              )}
+                              {clientPerson.isPrimaryContact && (
+                                <Badge variant="default" data-testid={`badge-primary-${clientPerson.person.id}`}>
+                                  Primary Contact
+                                </Badge>
+                              )}
+                            </div>
+                            {(clientPerson.person.nationality || clientPerson.person.occupation) && (
+                              <p className="text-sm text-muted-foreground">
+                                {[clientPerson.person.nationality, clientPerson.person.occupation]
+                                  .filter(Boolean)
+                                  .join(' • ')}
+                              </p>
+                            )}
+                            {clientPerson.person.addressLine1 && (
+                              <p className="text-sm text-muted-foreground">
+                                <MapPin className="w-3 h-3 inline mr-1" />
+                                {[
+                                  clientPerson.person.addressLine1,
+                                  clientPerson.person.addressLine2,
+                                  clientPerson.person.locality,
+                                  clientPerson.person.postalCode
+                                ].filter(Boolean).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        No directors or related people found for this client.
+                      </p>
+                      <p className="text-muted-foreground text-sm mt-2">
+                        Directors will be automatically added when creating clients from Companies House data.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

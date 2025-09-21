@@ -800,6 +800,114 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // People operations
+  async createPerson(personData: InsertPerson): Promise<Person> {
+    const [person] = await db.insert(people).values(personData).returning();
+    return person;
+  }
+
+  async getPersonById(id: string): Promise<Person | undefined> {
+    const [person] = await db.select().from(people).where(eq(people.id, id));
+    return person;
+  }
+
+  async getPersonByPersonNumber(personNumber: string): Promise<Person | undefined> {
+    const [person] = await db.select().from(people).where(eq(people.personNumber, personNumber));
+    return person;
+  }
+
+  async getAllPeople(): Promise<Person[]> {
+    return await db.select().from(people);
+  }
+
+  async updatePerson(id: string, personData: Partial<InsertPerson>): Promise<Person> {
+    const [person] = await db
+      .update(people)
+      .set(personData)
+      .where(eq(people.id, id))
+      .returning();
+    
+    if (!person) {
+      throw new Error(`Person with ID '${id}' not found`);
+    }
+    
+    return person;
+  }
+
+  async deletePerson(id: string): Promise<void> {
+    const result = await db
+      .delete(people)
+      .where(eq(people.id, id))
+      .returning();
+    
+    if (result.length === 0) {
+      throw new Error(`Person with ID '${id}' not found`);
+    }
+  }
+
+  // Client-People relationship operations
+  async createClientPerson(relationship: InsertClientPerson): Promise<ClientPerson> {
+    const [clientPerson] = await db.insert(clientPeople).values(relationship).returning();
+    return clientPerson;
+  }
+
+  async getClientPeopleByClientId(clientId: string): Promise<(ClientPerson & { person: Person })[]> {
+    const result = await db
+      .select({
+        clientPerson: clientPeople,
+        person: people
+      })
+      .from(clientPeople)
+      .innerJoin(people, eq(clientPeople.personId, people.id))
+      .where(eq(clientPeople.clientId, clientId));
+    
+    return result.map(row => ({
+      ...row.clientPerson,
+      person: row.person
+    }));
+  }
+
+  async getClientPeopleByPersonId(personId: string): Promise<(ClientPerson & { client: Client })[]> {
+    const result = await db
+      .select({
+        clientPerson: clientPeople,
+        client: clients
+      })
+      .from(clientPeople)
+      .innerJoin(clients, eq(clientPeople.clientId, clients.id))
+      .where(eq(clientPeople.personId, personId));
+    
+    return result.map(row => ({
+      ...row.clientPerson,
+      client: row.client
+    }));
+  }
+
+  async updateClientPerson(id: string, relationship: Partial<InsertClientPerson>): Promise<ClientPerson> {
+    const [clientPerson] = await db
+      .update(clientPeople)
+      .set(relationship)
+      .where(eq(clientPeople.id, id))
+      .returning();
+    
+    if (!clientPerson) {
+      throw new Error(`Client-person relationship with ID '${id}' not found`);
+    }
+    
+    return clientPerson;
+  }
+
+  async deleteClientPerson(id: string): Promise<void> {
+    const result = await db
+      .delete(clientPeople)
+      .where(eq(clientPeople.id, id))
+      .returning();
+    
+    if (result.length === 0) {
+      throw new Error(`Client-person relationship with ID '${id}' not found`);
+    }
+  }
+
   // Companies House specific operations
   async upsertClientFromCH(clientData: Partial<InsertClient>): Promise<Client> {
     // Check if client with this company number already exists
@@ -819,21 +927,12 @@ export class DatabaseStorage implements IStorage {
   async upsertPersonFromCH(personData: Partial<InsertPerson>): Promise<Person> {
     // Check if person exists by person number (if available)
     if (personData.personNumber) {
-      const [existingPerson] = await db
-        .select()
-        .from(people)
-        .where(eq(people.personNumber, personData.personNumber))
-        .limit(1);
+      const existingPerson = await this.getPersonByPersonNumber(personData.personNumber);
       
       if (existingPerson) {
         // Update existing person (exclude id from update)
         const { id, ...updateData } = personData;
-        const [updatedPerson] = await db
-          .update(people)
-          .set(updateData)
-          .where(eq(people.id, existingPerson.id))
-          .returning();
-        return updatedPerson;
+        return await this.updatePerson(existingPerson.id, updateData);
       }
     }
     
@@ -841,8 +940,7 @@ export class DatabaseStorage implements IStorage {
     const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const personWithId = { ...personData, id: personId } as InsertPerson;
     
-    const [person] = await db.insert(people).values(personWithId).returning();
-    return person;
+    return await this.createPerson(personWithId);
   }
 
   async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean): Promise<ClientPerson> {
