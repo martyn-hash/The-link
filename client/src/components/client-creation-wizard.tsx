@@ -357,23 +357,23 @@ function PersonForm({
   const formContainerRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
-  // Watch for changes, validate, and update parent with real-time feedback
+  // Watch for changes and update parent with deterministic completion logic
   useEffect(() => {
     const subscription = personForm.watch((value) => {
       if (value && onPersonUpdate) {
-        const isFormValid = personForm.formState.isValid;
+        // Deterministic completion logic - don't rely on stale formState.isValid
         const hasRequiredFields = value.relationshipType && value.fullName && 
           (value.source !== 'manual' || (value.email && value.email.trim() !== ''));
         
         const updatedPerson: PersonDraft = {
           ...value as PersonDraft,
-          completed: Boolean(isFormValid && hasRequiredFields),
+          completed: Boolean(hasRequiredFields),
         };
         onPersonUpdate(updatedPerson);
       }
     });
     return () => subscription.unsubscribe();
-  }, [onPersonUpdate, personForm.formState.isValid]);
+  }, [onPersonUpdate]);
 
   // Reset form when person changes with proper default values and focus management
   useEffect(() => {
@@ -397,6 +397,9 @@ function PersonForm({
       };
       personForm.reset(personWithDefaults);
       
+      // Trigger validation after reset (synchronous)
+      personForm.trigger();
+      
       // Focus management: focus first input when person changes (without forced scrolling)
       // Use setTimeout to ensure DOM has updated after form reset
       setTimeout(() => {
@@ -410,16 +413,15 @@ function PersonForm({
     }
   }, [person, personForm]);
 
-  // Auto-save helper function with form completion check
+  // Auto-save helper function with deterministic completion check
   const autoSave = () => {
     const formValues = personForm.getValues();
-    const isFormValid = personForm.formState.isValid;
     const hasRequiredFields = formValues.relationshipType && formValues.fullName && 
       (formValues.source !== 'manual' || (formValues.email && formValues.email.trim() !== ''));
     
     const updatedPerson: PersonDraft = {
       ...formValues,
-      completed: Boolean(isFormValid && hasRequiredFields),
+      completed: Boolean(hasRequiredFields),
     };
     onPersonUpdate(updatedPerson);
   };
@@ -461,11 +463,14 @@ function PersonForm({
     onNext();
   };
   
-  // Check if form can proceed to next
+  // Check if form can proceed to next (deterministic, not dependent on formState)
   const canProceedToNext = () => {
-    const formValues = personForm.getValues();
-    return formValues.relationshipType && formValues.fullName && 
-      (formValues.source !== 'manual' || (formValues.email && formValues.email.trim() !== ''));
+    const relationshipType = personForm.watch('relationshipType');
+    const fullName = personForm.watch('fullName');
+    const email = personForm.watch('email');
+    const source = personForm.watch('source');
+    return relationshipType && fullName && 
+      (source !== 'manual' || (email && email.trim() !== ''));
   };
 
   return (
@@ -521,9 +526,20 @@ function PersonForm({
                       <FormLabel className="text-sm font-medium text-foreground">
                         Relationship Type <span className="text-destructive">*</span>
                       </FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select 
+                        onValueChange={(value) => {
+                          personForm.setValue('relationshipType', value, { 
+                            shouldValidate: true, 
+                            shouldDirty: true 
+                          });
+                        }} 
+                        value={field.value ?? undefined}
+                      >
                         <FormControl>
-                          <SelectTrigger data-testid={`select-person-${personIndex}-relationship`}>
+                          <SelectTrigger 
+                            data-testid={`select-person-${personIndex}-relationship`}
+                            onBlur={field.onBlur}
+                          >
                             <SelectValue placeholder="Select relationship type" />
                           </SelectTrigger>
                         </FormControl>
@@ -819,14 +835,14 @@ function PersonForm({
           </span>
         </div>
         <div className="flex gap-2 text-xs text-muted-foreground">
-          <span className={personForm.getValues().relationshipType ? "text-green-600" : "text-muted-foreground"}>
+          <span className={personForm.watch("relationshipType") ? "text-green-600" : "text-muted-foreground"}>
             • Relationship
           </span>
-          <span className={personForm.getValues().fullName ? "text-green-600" : "text-muted-foreground"}>
+          <span className={personForm.watch("fullName") ? "text-green-600" : "text-muted-foreground"}>
             • Full Name
           </span>
           {person?.source === 'manual' && (
-            <span className={personForm.getValues().email && personForm.getValues().email?.trim() ? "text-green-600" : "text-muted-foreground"}>
+            <span className={personForm.watch("email") && personForm.watch("email")?.trim() ? "text-green-600" : "text-muted-foreground"}>
               • Email
             </span>
           )}
@@ -1921,6 +1937,7 @@ export function ClientCreationWizard({
                    wizardData.step3.currentPersonIndex < wizardData.step3.people.length &&
                    wizardData.step3.people[wizardData.step3.currentPersonIndex] ? (
                     <PersonForm
+                      key={wizardData.step3.people[wizardData.step3.currentPersonIndex]?.id}
                       person={wizardData.step3.people[wizardData.step3.currentPersonIndex]}
                       personIndex={wizardData.step3.currentPersonIndex}
                       totalPeople={wizardData.step3.people.length}
