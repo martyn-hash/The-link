@@ -32,7 +32,9 @@ import { Switch } from "@/components/ui/switch";
 interface EditingStage {
   id?: string;
   name: string;
-  assignedRole: string;
+  assignedRole?: string;
+  assignedWorkRoleId?: string;
+  assignedUserId?: string;
   order: number;
   color: string;
   maxInstanceTime?: number;
@@ -605,16 +607,32 @@ export default function ProjectTypeDetail() {
     enabled: !!projectTypeId && isAuthenticated && !!user,
   });
 
-  // Use service-specific roles if available, otherwise fall back to system roles
+  // Use service-specific roles if available, otherwise fall back to system roles  
   const availableRoles = projectTypeRoles && projectTypeRoles.length > 0 
-    ? projectTypeRoles.map(role => ({ value: role.name.toLowerCase().replace(/\s+/g, '_'), label: role.name }))
+    ? projectTypeRoles.map(role => ({ value: role.id, label: role.name }))
     : SYSTEM_ROLE_OPTIONS;
 
-  // Helper function to get role label from role value
-  const getRoleLabel = (roleValue: string | null | undefined) => {
-    if (!roleValue) return "Unknown";
-    const role = availableRoles.find(r => r.value === roleValue);
-    return role ? role.label : roleValue;
+  // Helper function to get role label for a stage
+  const getStageRoleLabel = (stage: any) => {
+    // For service-linked project types, check assignedWorkRoleId first
+    if (projectType?.serviceId && stage.assignedWorkRoleId) {
+      const serviceRole = availableRoles.find(r => r.value === stage.assignedWorkRoleId);
+      return serviceRole ? serviceRole.label : "Unknown Service Role";
+    }
+    
+    // For non-service project types, we would check assignedUserId (but we need user data for this)
+    if (!projectType?.serviceId && stage.assignedUserId) {
+      // For now, return a placeholder - we could fetch user data if needed
+      return "Assigned User";
+    }
+    
+    // Legacy support: check assignedRole for existing stages
+    if (stage.assignedRole) {
+      const role = availableRoles.find(r => r.value === stage.assignedRole);
+      return role ? role.label : stage.assignedRole;
+    }
+    
+    return "Unknown";
   };
 
   // Fetch all stage approval fields (needed for managing approval fields)
@@ -1046,11 +1064,49 @@ export default function ProjectTypeDetail() {
     if (!editingStage) return;
     
     try {
+      // Prepare stage data with correct assignment fields
+      let stageData = { ...editingStage };
+      
+      // Clean up assignment fields based on project type
+      if (projectType?.serviceId) {
+        // Service-linked: ensure only assignedWorkRoleId is set
+        stageData.assignedRole = undefined;
+        stageData.assignedUserId = undefined;
+        
+        // Client-side validation: require service role selection
+        if (!stageData.assignedWorkRoleId) {
+          toast({
+            title: "Validation Error",
+            description: "Please select a service role",
+            variant: "destructive",
+          });
+          return;
+        }
+      } else {
+        // Non-service: ensure only assignedUserId is set
+        stageData.assignedRole = undefined;
+        stageData.assignedWorkRoleId = undefined;
+        
+        // Client-side validation: require user selection
+        if (!stageData.assignedUserId) {
+          toast({
+            title: "Validation Error",
+            description: "Please select a user",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      console.log("Project type detail - submitting stage data:", stageData);
+      
       // Save the stage first
       if (editingStage.id) {
-        await updateStageMutation.mutateAsync(editingStage);
+        await updateStageMutation.mutateAsync(stageData);
       } else {
-        const createdStage = await createStageMutation.mutateAsync(editingStage);
+        // Strip id field for creation to avoid validation errors
+        const { id, ...createData } = stageData;
+        const createdStage = await createStageMutation.mutateAsync(createData);
         if (createdStage && typeof createdStage === 'object' && 'id' in createdStage) {
           editingStage.id = (createdStage as any).id;
         }
@@ -1243,7 +1299,7 @@ export default function ProjectTypeDetail() {
                             {stage.name}
                           </CardTitle>
                           <Badge variant="secondary" data-testid={`badge-stage-role-${stage.id}`}>
-                            {getRoleLabel(stage.assignedRole)}
+                            {getStageRoleLabel(stage)}
                           </Badge>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -1333,14 +1389,36 @@ export default function ProjectTypeDetail() {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label htmlFor="stage-role">Assigned Role</Label>
+                        <Label htmlFor="stage-role">
+                          {projectType?.serviceId ? "Assigned Service Role" : "Assigned User"}
+                        </Label>
                         <Select
-                          value={editingStage?.assignedRole || "client_manager"}
-                          onValueChange={(value) => setEditingStage(prev => ({ ...prev!, assignedRole: value }))}
+                          value={projectType?.serviceId 
+                            ? (editingStage?.assignedWorkRoleId || "") 
+                            : (editingStage?.assignedUserId || "")
+                          }
+                          onValueChange={(value) => {
+                            if (projectType?.serviceId) {
+                              setEditingStage(prev => ({ 
+                                ...prev!, 
+                                assignedWorkRoleId: value,
+                                assignedUserId: undefined,
+                                assignedRole: undefined
+                              }));
+                            } else {
+                              setEditingStage(prev => ({ 
+                                ...prev!, 
+                                assignedUserId: value,
+                                assignedWorkRoleId: undefined,
+                                assignedRole: undefined
+                              }));
+                            }
+                          }}
                           disabled={rolesLoading}
                         >
                           <SelectTrigger data-testid="select-stage-role">
-                            <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select role"} />
+                            <SelectValue placeholder={rolesLoading ? "Loading..." : 
+                              projectType?.serviceId ? "Select service role" : "Select user"} />
                           </SelectTrigger>
                           <SelectContent>
                             {availableRoles.map(role => (
@@ -1350,7 +1428,7 @@ export default function ProjectTypeDetail() {
                             ))}
                           </SelectContent>
                         </Select>
-                        {projectTypeRoles && projectTypeRoles.length > 0 && (
+                        {projectType?.serviceId && (
                           <p className="text-xs text-muted-foreground">
                             Using service-specific roles
                           </p>

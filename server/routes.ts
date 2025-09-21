@@ -1439,9 +1439,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Service roles endpoint
+  app.get("/api/config/services/:serviceId/roles", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const workRoles = await storage.getWorkRolesByServiceId(req.params.serviceId);
+      res.json(workRoles);
+    } catch (error) {
+      console.error("Error fetching service roles:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      res.status(500).json({ message: "Failed to fetch service roles" });
+    }
+  });
+
   app.post("/api/config/stages", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const stageData = insertKanbanStageSchema.parse(req.body);
+      
+      // Get project type to validate assignment method
+      const projectType = await storage.getProjectTypeById(stageData.projectTypeId);
+      if (!projectType) {
+        return res.status(404).json({ message: "Project type not found" });
+      }
+      
+      // Conditional validation based on service linkage
+      if (projectType.serviceId) {
+        // Service-linked project type: require assignedWorkRoleId
+        if (!stageData.assignedWorkRoleId) {
+          return res.status(400).json({ 
+            message: "Service-linked project types require a work role assignment",
+            code: "WORK_ROLE_REQUIRED"
+          });
+        }
+        
+        // Validate work role belongs to the service
+        const serviceRoles = await storage.getServiceRolesByServiceId(projectType.serviceId);
+        const isValidRole = serviceRoles.some((sr: any) => sr.roleId === stageData.assignedWorkRoleId);
+        if (!isValidRole) {
+          return res.status(400).json({ 
+            message: "Work role does not belong to the project type's service",
+            code: "INVALID_SERVICE_ROLE"
+          });
+        }
+        
+        // Clear other assignment fields
+        stageData.assignedUserId = null;
+        stageData.assignedRole = null;
+      } else {
+        // Non-service project type: require assignedUserId
+        if (!stageData.assignedUserId) {
+          return res.status(400).json({ 
+            message: "Non-service project types require a user assignment",
+            code: "USER_REQUIRED"
+          });
+        }
+        
+        // Validate user exists and is active
+        const user = await storage.getUser(stageData.assignedUserId);
+        if (!user) {
+          return res.status(400).json({ 
+            message: "Assigned user not found",
+            code: "USER_NOT_FOUND"
+          });
+        }
+        
+        // Clear other assignment fields
+        stageData.assignedWorkRoleId = null;
+        stageData.assignedRole = null;
+      }
+      
       const stage = await storage.createKanbanStage(stageData);
       res.json(stage);
     } catch (error) {
@@ -1463,6 +1527,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/config/stages/:id", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const updateData = updateKanbanStageSchema.parse(req.body);
+      
+      // Get existing stage to check project type
+      const existingStage = await storage.getStageById(req.params.id);
+      if (!existingStage) {
+        return res.status(404).json({ message: "Stage not found" });
+      }
+      
+      // If assignment fields are being updated, validate them
+      if (updateData.assignedWorkRoleId !== undefined || updateData.assignedUserId !== undefined || updateData.assignedRole !== undefined) {
+        const projectType = await storage.getProjectTypeById(existingStage.projectTypeId);
+        if (!projectType) {
+          return res.status(404).json({ message: "Project type not found" });
+        }
+        
+        // Conditional validation based on service linkage
+        if (projectType.serviceId) {
+          // Service-linked project type: require assignedWorkRoleId
+          const workRoleId = updateData.assignedWorkRoleId ?? existingStage.assignedWorkRoleId;
+          if (!workRoleId) {
+            return res.status(400).json({ 
+              message: "Service-linked project types require a work role assignment",
+              code: "WORK_ROLE_REQUIRED"
+            });
+          }
+          
+          // Validate work role belongs to the service
+          const serviceRoles = await storage.getServiceRolesByServiceId(projectType.serviceId);
+          const isValidRole = serviceRoles.some((sr: any) => sr.roleId === workRoleId);
+          if (!isValidRole) {
+            return res.status(400).json({ 
+              message: "Work role does not belong to the project type's service",
+              code: "INVALID_SERVICE_ROLE"
+            });
+          }
+          
+          // Clear other assignment fields
+          updateData.assignedUserId = null;
+          updateData.assignedRole = null;
+        } else {
+          // Non-service project type: require assignedUserId
+          const userId = updateData.assignedUserId ?? existingStage.assignedUserId;
+          if (!userId) {
+            return res.status(400).json({ 
+              message: "Non-service project types require a user assignment",
+              code: "USER_REQUIRED"
+            });
+          }
+          
+          // Validate user exists and is active
+          const user = await storage.getUser(userId);
+          if (!user) {
+            return res.status(400).json({ 
+              message: "Assigned user not found",
+              code: "USER_NOT_FOUND"
+            });
+          }
+          
+          // Clear other assignment fields
+          updateData.assignedWorkRoleId = null;
+          updateData.assignedRole = null;
+        }
+      }
+      
       const stage = await storage.updateKanbanStage(req.params.id, updateData);
       res.json(stage);
     } catch (error) {

@@ -27,7 +27,9 @@ interface SettingsModalProps {
 interface EditingStage {
   id?: string;
   name: string;
-  assignedRole: string;
+  assignedRole?: string;  // Legacy field
+  assignedWorkRoleId?: string;  // For service-linked project types
+  assignedUserId?: string;  // For non-service project types
   order: number;
   color: string;
 }
@@ -48,7 +50,9 @@ interface EditingProjectType {
 
 const DEFAULT_STAGE: EditingStage = {
   name: "",
-  assignedRole: "client_manager",
+  assignedRole: undefined,
+  assignedWorkRoleId: undefined,
+  assignedUserId: undefined,
   order: 0,
   color: "#6b7280",
 };
@@ -123,6 +127,26 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { data: stageApprovals, isLoading: stageApprovalsLoading } = useQuery<StageApproval[]>({
     queryKey: ["/api/config/project-types", selectedProjectTypeId, "stage-approvals"],
     enabled: isOpen && !!selectedProjectTypeId,
+  });
+
+  // Get selected project type to check if it has a service
+  const selectedProjectType = projectTypes?.find(pt => pt.id === selectedProjectTypeId);
+
+  // Fetch service roles if project type is linked to a service
+  const { data: serviceRoles } = useQuery<any[]>({
+    queryKey: ["/api/config/services", selectedProjectType?.serviceId, "roles"],
+    enabled: isOpen && !!selectedProjectType?.serviceId,
+    queryFn: async () => {
+      const response = await fetch(`/api/config/services/${selectedProjectType?.serviceId}/roles`);
+      if (!response.ok) throw new Error('Failed to fetch service roles');
+      return response.json();
+    },
+  });
+
+  // Fetch all users if project type is not linked to a service
+  const { data: users } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    enabled: isOpen && !!selectedProjectType && !selectedProjectType.serviceId,
   });
 
   // Project Type mutations
@@ -379,10 +403,43 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       return;
     }
 
-    if (editingStage.id) {
-      updateStageMutation.mutate(editingStage);
+    // Prepare stage data with correct assignment fields
+    const { id, ...stageData } = editingStage;
+    
+    // Clean up assignment fields based on project type
+    if (selectedProjectType?.serviceId) {
+      // Service-linked: ensure only assignedWorkRoleId is set
+      stageData.assignedRole = undefined;
+      stageData.assignedUserId = undefined;
+      
+      if (!stageData.assignedWorkRoleId) {
+        toast({
+          title: "Validation Error",
+          description: "Please select a service role",
+          variant: "destructive",
+        });
+        return;
+      }
     } else {
-      const { id, ...stageData } = editingStage;
+      // Non-service: ensure only assignedUserId is set
+      stageData.assignedRole = undefined;
+      stageData.assignedWorkRoleId = undefined;
+      
+      if (!stageData.assignedUserId) {
+        toast({
+          title: "Validation Error",
+          description: "Please select a user",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    console.log("Submitting stage data:", stageData);
+
+    if (editingStage.id) {
+      updateStageMutation.mutate(stageData);
+    } else {
       createStageMutation.mutate(stageData);
     }
   };
@@ -391,7 +448,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setEditingStage({
       id: stage.id,
       name: stage.name,
-      assignedRole: stage.assignedRole || "client_manager",
+      assignedRole: stage.assignedRole || undefined,
+      assignedWorkRoleId: (stage as any).assignedWorkRoleId,
+      assignedUserId: (stage as any).assignedUserId,
       order: stage.order,
       color: stage.color || "#6b7280",
     });
@@ -400,7 +459,27 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const handleAddStage = () => {
     const nextOrder = Math.max(0, ...(stages?.map(s => s.order) || [])) + 1;
-    setEditingStage({ ...DEFAULT_STAGE, order: nextOrder });
+    
+    // Initialize with appropriate default assignment based on project type
+    const defaultStage = {
+      ...DEFAULT_STAGE,
+      order: nextOrder,
+    };
+    
+    // Set default assignment based on project type service linkage
+    if (selectedProjectType?.serviceId) {
+      // Service-linked: will select service role in dropdown
+      defaultStage.assignedWorkRoleId = undefined;
+      defaultStage.assignedUserId = undefined;
+      defaultStage.assignedRole = undefined;
+    } else {
+      // Non-service: will select user in dropdown
+      defaultStage.assignedUserId = undefined;
+      defaultStage.assignedWorkRoleId = undefined;
+      defaultStage.assignedRole = undefined;
+    }
+    
+    setEditingStage(defaultStage);
     setIsAddingStage(true);
   };
 
@@ -739,23 +818,59 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             
 
                             <div>
-                              <Label htmlFor="stage-role">Assigned Role</Label>
-                              <select
-                                id="stage-role"
-                                value={editingStage.assignedRole}
-                                onChange={(e) => setEditingStage({
-                                  ...editingStage,
-                                  assignedRole: e.target.value
-                                })}
-                                className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                                data-testid="select-stage-role"
-                              >
-                                {ROLE_OPTIONS.map(option => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                              <Label htmlFor="stage-role">
+                                {selectedProjectType?.serviceId ? "Assigned Service Role" : "Assigned User"}
+                              </Label>
+                              {selectedProjectType?.serviceId ? (
+                                // Service-linked project type: show service roles
+                                <select
+                                  id="stage-role"
+                                  value={editingStage.assignedWorkRoleId || ""}
+                                  onChange={(e) => setEditingStage({
+                                    ...editingStage,
+                                    assignedWorkRoleId: e.target.value || undefined,
+                                    assignedUserId: undefined,
+                                    assignedRole: undefined,
+                                  })}
+                                  className="w-full px-3 py-2 bg-background border border-input rounded-md"
+                                  data-testid="select-stage-role"
+                                >
+                                  <option value="">Select a service role...</option>
+                                  {serviceRoles?.map(role => (
+                                    <option key={role.id} value={role.id}>
+                                      {role.name}
+                                    </option>
+                                  )) || (
+                                    <option disabled>Loading service roles...</option>
+                                  )}
+                                </select>
+                              ) : (
+                                // Non-service project type: show users
+                                <select
+                                  id="stage-role"
+                                  value={editingStage.assignedUserId || ""}
+                                  onChange={(e) => setEditingStage({
+                                    ...editingStage,
+                                    assignedUserId: e.target.value || undefined,
+                                    assignedWorkRoleId: undefined,
+                                    assignedRole: undefined,
+                                  })}
+                                  className="w-full px-3 py-2 bg-background border border-input rounded-md"
+                                  data-testid="select-stage-user"
+                                >
+                                  <option value="">Select a user...</option>
+                                  {users?.map(user => (
+                                    <option key={user.id} value={user.id}>
+                                      {user.firstName && user.lastName 
+                                        ? `${user.firstName} ${user.lastName}` 
+                                        : user.email
+                                      }
+                                    </option>
+                                  )) || (
+                                    <option disabled>Loading users...</option>
+                                  )}
+                                </select>
+                              )}
                             </div>
 
                             <div>

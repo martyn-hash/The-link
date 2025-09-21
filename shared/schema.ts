@@ -281,7 +281,9 @@ export const kanbanStages = pgTable("kanban_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type
   name: varchar("name").notNull(),
-  assignedRole: userRoleEnum("assigned_role"),
+  assignedRole: userRoleEnum("assigned_role"), // Legacy field for backward compatibility
+  assignedWorkRoleId: varchar("assigned_work_role_id").references(() => workRoles.id, { onDelete: "set null" }), // For service-linked project types
+  assignedUserId: varchar("assigned_user_id").references(() => users.id, { onDelete: "set null" }), // For non-service project types
   order: integer("order").notNull(),
   color: varchar("color").default("#6b7280"),
   maxInstanceTime: integer("max_instance_time"), // Maximum hours for a single visit to this stage (optional)
@@ -290,6 +292,8 @@ export const kanbanStages = pgTable("kanban_stages", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_kanban_stages_project_type_id").on(table.projectTypeId),
+  index("idx_kanban_stages_assigned_work_role_id").on(table.assignedWorkRoleId),
+  index("idx_kanban_stages_assigned_user_id").on(table.assignedUserId),
   // Name must be unique within a project type
   unique("unique_stage_name_per_project_type").on(table.projectTypeId, table.name),
 ]);
@@ -667,9 +671,21 @@ export const insertKanbanStageSchema = baseKanbanStageSchema.refine((data) => {
   if (data.maxTotalTime !== undefined && data.maxTotalTime !== null && data.maxTotalTime <= 0) {
     return false;
   }
+  
+  // Validate assignment fields - only one assignment method should be used
+  const assignmentFields = [
+    data.assignedRole,
+    data.assignedWorkRoleId,
+    data.assignedUserId
+  ].filter(field => field !== undefined && field !== null);
+  
+  if (assignmentFields.length > 1) {
+    return false;
+  }
+  
   return true;
 }, {
-  message: "Time limits must be positive numbers when specified",
+  message: "Time limits must be positive numbers when specified, and only one assignment method (role, work role, or user) should be used",
 });
 
 export const updateKanbanStageSchema = baseKanbanStageSchema.partial().refine((data) => {
@@ -681,9 +697,21 @@ export const updateKanbanStageSchema = baseKanbanStageSchema.partial().refine((d
   if (data.maxTotalTime !== undefined && data.maxTotalTime !== null && data.maxTotalTime <= 0) {
     return false;
   }
+  
+  // Validate assignment fields - only one assignment method should be used
+  const assignmentFields = [
+    data.assignedRole,
+    data.assignedWorkRoleId,
+    data.assignedUserId
+  ].filter(field => field !== undefined && field !== null);
+  
+  if (assignmentFields.length > 1) {
+    return false;
+  }
+  
   return true;
 }, {
-  message: "Time limits must be positive numbers when specified",
+  message: "Time limits must be positive numbers when specified, and only one assignment method (role, work role, or user) should be used",
 });
 
 export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({

@@ -161,6 +161,7 @@ export interface IStorage {
   
   // Project type operations
   getAllProjectTypes(): Promise<ProjectType[]>;
+  getProjectTypeById(id: string): Promise<ProjectType | undefined>;
   createProjectType(projectType: InsertProjectType): Promise<ProjectType>;
   updateProjectType(id: string, projectType: Partial<InsertProjectType>): Promise<ProjectType>;
   deleteProjectType(id: string): Promise<void>;
@@ -1715,6 +1716,11 @@ export class DatabaseStorage implements IStorage {
   // Project description operations
   async getAllProjectTypes(): Promise<ProjectType[]> {
     return await db.select().from(projectTypes).orderBy(projectTypes.name);
+  }
+
+  async getProjectTypeById(id: string): Promise<ProjectType | undefined> {
+    const [projectType] = await db.select().from(projectTypes).where(eq(projectTypes.id, id));
+    return projectType;
   }
 
   async createProjectType(projectType: InsertProjectType): Promise<ProjectType> {
