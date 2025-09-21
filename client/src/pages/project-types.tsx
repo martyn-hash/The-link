@@ -123,8 +123,10 @@ export default function ProjectTypes() {
     enabled: !!projectTypes && projectTypes.length > 0,
   });
 
-  // Calculate unmapped services
-  const unmappedServices = services?.filter(service => !service.projectTypeId) || [];
+  // Calculate unmapped services (services not referenced by any project type)
+  const unmappedServices = services?.filter(service => {
+    return !projectTypes?.some(pt => pt.serviceId === service.id);
+  }) || [];
   
   // Get selected service details
   const selectedServiceId = form.watch("serviceId");
@@ -133,18 +135,15 @@ export default function ProjectTypes() {
   // Create project type mutation
   const createProjectTypeMutation = useMutation({
     mutationFn: async (data: CreateProjectTypeForm) => {
-      const { serviceId, ...projectTypeData } = data;
+      // Create the project type with serviceId included if provided
+      const projectTypeData = data.serviceId && data.serviceId.trim() 
+        ? data 
+        : { ...data, serviceId: undefined };
       
-      // First create the project type
       const response = await apiRequest("POST", "/api/config/project-types", projectTypeData);
       const projectType = await response.json();
       
-      // If a service is selected, update the service to link to this project type
-      if (serviceId && serviceId.trim()) {
-        await apiRequest("PATCH", `/api/services/${serviceId}`, {
-          projectTypeId: projectType.id
-        });
-      }
+      // Service linking is now handled by serviceId in project type - no service update needed
       
       return projectType;
     },
