@@ -95,12 +95,79 @@ export const magicLinkTokens = pgTable("magic_link_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Clients table
+// Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   email: varchar("email"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Companies House Basic Fields (existing in database)
+  clientType: varchar("client_type"), // Existing field
+  companyNumber: varchar("company_number"), // Existing field
+  companiesHouseName: varchar("companies_house_name"), // Existing field
+  companyStatus: varchar("company_status"), // Existing field
+  companyType: varchar("company_type"), // Existing field
+  dateOfCreation: timestamp("date_of_creation"), // Existing field
+  jurisdiction: varchar("jurisdiction"), // Existing field
+  sicCodes: text("sic_codes").array(), // Existing field
+  // Registered Office Address (existing in database)
+  registeredAddress1: varchar("registered_address_1"), // Existing field
+  registeredAddress2: varchar("registered_address_2"), // Existing field
+  registeredAddress3: varchar("registered_address_3"), // Existing field
+  // registeredAddress4: varchar("registered_address_4"), // Temporarily commented - deployment blocker
+  registeredCountry: varchar("registered_country"), // Existing field
+  registeredPostcode: varchar("registered_postcode"), // Existing field
+  // Accounts Filing Information (existing in database)
+  accountingReferenceDay: integer("accounting_reference_day"), // Existing field
+  accountingReferenceMonth: integer("accounting_reference_month"), // Existing field
+  lastAccountsMadeUpTo: timestamp("last_accounts_made_up_to"), // Existing field
+  lastAccountsType: varchar("last_accounts_type"), // Existing field
+  nextAccountsDue: timestamp("next_accounts_due"), // Existing field
+  nextAccountsPeriodEnd: timestamp("next_accounts_period_end"), // Existing field
+  accountsOverdue: boolean("accounts_overdue").default(false), // Existing field
+  // Confirmation Statement Information (existing in database)
+  confirmationStatementLastMadeUpTo: timestamp("confirmation_statement_last_made_up_to"), // Existing field
+  confirmationStatementNextDue: timestamp("confirmation_statement_next_due"), // Existing field
+  confirmationStatementNextMadeUpTo: timestamp("confirmation_statement_next_made_up_to"), // Existing field
+  confirmationStatementOverdue: boolean("confirmation_statement_overdue").default(false), // Existing field
+  // Metadata - Full CH API response for audit trail (existing in database)
+  companiesHouseData: jsonb("companies_house_data"), // Existing field
+});
+
+// People table - matches existing database structure
+export const people = pgTable("people", {
+  id: text("id").primaryKey(), // Existing field - uses text, not varchar
+  personNumber: text("person_number"), // Existing field
+  fullName: text("full_name").notNull(), // Existing field - is NOT NULL
+  title: text("title"), // Existing field
+  firstName: text("first_name"), // Existing field
+  lastName: text("last_name"), // Existing field
+  dateOfBirth: text("date_of_birth"), // Existing field - uses date type, not separate month/year
+  nationality: text("nationality"), // Existing field
+  countryOfResidence: text("country_of_residence"), // Existing field
+  occupation: text("occupation"), // Existing field
+  // Address fields (existing in database with different naming)
+  addressLine1: text("address_line_1"), // Existing field
+  addressLine2: text("address_line_2"), // Existing field
+  locality: text("locality"), // Existing field
+  region: text("region"), // Existing field
+  postalCode: text("postal_code"), // Existing field
+  country: text("country"), // Existing field
+  // Contact Information (existing fields)
+  email: text("email"), // Existing field
+  telephone: text("telephone"), // Existing field
+  notes: text("notes"), // Existing field
+  createdAt: timestamp("created_at").defaultNow(), // Existing field
+});
+
+// Client-People relationships - matches existing database structure
+export const clientPeople = pgTable("client_people", {
+  id: text("id").primaryKey(), // Existing field - uses text, not varchar
+  clientId: text("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }), // Existing field
+  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }), // Existing field
+  officerRole: text("officer_role"), // Existing field
+  isPrimaryContact: boolean("is_primary_contact"), // Existing field
+  createdAt: timestamp("created_at").defaultNow(), // Existing field
 });
 
 // Projects table (individual client work items)
@@ -384,6 +451,22 @@ export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => 
 export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
   clientServices: many(clientServices),
+  clientPeople: many(clientPeople),
+}));
+
+export const peopleRelations = relations(people, ({ many }) => ({
+  clientPeople: many(clientPeople),
+}));
+
+export const clientPeopleRelations = relations(clientPeople, ({ one }) => ({
+  client: one(clients, {
+    fields: [clientPeople.clientId],
+    references: [clients.id],
+  }),
+  person: one(people, {
+    fields: [clientPeople.personId],
+    references: [people.id],
+  }),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -531,6 +614,18 @@ export const upsertUserSchema = createInsertSchema(users).omit({
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertPersonSchema = createInsertSchema(people).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertClientPersonSchema = createInsertSchema(clientPeople).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -1008,6 +1103,10 @@ export type ClientService = typeof clientServices.$inferSelect;
 export type InsertClientService = z.infer<typeof insertClientServiceSchema>;
 export type ClientServiceRoleAssignment = typeof clientServiceRoleAssignments.$inferSelect;
 export type InsertClientServiceRoleAssignment = z.infer<typeof insertClientServiceRoleAssignmentSchema>;
+export type Person = typeof people.$inferSelect;
+export type InsertPerson = z.infer<typeof insertPersonSchema>;
+export type ClientPerson = typeof clientPeople.$inferSelect;
+export type InsertClientPerson = z.infer<typeof insertClientPersonSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {

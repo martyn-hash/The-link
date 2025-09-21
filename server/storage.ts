@@ -1,6 +1,8 @@
 import {
   users,
   clients,
+  people,
+  clientPeople,
   projects,
   projectChronology,
   kanbanStages,
@@ -25,6 +27,10 @@ import {
   type InsertUser,
   type Client,
   type InsertClient,
+  type Person,
+  type InsertPerson,
+  type ClientPerson,
+  type InsertClientPerson,
   type Project,
   type InsertProject,
   type ProjectChronology,
@@ -97,6 +103,27 @@ export interface IStorage {
   getAllClients(): Promise<Client[]>;
   updateClient(id: string, client: Partial<InsertClient>): Promise<Client>;
   deleteClient(id: string): Promise<void>;
+  
+  // Companies House specific client operations
+  getClientByCompanyNumber(companyNumber: string): Promise<Client | undefined>;
+  upsertClientFromCH(clientData: Partial<InsertClient>): Promise<Client>;
+  
+  // People operations  
+  createPerson(person: InsertPerson): Promise<Person>;
+  getPersonById(id: string): Promise<Person | undefined>;
+  getPersonByPersonNumber(personNumber: string): Promise<Person | undefined>;
+  getAllPeople(): Promise<Person[]>;
+  updatePerson(id: string, person: Partial<InsertPerson>): Promise<Person>;
+  deletePerson(id: string): Promise<void>;
+  upsertPersonFromCH(personData: Partial<InsertPerson>): Promise<Person>;
+  
+  // Client-People relationship operations
+  createClientPerson(relationship: InsertClientPerson): Promise<ClientPerson>;
+  getClientPeopleByClientId(clientId: string): Promise<(ClientPerson & { person: Person })[]>;
+  getClientPeopleByPersonId(personId: string): Promise<(ClientPerson & { client: Client })[]>;
+  updateClientPerson(id: string, relationship: Partial<InsertClientPerson>): Promise<ClientPerson>;
+  deleteClientPerson(id: string): Promise<void>;
+  linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean): Promise<ClientPerson>;
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
@@ -765,6 +792,138 @@ export class DatabaseStorage implements IStorage {
     if (result.length === 0) {
       throw new Error(`Failed to delete client with ID '${id}'`);
     }
+  }
+
+  // Companies House specific operations
+  async upsertClientFromCH(clientData: Partial<InsertClient>): Promise<Client> {
+    // Check if client with this company number already exists
+    if (clientData.companyNumber) {
+      const existingClient = await this.getClientByCompanyNumber(clientData.companyNumber);
+      if (existingClient) {
+        // Update existing client with CH data (exclude id from update)
+        const { id, ...updateData } = clientData;
+        return await this.updateClient(existingClient.id, updateData);
+      }
+    }
+    
+    // Create new client
+    return await this.createClient(clientData as InsertClient);
+  }
+
+  async upsertPersonFromCH(personData: Partial<InsertPerson>): Promise<Person> {
+    // Check if person exists by person number (if available)
+    if (personData.personNumber) {
+      const [existingPerson] = await db
+        .select()
+        .from(people)
+        .where(eq(people.personNumber, personData.personNumber))
+        .limit(1);
+      
+      if (existingPerson) {
+        // Update existing person (exclude id from update)
+        const { id, ...updateData } = personData;
+        const [updatedPerson] = await db
+          .update(people)
+          .set(updateData)
+          .where(eq(people.id, existingPerson.id))
+          .returning();
+        return updatedPerson;
+      }
+    }
+    
+    // Create new person
+    const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const personWithId = { ...personData, id: personId } as InsertPerson;
+    
+    const [person] = await db.insert(people).values(personWithId).returning();
+    return person;
+  }
+
+  async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean): Promise<ClientPerson> {
+    // Check if relationship already exists
+    const [existingLink] = await db
+      .select()
+      .from(clientPeople)
+      .where(
+        and(
+          eq(clientPeople.clientId, clientId),
+          eq(clientPeople.personId, personId)
+        )
+      )
+      .limit(1);
+    
+    if (existingLink) {
+      // Update existing relationship
+      const [updatedLink] = await db
+        .update(clientPeople)
+        .set({
+          officerRole,
+          isPrimaryContact: isPrimaryContact ?? false
+        })
+        .where(eq(clientPeople.id, existingLink.id))
+        .returning();
+      return updatedLink;
+    }
+    
+    // Create new relationship
+    const relationshipId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const linkData: InsertClientPerson = {
+      id: relationshipId,
+      clientId,
+      personId,
+      officerRole,
+      isPrimaryContact: isPrimaryContact ?? false
+    };
+    
+    const [clientPerson] = await db.insert(clientPeople).values(linkData).returning();
+    return clientPerson;
+  }
+
+  async getClientWithPeople(clientId: string): Promise<(Client & { people: (Person & { officerRole?: string })[] }) | undefined> {
+    // Get client
+    const [client] = await db.select().from(clients).where(eq(clients.id, clientId));
+    if (!client) return undefined;
+    
+    // Get related people with their officer roles
+    const clientPeopleData = await db
+      .select({
+        person: people,
+        officerRole: clientPeople.officerRole
+      })
+      .from(clientPeople)
+      .innerJoin(people, eq(clientPeople.personId, people.id))
+      .where(eq(clientPeople.clientId, clientId));
+    
+    const peopleWithRoles = clientPeopleData.map(row => ({
+      ...row.person,
+      officerRole: row.officerRole
+    }));
+    
+    return {
+      ...client,
+      people: peopleWithRoles
+    };
+  }
+
+  async getClientByCompanyNumber(companyNumber: string): Promise<Client | undefined> {
+    const [client] = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.companyNumber, companyNumber))
+      .limit(1);
+    return client;
+  }
+
+  async unlinkPersonFromClient(clientId: string, personId: string): Promise<void> {
+    await db
+      .delete(clientPeople)
+      .where(
+        and(
+          eq(clientPeople.clientId, clientId),
+          eq(clientPeople.personId, personId)
+        )
+      );
   }
 
   // Project operations
