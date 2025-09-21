@@ -611,7 +611,7 @@ export function ClientManagementModal({
                                 <div className="mt-3 pt-3 border-t">
                                   <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                      Service Owner Override (Optional)
+                                      Service Owner Assignment
                                     </label>
                                     <Select
                                       value={serviceOwnerAssignments[service.id] || "none"}
@@ -624,10 +624,10 @@ export function ClientManagementModal({
                                       data-testid={`select-service-owner-${service.id}`}
                                     >
                                       <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
-                                        <SelectValue placeholder="Choose service owner (optional)" />
+                                        <SelectValue placeholder="Choose service owner" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="none" key="none">No override (use service default)</SelectItem>
+                                        <SelectItem value="none" key="none">No service owner assigned</SelectItem>
                                         {users?.map((user) => (
                                           <SelectItem key={user.id} value={user.id}>
                                             {user.firstName} {user.lastName}
@@ -635,11 +635,6 @@ export function ClientManagementModal({
                                         ))}
                                       </SelectContent>
                                     </Select>
-                                    {service.serviceOwnerId && (
-                                      <p className="text-xs text-muted-foreground">
-                                        Default: {users?.find(u => u.id === service.serviceOwnerId)?.firstName} {users?.find(u => u.id === service.serviceOwnerId)?.lastName || "Unknown"}
-                                      </p>
-                                    )}
                                   </div>
                                 </div>
                               )}
