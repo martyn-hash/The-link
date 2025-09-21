@@ -286,6 +286,10 @@ export function ClientCreationWizard({
   const [isLoadingCompanyData, setIsLoadingCompanyData] = useState(false);
   const [companyLookupError, setCompanyLookupError] = useState<string | null>(null);
 
+  // Debug modal state for tracing directors data
+  const [showDebugModal, setShowDebugModal] = useState(false);
+  const [debugData, setDebugData] = useState<any>(null);
+
   // Fetch services for step 4 and 5 (moved up for resolver dependencies)
   const { data: services, isLoading: servicesLoading } = useQuery<ServiceWithDetails[]>({
     queryKey: ["/api/services"],
@@ -482,20 +486,32 @@ export function ClientCreationWizard({
   // Companies House company lookup
   const lookupCompanyMutation = useMutation({
     mutationFn: async (companyNumber: string) => {
+      console.log('🏢 [DEBUG] Starting company lookup API call for:', companyNumber);
+      console.log('🌐 [DEBUG] Company lookup endpoint:', `/api/companies-house/company/${companyNumber}`);
       const response = await apiRequest("GET", `/api/companies-house/company/${companyNumber}`);
-      return await response.json();
+      const result = await response.json();
+      console.log('📡 [DEBUG] Raw company lookup API response:', result);
+      return result;
     },
     onSuccess: (data: any) => {
+      console.log('✅ [DEBUG] Company lookup mutation onSuccess called with data:', data);
+      
       // Extract the company data from the API response structure
       const companyData = data.data.companyData;
+      console.log('🏢 [DEBUG] Extracted company data:', companyData);
+      console.log('💾 [DEBUG] Setting companiesHouseCompany state...');
+      
       setCompaniesHouseCompany(companyData);
       setCompanyLookupError(null);
+      
+      console.log('🎉 [DEBUG] Company lookup completed successfully');
       toast({
         title: "Company found",
         description: `Successfully loaded data for ${companyData.company_name}`,
       });
     },
     onError: (error: Error) => {
+      console.error('❌ [DEBUG] Company lookup mutation onError called:', error.message);
       setCompanyLookupError(error.message);
       setCompaniesHouseCompany(null);
       toast({
@@ -548,7 +564,26 @@ export function ClientCreationWizard({
       console.log('👥 [DEBUG] Processed officers data:', officersData);
       console.log('📈 [DEBUG] Setting companiesHouseOfficers state with', officersData.length, 'officers');
       
+      // CRITICAL DEBUG: Log state before and after update
+      console.log('🔄 [DEBUG] Current companiesHouseOfficers state before update:', companiesHouseOfficers);
       setCompaniesHouseOfficers(officersData);
+      console.log('✨ [DEBUG] companiesHouseOfficers state update triggered with:', officersData);
+      
+      // Store debug data for modal
+      setDebugData({
+        timestamp: new Date().toISOString(),
+        companyLookupData: companiesHouseCompany,
+        officersLookupData: data,
+        processedOfficers: officersData,
+        currentState: {
+          companiesHouseOfficers: officersData,
+          wizardData: wizardData
+        }
+      });
+      
+      // Trigger debug modal to show for company clients
+      console.log('🚨 [DEBUG] Triggering debug modal after officers lookup success');
+      setShowDebugModal(true);
       
       toast({
         title: "Officers loaded",
@@ -623,10 +658,17 @@ export function ClientCreationWizard({
 
   // Navigation handlers
   const handleNext = async () => {
+    console.log('🎯 [DEBUG] handleNext called for step:', currentStep);
+    
     switch (currentStep) {
       case 1: {
+        console.log('📝 [DEBUG] Processing Step 1 navigation...');
+        
         const isValid = await step1Form.trigger();
+        console.log('✅ [DEBUG] Step 1 form validation result:', isValid);
+        
         if (!isValid) {
+          console.log('❌ [DEBUG] Step 1 validation failed, blocking navigation');
           toast({
             title: "Validation Error",
             description: "Please complete all required fields before continuing",
@@ -636,12 +678,18 @@ export function ClientCreationWizard({
         }
 
         const step1Data = step1Form.getValues();
+        console.log('📊 [DEBUG] Step 1 form data:', step1Data);
         
         // For company type, ensure company lookup is successful before proceeding
         if (step1Data.clientType === "company" && step1Data.companyNumber) {
+          console.log('🏢 [DEBUG] Company client detected, processing company lookup...');
+          
           // Validate company number format
           const companyNumberValidation = companyNumberSchema.safeParse(step1Data.companyNumber);
+          console.log('🔍 [DEBUG] Company number validation result:', companyNumberValidation);
+          
           if (!companyNumberValidation.success) {
+            console.log('❌ [DEBUG] Invalid company number format:', step1Data.companyNumber);
             toast({
               title: "Invalid Company Number",
               description: "Please enter a valid company number (up to 8 alphanumeric characters)",
@@ -651,17 +699,35 @@ export function ClientCreationWizard({
           }
 
           // Lookup company data before proceeding - use return values directly
-          if (!companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber) {
+          const needsLookup = !companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber;
+          console.log('🔍 [DEBUG] Needs company lookup:', needsLookup);
+          console.log('🏢 [DEBUG] Current companiesHouseCompany state:', companiesHouseCompany);
+          console.log('👥 [DEBUG] Current companiesHouseOfficers state before lookup:', companiesHouseOfficers);
+          
+          if (needsLookup) {
+            console.log('🚀 [DEBUG] Starting company and officers lookup for:', step1Data.companyNumber);
             setIsLoadingCompanyData(true);
+            
             try {
-              console.log('🚀 [DEBUG] Starting company and officers lookup for:', step1Data.companyNumber);
+              console.log('📞 [DEBUG] Calling company lookup mutation...');
+              const companyResult = await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
+              console.log('✅ [DEBUG] Company lookup completed, result:', companyResult);
               
-              // Execute the mutations - onSuccess callbacks will handle state updates and toasts
-              await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
-              await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
-              console.log('✅ [DEBUG] Both lookups completed successfully');
+              console.log('📞 [DEBUG] Calling officers lookup mutation...');
+              const officersResult = await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
+              console.log('✅ [DEBUG] Officers lookup completed, result:', officersResult);
+              
+              console.log('🎉 [DEBUG] Both lookups completed successfully');
+              
+              // Wait a bit for state updates to complete
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              console.log('🔄 [DEBUG] Final state after lookups:');
+              console.log('   - companiesHouseCompany:', companiesHouseCompany);
+              console.log('   - companiesHouseOfficers:', companiesHouseOfficers);
               
             } catch (error) {
+              console.error('❌ [DEBUG] Lookup failed with error:', error);
               // Block advancement if lookup fails
               toast({
                 title: "Company Lookup Required",
@@ -672,11 +738,22 @@ export function ClientCreationWizard({
             } finally {
               setIsLoadingCompanyData(false);
             }
+          } else {
+            console.log('⏩ [DEBUG] Company data already loaded, skipping lookup');
           }
+        } else {
+          console.log('👤 [DEBUG] Individual client or no company number, skipping lookup');
         }
 
         // Save step 1 data
-        setWizardData(prev => ({ ...prev, step1: step1Data }));
+        console.log('💾 [DEBUG] Saving step 1 data to wizard state:', step1Data);
+        setWizardData(prev => {
+          const newData = { ...prev, step1: step1Data };
+          console.log('📊 [DEBUG] Updated wizard data:', newData);
+          return newData;
+        });
+        
+        console.log('🎯 [DEBUG] Step 1 processing complete, ready to advance to Step 2');
         break;
       }
 
@@ -901,6 +978,7 @@ export function ClientCreationWizard({
   const isLoading = isLoadingCompanyData || lookupCompanyMutation.isPending || lookupOfficersMutation.isPending;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -1113,9 +1191,22 @@ export function ClientCreationWizard({
               {currentStep === 2 && (
                 <Form {...step2Form}>
                   <div className="space-y-6" data-testid="step-2-content">
-                  {/* DEBUG: Log state when Step 2 renders */}
+                  {/* DEBUG: Enhanced logging when Step 2 renders */}
                   {(() => {
-                    console.log('🎬 [DEBUG] Step 2 rendering. Officers count:', companiesHouseOfficers.length);
+                    console.log('🎬 [DEBUG] ===== STEP 2 RENDERING =====');
+                    console.log('🎬 [DEBUG] Current timestamp:', new Date().toISOString());
+                    console.log('🎬 [DEBUG] companiesHouseOfficers length:', companiesHouseOfficers.length);
+                    console.log('🎬 [DEBUG] companiesHouseOfficers data:', companiesHouseOfficers);
+                    console.log('🎬 [DEBUG] wizardData.step1:', wizardData.step1);
+                    console.log('🎬 [DEBUG] wizardData.step2:', wizardData.step2);
+                    console.log('🎬 [DEBUG] companiesHouseCompany:', companiesHouseCompany);
+                    console.log('🎬 [DEBUG] currentClientType:', currentClientType);
+                    console.log('🎬 [DEBUG] selectedPeopleCount:', selectedPeopleCount);
+                    console.log('🎬 [DEBUG] debugData:', debugData);
+                    console.log('🎬 [DEBUG] ===== END STEP 2 RENDERING =====');
+                    
+                    // Debug modal is now triggered directly in the officers lookup success handler
+                    
                     return null;
                   })()}
                   <div className="flex items-center gap-2">
@@ -1584,5 +1675,143 @@ export function ClientCreationWizard({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Debug Modal - Shows when advancing to Step 2 (separate from main wizard) */}
+    <Dialog open={showDebugModal} onOpenChange={setShowDebugModal}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2" data-testid="debug-modal-title">
+            🐛 Debug Information - Directors Data Flow
+          </DialogTitle>
+          <DialogDescription>
+            This debug modal shows exactly what data was loaded and processed when advancing to Step 2.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {debugData && (
+          <div className="space-y-6">
+            {/* Summary Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">📊 Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <strong>Timestamp:</strong><br />
+                    <code className="text-xs">{debugData.timestamp}</code>
+                  </div>
+                  <div>
+                    <strong>Directors Found:</strong><br />
+                    <span className="text-2xl font-bold text-green-600" data-testid="debug-directors-count">
+                      {debugData.processedOfficers?.length || 0}
+                    </span>
+                  </div>
+                </div>
+                
+                {debugData.processedOfficers?.length > 0 && (
+                  <div className="mt-4">
+                    <strong>Directors Summary:</strong>
+                    <ul className="list-disc list-inside mt-2" data-testid="debug-directors-list">
+                      {debugData.processedOfficers.map((officer: any, index: number) => (
+                        <li key={index} className="text-sm">
+                          {officer.fullName} - {officer.officerRole}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Raw API Response */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">📡 Raw Officers API Response</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="bg-gray-100 p-4 rounded text-xs overflow-x-auto" data-testid="debug-raw-api-data">
+                  {JSON.stringify(debugData.officersLookupData, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+
+            {/* Processed Officers Data */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">⚙️ Processed Officers Data</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="bg-gray-100 p-4 rounded text-xs overflow-x-auto" data-testid="debug-processed-officers">
+                  {JSON.stringify(debugData.processedOfficers, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+
+            {/* Current Component State */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">🔄 Current Component State</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <strong>companiesHouseOfficers State:</strong>
+                    <pre className="bg-gray-100 p-4 rounded text-xs overflow-x-auto mt-2" data-testid="debug-current-officers-state">
+                      {JSON.stringify(companiesHouseOfficers, null, 2)}
+                    </pre>
+                  </div>
+                  <div>
+                    <strong>wizardData State:</strong>
+                    <pre className="bg-gray-100 p-4 rounded text-xs overflow-x-auto mt-2" data-testid="debug-wizard-data-state">
+                      {JSON.stringify(wizardData, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Company Data */}
+            {debugData.companyLookupData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">🏢 Company Data</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="bg-gray-100 p-4 rounded text-xs overflow-x-auto" data-testid="debug-company-data">
+                    {JSON.stringify(debugData.companyLookupData, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+        
+        <div className="flex justify-end gap-2 mt-6">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowDebugModal(false)}
+            data-testid="button-close-debug-modal"
+          >
+            Close Debug Modal
+          </Button>
+          <Button 
+            onClick={() => {
+              console.log('🚨 [DEBUG] Manual debug data dump:', {
+                companiesHouseOfficers,
+                wizardData,
+                debugData,
+                timestamp: new Date().toISOString()
+              });
+              setShowDebugModal(false);
+            }}
+            data-testid="button-log-and-close-debug"
+          >
+            Log to Console & Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  </>
   );
 }
