@@ -516,7 +516,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const companyData = await companiesHouseService.searchCompanies(query.trim(), parsedItemsPerPage);
-      res.json(companyData);
+      res.json({
+        items: companyData,
+        total_results: companyData.length,
+        items_per_page: parsedItemsPerPage
+      });
     } catch (error) {
       console.error("Error searching Companies House:", error instanceof Error ? error.message : error);
       
