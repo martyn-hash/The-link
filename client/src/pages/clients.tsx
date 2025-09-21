@@ -9,8 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SimpleClientCreation } from "@/components/simple-client-creation";
-import { ClientDetailView } from "@/components/client-detail-view";
+import { ClientManagementModal } from "@/components/client-management-modal";
 import { AlertCircle, Search, Building2, Mail, Plus, Edit } from "lucide-react";
 import { format } from "date-fns";
 
@@ -19,8 +18,7 @@ export default function Clients() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [showClientModal, setShowClientModal] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "detail">("list");
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   const { data: clients, isLoading: clientsLoading, error } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
@@ -66,32 +64,26 @@ export default function Clients() {
 
   // Handle create client
   const handleCreateClient = () => {
+    setSelectedClient(null);
     setShowClientModal(true);
   };
 
-  // Handle view client details
-  const handleViewClient = (clientId: string) => {
-    setSelectedClientId(clientId);
-    setViewMode("detail");
-  };
-
-  // Handle back to list
-  const handleBackToList = () => {
-    setSelectedClientId(null);
-    setViewMode("list");
+  // Handle edit client
+  const handleEditClient = (client: Client) => {
+    setSelectedClient(client);
+    setShowClientModal(true);
   };
 
   // Handle modal close
   const handleModalClose = () => {
     setShowClientModal(false);
+    setSelectedClient(null);
   };
 
-  // Handle successful client creation
-  const handleClientCreated = (clientId: string) => {
-    setShowClientModal(false);
-    // Navigate directly to the client detail view
-    setSelectedClientId(clientId);
-    setViewMode("detail");
+  // Handle successful client operation
+  const handleClientSuccess = () => {
+    // The modal will handle closing and cache invalidation
+    handleModalClose();
   };
 
   if (authLoading || !user) {
@@ -113,22 +105,11 @@ export default function Clients() {
         <div className="border-b border-border bg-card">
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                {viewMode === "detail" && (
-                  <Button variant="ghost" onClick={handleBackToList} data-testid="button-back-to-list">
-                    ← Back to Clients
-                  </Button>
-                )}
-                <div>
-                  <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-                    {viewMode === "detail" ? "Client Details" : "Clients"}
-                  </h1>
-                  <p className="text-muted-foreground">
-                    {viewMode === "detail" ? "View and manage client information" : "Manage your client relationships"}
-                  </p>
-                </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Clients</h1>
+                <p className="text-muted-foreground">Manage your client relationships</p>
               </div>
-              {user?.role === 'admin' && viewMode === "list" && (
+              {user?.role === 'admin' && (
                 <Button onClick={handleCreateClient} data-testid="button-create-client">
                   <Plus className="w-4 h-4 mr-2" />
                   Add Client
@@ -136,133 +117,137 @@ export default function Clients() {
               )}
             </div>
             
-            {/* Search - only show in list mode */}
-            {viewMode === "list" && (
-              <div className="relative max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  type="text"
-                  placeholder="Search clients..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                  data-testid="input-search-clients"
-                />
-              </div>
-            )}
+            {/* Search */}
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="Search clients..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-clients"
+              />
+            </div>
           </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
-          {viewMode === "detail" && selectedClientId ? (
-            <ClientDetailView clientId={selectedClientId} />
-          ) : (
-            clientsLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <Card key={i}>
-                    <CardHeader>
-                      <div className="flex items-center space-x-4">
-                        <Skeleton className="w-10 h-10 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-3 w-24" />
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
+          {clientsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <div className="flex items-center space-x-4">
+                      <Skeleton className="w-10 h-10 rounded-full" />
                       <div className="space-y-2">
-                        <Skeleton className="h-3 w-28" />
-                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">Unable to load clients</h3>
-                <p className="text-muted-foreground text-center max-w-md">
-                  There was an issue loading the client list. Please try refreshing the page or contact support if the problem persists.
-                </p>
-              </div>
-            ) : filteredClients.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                {searchTerm ? (
-                  <>
-                    <Search className="w-12 h-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2" data-testid="text-no-search-results">No clients found</h3>
-                    <p className="text-muted-foreground text-center max-w-md">
-                      No clients match your search for "{searchTerm}". Try adjusting your search terms.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2" data-testid="text-no-clients">No clients yet</h3>
-                    <p className="text-muted-foreground text-center max-w-md mb-4">
-                      There are no clients in the system yet. Clients will appear here as they are added to the system.
-                    </p>
-                    {user?.role === 'admin' && (
-                      <Button onClick={handleCreateClient} data-testid="button-create-first-client">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Your First Client
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredClients.map((client) => (
-                  <Card 
-                    key={client.id} 
-                    className="hover:shadow-md transition-shadow cursor-pointer group" 
-                    onClick={() => handleViewClient(client.id)}
-                    data-testid={`card-client-${client.id}`}
-                  >
-                    <CardHeader>
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                          <Building2 className="w-5 h-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base truncate" data-testid={`text-client-name-${client.id}`}>
-                            {client.name}
-                          </CardTitle>
-                          {client.email && (
-                            <CardDescription className="flex items-center mt-1">
-                              <Mail className="w-3 h-3 mr-1" />
-                              <span className="truncate" data-testid={`text-client-email-${client.id}`}>
-                                {client.email}
-                              </span>
-                            </CardDescription>
-                          )}
-                        </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <Skeleton className="h-3 w-28" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">Unable to load clients</h3>
+              <p className="text-muted-foreground text-center max-w-md">
+                There was an issue loading the client list. Please try refreshing the page or contact support if the problem persists.
+              </p>
+            </div>
+          ) : filteredClients.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              {searchTerm ? (
+                <>
+                  <Search className="w-12 h-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2" data-testid="text-no-search-results">No clients found</h3>
+                  <p className="text-muted-foreground text-center max-w-md">
+                    No clients match your search for "{searchTerm}". Try adjusting your search terms.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2" data-testid="text-no-clients">No clients yet</h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-4">
+                    There are no clients in the system yet. Clients will appear here as they are added to the system.
+                  </p>
+                  {user?.role === 'admin' && (
+                    <Button onClick={handleCreateClient} data-testid="button-create-first-client">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Your First Client
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredClients.map((client) => (
+                <Card key={client.id} className="hover:shadow-md transition-shadow group" data-testid={`card-client-${client.id}`}>
+                  <CardHeader>
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-primary" />
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        <p data-testid={`text-client-created-${client.id}`}>
-                          Created: {client.createdAt ? format(new Date(client.createdAt), "MMM d, yyyy") : "Unknown"}
-                        </p>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base truncate" data-testid={`text-client-name-${client.id}`}>
+                          {client.name}
+                        </CardTitle>
+                        {client.email && (
+                          <CardDescription className="flex items-center mt-1">
+                            <Mail className="w-3 h-3 mr-1" />
+                            <span className="truncate" data-testid={`text-client-email-${client.id}`}>
+                              {client.email}
+                            </span>
+                          </CardDescription>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClient(client);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          data-testid={`button-edit-client-${client.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p data-testid={`text-client-created-${client.id}`}>
+                        Created: {client.createdAt ? format(new Date(client.createdAt), "MMM d, yyyy") : "Unknown"}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       </div>
       
-      {/* Simple Client Creation */}
-      <SimpleClientCreation
+      {/* Client Management Modal */}
+      <ClientManagementModal
         open={showClientModal}
-        onClose={handleModalClose}
-        onClientCreated={handleClientCreated}
+        onOpenChange={setShowClientModal}
+        client={selectedClient}
+        onSuccess={handleClientSuccess}
       />
     </div>
   );

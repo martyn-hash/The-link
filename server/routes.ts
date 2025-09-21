@@ -35,24 +35,8 @@ import {
   insertClientSchema,
   insertClientServiceSchema,
   insertClientServiceRoleAssignmentSchema,
-  insertPeopleSchema,
-  insertClientPeopleSchema,
   type User,
-  type InsertPeople,
-  type InsertClientPeople,
-  type InsertClientService,
-  type InsertClientServiceRoleAssignment,
 } from "@shared/schema";
-import { 
-  CompaniesHouseAPI, 
-  transformCompanyData, 
-  transformOfficersData,
-  companyNumberSchema,
-  CompaniesHouseAPIError,
-  CompaniesHouseNotFoundError,
-  CompaniesHouseRateLimitError,
-  type OfficerTransformResult 
-} from "./companiesHouseApi";
 
 // Resource-specific parameter validation schemas for consistent error responses
 // Users: Allow flexible ID format (Replit Auth generates short string IDs like "uOBWFr")
@@ -88,26 +72,6 @@ const paramClientServiceIdSchema = z.object({
 
 const paramApprovalIdSchema = z.object({ 
   approvalId: z.string().min(1, "Approval ID is required").uuid("Invalid approval ID format") 
-});
-
-// Companies House parameter validation schemas
-const paramCompanyNumberSchema = z.object({
-  companyNumber: companyNumberSchema
-});
-
-// Complete client creation schema for Companies House integration
-const createClientWithCompaniesHouseSchema = z.object({
-  companyData: z.object({
-    companyNumber: companyNumberSchema
-  }),
-  selectedPeopleIds: z.array(z.string()).optional().default([]),
-  services: z.array(z.object({
-    serviceId: z.string().uuid("Invalid service ID"),
-    roleAssignments: z.array(z.object({
-      roleId: z.string().uuid("Invalid role ID"),
-      userId: z.string().min(1, "User ID is required")
-    }))
-  }))
 });
 
 // Helper function for parameter validation
@@ -397,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating client:", error instanceof Error ? error.message : error);
       
       // Handle duplicate name case
-      if (error instanceof Error && (error.message.includes("duplicate") || error.message.includes("unique"))) {
+      if (error instanceof Error && error.message.includes("duplicate") || error.message.includes("unique")) {
         return res.status(409).json({ 
           message: "A client with this name already exists" 
         });
@@ -462,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: "INCOMPLETE_ROLE_ASSIGNMENTS",
             incompleteServices: incompleteServices.map(service => ({
               serviceName: service.serviceName,
-              missingRoles: service.missingRoles
+              missingRoles: service.missingRoles.map(role => role.name)
             }))
           });
         }
@@ -485,7 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Handle duplicate name case
-      if (error instanceof Error && (error.message.includes("duplicate") || error.message.includes("unique"))) {
+      if (error instanceof Error && error.message.includes("duplicate") || error.message.includes("unique")) {
         return res.status(409).json({ 
           message: "A client with this name already exists" 
         });
@@ -526,370 +490,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(500).json({ message: "Failed to delete client" });
-    }
-  });
-
-  // ===========================================
-  // Companies House Integration Routes
-  // ===========================================
-
-  // GET /api/companies-house/company/:companyNumber - Lookup company data
-  app.get("/api/companies-house/company/:companyNumber", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      // Validate path parameters
-      const paramValidation = validateParams(paramCompanyNumberSchema, req.params);
-      if (!paramValidation.success) {
-        return res.status(400).json({ 
-          message: "Invalid company number format", 
-          errors: paramValidation.errors 
-        });
-      }
-
-      const { companyNumber } = paramValidation.data;
-      
-      // Create Companies House API client
-      const companiesHouseApi = new CompaniesHouseAPI();
-      
-      // Fetch company data from Companies House API
-      const companyResponse = await companiesHouseApi.getCompany(companyNumber);
-      
-      // Transform the data to our client format
-      const transformedClientData = transformCompanyData(companyResponse);
-      
-      res.json({
-        success: true,
-        data: {
-          companyData: companyResponse,
-          transformedClientData
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching company data:", error instanceof Error ? error.message : error);
-      
-      if (error instanceof CompaniesHouseNotFoundError) {
-        return res.status(404).json({ 
-          message: `Company ${req.params.companyNumber} not found`,
-          error: "COMPANY_NOT_FOUND"
-        });
-      }
-      
-      if (error instanceof CompaniesHouseRateLimitError) {
-        return res.status(429).json({ 
-          message: "Rate limit exceeded. Please try again later.",
-          error: "RATE_LIMIT_EXCEEDED"
-        });
-      }
-      
-      if (error instanceof CompaniesHouseAPIError) {
-        return res.status(error.statusCode || 500).json({ 
-          message: error.message,
-          error: error.errorType || "API_ERROR"
-        });
-      }
-      
-      res.status(500).json({ 
-        message: "Failed to fetch company data",
-        error: "INTERNAL_ERROR"
-      });
-    }
-  });
-
-  // GET /api/companies-house/officers/:companyNumber - Lookup officers data
-  app.get("/api/companies-house/officers/:companyNumber", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      // Validate path parameters
-      const paramValidation = validateParams(paramCompanyNumberSchema, req.params);
-      if (!paramValidation.success) {
-        return res.status(400).json({ 
-          message: "Invalid company number format", 
-          errors: paramValidation.errors 
-        });
-      }
-
-      const { companyNumber } = paramValidation.data;
-      
-      // Create Companies House API client
-      const companiesHouseApi = new CompaniesHouseAPI();
-      
-      // Fetch officers data from Companies House API
-      const officersResponse = await companiesHouseApi.getOfficers(companyNumber);
-      
-      // Transform the data to our people format
-      const transformedOfficersData = transformOfficersData(officersResponse);
-      
-      res.json({
-        success: true,
-        data: {
-          officersData: officersResponse,
-          transformedPeopleData: transformedOfficersData.map(result => ({
-            person: result.person,
-            clientPeopleData: result.clientPeopleData
-          }))
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching officers data:", error instanceof Error ? error.message : error);
-      
-      if (error instanceof CompaniesHouseNotFoundError) {
-        return res.status(404).json({ 
-          message: `Company ${req.params.companyNumber} not found`,
-          error: "COMPANY_NOT_FOUND"
-        });
-      }
-      
-      if (error instanceof CompaniesHouseRateLimitError) {
-        return res.status(429).json({ 
-          message: "Rate limit exceeded. Please try again later.",
-          error: "RATE_LIMIT_EXCEEDED"
-        });
-      }
-      
-      if (error instanceof CompaniesHouseAPIError) {
-        return res.status(error.statusCode || 500).json({ 
-          message: error.message,
-          error: error.errorType || "API_ERROR"
-        });
-      }
-      
-      res.status(500).json({ 
-        message: "Failed to fetch officers data",
-        error: "INTERNAL_ERROR"
-      });
-    }
-  });
-
-  // POST /api/clients/create-with-companies-house - Complete client creation with Companies House data
-  app.post("/api/clients/create-with-companies-house", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
-    try {
-      // Validate request body
-      const validationResult = createClientWithCompaniesHouseSchema.safeParse(req.body);
-      if (!validationResult.success) {
-        return res.status(400).json({ 
-          message: "Invalid request data", 
-          errors: validationResult.error.issues 
-        });
-      }
-
-      const { companyData, selectedPeopleIds, services } = validationResult.data;
-      
-      // Create Companies House API client
-      const companiesHouseApi = new CompaniesHouseAPI();
-      
-      // Fetch fresh company data from Companies House API
-      const companyResponse = await companiesHouseApi.getCompany(companyData.companyNumber);
-      const officersResponse = await companiesHouseApi.getOfficers(companyData.companyNumber);
-      
-      // Transform the data
-      const transformedClientData = transformCompanyData(companyResponse);
-      const transformedOfficersData = transformOfficersData(officersResponse);
-      
-      // SECURITY: Validate transformed client data before persisting
-      const clientValidationResult = insertClientSchema.safeParse(transformedClientData);
-      if (!clientValidationResult.success) {
-        return res.status(400).json({ 
-          message: "Invalid client data from Companies House transformation", 
-          errors: clientValidationResult.error.issues 
-        });
-      }
-      
-      // SECURITY: Validate all role assignments before proceeding with any database operations
-      for (const serviceConfig of services) {
-        for (const roleAssignment of serviceConfig.roleAssignments) {
-          const roleAssignmentValidation = insertClientServiceRoleAssignmentSchema.safeParse({
-            clientServiceId: "temp", // Will be replaced with actual ID
-            workRoleId: roleAssignment.roleId,
-            userId: roleAssignment.userId,
-            isActive: true
-          });
-          
-          if (!roleAssignmentValidation.success) {
-            return res.status(400).json({ 
-              message: `Invalid role assignment for service ${serviceConfig.serviceId}`, 
-              errors: roleAssignmentValidation.error.issues 
-            });
-          }
-        }
-      }
-      
-      // TRANSACTION: Track all created entities for potential cleanup
-      const createdEntities = {
-        client: null as any,
-        people: [] as any[],
-        clientPeople: [] as any[],
-        clientServices: [] as any[],
-        roleAssignments: [] as any[]
-      };
-
-      try {
-        // Create the client with validated data
-        const createdClient = await storage.createClient(clientValidationResult.data);
-        createdEntities.client = createdClient;
-        
-        // Create people records and client-people relationships for selected officers
-        for (const officerData of transformedOfficersData) {
-          // Check if this person should be included (either all are included or it's in selectedPeopleIds)
-          const shouldInclude = selectedPeopleIds.length === 0 || 
-            selectedPeopleIds.some(id => id === officerData.person.personNumber);
-          
-          if (shouldInclude) {
-            // Check if person already exists by personNumber
-            let person;
-            if (officerData.person.personNumber) {
-              person = await storage.getPersonByPersonNumber(officerData.person.personNumber);
-            }
-            
-            if (!person) {
-              // Create new person
-              person = await storage.createPerson(officerData.person);
-              createdEntities.people.push(person);
-            }
-            
-            // Create client-person relationship
-            const clientPersonData: InsertClientPeople = {
-              clientId: createdClient.id,
-              personId: person.id,
-              ...officerData.clientPeopleData
-            };
-            
-            const clientPerson = await storage.createClientPerson(clientPersonData);
-            createdEntities.clientPeople.push(clientPerson);
-          }
-        }
-        
-        // Create service assignments
-        for (const serviceConfig of services) {
-          // Create client service
-          const clientServiceData: InsertClientService = {
-            clientId: createdClient.id,
-            serviceId: serviceConfig.serviceId
-          };
-          
-          const clientService = await storage.createClientService(clientServiceData);
-          createdEntities.clientServices.push(clientService);
-          
-          // Create role assignments
-          for (const roleAssignment of serviceConfig.roleAssignments) {
-            const roleAssignmentData: InsertClientServiceRoleAssignment = {
-              clientServiceId: clientService.id,
-              workRoleId: roleAssignment.roleId, // Map roleId from frontend to workRoleId for storage
-              userId: roleAssignment.userId,
-              isActive: true
-            };
-            
-            const createdAssignment = await storage.createClientServiceRoleAssignment(roleAssignmentData);
-            createdEntities.roleAssignments.push(createdAssignment);
-          }
-        }
-      } catch (creationError) {
-        // ROLLBACK: Cleanup any partially created entities
-        console.error("Error during client creation, initiating cleanup:", creationError instanceof Error ? creationError.message : creationError);
-        
-        try {
-          // Cleanup in reverse order of creation to respect foreign key constraints
-          // Delete role assignments first
-          for (const assignment of createdEntities.roleAssignments) {
-            try {
-              await storage.deleteClientServiceRoleAssignment(assignment.id);
-            } catch (cleanupError) {
-              console.error("Cleanup error for role assignment:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
-            }
-          }
-          
-          // Delete client services
-          for (const clientService of createdEntities.clientServices) {
-            try {
-              await storage.deleteClientService(clientService.id);
-            } catch (cleanupError) {
-              console.error("Cleanup error for client service:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
-            }
-          }
-          
-          // Delete client-people relationships
-          for (const clientPerson of createdEntities.clientPeople) {
-            try {
-              await storage.deleteClientPerson(clientPerson.id);
-            } catch (cleanupError) {
-              console.error("Cleanup error for client-person relationship:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
-            }
-          }
-          
-          // Delete newly created people (only those we created, not existing ones)
-          for (const person of createdEntities.people) {
-            try {
-              await storage.deletePerson(person.id);
-            } catch (cleanupError) {
-              console.error("Cleanup error for person:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
-            }
-          }
-          
-          // Delete client last
-          if (createdEntities.client) {
-            try {
-              await storage.deleteClient(createdEntities.client.id);
-            } catch (cleanupError) {
-              console.error("Cleanup error for client:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
-            }
-          }
-        } catch (cleanupError) {
-          console.error("Critical error during cleanup - manual intervention may be required:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
-        }
-        
-        // Re-throw the original creation error
-        throw creationError;
-      }
-      
-      // Return complete created data
-      res.status(201).json({
-        success: true,
-        data: {
-          client: createdEntities.client,
-          people: createdEntities.people,
-          clientPeople: createdEntities.clientPeople,
-          clientServices: createdEntities.clientServices,
-          roleAssignments: createdEntities.roleAssignments,
-          companiesHouseData: {
-            company: companyResponse,
-            officers: officersResponse
-          }
-        }
-      });
-      
-    } catch (error) {
-      console.error("Error creating client with Companies House data:", error instanceof Error ? error.message : error);
-      
-      if (error instanceof CompaniesHouseNotFoundError) {
-        return res.status(404).json({ 
-          message: `Company ${req.body?.companyData?.companyNumber} not found`,
-          error: "COMPANY_NOT_FOUND"
-        });
-      }
-      
-      if (error instanceof CompaniesHouseRateLimitError) {
-        return res.status(429).json({ 
-          message: "Rate limit exceeded. Please try again later.",
-          error: "RATE_LIMIT_EXCEEDED"
-        });
-      }
-      
-      if (error instanceof CompaniesHouseAPIError) {
-        return res.status(error.statusCode || 500).json({ 
-          message: error.message,
-          error: error.errorType || "API_ERROR"
-        });
-      }
-      
-      // Handle duplicate client name case
-      if (error instanceof Error && (error.message.includes("duplicate") || error.message.includes("unique"))) {
-        return res.status(409).json({ 
-          message: "A client with this name already exists",
-          error: "DUPLICATE_CLIENT"
-        });
-      }
-      
-      res.status(500).json({ 
-        message: "Failed to create client with Companies House data",
-        error: "INTERNAL_ERROR"
-      });
     }
   });
 

@@ -101,121 +101,7 @@ export const clients = pgTable("clients", {
   name: varchar("name").notNull(),
   email: varchar("email"),
   createdAt: timestamp("created_at").defaultNow(),
-  
-  // Companies House integration fields
-  // Client classification
-  clientType: varchar("client_type"), // e.g., "company", "individual", etc.
-  companyNumber: varchar("company_number"), // Companies House company number
-  companiesHouseName: varchar("companies_house_name"), // Official name from Companies House
-  companyStatus: varchar("company_status"), // active, dissolved, etc.
-  companyType: varchar("company_type"), // ltd, plc, etc.
-  
-  // Companies House dates and basic info
-  dateOfCreation: timestamp("date_of_creation"),
-  jurisdiction: varchar("jurisdiction"), // england-wales, scotland, etc.
-  sicCodes: text("sic_codes").array(), // Array of SIC codes
-  
-  // Registered office address
-  registeredAddress1: varchar("registered_address_1"),
-  registeredAddress2: varchar("registered_address_2"),
-  registeredAddress3: varchar("registered_address_3"),
-  registeredCountry: varchar("registered_country"),
-  registeredPostcode: varchar("registered_postcode"),
-  
-  // Accounts filing information
-  accountingReferenceDay: integer("accounting_reference_day"), // Day of month (1-31)
-  accountingReferenceMonth: integer("accounting_reference_month"), // Month (1-12)
-  lastAccountsMadeUpTo: timestamp("last_accounts_made_up_to"),
-  lastAccountsType: varchar("last_accounts_type"), // full, small, medium, etc.
-  nextAccountsDue: timestamp("next_accounts_due"),
-  nextAccountsPeriodEnd: timestamp("next_accounts_period_end"),
-  accountsOverdue: boolean("accounts_overdue").default(false),
-  
-  // Confirmation statement information
-  confirmationStatementLastMadeUpTo: timestamp("confirmation_statement_last_made_up_to"),
-  confirmationStatementNextDue: timestamp("confirmation_statement_next_due"),
-  confirmationStatementNextMadeUpTo: timestamp("confirmation_statement_next_made_up_to"),
-  confirmationStatementOverdue: boolean("confirmation_statement_overdue").default(false),
-  
-  // Metadata
-  companiesHouseData: jsonb("companies_house_data"), // Full JSON response from Companies House API
-}, (table) => [
-  // Unique index on companyNumber to prevent duplicate clients and enable lookups
-  unique("unique_company_number").on(table.companyNumber),
-]);
-
-// People table for Companies House officers and contacts
-export const people = pgTable("people", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  
-  // Basic information
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  fullName: varchar("full_name"), // Complete name as it appears in Companies House
-  
-  // Contact details
-  telephone: varchar("telephone"),
-  email: varchar("email"),
-  address1: varchar("address_1"),
-  address2: varchar("address_2"),
-  address3: varchar("address_3"),
-  locality: varchar("locality"), // Town/city
-  region: varchar("region"), // County/state
-  country: varchar("country"),
-  postalCode: varchar("postal_code"),
-  
-  // Companies House specific fields
-  personNumber: varchar("person_number"), // Companies House person identifier
-  nationality: varchar("nationality"),
-  countryOfResidence: varchar("country_of_residence"),
-  occupation: varchar("occupation"),
-  dateOfBirthMonth: integer("date_of_birth_month"), // Month only (1-12) for privacy
-  dateOfBirthYear: integer("date_of_birth_year"), // Year only for privacy
-  
-  // Registered address from Companies House (often different from correspondence address)
-  registeredAddress1: varchar("registered_address_1"),
-  registeredAddress2: varchar("registered_address_2"),
-  registeredAddress3: varchar("registered_address_3"),
-  registeredLocality: varchar("registered_locality"),
-  registeredRegion: varchar("registered_region"),
-  registeredCountry: varchar("registered_country"),
-  registeredPostalCode: varchar("registered_postal_code"),
-  
-  // Metadata
-  isFromCompaniesHouse: boolean("is_from_companies_house").default(false),
-  companiesHouseData: jsonb("companies_house_data"), // Full JSON response from Companies House API
-  
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  // Unique index on personNumber to prevent duplicate officer records from Companies House
-  unique("unique_person_number").on(table.personNumber),
-]);
-
-// Client-People junction table for Companies House officers and relationships
-export const clientPeople = pgTable("client_people", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
-  personId: varchar("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
-  
-  // Companies House officer role information
-  officerRole: varchar("officer_role"), // director, secretary, etc.
-  appointedOn: timestamp("appointed_on"),
-  resignedOn: timestamp("resigned_on"),
-  isPre1992Appointment: boolean("is_pre_1992_appointment").default(false),
-  
-  // Additional relationship types
-  relationshipType: varchar("relationship_type"), // officer, contact, shareholder, etc.
-  isActive: boolean("is_active").default(true),
-  
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_client_people_client_id").on(table.clientId),
-  index("idx_client_people_person_id").on(table.personId),
-  index("idx_client_people_active").on(table.isActive),
-  unique("unique_client_person").on(table.clientId, table.personId),
-]);
+});
 
 // Projects table (individual client work items)
 export const projects = pgTable("projects", {
@@ -498,22 +384,6 @@ export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => 
 export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
   clientServices: many(clientServices),
-  clientPeople: many(clientPeople),
-}));
-
-export const peopleRelations = relations(people, ({ many }) => ({
-  clientPeople: many(clientPeople),
-}));
-
-export const clientPeopleRelations = relations(clientPeople, ({ one }) => ({
-  client: one(clients, {
-    fields: [clientPeople.clientId],
-    references: [clients.id],
-  }),
-  person: one(people, {
-    fields: [clientPeople.personId],
-    references: [people.id],
-  }),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -661,18 +531,6 @@ export const upsertUserSchema = createInsertSchema(users).omit({
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
   createdAt: true,
-});
-
-export const insertPeopleSchema = createInsertSchema(people).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertClientPeopleSchema = createInsertSchema(clientPeople).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
 });
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -1046,10 +904,6 @@ export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
-export type People = typeof people.$inferSelect;
-export type InsertPeople = z.infer<typeof insertPeopleSchema>;
-export type ClientPeople = typeof clientPeople.$inferSelect;
-export type InsertClientPeople = z.infer<typeof insertClientPeopleSchema>;
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type ProjectChronology = typeof projectChronology.$inferSelect;

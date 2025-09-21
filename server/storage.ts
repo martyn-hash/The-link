@@ -19,8 +19,6 @@ import {
   serviceRoles,
   clientServices,
   clientServiceRoleAssignments,
-  people,
-  clientPeople,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -64,10 +62,6 @@ import {
   type InsertClientService,
   type ClientServiceRoleAssignment,
   type InsertClientServiceRoleAssignment,
-  type People,
-  type InsertPeople,
-  type ClientPeople,
-  type InsertClientPeople,
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
@@ -103,20 +97,6 @@ export interface IStorage {
   getAllClients(): Promise<Client[]>;
   updateClient(id: string, client: Partial<InsertClient>): Promise<Client>;
   deleteClient(id: string): Promise<void>;
-  
-  // People operations
-  createPerson(person: InsertPeople): Promise<People>;
-  getPersonById(id: string): Promise<People | undefined>;
-  getPersonByPersonNumber(personNumber: string): Promise<People | undefined>;
-  updatePerson(id: string, person: Partial<InsertPeople>): Promise<People>;
-  deletePerson(id: string): Promise<void>;
-  getAllPeople(): Promise<People[]>;
-  
-  // ClientPeople operations
-  createClientPerson(clientPerson: InsertClientPeople): Promise<ClientPeople>;
-  getClientPeopleByClientId(clientId: string): Promise<(ClientPeople & { person: People })[]>;
-  deleteClientPerson(id: string): Promise<void>;
-  updateClientPerson(id: string, clientPerson: Partial<InsertClientPeople>): Promise<ClientPeople>;
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
@@ -784,150 +764,6 @@ export class DatabaseStorage implements IStorage {
     
     if (result.length === 0) {
       throw new Error(`Failed to delete client with ID '${id}'`);
-    }
-  }
-
-  // People operations
-  async createPerson(personData: InsertPeople): Promise<People> {
-    const [person] = await db.insert(people).values(personData).returning();
-    return person;
-  }
-
-  async getPersonById(id: string): Promise<People | undefined> {
-    const [person] = await db.select().from(people).where(eq(people.id, id));
-    return person;
-  }
-
-  async getPersonByPersonNumber(personNumber: string): Promise<People | undefined> {
-    const [person] = await db.select().from(people).where(eq(people.personNumber, personNumber));
-    return person;
-  }
-
-  async updatePerson(id: string, personData: Partial<InsertPeople>): Promise<People> {
-    const [person] = await db
-      .update(people)
-      .set({
-        ...personData,
-        updatedAt: new Date(),
-      })
-      .where(eq(people.id, id))
-      .returning();
-    
-    if (!person) {
-      throw new Error(`Person with ID '${id}' not found`);
-    }
-    
-    return person;
-  }
-
-  async deletePerson(id: string): Promise<void> {
-    // Check if person exists first
-    const existingPerson = await db
-      .select()
-      .from(people)
-      .where(eq(people.id, id))
-      .limit(1);
-    
-    if (existingPerson.length === 0) {
-      throw new Error(`Person with ID '${id}' not found`);
-    }
-
-    const result = await db.delete(people).where(eq(people.id, id));
-    if (result.rowCount === 0) {
-      throw new Error(`Person with ID '${id}' not found`);
-    }
-  }
-
-  async getAllPeople(): Promise<People[]> {
-    return await db.select().from(people);
-  }
-
-  // ClientPeople operations
-  async createClientPerson(clientPersonData: InsertClientPeople): Promise<ClientPeople> {
-    // Validate that client exists
-    const client = await db.select().from(clients).where(eq(clients.id, clientPersonData.clientId)).limit(1);
-    if (client.length === 0) {
-      throw new Error(`Client with ID '${clientPersonData.clientId}' not found`);
-    }
-
-    // Validate that person exists
-    const person = await db.select().from(people).where(eq(people.id, clientPersonData.personId)).limit(1);
-    if (person.length === 0) {
-      throw new Error(`Person with ID '${clientPersonData.personId}' not found`);
-    }
-
-    const [clientPerson] = await db.insert(clientPeople).values(clientPersonData).returning();
-    return clientPerson;
-  }
-
-  async getClientPeopleByClientId(clientId: string): Promise<(ClientPeople & { person: People })[]> {
-    const results = await db
-      .select({
-        id: clientPeople.id,
-        clientId: clientPeople.clientId,
-        personId: clientPeople.personId,
-        officerRole: clientPeople.officerRole,
-        appointedOn: clientPeople.appointedOn,
-        resignedOn: clientPeople.resignedOn,
-        isPre1992Appointment: clientPeople.isPre1992Appointment,
-        relationshipType: clientPeople.relationshipType,
-        isActive: clientPeople.isActive,
-        createdAt: clientPeople.createdAt,
-        updatedAt: clientPeople.updatedAt,
-        person: people,
-      })
-      .from(clientPeople)
-      .innerJoin(people, eq(clientPeople.personId, people.id))
-      .where(eq(clientPeople.clientId, clientId));
-
-    return results.map(result => ({
-      id: result.id,
-      clientId: result.clientId,
-      personId: result.personId,
-      officerRole: result.officerRole,
-      appointedOn: result.appointedOn,
-      resignedOn: result.resignedOn,
-      isPre1992Appointment: result.isPre1992Appointment,
-      relationshipType: result.relationshipType,
-      isActive: result.isActive,
-      createdAt: result.createdAt,
-      updatedAt: result.updatedAt,
-      person: result.person,
-    }));
-  }
-
-  async updateClientPerson(id: string, clientPersonData: Partial<InsertClientPeople>): Promise<ClientPeople> {
-    const [clientPerson] = await db
-      .update(clientPeople)
-      .set({
-        ...clientPersonData,
-        updatedAt: new Date(),
-      })
-      .where(eq(clientPeople.id, id))
-      .returning();
-    
-    if (!clientPerson) {
-      throw new Error(`ClientPerson with ID '${id}' not found`);
-    }
-    
-    return clientPerson;
-  }
-
-  async deleteClientPerson(id: string): Promise<void> {
-    // Check if clientPerson exists first
-    const existingClientPerson = await db
-      .select()
-      .from(clientPeople)
-      .where(eq(clientPeople.id, id))
-      .limit(1);
-    
-    if (existingClientPerson.length === 0) {
-      throw new Error(`ClientPerson with ID '${id}' not found`);
-    }
-
-    const result = await db.delete(clientPeople).where(eq(clientPeople.id, id));
-    if (result.rowCount === 0) {
-      throw new Error(`ClientPerson with ID '${id}' not found`);
     }
   }
 
@@ -2963,7 +2799,10 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         createdAt: clientServices.createdAt,
-        client: clients,
+        clientId_data: clients.id,
+        clientName: clients.name,
+        clientEmail: clients.email,
+        clientCreatedAt: clients.createdAt,
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
@@ -2987,7 +2826,12 @@ export class DatabaseStorage implements IStorage {
       clientId: result.clientId,
       serviceId: result.serviceId,
       createdAt: result.createdAt,
-      client: result.client,
+      client: {
+        id: result.clientId_data,
+        name: result.clientName,
+        email: result.clientEmail,
+        createdAt: result.clientCreatedAt,
+      },
       service: {
         id: result.serviceId_data,
         name: result.serviceName,
@@ -3014,7 +2858,10 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         createdAt: clientServices.createdAt,
-        client: clients,
+        clientId_data: clients.id,
+        clientName: clients.name,
+        clientEmail: clients.email,
+        clientCreatedAt: clients.createdAt,
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
@@ -3043,7 +2890,12 @@ export class DatabaseStorage implements IStorage {
       clientId: result.clientId,
       serviceId: result.serviceId,
       createdAt: result.createdAt,
-      client: result.client,
+      client: {
+        id: result.clientId_data,
+        name: result.clientName,
+        email: result.clientEmail,
+        createdAt: result.clientCreatedAt,
+      },
       service: {
         id: result.serviceId_data,
         name: result.serviceName,
@@ -3119,7 +2971,12 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         createdAt: clientServices.createdAt,
-        client: clients,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          createdAt: clients.createdAt,
+        },
       })
       .from(clientServices)
       .innerJoin(clients, eq(clientServices.clientId, clients.id))
