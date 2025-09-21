@@ -84,13 +84,35 @@ interface Step2FormData {
   addOtherPeople: boolean;
 }
 
-// Step 3: Additional person details
+// PersonDraft interface for individual person form data
+interface PersonDraft {
+  id: string;
+  source: 'ch' | 'manual';
+  relationshipType: string;
+  officerRole?: string;
+  appointedOn?: string;
+  resignedOn?: string;
+  fullName: string;
+  firstName?: string;
+  lastName?: string;
+  telephone?: string;
+  email?: string;
+  notes?: string;
+  // Address fields
+  address1?: string;
+  address2?: string;
+  address3?: string;
+  locality?: string;
+  region?: string;
+  country?: string;
+  postalCode?: string;
+  completed: boolean;
+}
+
+// Step 3: Person forms with individual navigation
 interface Step3FormData {
-  additionalPeopleDetails: Record<string, {
-    telephone?: string;
-    email?: string;
-    notes?: string;
-  }>;
+  people: PersonDraft[];
+  currentPersonIndex: number;
 }
 
 // Step 4: Services selection
@@ -200,12 +222,34 @@ const step2Schema = z.object({
   addOtherPeople: z.boolean().default(false),
 });
 
+// PersonForm validation schema
+const personFormSchema = z.object({
+  id: z.string(),
+  source: z.enum(['ch', 'manual']),
+  relationshipType: z.string().min(1, "Relationship type is required"),
+  officerRole: z.string().optional(),
+  appointedOn: z.string().optional(),
+  resignedOn: z.string().optional(),
+  fullName: z.string().min(1, "Full name is required"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  telephone: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  notes: z.string().optional(),
+  // Address fields
+  address1: z.string().optional(),
+  address2: z.string().optional(),
+  address3: z.string().optional(),
+  locality: z.string().optional(),
+  region: z.string().optional(),
+  country: z.string().optional(),
+  postalCode: z.string().optional(),
+  completed: z.boolean(),
+});
+
 const step3Schema = z.object({
-  additionalPeopleDetails: z.record(z.string(), z.object({
-    telephone: z.string().optional(),
-    email: z.string().email().optional().or(z.literal("")),
-    notes: z.string().optional(),
-  })),
+  people: z.array(personFormSchema),
+  currentPersonIndex: z.number().min(0),
 });
 
 const step4Schema = z.object({
@@ -254,6 +298,432 @@ const step5Schema = z.object({
 // Company number validation schema
 const companyNumberSchema = z.string().min(1).max(8).regex(/^[A-Z0-9]+$/, "Invalid company number format");
 
+// PersonForm subcomponent props
+interface PersonFormProps {
+  person: PersonDraft;
+  personIndex: number;
+  totalPeople: number;
+  onPersonUpdate: (updatedPerson: PersonDraft) => void;
+  onBack: () => void;
+  onNext: () => void;
+  onSaveAndNext: () => void;
+  isFirstPerson: boolean;
+  isLastPerson: boolean;
+}
+
+// PersonForm subcomponent
+function PersonForm({
+  person,
+  personIndex,
+  totalPeople,
+  onPersonUpdate,
+  onBack,
+  onNext,
+  onSaveAndNext,
+  isFirstPerson,
+  isLastPerson,
+}: PersonFormProps) {
+  // Add null check for person prop
+  if (!person) {
+    return (
+      <Alert>
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          Person data is not available. Please go back and try again.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const personForm = useForm<PersonDraft>({
+    resolver: zodResolver(personFormSchema),
+    defaultValues: person,
+    mode: "onChange",
+  });
+
+  // Watch for changes and update parent
+  useEffect(() => {
+    const subscription = personForm.watch((value) => {
+      if (value && onPersonUpdate) {
+        onPersonUpdate(value as PersonDraft);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [onPersonUpdate]);
+
+  // Reset form when person changes
+  useEffect(() => {
+    if (person) {
+      personForm.reset(person);
+    }
+  }, [person, personForm]);
+
+  const handleSaveAndNext = () => {
+    personForm.trigger().then((isValid) => {
+      if (isValid) {
+        const updatedPerson = {
+          ...personForm.getValues(),
+          completed: true,
+        };
+        onPersonUpdate(updatedPerson);
+        onSaveAndNext();
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-6" data-testid="person-form">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <UserCheck className="w-5 h-5" />
+          <h3 className="text-lg font-semibold">
+            Person {personIndex + 1} of {totalPeople}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {person?.source === 'ch' && (
+            <Badge variant="secondary">Companies House</Badge>
+          )}
+          {person?.source === 'manual' && (
+            <Badge variant="outline">Manual Entry</Badge>
+          )}
+          {person?.completed && (
+            <Badge variant="default">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Complete
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <h4 className="font-medium text-lg">{person?.fullName || 'Unknown Person'}</h4>
+          {person?.officerRole && (
+            <Badge variant="secondary">{person.officerRole}</Badge>
+          )}
+        </div>
+        
+        <Form {...personForm}>
+          <div className="space-y-6">
+            {/* Basic Information */}
+            <div className="space-y-4">
+              <h5 className="font-medium text-base">Basic Information</h5>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={personForm.control}
+                  name="relationshipType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Relationship Type *</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid={`select-person-${personIndex}-relationship`}>
+                            <SelectValue placeholder="Select relationship type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="director">Director</SelectItem>
+                          <SelectItem value="secretary">Secretary</SelectItem>
+                          <SelectItem value="shareholder">Shareholder</SelectItem>
+                          <SelectItem value="contact">Contact Person</SelectItem>
+                          <SelectItem value="accountant">Accountant</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={personForm.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Full name"
+                          data-testid={`input-person-${personIndex}-fullname`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={personForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="First name"
+                          data-testid={`input-person-${personIndex}-firstname`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={personForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Last name"
+                          data-testid={`input-person-${personIndex}-lastname`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Contact Information */}
+            <div className="space-y-4">
+              <h5 className="font-medium text-base">Contact Information</h5>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={personForm.control}
+                  name="telephone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone Number</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="+44 123 456 7890"
+                          data-testid={`input-person-${personIndex}-phone`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={personForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email Address</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="email"
+                          placeholder="email@example.com"
+                          data-testid={`input-person-${personIndex}-email`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Address Information */}
+            <div className="space-y-4">
+              <h5 className="font-medium text-base">Address Information</h5>
+              
+              <FormField
+                control={personForm.control}
+                name="address1"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address Line 1</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Street address"
+                        data-testid={`input-person-${personIndex}-address1`}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={personForm.control}
+                name="address2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address Line 2</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Apartment, suite, etc."
+                        data-testid={`input-person-${personIndex}-address2`}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  control={personForm.control}
+                  name="locality"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>City/Town</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="City"
+                          data-testid={`input-person-${personIndex}-city`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={personForm.control}
+                  name="region"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>County/State</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="County"
+                          data-testid={`input-person-${personIndex}-county`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={personForm.control}
+                  name="postalCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Postal Code</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Postal code"
+                          data-testid={`input-person-${personIndex}-postcode`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={personForm.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="United Kingdom"
+                        data-testid={`input-person-${personIndex}-country`}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Separator />
+
+            {/* Notes */}
+            <div className="space-y-4">
+              <FormField
+                control={personForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="Additional notes about this person..."
+                        data-testid={`textarea-person-${personIndex}-notes`}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+        </Form>
+      </Card>
+
+      {/* Navigation buttons */}
+      <div className="flex justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onBack}
+          disabled={isFirstPerson}
+          data-testid={`button-person-${personIndex}-back`}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Previous Person
+        </Button>
+
+        <div className="flex gap-2">
+          {!isLastPerson && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onNext}
+              data-testid={`button-person-${personIndex}-next`}
+            >
+              Next Person
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          )}
+          
+          <Button
+            type="button"
+            onClick={handleSaveAndNext}
+            data-testid={`button-person-${personIndex}-save-next`}
+          >
+            {isLastPerson ? 'Save & Continue' : 'Save & Next Person'}
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ClientCreationWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -273,7 +743,7 @@ export function ClientCreationWizard({
   const [wizardData, setWizardData] = useState<WizardFormData>({
     step1: { clientType: "company" },
     step2: { selectedPeopleIds: [], addOtherPeople: false },
-    step3: { additionalPeopleDetails: {} },
+    step3: { people: [], currentPersonIndex: 0 },
     step4: { selectedServiceIds: [] },
     step5: { serviceConfigurations: {} },
   });
@@ -353,7 +823,7 @@ export function ClientCreationWizard({
       const initialWizardData = {
         step1: { clientType: "company" as const },
         step2: { selectedPeopleIds: [], addOtherPeople: false },
-        step3: { additionalPeopleDetails: {} },
+        step3: { people: [], currentPersonIndex: 0 },
         step4: { selectedServiceIds: [] },
         step5: { serviceConfigurations: {} },
       };
@@ -584,8 +1054,8 @@ export function ClientCreationWizard({
         // People selection (from Companies House for companies, empty for individuals)
         selectedPeopleIds: wizardData.step2.selectedPeopleIds,
         
-        // Additional people details from Step 3
-        additionalPeopleDetails: wizardData.step3.additionalPeopleDetails || {},
+        // People data from Step 3 (new PersonDraft structure)
+        people: wizardData.step3.people || [],
         
         // Services and role assignments
         services: wizardData.step4.selectedServiceIds.map(serviceId => ({
@@ -711,7 +1181,79 @@ export function ClientCreationWizard({
           return;
         }
 
-        setWizardData(prev => ({ ...prev, step2: step2Data }));
+        // Create PersonDraft objects from selected people
+        const selectedPeople: PersonDraft[] = [];
+        
+        if (clientType === "company") {
+          // Create PersonDraft objects from Companies House officers
+          step2Data.selectedPeopleIds.forEach(personId => {
+            const officer = companiesHouseOfficers.find(o => o.id === personId);
+            if (officer) {
+              selectedPeople.push({
+                id: officer.id,
+                source: 'ch',
+                relationshipType: officer.officerRole || 'director',
+                officerRole: officer.officerRole,
+                appointedOn: officer.appointedOn,
+                resignedOn: officer.resignedOn,
+                fullName: officer.fullName || '',
+                firstName: officer.firstName || undefined,
+                lastName: officer.lastName || undefined,
+                telephone: officer.telephone || undefined,
+                email: officer.email || undefined,
+                notes: '',
+                // Address fields from officer data
+                address1: officer.address1 || undefined,
+                address2: officer.address2 || undefined,
+                address3: officer.address3 || undefined,
+                locality: officer.locality || undefined,
+                region: officer.region || undefined,
+                country: officer.country || undefined,
+                postalCode: officer.postalCode || undefined,
+                completed: false,
+              });
+            }
+          });
+        } else if (clientType === "individual") {
+          // Create PersonDraft object for individual client
+          const individualData = wizardData.step1;
+          selectedPeople.push({
+            id: 'individual-client',
+            source: 'manual',
+            relationshipType: 'client',
+            fullName: individualData.individualName || '',
+            firstName: individualData.individualName?.split(' ')[0] || '',
+            lastName: individualData.individualName?.split(' ').slice(1).join(' ') || '',
+            email: individualData.individualEmail,
+            telephone: '',
+            notes: '',
+            address1: '',
+            address2: '',
+            address3: '',
+            locality: '',
+            region: '',
+            country: '',
+            postalCode: '',
+            completed: false,
+          });
+        }
+
+        // Update wizard data with new step2 data and populated step3 people
+        setWizardData(prev => ({ 
+          ...prev, 
+          step2: step2Data,
+          step3: {
+            people: selectedPeople,
+            currentPersonIndex: selectedPeople.length > 0 ? 0 : -1 // Set to -1 if no people
+          }
+        }));
+
+        // Reset step3 form with new data
+        step3Form.reset({
+          people: selectedPeople,
+          currentPersonIndex: selectedPeople.length > 0 ? 0 : -1 // Set to -1 if no people
+        });
+
         break;
       }
 
@@ -1257,101 +1799,85 @@ export function ClientCreationWizard({
 
               {/* Step 3: Person Details */}
               {currentStep === 3 && (
-                <Form {...step3Form}>
-                  <div className="space-y-6" data-testid="step-3-content">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    <h3 className="text-lg font-semibold">Person Details</h3>
-                  </div>
-                  
-                  <div className="text-sm text-muted-foreground mb-4">
-                    Add additional contact details for the selected people.
-                  </div>
-                  
-                  {wizardData.step2.selectedPeopleIds.length > 0 ? (
-                    <div className="space-y-6">
-                      {wizardData.step2.selectedPeopleIds.map(personId => {
-                        const person = companiesHouseOfficers.find(o => o.id === personId);
-                        if (!person) return null;
-                        
-                        return (
-                          <Card key={personId} className="p-4">
-                            <div className="flex items-center gap-2 mb-4">
-                              <UserCheck className="w-4 h-4" />
-                              <h4 className="font-medium">{person.fullName}</h4>
-                              <Badge variant="secondary">{person.officerRole}</Badge>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <FormField
-                                control={step3Form.control}
-                                name={`additionalPeopleDetails.${personId}.telephone`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Phone Number</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...field}
-                                        placeholder="+44 123 456 7890"
-                                        data-testid={`input-person-${personId}-phone`}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              
-                              <FormField
-                                control={step3Form.control}
-                                name={`additionalPeopleDetails.${personId}.email`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Email Address</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...field}
-                                        type="email"
-                                        placeholder="email@example.com"
-                                        data-testid={`input-person-${personId}-email`}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-                            
-                            <FormField
-                              control={step3Form.control}
-                              name={`additionalPeopleDetails.${personId}.notes`}
-                              render={({ field }) => (
-                                <FormItem className="mt-4">
-                                  <FormLabel>Notes</FormLabel>
-                                  <FormControl>
-                                    <Textarea
-                                      {...field}
-                                      placeholder="Additional notes about this person..."
-                                      data-testid={`textarea-person-${personId}-notes`}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </Card>
-                        );
-                      })}
-                    </div>
+                <div className="space-y-6" data-testid="step-3-content">
+                  {wizardData.step3.people && wizardData.step3.people.length > 0 && 
+                   wizardData.step3.currentPersonIndex >= 0 && 
+                   wizardData.step3.currentPersonIndex < wizardData.step3.people.length &&
+                   wizardData.step3.people[wizardData.step3.currentPersonIndex] ? (
+                    <PersonForm
+                      person={wizardData.step3.people[wizardData.step3.currentPersonIndex]}
+                      personIndex={wizardData.step3.currentPersonIndex}
+                      totalPeople={wizardData.step3.people.length}
+                      onPersonUpdate={(updatedPerson) => {
+                        if (!wizardData.step3.people || wizardData.step3.currentPersonIndex < 0 || wizardData.step3.currentPersonIndex >= wizardData.step3.people.length) {
+                          return;
+                        }
+                        const updatedPeople = [...wizardData.step3.people];
+                        updatedPeople[wizardData.step3.currentPersonIndex] = updatedPerson;
+                        setWizardData(prev => ({
+                          ...prev,
+                          step3: {
+                            ...prev.step3,
+                            people: updatedPeople
+                          }
+                        }));
+                        step3Form.setValue('people', updatedPeople);
+                      }}
+                      onBack={() => {
+                        if (wizardData.step3.people && wizardData.step3.currentPersonIndex > 0) {
+                          const newIndex = wizardData.step3.currentPersonIndex - 1;
+                          setWizardData(prev => ({
+                            ...prev,
+                            step3: {
+                              ...prev.step3,
+                              currentPersonIndex: newIndex
+                            }
+                          }));
+                          step3Form.setValue('currentPersonIndex', newIndex);
+                        }
+                      }}
+                      onNext={() => {
+                        if (wizardData.step3.people && wizardData.step3.currentPersonIndex < wizardData.step3.people.length - 1) {
+                          const newIndex = wizardData.step3.currentPersonIndex + 1;
+                          setWizardData(prev => ({
+                            ...prev,
+                            step3: {
+                              ...prev.step3,
+                              currentPersonIndex: newIndex
+                            }
+                          }));
+                          step3Form.setValue('currentPersonIndex', newIndex);
+                        }
+                      }}
+                      onSaveAndNext={() => {
+                        // Save current person as completed and move to next or continue to step 4
+                        if (wizardData.step3.people && wizardData.step3.currentPersonIndex < wizardData.step3.people.length - 1) {
+                          const newIndex = wizardData.step3.currentPersonIndex + 1;
+                          setWizardData(prev => ({
+                            ...prev,
+                            step3: {
+                              ...prev.step3,
+                              currentPersonIndex: newIndex
+                            }
+                          }));
+                          step3Form.setValue('currentPersonIndex', newIndex);
+                        } else {
+                          // All people completed, trigger step navigation
+                          handleNext();
+                        }
+                      }}
+                      isFirstPerson={wizardData.step3.currentPersonIndex === 0}
+                      isLastPerson={wizardData.step3.people ? wizardData.step3.currentPersonIndex === wizardData.step3.people.length - 1 : true}
+                    />
                   ) : (
                     <Alert>
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription>
-                        No people selected. Please go back to Step 2 and select people first.
+                        No people data available. Please go back to Step 2 and select people first.
                       </AlertDescription>
                     </Alert>
-                    )}
-                  </div>
-                </Form>
+                  )}
+                </div>
               )}
 
               {/* Step 4: Services Selection */}
