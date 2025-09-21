@@ -605,9 +605,10 @@ export default function ProjectTypeDetail() {
     enabled: !!projectTypeId && isAuthenticated && !!user,
   });
 
-  // For stage creation, always use system roles to match backend validation
-  // Project-specific roles are used elsewhere but stages must use the userRoleEnum
-  const availableRoles = SYSTEM_ROLE_OPTIONS;
+  // Use service-specific roles if available, otherwise fall back to system roles
+  const availableRoles = projectTypeRoles && projectTypeRoles.length > 0 
+    ? projectTypeRoles.map(role => ({ value: role.name.toLowerCase().replace(/\s+/g, '_'), label: role.name }))
+    : SYSTEM_ROLE_OPTIONS;
 
   // Helper function to get role label from role value
   const getRoleLabel = (roleValue: string | null | undefined) => {
