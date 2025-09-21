@@ -258,7 +258,11 @@ export function SimpleClientCreation({ open, onClose, onClientCreated }: SimpleC
                   >
                     Back
                   </Button>
-                  <Button type="submit" disabled={isLoading} data-testid="button-create-company">
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !companyForm.formState.isValid} 
+                    data-testid="button-create-company"
+                  >
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Create Client
                   </Button>
@@ -329,7 +333,11 @@ export function SimpleClientCreation({ open, onClose, onClientCreated }: SimpleC
                   >
                     Back
                   </Button>
-                  <Button type="submit" disabled={isLoading} data-testid="button-create-individual">
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !individualForm.formState.isValid} 
+                    data-testid="button-create-individual"
+                  >
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Create Client
                   </Button>
