@@ -845,7 +845,7 @@ function PersonForm({
           <Button
             type="button"
             onClick={handleNext}
-            disabled={isLastPerson}
+            disabled={!canProceedToNext()}
             data-testid={`button-person-${personIndex}-next`}
             className={!canProceedToNext() ? "opacity-60" : ""}
             title={!canProceedToNext() ? "Please complete all required fields before proceeding" : ""}
