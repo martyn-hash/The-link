@@ -17,6 +17,14 @@ The application includes a comprehensive time governance system to monitor proje
 
 Preferred communication style: Simple, everyday language.
 
+## Test Credentials
+
+For testing and development purposes:
+- **Email**: admin@example.com
+- **Password**: admin123
+
+These credentials provide admin-level access for testing all application features and admin-only functionality.
+
 # System Architecture
 
 ## Frontend Architecture
