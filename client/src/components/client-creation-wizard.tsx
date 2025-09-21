@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -353,6 +353,10 @@ function PersonForm({
     mode: "onChange",
   });
 
+  // Refs for focus management
+  const formContainerRef = useRef<HTMLDivElement>(null);
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
   // Watch for changes, validate, and update parent with real-time feedback
   useEffect(() => {
     const subscription = personForm.watch((value) => {
@@ -371,7 +375,7 @@ function PersonForm({
     return () => subscription.unsubscribe();
   }, [onPersonUpdate, personForm.formState.isValid]);
 
-  // Reset form when person changes with proper default values
+  // Reset form when person changes with proper default values and focus management
   useEffect(() => {
     if (person) {
       const personWithDefaults = {
@@ -392,6 +396,26 @@ function PersonForm({
         postalCode: person.postalCode || '',
       };
       personForm.reset(personWithDefaults);
+      
+      // Focus management: scroll to top and focus first input when person changes
+      // Use setTimeout to ensure DOM has updated after form reset
+      setTimeout(() => {
+        // Scroll form container to top with smooth behavior
+        if (formContainerRef.current) {
+          formContainerRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+            inline: 'nearest'
+          });
+        }
+        
+        // Focus the first input field for better accessibility
+        // Focus the relationship type trigger since it's the first interactive element
+        const relationshipTrigger = formContainerRef.current?.querySelector('[data-testid^="select-person-"][data-testid$="-relationship"]') as HTMLElement;
+        if (relationshipTrigger) {
+          relationshipTrigger.focus();
+        }
+      }, 100); // Small delay to ensure smooth transition
     }
   }, [person, personForm]);
 
@@ -454,7 +478,7 @@ function PersonForm({
   };
 
   return (
-    <div className="space-y-6" data-testid="person-form">
+    <div ref={formContainerRef} className="space-y-6" data-testid="person-form">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <UserCheck className="w-5 h-5" />
