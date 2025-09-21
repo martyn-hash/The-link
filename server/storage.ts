@@ -1114,6 +1114,19 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Set project owner based on service owner resolution
+    if (service) {
+      // For service-mapped projects, resolve the effective service owner
+      const serviceOwner = await this.resolveServiceOwner(finalProjectData.clientId, finalProjectData.projectTypeId);
+      if (serviceOwner) {
+        finalProjectData.projectOwnerId = serviceOwner.id;
+        console.log(`Project owner set to service owner: ${serviceOwner.email} (${serviceOwner.id})`);
+      } else {
+        console.warn(`No service owner found for client ${finalProjectData.clientId} and project type ${finalProjectData.projectTypeId}`);
+      }
+    }
+    // For non-service-mapped projects, projectOwnerId remains null (which is fine since it's nullable)
+
     // Ensure currentAssigneeId is set if not already assigned
     if (!finalProjectData.currentAssigneeId) {
       finalProjectData.currentAssigneeId = finalProjectData.clientManagerId;
