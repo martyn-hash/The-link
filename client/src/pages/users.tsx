@@ -219,7 +219,7 @@ export default function UserManagement() {
   });
 
   const setFallbackUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async (userId: string): Promise<User> => {
       return await apiRequest("POST", "/api/config/fallback-user", { userId });
     },
     onSuccess: (data: User) => {
