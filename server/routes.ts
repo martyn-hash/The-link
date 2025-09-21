@@ -1918,7 +1918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project type management routes
-  app.get("/api/config/project-types", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  app.get("/api/config/project-types", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       // Extract query parameters for filtering
       const filters = {
