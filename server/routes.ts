@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
+import { companiesHouseService } from "./companies-house-service";
 import { z } from "zod";
 import {
   insertUserSchema,
@@ -72,6 +73,11 @@ const paramClientServiceIdSchema = z.object({
 
 const paramApprovalIdSchema = z.object({ 
   approvalId: z.string().min(1, "Approval ID is required").uuid("Invalid approval ID format") 
+});
+
+// Company number validation schema
+const paramCompanyNumberSchema = z.object({
+  companyNumber: z.string().min(1, "Company number is required").regex(/^[A-Z0-9]{6,8}$/, "Invalid UK company number format")
 });
 
 // Helper function for parameter validation
@@ -490,6 +496,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(500).json({ message: "Failed to delete client" });
+    }
+  });
+
+  // Companies House API routes
+  
+  // GET /api/companies-house/search - Search for companies
+  app.get("/api/companies-house/search", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { q: query, itemsPerPage = 20 } = req.query;
+      
+      if (!query || typeof query !== 'string' || query.trim().length === 0) {
+        return res.status(400).json({ message: "Search query 'q' is required" });
+      }
+      
+      const parsedItemsPerPage = typeof itemsPerPage === 'string' ? parseInt(itemsPerPage, 10) : itemsPerPage;
+      if (isNaN(parsedItemsPerPage) || parsedItemsPerPage < 1 || parsedItemsPerPage > 100) {
+        return res.status(400).json({ message: "itemsPerPage must be between 1 and 100" });
+      }
+      
+      const companyData = await companiesHouseService.searchCompanies(query.trim(), parsedItemsPerPage);
+      res.json(companyData);
+    } catch (error) {
+      console.error("Error searching Companies House:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("404") || error.message.includes("not found")) {
+          return res.status(404).json({ message: "No companies found" });
+        }
+        if (error.message.includes("API key")) {
+          return res.status(500).json({ message: "Companies House service unavailable" });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to search companies" });
+    }
+  });
+
+  // GET /api/companies-house/company/:companyNumber - Get full company profile
+  app.get("/api/companies-house/company/:companyNumber", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramCompanyNumberSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { companyNumber } = paramValidation.data;
+      const companyData = await companiesHouseService.getCompanyProfile(companyNumber);
+      res.json(companyData);
+    } catch (error) {
+      console.error("Error fetching company profile:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("404") || error.message.includes("not found")) {
+          return res.status(404).json({ message: "Company not found" });
+        }
+        if (error.message.includes("API key")) {
+          return res.status(500).json({ message: "Companies House service unavailable" });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to fetch company profile" });
+    }
+  });
+
+  // GET /api/companies-house/company/:companyNumber/officers - Get company officers
+  app.get("/api/companies-house/company/:companyNumber/officers", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramCompanyNumberSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { companyNumber } = paramValidation.data;
+      const officersData = await companiesHouseService.getCompanyOfficers(companyNumber);
+      res.json(officersData);
+    } catch (error) {
+      console.error("Error fetching company officers:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("404") || error.message.includes("not found")) {
+          return res.status(404).json({ message: "Company officers not found" });
+        }
+        if (error.message.includes("API key")) {
+          return res.status(500).json({ message: "Companies House service unavailable" });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to fetch company officers" });
+    }
+  });
+
+  // POST /api/clients/from-companies-house - Create client from Companies House data
+  app.post("/api/clients/from-companies-house", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate request body
+      const bodySchema = z.object({
+        companyNumber: z.string().min(1, "Company number is required").regex(/^[A-Z0-9]{6,8}$/, "Invalid UK company number format"),
+        selectedOfficers: z.array(z.number().int().min(0)).optional().default([])
+      });
+      
+      const bodyValidation = bodySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+      
+      const { companyNumber, selectedOfficers } = bodyValidation.data;
+      
+      // Fetch company data from Companies House
+      const companyData = await companiesHouseService.getCompanyProfile(companyNumber);
+      const officersData = selectedOfficers.length > 0 ? 
+        await companiesHouseService.getCompanyOfficers(companyNumber) : 
+        { officers: [] };
+      
+      // Transform CH data to internal client format
+      const clientData = companiesHouseService.transformCompanyToClient(companyData);
+      
+      // Create or update client with CH data
+      const client = await storage.upsertClientFromCH(clientData);
+      
+      // Create people from selected officers and link them to client
+      const createdPeople = [];
+      for (const officerIndex of selectedOfficers) {
+        if (officersData.officers && officersData.officers[officerIndex]) {
+          const officer = officersData.officers[officerIndex];
+          const personData = companiesHouseService.transformOfficerToPerson(officer);
+          
+          // Create or update person
+          const person = await storage.upsertPersonFromCH(personData);
+          
+          // Link person to client with officer role
+          await storage.linkPersonToClient(
+            client.id, 
+            person.id, 
+            officer.officer_role,
+            false // Not primary contact by default
+          );
+          
+          createdPeople.push({
+            ...person,
+            officerRole: officer.officer_role
+          });
+        }
+      }
+      
+      // Return client with related people
+      const clientWithPeople = await storage.getClientWithPeople(client.id);
+      
+      res.status(201).json({
+        client: clientWithPeople,
+        message: `Created client "${client.name}" with ${createdPeople.length} associated person(s)`
+      });
+      
+    } catch (error) {
+      console.error("Error creating client from Companies House:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("404") || error.message.includes("not found")) {
+          return res.status(404).json({ message: "Company not found" });
+        }
+        if (error.message.includes("API key")) {
+          return res.status(500).json({ message: "Companies House service unavailable" });
+        }
+        if (error.message.includes("duplicate") || error.message.includes("unique")) {
+          return res.status(409).json({ message: "Client with this company number already exists" });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to create client from Companies House data" });
     }
   });
 
