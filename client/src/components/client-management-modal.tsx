@@ -537,6 +537,7 @@ export function ClientManagementModal({
                             type="email"
                             placeholder="client@example.com"
                             data-testid="input-client-email"
+                            value={field.value || ""}
                           />
                         </FormControl>
                         <FormMessage />
@@ -613,11 +614,11 @@ export function ClientManagementModal({
                                       Service Owner Override (Optional)
                                     </label>
                                     <Select
-                                      value={serviceOwnerAssignments[service.id] || ""}
+                                      value={serviceOwnerAssignments[service.id] || "none"}
                                       onValueChange={(value) => {
                                         setServiceOwnerAssignments(prev => ({
                                           ...prev,
-                                          [service.id]: value || ""
+                                          [service.id]: value === "none" ? "" : (value || "")
                                         }));
                                       }}
                                       data-testid={`select-service-owner-${service.id}`}
@@ -626,7 +627,7 @@ export function ClientManagementModal({
                                         <SelectValue placeholder="Choose service owner (optional)" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="" key="none">No override (use service default)</SelectItem>
+                                        <SelectItem value="none" key="none">No override (use service default)</SelectItem>
                                         {users?.map((user) => (
                                           <SelectItem key={user.id} value={user.id}>
                                             {user.firstName} {user.lastName}

@@ -916,14 +916,18 @@ export default function Services() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Service Owner</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-service-owner">
+                                <Select
+                                  onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                                  value={field.value || "none"}
+                                  data-testid="select-service-owner"
+                                >
                                   <FormControl>
                                     <SelectTrigger>
                                       <SelectValue placeholder="Select a service owner (optional)" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">No owner assigned</SelectItem>
+                                    <SelectItem value="none">No owner assigned</SelectItem>
                                     {users?.map((owner) => (
                                       <SelectItem key={owner.id} value={owner.id}>
                                         {owner.firstName} {owner.lastName} ({owner.email})
@@ -1087,14 +1091,18 @@ export default function Services() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Service Owner</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-service-owner">
+                                <Select
+                                  onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                                  value={field.value || "none"}
+                                  data-testid="select-service-owner"
+                                >
                                   <FormControl>
                                     <SelectTrigger>
                                       <SelectValue placeholder="Select a service owner (optional)" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">No owner assigned</SelectItem>
+                                    <SelectItem value="none">No owner assigned</SelectItem>
                                     {users?.map((owner) => (
                                       <SelectItem key={owner.id} value={owner.id}>
                                         {owner.firstName} {owner.lastName} ({owner.email})
