@@ -1,9 +1,10 @@
 import { useParams } from "wouter";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn } from "@/lib/queryClient";
@@ -11,8 +12,102 @@ import type { Client, Person, ClientPerson } from "@shared/schema";
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
 
+interface PersonCardProps {
+  clientPerson: ClientPersonWithPerson;
+  expandedPersonId: string | null;
+  onToggleExpand: () => void;
+}
+
+function PersonCard({ clientPerson, expandedPersonId, onToggleExpand }: PersonCardProps) {
+  const isExpanded = expandedPersonId === clientPerson.person.id;
+  
+  return (
+    <div className="relative">
+      <div 
+        className="cursor-pointer p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+        onClick={onToggleExpand}
+        data-testid={`person-${clientPerson.person.id}`}
+      >
+        <div className="space-y-2">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center space-x-2 mb-1">
+                <h4 className="font-medium text-foreground truncate" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                  {clientPerson.person.fullName}
+                </h4>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {clientPerson.officerRole && (
+                  <Badge variant="secondary" className="text-xs" data-testid={`badge-role-${clientPerson.person.id}`}>
+                    {clientPerson.officerRole}
+                  </Badge>
+                )}
+                {clientPerson.isPrimaryContact && (
+                  <Badge variant="default" className="text-xs" data-testid={`badge-primary-${clientPerson.person.id}`}>
+                    Primary Contact
+                  </Badge>
+                )}
+              </div>
+              {(clientPerson.person.nationality || clientPerson.person.occupation) && (
+                <p className="text-sm text-muted-foreground truncate">
+                  {[clientPerson.person.nationality, clientPerson.person.occupation]
+                    .filter(Boolean)
+                    .join(' • ')}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {isExpanded && (
+        <div className="mt-2 p-4 rounded-lg border bg-muted/50 space-y-3">
+          {clientPerson.person.addressLine1 && (
+            <div className="flex items-start space-x-2">
+              <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <div className="text-sm text-muted-foreground">
+                {[
+                  clientPerson.person.addressLine1,
+                  clientPerson.person.addressLine2,
+                  clientPerson.person.locality,
+                  clientPerson.person.postalCode
+                ].filter(Boolean).join(', ')}
+              </div>
+            </div>
+          )}
+          
+          {/* Placeholder for phone - extend person schema later */}
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Phone className="w-4 h-4" />
+            <span>Phone number not available</span>
+          </div>
+          
+          {/* Placeholder for email - extend person schema later */}
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Mail className="w-4 h-4" />
+            <span>Email not available</span>
+          </div>
+          
+          {clientPerson.person.dateOfBirth && (
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+              <User className="w-4 h-4" />
+              <span>Born: {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClientDetail() {
   const { id } = useParams();
+  const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
 
   const { data: client, isLoading, error } = useQuery<Client>({
     queryKey: [`/api/clients/${id}`],
@@ -211,7 +306,21 @@ export default function ClientDetail() {
             {/* Related People Section */}
             <Card>
               <CardHeader>
-                <CardTitle>Related People</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Related People</CardTitle>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    data-testid="button-add-person"
+                    onClick={() => {
+                      // TODO: Implement add person modal/form
+                      alert('Add person functionality coming soon!');
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div data-testid="section-related-people">
@@ -230,49 +339,16 @@ export default function ClientDetail() {
                       </p>
                     </div>
                   ) : relatedPeople && relatedPeople.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {relatedPeople.map((clientPerson) => (
-                        <div 
-                          key={clientPerson.id} 
-                          className="flex items-start space-x-4 p-4 rounded-lg border bg-card"
-                          data-testid={`person-${clientPerson.person.id}`}
-                        >
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <h4 className="font-medium text-foreground" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                                {clientPerson.person.fullName}
-                              </h4>
-                              {clientPerson.officerRole && (
-                                <Badge variant="secondary" data-testid={`badge-role-${clientPerson.person.id}`}>
-                                  {clientPerson.officerRole}
-                                </Badge>
-                              )}
-                              {clientPerson.isPrimaryContact && (
-                                <Badge variant="default" data-testid={`badge-primary-${clientPerson.person.id}`}>
-                                  Primary Contact
-                                </Badge>
-                              )}
-                            </div>
-                            {(clientPerson.person.nationality || clientPerson.person.occupation) && (
-                              <p className="text-sm text-muted-foreground">
-                                {[clientPerson.person.nationality, clientPerson.person.occupation]
-                                  .filter(Boolean)
-                                  .join(' • ')}
-                              </p>
-                            )}
-                            {clientPerson.person.addressLine1 && (
-                              <p className="text-sm text-muted-foreground">
-                                <MapPin className="w-3 h-3 inline mr-1" />
-                                {[
-                                  clientPerson.person.addressLine1,
-                                  clientPerson.person.addressLine2,
-                                  clientPerson.person.locality,
-                                  clientPerson.person.postalCode
-                                ].filter(Boolean).join(', ')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                        <PersonCard 
+                          key={clientPerson.id}
+                          clientPerson={clientPerson}
+                          expandedPersonId={expandedPersonId}
+                          onToggleExpand={() => setExpandedPersonId(
+                            expandedPersonId === clientPerson.person.id ? null : clientPerson.person.id
+                          )}
+                        />
                       ))}
                     </div>
                   ) : (
