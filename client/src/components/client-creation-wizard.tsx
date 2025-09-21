@@ -226,15 +226,18 @@ const step2Schema = z.object({
 const personFormSchema = z.object({
   id: z.string(),
   source: z.enum(['ch', 'manual']),
-  relationshipType: z.string().min(1, "Relationship type is required"),
+  relationshipType: z.string().min(1, "Please select how this person is connected to your client"),
   officerRole: z.string().optional(),
   appointedOn: z.string().optional(),
   resignedOn: z.string().optional(),
-  fullName: z.string().min(1, "Full name is required"),
+  fullName: z.string().min(1, "Please enter the person's full name - this is required for identification"),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   telephone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
+  email: z.string()
+    .refine((val) => val === "" || z.string().email().safeParse(val).success, {
+      message: "Please enter a valid email address (e.g., john@example.com) or leave blank"
+    }),
   notes: z.string().optional(),
   // Address fields
   address1: z.string().optional(),
@@ -245,6 +248,15 @@ const personFormSchema = z.object({
   country: z.string().optional(),
   postalCode: z.string().optional(),
   completed: z.boolean(),
+}).refine((data) => {
+  // Ensure at least one contact method is provided for non-manual entries
+  if (data.source === 'manual') {
+    return data.email && data.email.trim() !== '';
+  }
+  return true;
+}, {
+  message: "Please provide an email address so we can contact this person",
+  path: ['email'], // This will show the error on the email field
 });
 
 const step3Schema = z.object({
@@ -341,33 +353,63 @@ function PersonForm({
     mode: "onChange",
   });
 
-  // Watch for changes and update parent
+  // Watch for changes, validate, and update parent with real-time feedback
   useEffect(() => {
     const subscription = personForm.watch((value) => {
       if (value && onPersonUpdate) {
-        onPersonUpdate(value as PersonDraft);
+        const isFormValid = personForm.formState.isValid;
+        const hasRequiredFields = value.relationshipType && value.fullName && 
+          (value.source !== 'manual' || (value.email && value.email.trim() !== ''));
+        
+        const updatedPerson: PersonDraft = {
+          ...value as PersonDraft,
+          completed: Boolean(isFormValid && hasRequiredFields),
+        };
+        onPersonUpdate(updatedPerson);
       }
     });
     return () => subscription.unsubscribe();
-  }, [onPersonUpdate]);
+  }, [onPersonUpdate, personForm.formState.isValid]);
 
-  // Reset form when person changes
+  // Reset form when person changes with proper default values
   useEffect(() => {
     if (person) {
-      personForm.reset(person);
+      const personWithDefaults = {
+        ...person,
+        relationshipType: person.relationshipType || '',
+        fullName: person.fullName || '',
+        firstName: person.firstName || '',
+        lastName: person.lastName || '',
+        telephone: person.telephone || '',
+        email: person.email || '',
+        notes: person.notes || '',
+        address1: person.address1 || '',
+        address2: person.address2 || '',
+        address3: person.address3 || '',
+        locality: person.locality || '',
+        region: person.region || '',
+        country: person.country || '',
+        postalCode: person.postalCode || '',
+      };
+      personForm.reset(personWithDefaults);
     }
   }, [person, personForm]);
 
-  // Auto-save helper function
+  // Auto-save helper function with form completion check
   const autoSave = () => {
-    const updatedPerson = {
-      ...personForm.getValues(),
-      completed: false, // Remove explicit completion tracking
+    const formValues = personForm.getValues();
+    const isFormValid = personForm.formState.isValid;
+    const hasRequiredFields = formValues.relationshipType && formValues.fullName && 
+      (formValues.source !== 'manual' || (formValues.email && formValues.email.trim() !== ''));
+    
+    const updatedPerson: PersonDraft = {
+      ...formValues,
+      completed: Boolean(isFormValid && hasRequiredFields),
     };
     onPersonUpdate(updatedPerson);
   };
 
-  // Navigation handlers with auto-save
+  // Navigation handlers with validation and auto-save
   const handlePrevious = () => {
     autoSave();
     onPrevious();
@@ -375,7 +417,40 @@ function PersonForm({
 
   const handleNext = () => {
     autoSave();
+    
+    // Validate required fields before proceeding
+    const formValues = personForm.getValues();
+    const hasRequiredFields = formValues.relationshipType && formValues.fullName && 
+      (formValues.source !== 'manual' || (formValues.email && formValues.email.trim() !== ''));
+    
+    if (!hasRequiredFields) {
+      // Show validation errors for required fields
+      if (!formValues.relationshipType) {
+        personForm.setError('relationshipType', {
+          message: 'Please select how this person is connected to your client'
+        });
+      }
+      if (!formValues.fullName) {
+        personForm.setError('fullName', {
+          message: 'Please enter the person\'s full name - this is required for identification'
+        });
+      }
+      if (formValues.source === 'manual' && (!formValues.email || !formValues.email.trim())) {
+        personForm.setError('email', {
+          message: 'Please provide an email address so we can contact this person'
+        });
+      }
+      return; // Don't proceed to next person
+    }
+    
     onNext();
+  };
+  
+  // Check if form can proceed to next
+  const canProceedToNext = () => {
+    const formValues = personForm.getValues();
+    return formValues.relationshipType && formValues.fullName && 
+      (formValues.source !== 'manual' || (formValues.email && formValues.email.trim() !== ''));
   };
 
   return (
@@ -394,10 +469,15 @@ function PersonForm({
           {person?.source === 'manual' && (
             <Badge variant="outline">Manual Entry</Badge>
           )}
-          {person?.completed && (
-            <Badge variant="default">
+          {person?.completed ? (
+            <Badge variant="default" className="bg-green-100 text-green-800 border-green-300">
               <CheckCircle className="w-3 h-3 mr-1" />
               Complete
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              In Progress
             </Badge>
           )}
         </div>
@@ -423,7 +503,9 @@ function PersonForm({
                   name="relationshipType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Relationship Type *</FormLabel>
+                      <FormLabel className="text-sm font-medium text-foreground">
+                        Relationship Type <span className="text-destructive">*</span>
+                      </FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid={`select-person-${personIndex}-relationship`}>
@@ -449,12 +531,18 @@ function PersonForm({
                   name="fullName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name *</FormLabel>
+                      <FormLabel className="text-sm font-medium text-foreground">
+                        Full Name <span className="text-destructive">*</span>
+                      </FormLabel>
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Full name"
+                          placeholder="e.g. John Smith"
                           data-testid={`input-person-${personIndex}-fullname`}
+                          className={personForm.formState.errors.fullName ? 
+                            "border-red-300 focus:border-red-500" : 
+                            (field.value && field.value.trim() ? "border-green-300 focus:border-green-500" : "")
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -469,7 +557,7 @@ function PersonForm({
                   name="firstName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>First Name</FormLabel>
+                      <FormLabel className="text-sm font-medium text-muted-foreground">First Name</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -487,7 +575,7 @@ function PersonForm({
                   name="lastName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Last Name</FormLabel>
+                      <FormLabel className="text-sm font-medium text-muted-foreground">Last Name</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -514,7 +602,7 @@ function PersonForm({
                   name="telephone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel className="text-sm font-medium text-muted-foreground">Phone Number</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -532,13 +620,19 @@ function PersonForm({
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Address</FormLabel>
+                      <FormLabel className={person?.source === 'manual' ? "text-sm font-medium text-foreground" : "text-sm font-medium text-muted-foreground"}>
+                        Email Address {person?.source === 'manual' && <span className="text-destructive">*</span>}
+                      </FormLabel>
                       <FormControl>
                         <Input
                           {...field}
                           type="email"
-                          placeholder="email@example.com"
+                          placeholder="e.g. john@example.com"
                           data-testid={`input-person-${personIndex}-email`}
+                          className={personForm.formState.errors.email ? 
+                            "border-red-300 focus:border-red-500" : 
+                            (field.value && field.value.trim() && !personForm.formState.errors.email ? "border-green-300 focus:border-green-500" : "")
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -559,7 +653,7 @@ function PersonForm({
                 name="address1"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address Line 1</FormLabel>
+                    <FormLabel className="text-sm font-medium text-muted-foreground">Address Line 1</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -577,7 +671,7 @@ function PersonForm({
                 name="address2"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address Line 2</FormLabel>
+                    <FormLabel className="text-sm font-medium text-muted-foreground">Address Line 2</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -596,7 +690,7 @@ function PersonForm({
                   name="locality"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>City/Town</FormLabel>
+                      <FormLabel className="text-sm font-medium text-muted-foreground">City/Town</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -614,7 +708,7 @@ function PersonForm({
                   name="region"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>County/State</FormLabel>
+                      <FormLabel className="text-sm font-medium text-muted-foreground">County/State</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -632,7 +726,7 @@ function PersonForm({
                   name="postalCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Postal Code</FormLabel>
+                      <FormLabel className="text-sm font-medium text-muted-foreground">Postal Code</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -651,7 +745,7 @@ function PersonForm({
                 name="country"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Country</FormLabel>
+                    <FormLabel className="text-sm font-medium text-muted-foreground">Country</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -674,7 +768,7 @@ function PersonForm({
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Notes</FormLabel>
+                    <FormLabel className="text-sm font-medium text-muted-foreground">Notes</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
@@ -690,6 +784,39 @@ function PersonForm({
           </div>
         </Form>
       </Card>
+
+      {/* Form Progress Indicator */}
+      <div className="bg-muted/30 rounded-lg p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-muted-foreground">Form Completion</span>
+          <span className="text-sm">
+            {person?.completed ? (
+              <span className="text-green-600 flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" />
+                Complete
+              </span>
+            ) : (
+              <span className="text-yellow-600 flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4" />
+                {person?.source === 'manual' ? 'Email required' : 'Please complete required fields'}
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="flex gap-2 text-xs text-muted-foreground">
+          <span className={personForm.getValues().relationshipType ? "text-green-600" : "text-muted-foreground"}>
+            • Relationship
+          </span>
+          <span className={personForm.getValues().fullName ? "text-green-600" : "text-muted-foreground"}>
+            • Full Name
+          </span>
+          {person?.source === 'manual' && (
+            <span className={personForm.getValues().email && personForm.getValues().email?.trim() ? "text-green-600" : "text-muted-foreground"}>
+              • Email
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* Navigation buttons */}
       <div className="flex justify-between">
@@ -720,9 +847,20 @@ function PersonForm({
             onClick={handleNext}
             disabled={isLastPerson}
             data-testid={`button-person-${personIndex}-next`}
+            className={!canProceedToNext() ? "opacity-60" : ""}
+            title={!canProceedToNext() ? "Please complete all required fields before proceeding" : ""}
           >
-            Next
-            <ArrowRight className="w-4 h-4 ml-2" />
+            {!canProceedToNext() ? (
+              <>
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Complete Required Fields
+              </>
+            ) : (
+              <>
+                Next
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       </div>
