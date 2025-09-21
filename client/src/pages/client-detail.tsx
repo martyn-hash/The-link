@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, Phone, Mail, User, Edit3 } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn } from "@/lib/queryClient";
@@ -14,186 +14,100 @@ type ClientPersonWithPerson = ClientPerson & { person: Person };
 
 interface PersonCardProps {
   clientPerson: ClientPersonWithPerson;
-  selectedPersonId: string | null;
-  onSelect: () => void;
+  expandedPersonId: string | null;
+  onToggleExpand: () => void;
 }
 
-function PersonCard({ clientPerson, selectedPersonId, onSelect }: PersonCardProps) {
-  const isSelected = selectedPersonId === clientPerson.person.id;
+function PersonCard({ clientPerson, expandedPersonId, onToggleExpand }: PersonCardProps) {
+  const isExpanded = expandedPersonId === clientPerson.person.id;
   
   return (
-    <div 
-      className={`cursor-pointer p-4 rounded-lg border transition-colors ${
-        isSelected 
-          ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-          : 'bg-card hover:bg-accent/50 border-border'
-      }`}
-      onClick={onSelect}
-      data-testid={`person-${clientPerson.person.id}`}
-    >
-      <div className="space-y-2">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2 mb-1">
-              <h4 className="font-medium text-foreground truncate" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                {clientPerson.person.fullName}
-              </h4>
-            </div>
-            <div className="flex flex-wrap gap-1 mb-2">
-              {clientPerson.officerRole && (
-                <Badge variant="secondary" className="text-xs" data-testid={`badge-role-${clientPerson.person.id}`}>
-                  {clientPerson.officerRole}
-                </Badge>
+    <div className="relative">
+      <div 
+        className="cursor-pointer p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+        onClick={onToggleExpand}
+        data-testid={`person-${clientPerson.person.id}`}
+      >
+        <div className="space-y-2">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center space-x-2 mb-1">
+                <h4 className="font-medium text-foreground truncate" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                  {clientPerson.person.fullName}
+                </h4>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {clientPerson.officerRole && (
+                  <Badge variant="secondary" className="text-xs" data-testid={`badge-role-${clientPerson.person.id}`}>
+                    {clientPerson.officerRole}
+                  </Badge>
+                )}
+                {clientPerson.isPrimaryContact && (
+                  <Badge variant="default" className="text-xs" data-testid={`badge-primary-${clientPerson.person.id}`}>
+                    Primary Contact
+                  </Badge>
+                )}
+              </div>
+              {(clientPerson.person.nationality || clientPerson.person.occupation) && (
+                <p className="text-sm text-muted-foreground truncate">
+                  {[clientPerson.person.nationality, clientPerson.person.occupation]
+                    .filter(Boolean)
+                    .join(' • ')}
+                </p>
               )}
-              {clientPerson.isPrimaryContact && (
-                <Badge variant="default" className="text-xs" data-testid={`badge-primary-${clientPerson.person.id}`}>
-                  Primary Contact
-                </Badge>
-              )}
-            </div>
-            {(clientPerson.person.nationality || clientPerson.person.occupation) && (
-              <p className="text-sm text-muted-foreground truncate">
-                {[clientPerson.person.nationality, clientPerson.person.occupation]
-                  .filter(Boolean)
-                  .join(' • ')}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PersonDetailView({ clientPerson }: { clientPerson: ClientPersonWithPerson }) {
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-2">
-        <div className="flex items-center space-x-2">
-          <h3 className="text-lg font-semibold" data-testid={`detail-person-name-${clientPerson.person.id}`}>
-            {clientPerson.person.fullName}
-          </h3>
-          {clientPerson.officerRole && (
-            <Badge variant="secondary" data-testid={`detail-badge-role-${clientPerson.person.id}`}>
-              {clientPerson.officerRole}
-            </Badge>
-          )}
-          {clientPerson.isPrimaryContact && (
-            <Badge variant="default" data-testid={`detail-badge-primary-${clientPerson.person.id}`}>
-              Primary Contact
-            </Badge>
-          )}
-        </div>
-        {(clientPerson.person.nationality || clientPerson.person.occupation) && (
-          <p className="text-sm text-muted-foreground">
-            {[clientPerson.person.nationality, clientPerson.person.occupation]
-              .filter(Boolean)
-              .join(' • ')}
-          </p>
-        )}
-      </div>
-
-      {/* Contact Information */}
-      <div className="space-y-4">
-        <h4 className="font-medium text-foreground">Contact Information</h4>
-        
-        <div className="grid gap-4">
-          {/* Email */}
-          <div className="flex items-center space-x-3 p-3 rounded-lg border bg-card">
-            <Mail className="w-5 h-5 text-muted-foreground" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Email</p>
-              <p className="text-sm text-muted-foreground">Not available</p>
-            </div>
-          </div>
-
-          {/* Phone */}
-          <div className="flex items-center space-x-3 p-3 rounded-lg border bg-card">
-            <Phone className="w-5 h-5 text-muted-foreground" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Phone</p>
-              <p className="text-sm text-muted-foreground">Not available</p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Address Information */}
-      {clientPerson.person.addressLine1 && (
-        <div className="space-y-4">
-          <h4 className="font-medium text-foreground">Address</h4>
-          <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card">
-            <MapPin className="w-5 h-5 mt-0.5 text-muted-foreground" />
-            <div className="flex-1">
-              <p className="text-sm">
+      
+      {isExpanded && (
+        <div className="mt-2 p-4 rounded-lg border bg-muted/50 space-y-3">
+          {clientPerson.person.addressLine1 && (
+            <div className="flex items-start space-x-2">
+              <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <div className="text-sm text-muted-foreground">
                 {[
                   clientPerson.person.addressLine1,
                   clientPerson.person.addressLine2,
                   clientPerson.person.locality,
                   clientPerson.person.postalCode
                 ].filter(Boolean).join(', ')}
-              </p>
+              </div>
             </div>
+          )}
+          
+          {/* Placeholder for phone - extend person schema later */}
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Phone className="w-4 h-4" />
+            <span>Phone number not available</span>
           </div>
+          
+          {/* Placeholder for email - extend person schema later */}
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Mail className="w-4 h-4" />
+            <span>Email not available</span>
+          </div>
+          
+          {clientPerson.person.dateOfBirth && (
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+              <User className="w-4 h-4" />
+              <span>Born: {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}</span>
+            </div>
+          )}
         </div>
       )}
-
-      {/* Personal Information */}
-      <div className="space-y-4">
-        <h4 className="font-medium text-foreground">Personal Information</h4>
-        
-        <div className="grid gap-4">
-          {clientPerson.person.dateOfBirth && (
-            <div className="flex items-center space-x-3 p-3 rounded-lg border bg-card">
-              <Calendar className="w-5 h-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Date of Birth</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {clientPerson.person.nationality && (
-            <div className="flex items-center space-x-3 p-3 rounded-lg border bg-card">
-              <User className="w-5 h-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Nationality</p>
-                <p className="text-sm text-muted-foreground">{clientPerson.person.nationality}</p>
-              </div>
-            </div>
-          )}
-
-          {clientPerson.person.occupation && (
-            <div className="flex items-center space-x-3 p-3 rounded-lg border bg-card">
-              <Building2 className="w-5 h-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Occupation</p>
-                <p className="text-sm text-muted-foreground">{clientPerson.person.occupation}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Recent Communications Placeholder */}
-      <div className="space-y-4">
-        <h4 className="font-medium text-foreground">Recent Communications</h4>
-        <div className="p-4 rounded-lg border bg-muted/50 text-center">
-          <p className="text-sm text-muted-foreground">No recent communications</p>
-          <p className="text-xs text-muted-foreground mt-1">Communication history will appear here</p>
-        </div>
-      </div>
     </div>
   );
 }
 
 export default function ClientDetail() {
   const { id } = useParams();
-  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
 
   const { data: client, isLoading, error } = useQuery<Client>({
     queryKey: [`/api/clients/${id}`],
@@ -228,10 +142,22 @@ export default function ClientDetail() {
   if (error || !client) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive mb-2">Client Not Found</h1>
-          <p className="text-muted-foreground">The client you're looking for doesn't exist or you don't have permission to view it.</p>
-        </div>
+        <Card className="w-96">
+          <CardHeader>
+            <CardTitle className="text-destructive">Client Not Found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              The client you're looking for could not be found.
+            </p>
+            <Button 
+              onClick={() => window.history.back()}
+              data-testid="button-go-back"
+            >
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -239,164 +165,145 @@ export default function ClientDetail() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
-              <p className="text-muted-foreground">
-                {client.companyNumber && `Company No: ${client.companyNumber} • `}
-                {client.email || "No email on file"}
+              <h1 className="text-2xl font-bold text-foreground" data-testid="text-client-name">
+                {client.name}
+              </h1>
+              <p className="text-muted-foreground flex items-center mt-1">
+                {client.companyNumber && (
+                  <>
+                    <Building2 className="w-4 h-4 mr-1" />
+                    Company #{client.companyNumber}
+                  </>
+                )}
               </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Edit3 className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
+            <div className="flex items-center gap-2">
+              {client.companyStatus && (
+                <Badge 
+                  variant={client.companyStatus === 'active' ? 'default' : 'secondary'}
+                  data-testid="badge-company-status"
+                >
+                  {client.companyStatus}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* Main Content */}
       <div className="container mx-auto p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="company">Company Info</TabsTrigger>
-            <TabsTrigger value="directors">Related People</TabsTrigger>
-            <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="communications">Communications</TabsTrigger>
-            <TabsTrigger value="tasks">Tasks</TabsTrigger>
-            <TabsTrigger value="chronology">Chronology</TabsTrigger>
+            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
+            <TabsTrigger value="projects" data-testid="tab-projects">Open Projects</TabsTrigger>
+            <TabsTrigger value="communications" data-testid="tab-communications">Communications</TabsTrigger>
+            <TabsTrigger value="chronology" data-testid="tab-chronology">Chronology</TabsTrigger>
+            <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
+            <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Client Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    Client Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Name</p>
-                    <p className="font-medium">{client.name}</p>
-                  </div>
-                  {client.companyNumber && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Company Number</p>
-                      <p className="font-medium">{client.companyNumber}</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Email</p>
-                    <p className="font-medium">{client.email || "Not provided"}</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Address */}
-              {client.registeredAddress1 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <MapPin className="h-5 w-5" />
-                      Address
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-sm space-y-1">
-                      <p>{client.registeredAddress1}</p>
-                      {client.registeredAddress2 && <p>{client.registeredAddress2}</p>}
-                      {client.registeredPostcode && <p>{client.registeredPostcode}</p>}
-                      {client.registeredCountry && <p>{client.registeredCountry}</p>}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Recent Activity */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Recent Activity
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">No recent activity</p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="company" className="space-y-6">
+            {/* Company Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Company Information</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Company Details
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Basic Information</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Company Name</p>
-                        <p>{client.name}</p>
-                      </div>
-                      {client.companyNumber && (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Company Number</p>
-                          <p>{client.companyNumber}</p>
-                        </div>
-                      )}
-                      {client.companyStatus && (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Status</p>
-                          <Badge variant={client.companyStatus === 'active' ? 'default' : 'secondary'}>
-                            {client.companyStatus}
-                          </Badge>
-                        </div>
-                      )}
-                      {client.companyType && (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Company Type</p>
-                          <p>{client.companyType}</p>
-                        </div>
-                      )}
-                      {client.dateOfIncorporation && (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Date of Incorporation</p>
-                          <p>{new Date(client.dateOfIncorporation).toLocaleDateString()}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {client.addressLine1 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Basic Information */}
+                  <div className="space-y-3">
                     <div>
-                      <h4 className="font-medium text-gray-700 mb-2">Registered Address</h4>
-                      <div className="text-sm space-y-1">
-                        <p>{client.addressLine1}</p>
-                        {client.addressLine2 && <p>{client.addressLine2}</p>}
-                        <p>
-                          {[client.locality, client.postalCode].filter(Boolean).join(', ')}
-                        </p>
-                        {client.country && <p>{client.country}</p>}
-                      </div>
+                      <label className="text-sm font-medium text-muted-foreground">Company Name</label>
+                      <p className="font-medium" data-testid="text-company-name">
+                        {client.companiesHouseName || client.name}
+                      </p>
                     </div>
-                  )}
+                    
+                    {client.companyNumber && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Company Number</label>
+                        <p className="font-medium" data-testid="text-company-number">
+                          {client.companyNumber}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {client.companyType && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Company Type</label>
+                        <p className="font-medium" data-testid="text-company-type">
+                          {client.companyType}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {client.dateOfCreation && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Date of Creation</label>
+                        <p className="font-medium flex items-center gap-1" data-testid="text-date-creation">
+                          <Calendar className="w-4 h-4" />
+                          {new Date(client.dateOfCreation).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Address Information */}
+                  <div className="space-y-3">
+                    {(client.registeredAddress1 || client.registeredPostcode) && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-4 h-4" />
+                          Registered Address
+                        </label>
+                        <div className="space-y-1" data-testid="text-company-address">
+                          {client.registeredAddress1 && <p>{client.registeredAddress1}</p>}
+                          {client.registeredAddress2 && <p>{client.registeredAddress2}</p>}
+                          {client.registeredAddress3 && <p>{client.registeredAddress3}</p>}
+                          {client.registeredPostcode && <p>{client.registeredPostcode}</p>}
+                          {client.registeredCountry && <p>{client.registeredCountry}</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    {client.email && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Email</label>
+                        <p className="font-medium" data-testid="text-company-email">
+                          {client.email}
+                        </p>
+                      </div>
+                    )}
+
+                  </div>
                 </div>
+
+                {client.companyNumber && (
+                  <div className="pt-4 border-t">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.open(`https://find-and-update.company-information.service.gov.uk/company/${client.companyNumber}`, '_blank')}
+                      data-testid="button-view-companies-house"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View on Companies House
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="directors" className="space-y-6">
+            {/* Related People Section */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -432,50 +339,17 @@ export default function ClientDetail() {
                       </p>
                     </div>
                   ) : relatedPeople && relatedPeople.length > 0 ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* Person Cards */}
-                      <div className="lg:col-span-2">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {relatedPeople.map((clientPerson) => (
-                            <PersonCard 
-                              key={clientPerson.id}
-                              clientPerson={clientPerson}
-                              selectedPersonId={selectedPersonId}
-                              onSelect={() => setSelectedPersonId(
-                                selectedPersonId === clientPerson.person.id ? null : clientPerson.person.id
-                              )}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* Person Detail View */}
-                      <div className="lg:col-span-1">
-                        {selectedPersonId ? (
-                          <Card className="sticky top-4">
-                            <CardHeader>
-                              <CardTitle className="text-base">Person Details</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <PersonDetailView 
-                                clientPerson={relatedPeople.find(p => p.person.id === selectedPersonId)!}
-                              />
-                            </CardContent>
-                          </Card>
-                        ) : (
-                          <Card className="sticky top-4">
-                            <CardContent className="pt-6">
-                              <div className="text-center py-8">
-                                <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                                <p className="text-muted-foreground">Select a person to view details</p>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Click on any person card to see their full information
-                                </p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {relatedPeople.map((clientPerson) => (
+                        <PersonCard 
+                          key={clientPerson.id}
+                          clientPerson={clientPerson}
+                          expandedPersonId={expandedPersonId}
+                          onToggleExpand={() => setExpandedPersonId(
+                            expandedPersonId === clientPerson.person.id ? null : clientPerson.person.id
+                          )}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="text-center py-8">
@@ -498,7 +372,26 @@ export default function ClientDetail() {
                 <CardTitle>Services</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Services information will be displayed here.</p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Services management will be implemented here.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="projects" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Open Projects</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Open projects will be displayed here.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -509,18 +402,11 @@ export default function ClientDetail() {
                 <CardTitle>Communications</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Communication history will be displayed here.</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="tasks" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Task management will be displayed here.</p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Communication history will be shown here.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -531,7 +417,41 @@ export default function ClientDetail() {
                 <CardTitle>Chronology</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Client chronology will be displayed here.</p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Timeline of events will be displayed here.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="documents" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Documents</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Client documents will be managed here.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="tasks" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Task management will be available here.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
