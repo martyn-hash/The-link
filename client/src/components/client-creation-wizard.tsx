@@ -397,23 +397,14 @@ function PersonForm({
       };
       personForm.reset(personWithDefaults);
       
-      // Focus management: scroll to top and focus first input when person changes
+      // Focus management: focus first input when person changes (without forced scrolling)
       // Use setTimeout to ensure DOM has updated after form reset
       setTimeout(() => {
-        // Scroll form container to top with smooth behavior
-        if (formContainerRef.current) {
-          formContainerRef.current.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-            inline: 'nearest'
-          });
-        }
-        
-        // Focus the first input field for better accessibility
+        // Focus the first input field for better accessibility without forced scrolling
         // Focus the relationship type trigger since it's the first interactive element
         const relationshipTrigger = formContainerRef.current?.querySelector('[data-testid^="select-person-"][data-testid$="-relationship"]') as HTMLElement;
         if (relationshipTrigger) {
-          relationshipTrigger.focus();
+          relationshipTrigger.focus({ preventScroll: true });
         }
       }, 100); // Small delay to ensure smooth transition
     }
