@@ -49,6 +49,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Building2, 
   Users, 
@@ -80,6 +81,7 @@ interface Step1FormData {
 // Step 2: People selection from Companies House officers
 interface Step2FormData {
   selectedPeopleIds: string[];
+  addOtherPeople: boolean;
 }
 
 // Step 3: Additional person details
@@ -195,6 +197,7 @@ const createStep2Schema = (clientType: "company" | "individual") => {
 
 const step2Schema = z.object({
   selectedPeopleIds: z.array(z.string()),
+  addOtherPeople: z.boolean().default(false),
 });
 
 const step3Schema = z.object({
@@ -269,7 +272,7 @@ export function ClientCreationWizard({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [wizardData, setWizardData] = useState<WizardFormData>({
     step1: { clientType: "company" },
-    step2: { selectedPeopleIds: [] },
+    step2: { selectedPeopleIds: [], addOtherPeople: false },
     step3: { additionalPeopleDetails: {} },
     step4: { selectedServiceIds: [] },
     step5: { serviceConfigurations: {} },
@@ -349,7 +352,7 @@ export function ClientCreationWizard({
       setCurrentStep(1);
       const initialWizardData = {
         step1: { clientType: "company" as const },
-        step2: { selectedPeopleIds: [] },
+        step2: { selectedPeopleIds: [], addOtherPeople: false },
         step3: { additionalPeopleDetails: {} },
         step4: { selectedServiceIds: [] },
         step5: { serviceConfigurations: {} },
@@ -1130,62 +1133,88 @@ export function ClientCreationWizard({
                   </div>
                   
                   {wizardData.step1.clientType === "company" ? (
-                    <FormField
-                      control={step2Form.control}
-                      name="selectedPeopleIds"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Select Directors and Officers</FormLabel>
-                          <FormDescription>
-                            Choose the directors and officers from Companies House that you want to associate with this client.
-                          </FormDescription>
-                          <div className="space-y-2">
-                            {companiesHouseOfficers.length > 0 ? (
-                              companiesHouseOfficers.map((officer) => (
-                                <div key={officer.id} className="flex items-center space-x-2">
-                                  <input
-                                    type="checkbox"
-                                    id={`officer-${officer.id}`}
-                                    checked={field.value.includes(officer.id)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        field.onChange([...field.value, officer.id]);
-                                      } else {
-                                        field.onChange(field.value.filter(id => id !== officer.id));
-                                      }
-                                    }}
-                                    className="rounded border-gray-300"
-                                    data-testid={`checkbox-officer-${officer.id}`}
-                                  />
-                                  <label htmlFor={`officer-${officer.id}`} className="flex-1">
-                                    <Card className="p-3 cursor-pointer hover:bg-gray-50">
-                                      <div className="font-medium">{officer.fullName}</div>
-                                      <div className="text-sm text-muted-foreground">
-                                        {officer.officerRole}
-                                        {officer.appointedOn && ` • Appointed: ${new Date(officer.appointedOn).toLocaleDateString()}`}
-                                      </div>
-                                      {officer.nationality && (
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                          Nationality: {officer.nationality}
+                    <div className="space-y-6">
+                      <FormField
+                        control={step2Form.control}
+                        name="selectedPeopleIds"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Select Directors and Officers</FormLabel>
+                            <FormDescription>
+                              Choose the directors and officers from Companies House that you want to associate with this client.
+                            </FormDescription>
+                            <div className="space-y-2">
+                              {companiesHouseOfficers.length > 0 ? (
+                                companiesHouseOfficers.map((officer) => (
+                                  <div key={officer.id} className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`officer-${officer.id}`}
+                                      checked={field.value.includes(officer.id)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          field.onChange([...field.value, officer.id]);
+                                        } else {
+                                          field.onChange(field.value.filter(id => id !== officer.id));
+                                        }
+                                      }}
+                                      className="rounded border-gray-300"
+                                      data-testid={`checkbox-officer-${officer.id}`}
+                                    />
+                                    <label htmlFor={`officer-${officer.id}`} className="flex-1">
+                                      <Card className="p-3 cursor-pointer hover:bg-gray-50">
+                                        <div className="font-medium">{officer.fullName}</div>
+                                        <div className="text-sm text-muted-foreground">
+                                          {officer.officerRole}
+                                          {officer.appointedOn && ` • Appointed: ${new Date(officer.appointedOn).toLocaleDateString()}`}
                                         </div>
-                                      )}
-                                    </Card>
-                                  </label>
-                                </div>
-                              ))
-                            ) : (
-                              <Alert>
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertDescription>
-                                  No officers found. Please ensure company lookup was successful in Step 1.
-                                </AlertDescription>
-                              </Alert>
-                            )}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                                        {officer.nationality && (
+                                          <div className="text-xs text-muted-foreground mt-1">
+                                            Nationality: {officer.nationality}
+                                          </div>
+                                        )}
+                                      </Card>
+                                    </label>
+                                  </div>
+                                ))
+                              ) : (
+                                <Alert>
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <AlertDescription>
+                                    No officers found. Please ensure company lookup was successful in Step 1.
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={step2Form.control}
+                        name="addOtherPeople"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 border rounded-lg">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="checkbox-add-other-people"
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>
+                                Add other people
+                              </FormLabel>
+                              <FormDescription>
+                                Check this to add other people who have involvement with the company but are not directors or officers (e.g., accountants, consultants, key contacts).
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   ) : (
                     /* Individual Client Path */
                     <div className="space-y-4">
