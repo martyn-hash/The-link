@@ -1,6 +1,7 @@
 import { useParams } from "wouter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn } from "@/lib/queryClient";
+import TopNavigation from "@/components/top-navigation";
 import type { Client, Person, ClientPerson } from "@shared/schema";
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
@@ -107,6 +109,7 @@ function PersonCard({ clientPerson, expandedPersonId, onToggleExpand }: PersonCa
 
 export default function ClientDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
 
   const { data: client, isLoading, error } = useQuery<Client>({
@@ -125,15 +128,18 @@ export default function ClientDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container mx-auto px-6 py-4">
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-48" />
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
+        <div className="flex-1">
+          <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="container mx-auto px-6 py-4">
+              <Skeleton className="h-8 w-64 mb-2" />
+              <Skeleton className="h-4 w-48" />
+            </div>
           </div>
-        </div>
-        <div className="container mx-auto p-6">
-          <Skeleton className="h-96 w-full" />
+          <div className="container mx-auto p-6">
+            <Skeleton className="h-96 w-full" />
+          </div>
         </div>
       </div>
     );
@@ -141,31 +147,36 @@ export default function ClientDetail() {
 
   if (error || !client) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="w-96">
-          <CardHeader>
-            <CardTitle className="text-destructive">Client Not Found</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              The client you're looking for could not be found.
-            </p>
-            <Button 
-              onClick={() => window.history.back()}
-              data-testid="button-go-back"
-            >
-              Go Back
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
+        <div className="flex-1 flex items-center justify-center">
+          <Card className="w-96">
+            <CardHeader>
+              <CardTitle className="text-destructive">Client Not Found</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                The client you're looking for could not be found.
+              </p>
+              <Button 
+                onClick={() => window.history.back()}
+                data-testid="button-go-back"
+              >
+                Go Back
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
+      <div className="flex-1">
+        {/* Header */}
+        <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -456,6 +467,7 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
         </Tabs>
+      </div>
       </div>
     </div>
   );
