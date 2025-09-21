@@ -698,26 +698,43 @@ export function ClientCreationWizard({
             return;
           }
 
-          // Lookup company data before proceeding - use return values directly
-          const needsLookup = !companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber;
-          console.log('🔍 [DEBUG] Needs company lookup:', needsLookup);
+          // Separate company lookup and officers lookup into independent checks
+          const needsCompanyLookup = !companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber;
+          const needsOfficersLookup = companiesHouseOfficers.length === 0 || 
+            (companiesHouseCompany && companiesHouseCompany.company_number !== step1Data.companyNumber);
+          
+          console.log('🔍 [DEBUG] Needs company lookup:', needsCompanyLookup);
+          console.log('👥 [DEBUG] Needs officers lookup:', needsOfficersLookup);
           console.log('🏢 [DEBUG] Current companiesHouseCompany state:', companiesHouseCompany);
           console.log('👥 [DEBUG] Current companiesHouseOfficers state before lookup:', companiesHouseOfficers);
           
-          if (needsLookup) {
-            console.log('🚀 [DEBUG] Starting company and officers lookup for:', step1Data.companyNumber);
+          // Check if we need to perform any lookups
+          if (needsCompanyLookup || needsOfficersLookup) {
+            console.log('🚀 [DEBUG] Starting lookups for:', step1Data.companyNumber);
+            console.log('🔄 [DEBUG] Will perform company lookup:', needsCompanyLookup);
+            console.log('🔄 [DEBUG] Will perform officers lookup:', needsOfficersLookup);
             setIsLoadingCompanyData(true);
             
             try {
-              console.log('📞 [DEBUG] Calling company lookup mutation...');
-              const companyResult = await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
-              console.log('✅ [DEBUG] Company lookup completed, result:', companyResult);
+              // Perform company lookup if needed
+              if (needsCompanyLookup) {
+                console.log('📞 [DEBUG] Calling company lookup mutation...');
+                const companyResult = await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
+                console.log('✅ [DEBUG] Company lookup completed, result:', companyResult);
+              } else {
+                console.log('⏩ [DEBUG] Skipping company lookup - data already available');
+              }
               
-              console.log('📞 [DEBUG] Calling officers lookup mutation...');
-              const officersResult = await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
-              console.log('✅ [DEBUG] Officers lookup completed, result:', officersResult);
+              // Perform officers lookup if needed
+              if (needsOfficersLookup) {
+                console.log('📞 [DEBUG] Calling officers lookup mutation...');
+                const officersResult = await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
+                console.log('✅ [DEBUG] Officers lookup completed, result:', officersResult);
+              } else {
+                console.log('⏩ [DEBUG] Skipping officers lookup - data already available');
+              }
               
-              console.log('🎉 [DEBUG] Both lookups completed successfully');
+              console.log('🎉 [DEBUG] All required lookups completed successfully');
               
               // Wait a bit for state updates to complete
               await new Promise(resolve => setTimeout(resolve, 100));
@@ -730,8 +747,8 @@ export function ClientCreationWizard({
               console.error('❌ [DEBUG] Lookup failed with error:', error);
               // Block advancement if lookup fails
               toast({
-                title: "Company Lookup Required",
-                description: "Please successfully lookup company data before proceeding",
+                title: "Company/Officers Lookup Required",
+                description: "Please successfully lookup company and officers data before proceeding",
                 variant: "destructive",
               });
               return;
@@ -739,7 +756,7 @@ export function ClientCreationWizard({
               setIsLoadingCompanyData(false);
             }
           } else {
-            console.log('⏩ [DEBUG] Company data already loaded, skipping lookup');
+            console.log('⏩ [DEBUG] Both company and officers data already loaded, skipping all lookups');
           }
         } else {
           console.log('👤 [DEBUG] Individual client or no company number, skipping lookup');

@@ -1,0 +1,209 @@
+chunk-RPCDYKBN.js?v=cf47656b:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+chunk-RPCDYKBN.js?v=cf47656b:521 Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components
+    at input
+    at _c (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/components/ui/input.tsx:20:11)
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=cf47656b:79:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=cf47656b:56:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/components/ui/form.tsx:124:9
+    at div
+    at div
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/components/ui/form.tsx:72:6
+    at Controller (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=cf47656b:298:35)
+    at FormField (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/components/ui/form.tsx:33:6)
+    at div
+    at div
+    at FormProvider (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=cf47656b:102:11)
+    at div
+    at div
+    at div
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=cf47656b:42:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-UVALUFUY.js?v=cf47656b:61:7
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=cf47656b:79:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=cf47656b:56:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=cf47656b:42:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-M22ABFTW.js?v=cf47656b:57:5
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XDY7EVDD.js?v=cf47656b:235:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XDY7EVDD.js?v=cf47656b:158:58
+    at Presence (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-VCJEE5DL.js?v=cf47656b:24:11)
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XDY7EVDD.js?v=cf47656b:149:64
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=cf47656b:79:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EVLBUYTV.js?v=cf47656b:56:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-V54TMEDA.js?v=cf47656b:42:13
+    at https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-UVALUFUY.js?v=cf47656b:260:22
+    at Presence (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-VCJEE5DL.js?v=cf47656b:24:11)
+    at Provider (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=cf47656b:38:15)
+    at DialogPortal (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XDY7EVDD.js?v=cf47656b:111:11)
+    at _c3 (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=cf47656b:38:15)
+    at Dialog (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XDY7EVDD.js?v=cf47656b:52:5)
+    at ClientCreationWizard (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/components/client-creation-wizard.tsx:143:3)
+    at div
+    at Clients (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/pages/clients.tsx:33:61)
+    at Route (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=cf47656b:323:16)
+    at Switch (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=cf47656b:379:17)
+    at Router (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/src/App.tsx?v=pyM1Go-pfizUy-SHm7Htz:42:42)
+    at Provider (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=cf47656b:38:15)
+    at TooltipProvider (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=cf47656b:64:5)
+    at QueryClientProvider (https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=cf47656b:2805:3)
+    at App
+printWarning @ chunk-RPCDYKBN.js?v=cf47656b:521
+error @ chunk-RPCDYKBN.js?v=cf47656b:505
+updateWrapper @ chunk-RPCDYKBN.js?v=cf47656b:1968
+updateProperties @ chunk-RPCDYKBN.js?v=cf47656b:7762
+commitUpdate @ chunk-RPCDYKBN.js?v=cf47656b:8419
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17763
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17813
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=cf47656b:17794
+commitMutationEffects @ chunk-RPCDYKBN.js?v=cf47656b:17663
+commitRootImpl @ chunk-RPCDYKBN.js?v=cf47656b:19347
+commitRoot @ chunk-RPCDYKBN.js?v=cf47656b:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=cf47656b:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=cf47656b:9119
+flushSync @ chunk-RPCDYKBN.js?v=cf47656b:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=cf47656b:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=cf47656b:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=cf47656b:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=cf47656b:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=cf47656b:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=cf47656b:5449
+client-creation-wizard.tsx:489 🏢 [DEBUG] Starting company lookup API call for: 14753824
+client-creation-wizard.tsx:490 🌐 [DEBUG] Company lookup endpoint: /api/companies-house/company/14753824
+client-creation-wizard.tsx:493 📡 [DEBUG] Raw company lookup API response: {success: true, data: {…}}
+client-creation-wizard.tsx:497 ✅ [DEBUG] Company lookup mutation onSuccess called with data: {success: true, data: {…}}
+client-creation-wizard.tsx:501 🏢 [DEBUG] Extracted company data: {accounts: {…}, can_file: true, company_name: 'GROWTH ACCOUNTANTS LIMITED', company_number: '14753824', company_status: 'active', …}
+client-creation-wizard.tsx:502 💾 [DEBUG] Setting companiesHouseCompany state...
+client-creation-wizard.tsx:507 🎉 [DEBUG] Company lookup completed successfully
+client-creation-wizard.tsx:661 🎯 [DEBUG] handleNext called for step: 1
+client-creation-wizard.tsx:665 📝 [DEBUG] Processing Step 1 navigation...
+client-creation-wizard.tsx:668 ✅ [DEBUG] Step 1 form validation result: true
+client-creation-wizard.tsx:681 📊 [DEBUG] Step 1 form data: {clientType: 'company', companyNumber: '14753824'}
+client-creation-wizard.tsx:685 🏢 [DEBUG] Company client detected, processing company lookup...
+client-creation-wizard.tsx:689 🔍 [DEBUG] Company number validation result: {success: true, data: '14753824'}
+client-creation-wizard.tsx:703 🔍 [DEBUG] Needs company lookup: false
+client-creation-wizard.tsx:704 🏢 [DEBUG] Current companiesHouseCompany state: {accounts: {…}, can_file: true, company_name: 'GROWTH ACCOUNTANTS LIMITED', company_number: '14753824', company_status: 'active', …}
+client-creation-wizard.tsx:705 👥 [DEBUG] Current companiesHouseOfficers state before lookup: []
+client-creation-wizard.tsx:742 ⏩ [DEBUG] Company data already loaded, skipping lookup
+client-creation-wizard.tsx:749 💾 [DEBUG] Saving step 1 data to wizard state: {clientType: 'company', companyNumber: '14753824'}
+client-creation-wizard.tsx:752 📊 [DEBUG] Updated wizard data: {step1: {…}, step2: {…}, step3: {…}, step4: {…}, step5: {…}}
+client-creation-wizard.tsx:756 🎯 [DEBUG] Step 1 processing complete, ready to advance to Step 2
+client-creation-wizard.tsx:1196 🎬 [DEBUG] ===== STEP 2 RENDERING =====
+client-creation-wizard.tsx:1197 🎬 [DEBUG] Current timestamp: 2025-09-21T07:25:05.995Z
+client-creation-wizard.tsx:1198 🎬 [DEBUG] companiesHouseOfficers length: 0
+client-creation-wizard.tsx:1199 🎬 [DEBUG] companiesHouseOfficers data: []
+client-creation-wizard.tsx:1200 🎬 [DEBUG] wizardData.step1: {clientType: 'company', companyNumber: '14753824'}
+client-creation-wizard.tsx:1201 🎬 [DEBUG] wizardData.step2: {selectedPeopleIds: Array(0)}
+client-creation-wizard.tsx:1202 🎬 [DEBUG] companiesHouseCompany: {accounts: {…}, can_file: true, company_name: 'GROWTH ACCOUNTANTS LIMITED', company_number: '14753824', company_status: 'active', …}
+client-creation-wizard.tsx:1203 🎬 [DEBUG] currentClientType: company
+client-creation-wizard.tsx:1204 🎬 [DEBUG] selectedPeopleCount: 0
+client-creation-wizard.tsx:1205 🎬 [DEBUG] debugData: null
+client-creation-wizard.tsx:1206 🎬 [DEBUG] ===== END STEP 2 RENDERING =====
