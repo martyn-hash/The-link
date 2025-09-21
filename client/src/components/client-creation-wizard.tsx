@@ -509,13 +509,19 @@ export function ClientCreationWizard({
   // Companies House officers lookup
   const lookupOfficersMutation = useMutation({
     mutationFn: async (companyNumber: string) => {
-      const response = await apiRequest("GET", `/api/companies-house/company/${companyNumber}/officers`);
-      return await response.json();
+      console.log('🔍 [DEBUG] Starting officers lookup for company:', companyNumber);
+      const response = await apiRequest("GET", `/api/companies-house/officers/${companyNumber}`);
+      const result = await response.json();
+      console.log('📡 [DEBUG] Raw API response for officers:', result);
+      return result;
     },
     onSuccess: (data: any) => {
+      console.log('✅ [DEBUG] Officers mutation onSuccess called with data:', data);
+      
       // Extract the officers data from the API response structure
       // Backend returns: { data: { transformedPeopleData: [{ person: {...}, clientPeopleData: {...} }] } }
       const rawOfficersData = data.data?.transformedPeopleData || data.transformedPeopleData || [];
+      console.log('📊 [DEBUG] Extracted rawOfficersData:', rawOfficersData);
       
       // Extract and merge person + clientPeopleData into flat structure for frontend
       const officersData = rawOfficersData.map((item: any) => {
@@ -539,13 +545,18 @@ export function ClientCreationWizard({
         };
       }).filter((officer: any) => officer.fullName && officer.fullName.trim() !== '');
       
+      console.log('👥 [DEBUG] Processed officers data:', officersData);
+      console.log('📈 [DEBUG] Setting companiesHouseOfficers state with', officersData.length, 'officers');
+      
       setCompaniesHouseOfficers(officersData);
+      
       toast({
         title: "Officers loaded",
         description: `Found ${officersData.length} officer(s) for this company`,
       });
     },
     onError: (error: Error) => {
+      console.error('❌ [DEBUG] Officers mutation onError called:', error.message);
       setCompaniesHouseOfficers([]);
       toast({
         title: "Officers lookup failed",
@@ -643,9 +654,13 @@ export function ClientCreationWizard({
           if (!companiesHouseCompany || companiesHouseCompany.company_number !== step1Data.companyNumber) {
             setIsLoadingCompanyData(true);
             try {
+              console.log('🚀 [DEBUG] Starting company and officers lookup for:', step1Data.companyNumber);
+              
               // Execute the mutations - onSuccess callbacks will handle state updates and toasts
               await lookupCompanyMutation.mutateAsync(step1Data.companyNumber);
               await lookupOfficersMutation.mutateAsync(step1Data.companyNumber);
+              console.log('✅ [DEBUG] Both lookups completed successfully');
+              
             } catch (error) {
               // Block advancement if lookup fails
               toast({
@@ -1098,6 +1113,11 @@ export function ClientCreationWizard({
               {currentStep === 2 && (
                 <Form {...step2Form}>
                   <div className="space-y-6" data-testid="step-2-content">
+                  {/* DEBUG: Log state when Step 2 renders */}
+                  {(() => {
+                    console.log('🎬 [DEBUG] Step 2 rendering. Officers count:', companiesHouseOfficers.length);
+                    return null;
+                  })()}
                   <div className="flex items-center gap-2">
                     <Users className="w-5 h-5" />
                     <h3 className="text-lg font-semibold">
