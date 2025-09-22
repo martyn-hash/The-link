@@ -2821,6 +2821,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientServiceData = validationResult.data;
       console.log("Validated data:", clientServiceData);
       
+      // Convert ISO string dates to Date objects for database insertion
+      const dataForStorage = {
+        ...clientServiceData,
+        nextStartDate: clientServiceData.nextStartDate ? new Date(clientServiceData.nextStartDate) : null,
+        nextDueDate: clientServiceData.nextDueDate ? new Date(clientServiceData.nextDueDate) : null,
+      };
+      console.log("Data prepared for storage:", dataForStorage);
+      
       // Check if client-service mapping already exists
       const mappingExists = await storage.checkClientServiceMappingExists(
         clientServiceData.clientId, 
@@ -2834,7 +2842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const clientService = await storage.createClientService(clientServiceData);
+      const clientService = await storage.createClientService(dataForStorage);
       res.status(201).json(clientService);
     } catch (error) {
       console.error("Error creating client service:", error instanceof Error ? error.message : error);
