@@ -341,7 +341,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client management routes
   app.get("/api/clients", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const clients = await storage.getAllClients();
+      const search = req.query.search as string | undefined;
+      const clients = await storage.getAllClients(search);
       res.json(clients);
     } catch (error) {
       console.error("Error fetching clients:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);

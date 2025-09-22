@@ -80,7 +80,7 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -105,7 +105,7 @@ export interface IStorage {
   createClient(client: InsertClient): Promise<Client>;
   getClientById(id: string): Promise<Client | undefined>;
   getClientByName(name: string): Promise<Client | undefined>;
-  getAllClients(): Promise<Client[]>;
+  getAllClients(search?: string): Promise<Client[]>;
   updateClient(id: string, client: Partial<InsertClient>): Promise<Client>;
   deleteClient(id: string): Promise<void>;
   
@@ -778,8 +778,22 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
-  async getAllClients(): Promise<Client[]> {
-    return await db.select().from(clients);
+  async getAllClients(search?: string): Promise<Client[]> {
+    if (!search) {
+      return await db.select().from(clients);
+    }
+    
+    // Server-side search filtering by name or email
+    const searchTerm = `%${search}%`;
+    return await db
+      .select()
+      .from(clients)
+      .where(
+        or(
+          ilike(clients.name, searchTerm),
+          ilike(clients.email, searchTerm)
+        )
+      );
   }
 
   async updateClient(id: string, clientData: Partial<InsertClient>): Promise<Client> {

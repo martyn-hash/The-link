@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
-import { Search, Building2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Building2, Users, Plus } from "lucide-react";
 import { type Client } from "@shared/schema";
+import { CompaniesHouseClientModal } from "@/components/companies-house-client-modal";
 
 interface ClientSearchProps {
   // For local search on clients page
@@ -26,9 +28,11 @@ export default function ClientSearch({
   const [localValue, setLocalValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
   const [, setLocation] = useLocation();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const searchValue = isGlobal ? localValue : (value || "");
 
@@ -44,6 +48,7 @@ export default function ClientSearch({
   }, [searchValue, isGlobal]);
 
   // Fetch clients for autocomplete (only when global and has search term)
+  // Server-side filtering is now handled by the API endpoint
   const { data: clients, isLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients", { search: debouncedSearch }],
     enabled: isGlobal && debouncedSearch.length >= 2,
@@ -51,11 +56,8 @@ export default function ClientSearch({
     staleTime: 30000, // Cache for 30 seconds
   });
 
-  // Filter clients based on search term
-  const filteredClients = clients?.filter(client =>
-    client.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-    (client.email && client.email.toLowerCase().includes(debouncedSearch.toLowerCase()))
-  ).slice(0, 5) || []; // Limit to 5 results
+  // Server returns filtered results, limit to 5 for display
+  const filteredClients = clients?.slice(0, 5) || [];
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -110,6 +112,16 @@ export default function ClientSearch({
     }
   };
 
+  const handleAddClient = () => {
+    setShowClientModal(true);
+  };
+
+  const handleClientCreated = () => {
+    // Invalidate clients cache to refresh search results
+    queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+    setShowClientModal(false);
+  };
+
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -121,9 +133,21 @@ export default function ClientSearch({
         onChange={handleChange}
         onKeyPress={handleKeyPress}
         onFocus={handleFocus}
-        className="pl-10"
+        className="pl-10 pr-12"
         data-testid={isGlobal ? "input-global-search-clients" : "input-search-clients"}
       />
+      
+      {/* Add Client Button - only show for global search */}
+      {isGlobal && (
+        <Button
+          onClick={handleAddClient}
+          size="sm"
+          className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700"
+          data-testid="button-add-client"
+        >
+          <Plus className="w-4 h-4 text-white" />
+        </Button>
+      )}
 
       {/* Autocomplete Dropdown - only show for global search */}
       {isGlobal && showDropdown && debouncedSearch.length >= 2 && (
@@ -185,6 +209,16 @@ export default function ClientSearch({
             </div>
           )}
         </div>
+      )}
+
+      {/* Companies House Client Modal for Creation */}
+      {isGlobal && (
+        <CompaniesHouseClientModal
+          open={showClientModal}
+          onOpenChange={setShowClientModal}
+          client={null}
+          onSuccess={handleClientCreated}
+        />
       )}
     </div>
   );
