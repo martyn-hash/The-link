@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
-import { type Service, type WorkRole, type UDFDefinition, insertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
+import { type Service, type WorkRole, type UDFDefinition, baseInsertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +61,7 @@ import { Switch } from "@/components/ui/switch";
 import { nanoid } from "nanoid";
 
 // Form schemas
-const createServiceFormSchema = insertServiceSchema.extend({
+const createServiceFormSchema = baseInsertServiceSchema.extend({
   roleIds: z.array(z.string()).default([]),
 });
 

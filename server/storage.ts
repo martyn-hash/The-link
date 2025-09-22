@@ -21,6 +21,7 @@ import {
   serviceRoles,
   clientServices,
   clientServiceRoleAssignments,
+  chChangeRequests,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -68,6 +69,9 @@ import {
   type InsertClientService,
   type ClientServiceRoleAssignment,
   type InsertClientServiceRoleAssignment,
+  type ChChangeRequest,
+  type InsertChChangeRequest,
+  type UpdateChChangeRequest,
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
@@ -312,6 +316,21 @@ export interface IStorage {
   
   // Service Owner Resolution
   resolveServiceOwner(clientId: string, projectTypeId: string): Promise<User | undefined>;
+
+  // Companies House Change Requests CRUD
+  getAllChChangeRequests(): Promise<(ChChangeRequest & { client: Client; approvedByUser?: User })[]>;
+  getChChangeRequestById(id: string): Promise<(ChChangeRequest & { client: Client; approvedByUser?: User }) | undefined>;
+  getChChangeRequestsByClientId(clientId: string): Promise<ChChangeRequest[]>;
+  getPendingChChangeRequests(): Promise<(ChChangeRequest & { client: Client })[]>;
+  createChChangeRequest(request: InsertChChangeRequest): Promise<ChChangeRequest>;
+  updateChChangeRequest(id: string, request: Partial<UpdateChChangeRequest>): Promise<ChChangeRequest>;
+  approveChChangeRequest(id: string, approvedBy: string, notes?: string): Promise<ChChangeRequest>;
+  rejectChChangeRequest(id: string, approvedBy: string, notes?: string): Promise<ChChangeRequest>;
+  deleteChChangeRequest(id: string): Promise<void>;
+  
+  // Companies House Data Synchronization
+  detectChDataChanges(clientId: string, newChData: any): Promise<ChChangeRequest[]>;
+  applyChChangeRequests(requestIds: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3905,6 +3924,174 @@ export class DatabaseStorage implements IStorage {
       invalidRoles: invalidRoleNames,
       allowedRoles: allowedRoleNames,
     };
+  }
+
+  // Companies House Change Requests CRUD implementations
+  async getAllChChangeRequests(): Promise<(ChChangeRequest & { client: Client; approvedByUser?: User })[]> {
+    const results = await db
+      .select({
+        id: chChangeRequests.id,
+        clientId: chChangeRequests.clientId,
+        changeType: chChangeRequests.changeType,
+        fieldName: chChangeRequests.fieldName,
+        oldValue: chChangeRequests.oldValue,
+        newValue: chChangeRequests.newValue,
+        status: chChangeRequests.status,
+        detectedAt: chChangeRequests.detectedAt,
+        approvedAt: chChangeRequests.approvedAt,
+        approvedBy: chChangeRequests.approvedBy,
+        notes: chChangeRequests.notes,
+        createdAt: chChangeRequests.createdAt,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          createdAt: clients.createdAt,
+          companyNumber: clients.companyNumber,
+        },
+        approvedByUser: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        }
+      })
+      .from(chChangeRequests)
+      .innerJoin(clients, eq(chChangeRequests.clientId, clients.id))
+      .leftJoin(users, eq(chChangeRequests.approvedBy, users.id))
+      .orderBy(desc(chChangeRequests.detectedAt));
+
+    return results.map((result) => ({
+      id: result.id,
+      clientId: result.clientId,
+      changeType: result.changeType,
+      fieldName: result.fieldName,
+      oldValue: result.oldValue,
+      newValue: result.newValue,
+      status: result.status,
+      detectedAt: result.detectedAt,
+      approvedAt: result.approvedAt,
+      approvedBy: result.approvedBy,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      client: result.client as Client,
+      approvedByUser: result.approvedByUser && result.approvedByUser.id ? result.approvedByUser as User : undefined,
+    }));
+  }
+
+  async getPendingChChangeRequests(): Promise<(ChChangeRequest & { client: Client })[]> {
+    const results = await db
+      .select({
+        id: chChangeRequests.id,
+        clientId: chChangeRequests.clientId,
+        changeType: chChangeRequests.changeType,
+        fieldName: chChangeRequests.fieldName,
+        oldValue: chChangeRequests.oldValue,
+        newValue: chChangeRequests.newValue,
+        status: chChangeRequests.status,
+        detectedAt: chChangeRequests.detectedAt,
+        approvedAt: chChangeRequests.approvedAt,
+        approvedBy: chChangeRequests.approvedBy,
+        notes: chChangeRequests.notes,
+        createdAt: chChangeRequests.createdAt,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          createdAt: clients.createdAt,
+          companyNumber: clients.companyNumber,
+        },
+      })
+      .from(chChangeRequests)
+      .innerJoin(clients, eq(chChangeRequests.clientId, clients.id))
+      .where(eq(chChangeRequests.status, "pending"))
+      .orderBy(desc(chChangeRequests.detectedAt));
+
+    return results.map((result) => ({
+      id: result.id,
+      clientId: result.clientId,
+      changeType: result.changeType,
+      fieldName: result.fieldName,
+      oldValue: result.oldValue,
+      newValue: result.newValue,
+      status: result.status,
+      detectedAt: result.detectedAt,
+      approvedAt: result.approvedAt,
+      approvedBy: result.approvedBy,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      client: result.client as Client,
+    }));
+  }
+
+  async createChChangeRequest(request: InsertChChangeRequest): Promise<ChChangeRequest> {
+    const [changeRequest] = await db
+      .insert(chChangeRequests)
+      .values(request)
+      .returning();
+    
+    return changeRequest;
+  }
+
+  async approveChChangeRequest(id: string, approvedBy: string, notes?: string): Promise<ChChangeRequest> {
+    const [changeRequest] = await db
+      .update(chChangeRequests)
+      .set({
+        status: "approved",
+        approvedBy,
+        approvedAt: sql`now()`,
+        notes,
+      })
+      .where(eq(chChangeRequests.id, id))
+      .returning();
+    
+    return changeRequest;
+  }
+
+  async rejectChChangeRequest(id: string, approvedBy: string, notes?: string): Promise<ChChangeRequest> {
+    const [changeRequest] = await db
+      .update(chChangeRequests)
+      .set({
+        status: "rejected",
+        approvedBy,
+        approvedAt: sql`now()`,
+        notes,
+      })
+      .where(eq(chChangeRequests.id, id))
+      .returning();
+    
+    return changeRequest;
+  }
+
+  // Placeholder implementations for remaining methods
+  async getChChangeRequestById(id: string): Promise<(ChChangeRequest & { client: Client; approvedByUser?: User }) | undefined> {
+    // TODO: Implement
+    throw new Error("Method not implemented.");
+  }
+
+  async getChChangeRequestsByClientId(clientId: string): Promise<ChChangeRequest[]> {
+    // TODO: Implement
+    throw new Error("Method not implemented.");
+  }
+
+  async updateChChangeRequest(id: string, request: Partial<UpdateChChangeRequest>): Promise<ChChangeRequest> {
+    // TODO: Implement
+    throw new Error("Method not implemented.");
+  }
+
+  async deleteChChangeRequest(id: string): Promise<void> {
+    // TODO: Implement
+    throw new Error("Method not implemented.");
+  }
+
+  async detectChDataChanges(clientId: string, newChData: any): Promise<ChChangeRequest[]> {
+    // TODO: Implement
+    throw new Error("Method not implemented.");
+  }
+
+  async applyChChangeRequests(requestIds: string[]): Promise<void> {
+    // TODO: Implement
+    throw new Error("Method not implemented.");
   }
 }
 

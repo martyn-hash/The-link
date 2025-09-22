@@ -916,8 +916,8 @@ export const udfDefinitionSchema = z.object({
   placeholder: z.string().optional(),
 });
 
-// Services schema
-export const insertServiceSchema = createInsertSchema(services).omit({
+// Services schema - base schema
+export const baseInsertServiceSchema = createInsertSchema(services).omit({
   id: true,
   createdAt: true,
 }).extend({
@@ -925,7 +925,10 @@ export const insertServiceSchema = createInsertSchema(services).omit({
   isCompaniesHouseConnected: z.boolean().optional().default(false),
   chStartDateField: z.string().optional(),
   chDueDateField: z.string().optional(),
-}).refine((data) => {
+});
+
+// Services schema with validation
+export const insertServiceSchema = baseInsertServiceSchema.refine((data) => {
   // If CH connected, both field mappings are required
   if (data.isCompaniesHouseConnected) {
     return data.chStartDateField && data.chDueDateField;
@@ -935,7 +938,16 @@ export const insertServiceSchema = createInsertSchema(services).omit({
   message: "Companies House connected services must specify both start and due date field mappings",
 });
 
-export const updateServiceSchema = insertServiceSchema.partial();
+// Update schema with conditional CH validation
+export const updateServiceSchema = baseInsertServiceSchema.partial().refine((data) => {
+  // If CH connected is being set to true, both field mappings are required
+  if (data.isCompaniesHouseConnected === true) {
+    return data.chStartDateField && data.chDueDateField;
+  }
+  return true;
+}, {
+  message: "Companies House connected services must specify both start and due date field mappings",
+});
 
 // CH change requests schema
 export const insertChChangeRequestSchema = createInsertSchema(chChangeRequests).omit({
