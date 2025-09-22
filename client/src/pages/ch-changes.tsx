@@ -92,7 +92,9 @@ export default function ChChanges() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Change request approved successfully" });
+      // Invalidate both change requests and clients queries to ensure UI refresh
       queryClient.invalidateQueries({ queryKey: ["/api/ch-change-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       setShowApproveDialog(false);
       setActionNotes("");
       setSelectedRequest(null);
@@ -113,7 +115,9 @@ export default function ChChanges() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Change request rejected successfully" });
+      // Invalidate both change requests and clients queries to ensure UI refresh  
       queryClient.invalidateQueries({ queryKey: ["/api/ch-change-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       setShowRejectDialog(false);
       setActionNotes("");
       setSelectedRequest(null);

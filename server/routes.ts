@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
 import { companiesHouseService } from "./companies-house-service";
+import { runChSync } from "./ch-sync-service";
 import { z } from "zod";
 import {
   insertUserSchema,
@@ -3561,6 +3562,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error rejecting CH change request:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to reject CH change request" });
+    }
+  });
+
+  // POST /api/ch-sync - Trigger manual Companies House data synchronization (admin only)
+  app.post("/api/ch-sync", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Manual CH sync triggered by admin: ${req.user?.email}`);
+      
+      const result = await runChSync();
+      
+      res.json({
+        message: "Companies House synchronization completed",
+        processedClients: result.processedClients,
+        createdRequests: result.createdRequests,
+        errors: result.errors,
+      });
+    } catch (error) {
+      console.error("Error running CH sync:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to run Companies House synchronization",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 

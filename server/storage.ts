@@ -4065,8 +4065,24 @@ export class DatabaseStorage implements IStorage {
 
   // Placeholder implementations for remaining methods
   async getChChangeRequestById(id: string): Promise<(ChChangeRequest & { client: Client; approvedByUser?: User }) | undefined> {
-    // TODO: Implement
-    throw new Error("Method not implemented.");
+    const result = await db
+      .select()
+      .from(chChangeRequests)
+      .leftJoin(clients, eq(chChangeRequests.clientId, clients.id))
+      .leftJoin(users, eq(chChangeRequests.approvedBy, users.id))
+      .where(eq(chChangeRequests.id, id))
+      .limit(1);
+
+    if (result.length === 0) {
+      return undefined;
+    }
+
+    const row = result[0];
+    return {
+      ...row.ch_change_requests,
+      client: row.clients!,
+      approvedByUser: row.users || undefined,
+    };
   }
 
   async getChChangeRequestsByClientId(clientId: string): Promise<ChChangeRequest[]> {

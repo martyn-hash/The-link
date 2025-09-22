@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cron from "node-cron";
+import { runChSync } from "./ch-sync-service";
 
 const app = express();
 app.use(express.json());
@@ -67,5 +69,24 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    // Setup nightly Companies House data synchronization
+    // Runs every day at 2:00 AM server time
+    cron.schedule('0 2 * * *', async () => {
+      try {
+        log('[CH Sync] Starting scheduled nightly sync...');
+        const result = await runChSync();
+        log(`[CH Sync] Nightly sync completed: ${result.processedClients} clients, ${result.createdRequests} requests, ${result.errors.length} errors`);
+        if (result.errors.length > 0) {
+          console.error('[CH Sync] Nightly sync errors:', result.errors);
+        }
+      } catch (error) {
+        console.error('[CH Sync] Fatal error in nightly sync:', error);
+      }
+    }, {
+      timezone: "UTC"
+    });
+    
+    log('[CH Sync] Nightly scheduler initialized (runs daily at 2:00 AM UTC)');
   });
 })();
