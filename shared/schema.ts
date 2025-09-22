@@ -47,6 +47,30 @@ export const projectStatusEnum = pgEnum("project_status", [
 //   "clarifications_needed"
 // ]);
 
+// Nationality enum with comprehensive country list
+export const nationalityEnum = pgEnum("nationality", [
+  "afghan", "albanian", "algerian", "american", "andorran", "angolan", "antiguans", "argentinean", "armenian", "australian",
+  "austrian", "azerbaijani", "bahamian", "bahraini", "bangladeshi", "barbadian", "barbudans", "batswana", "belarusian", "belgian",
+  "belizean", "beninese", "bhutanese", "bolivian", "bosnian", "brazilian", "british", "bruneian", "bulgarian", "burkinabe",
+  "burmese", "burundian", "cambodian", "cameroonian", "canadian", "cape_verdean", "central_african", "chadian", "chilean", "chinese",
+  "colombian", "comoran", "congolese", "costa_rican", "croatian", "cuban", "cypriot", "czech", "danish", "djibouti",
+  "dominican", "dutch", "east_timorese", "ecuadorean", "egyptian", "emirian", "equatorial_guinean", "eritrean", "estonian", "ethiopian",
+  "fijian", "filipino", "finnish", "french", "gabonese", "gambian", "georgian", "german", "ghanaian", "greek",
+  "grenadian", "guatemalan", "guinea_bissauan", "guinean", "guyanese", "haitian", "herzegovinian", "honduran", "hungarian", "icelander",
+  "indian", "indonesian", "iranian", "iraqi", "irish", "israeli", "italian", "ivorian", "jamaican", "japanese",
+  "jordanian", "kazakhstani", "kenyan", "kittian_and_nevisian", "kuwaiti", "kyrgyz", "laotian", "latvian", "lebanese", "liberian",
+  "libyan", "liechtensteiner", "lithuanian", "luxembourger", "macedonian", "malagasy", "malawian", "malaysian", "maldivan", "malian",
+  "maltese", "marshallese", "mauritanian", "mauritian", "mexican", "micronesian", "moldovan", "monacan", "mongolian", "moroccan",
+  "mosotho", "motswana", "mozambican", "namibian", "nauruan", "nepalese", "new_zealander", "ni_vanuatu", "nicaraguan", "nigerien",
+  "north_korean", "northern_irish", "norwegian", "omani", "pakistani", "palauan", "panamanian", "papua_new_guinean", "paraguayan", "peruvian",
+  "polish", "portuguese", "qatari", "romanian", "russian", "rwandan", "saint_lucian", "salvadoran", "samoan", "san_marinese",
+  "sao_tomean", "saudi", "scottish", "senegalese", "serbian", "seychellois", "sierra_leonean", "singaporean", "slovakian", "slovenian",
+  "solomon_islander", "somali", "south_african", "south_korean", "spanish", "sri_lankan", "sudanese", "surinamer", "swazi", "swedish",
+  "swiss", "syrian", "taiwanese", "tajik", "tanzanian", "thai", "togolese", "tongan", "trinidadian_or_tobagonian", "tunisian",
+  "turkish", "tuvaluan", "ugandan", "ukrainian", "uruguayan", "uzbekistani", "venezuelan", "vietnamese", "welsh", "yemenite",
+  "zambian", "zimbabwean"
+]);
+
 // Custom field type enum
 export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text", "multi_select"]);
 
@@ -143,7 +167,7 @@ export const people = pgTable("people", {
   firstName: text("first_name"), // Existing field
   lastName: text("last_name"), // Existing field
   dateOfBirth: text("date_of_birth"), // Existing field - uses date type, not separate month/year
-  nationality: text("nationality"), // Existing field
+  nationality: nationalityEnum("nationality"), // Updated to use enum
   countryOfResidence: text("country_of_residence"), // Existing field
   occupation: text("occupation"), // Existing field
   // Address fields (existing in database with different naming)
@@ -157,6 +181,12 @@ export const people = pgTable("people", {
   email: text("email"), // Existing field
   telephone: text("telephone"), // Existing field
   notes: text("notes"), // Existing field
+  // New fields for enhanced person data
+  isMainContact: boolean("is_main_contact").default(false),
+  niNumber: text("ni_number"), // National Insurance Number
+  personalUtrNumber: text("personal_utr_number"), // Personal UTR Number
+  photoIdVerified: boolean("photo_id_verified").default(false),
+  addressVerified: boolean("address_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(), // Existing field
 });
 
@@ -661,9 +691,39 @@ export const insertClientSchema = createInsertSchema(clients).omit({
   createdAt: true,
 });
 
+// Zod validation schemas for NI and UTR numbers
+const niNumberRegex = /^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$/;
+const personalUtrRegex = /^[0-9]{10}$/;
+
 export const insertPersonSchema = createInsertSchema(people).omit({
   id: true,
   createdAt: true,
+}).extend({
+  // Add validation for new fields
+  niNumber: z.string().regex(niNumberRegex, "Invalid National Insurance number format").optional().or(z.literal("")),
+  personalUtrNumber: z.string().regex(personalUtrRegex, "Personal UTR must be 10 digits").optional().or(z.literal("")),
+  nationality: z.enum([
+    "afghan", "albanian", "algerian", "american", "andorran", "angolan", "antiguans", "argentinean", "armenian", "australian",
+    "austrian", "azerbaijani", "bahamian", "bahraini", "bangladeshi", "barbadian", "barbudans", "batswana", "belarusian", "belgian",
+    "belizean", "beninese", "bhutanese", "bolivian", "bosnian", "brazilian", "british", "bruneian", "bulgarian", "burkinabe",
+    "burmese", "burundian", "cambodian", "cameroonian", "canadian", "cape_verdean", "central_african", "chadian", "chilean", "chinese",
+    "colombian", "comoran", "congolese", "costa_rican", "croatian", "cuban", "cypriot", "czech", "danish", "djibouti",
+    "dominican", "dutch", "east_timorese", "ecuadorean", "egyptian", "emirian", "equatorial_guinean", "eritrean", "estonian", "ethiopian",
+    "fijian", "filipino", "finnish", "french", "gabonese", "gambian", "georgian", "german", "ghanaian", "greek",
+    "grenadian", "guatemalan", "guinea_bissauan", "guinean", "guyanese", "haitian", "herzegovinian", "honduran", "hungarian", "icelander",
+    "indian", "indonesian", "iranian", "iraqi", "irish", "israeli", "italian", "ivorian", "jamaican", "japanese",
+    "jordanian", "kazakhstani", "kenyan", "kittian_and_nevisian", "kuwaiti", "kyrgyz", "laotian", "latvian", "lebanese", "liberian",
+    "libyan", "liechtensteiner", "lithuanian", "luxembourger", "macedonian", "malagasy", "malawian", "malaysian", "maldivan", "malian",
+    "maltese", "marshallese", "mauritanian", "mauritian", "mexican", "micronesian", "moldovan", "monacan", "mongolian", "moroccan",
+    "mosotho", "motswana", "mozambican", "namibian", "nauruan", "nepalese", "new_zealander", "ni_vanuatu", "nicaraguan", "nigerien",
+    "north_korean", "northern_irish", "norwegian", "omani", "pakistani", "palauan", "panamanian", "papua_new_guinean", "paraguayan", "peruvian",
+    "polish", "portuguese", "qatari", "romanian", "russian", "rwandan", "saint_lucian", "salvadoran", "samoan", "san_marinese",
+    "sao_tomean", "saudi", "scottish", "senegalese", "serbian", "seychellois", "sierra_leonean", "singaporean", "slovakian", "slovenian",
+    "solomon_islander", "somali", "south_african", "south_korean", "spanish", "sri_lankan", "sudanese", "surinamer", "swazi", "swedish",
+    "swiss", "syrian", "taiwanese", "tajik", "tanzanian", "thai", "togolese", "tongan", "trinidadian_or_tobagonian", "tunisian",
+    "turkish", "tuvaluan", "ugandan", "ukrainian", "uruguayan", "uzbekistani", "venezuelan", "vietnamese", "welsh", "yemenite",
+    "zambian", "zimbabwean"
+  ]).optional(),
 });
 
 export const insertClientPersonSchema = createInsertSchema(clientPeople).omit({
