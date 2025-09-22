@@ -2408,6 +2408,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/services/active - Get active services (public endpoint for authenticated users)
+  app.get("/api/services/active", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const services = await storage.getActiveServices();
+      res.json(services);
+    } catch (error) {
+      console.error("Error fetching active services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch active services" });
+    }
+  });
+
   // GET /api/services/:id - Get service by ID
   app.get("/api/services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
