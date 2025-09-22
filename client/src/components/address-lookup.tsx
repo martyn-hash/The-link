@@ -193,9 +193,9 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
                     <MapPin className="h-4 w-4 text-muted-foreground" />
                     <span>
                       {[
-                        address.line_1,
-                        address.line_2,
-                        address.locality || address.town_or_city,
+                        address.line1,
+                        address.line2,
+                        address.city,
                         address.county
                       ].filter(Boolean).join(", ")}
                     </span>

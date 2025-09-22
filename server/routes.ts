@@ -11,6 +11,7 @@ import { runChSync } from "./ch-sync-service";
 import { z } from "zod";
 import {
   insertUserSchema,
+  insertPersonSchema,
   insertKanbanStageSchema,
   updateKanbanStageSchema,
   insertChangeReasonSchema,

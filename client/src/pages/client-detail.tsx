@@ -24,6 +24,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment } from "@shared/schema";
+import { insertPersonSchema } from "@shared/schema";
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
 type ClientServiceWithService = ClientService & { 
@@ -68,26 +69,10 @@ const addServiceSchema = z.object({
 
 type AddServiceData = z.infer<typeof addServiceSchema>;
 
-// Validation schema for updating person data
-const updatePersonSchema = z.object({
+// Validation schema for updating person data - use shared schema for consistency
+const updatePersonSchema = insertPersonSchema.partial().extend({
   fullName: z.string().min(1, "Full name is required"),
-  title: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  nationality: z.string().optional(),
-  occupation: z.string().optional(),
-  telephone: z.string().optional(),
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
-  addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
-  locality: z.string().optional(),
-  region: z.string().optional(),
-  postalCode: z.string().optional(),
-  country: z.string().optional(),
-  isMainContact: z.boolean().optional(),
-  niNumber: z.string().regex(/^[A-Z]{2}[0-9]{6}[A-Z]$/, "Invalid NI Number format (e.g., AB123456C)").optional().or(z.literal("")),
-  personalUtrNumber: z.string().regex(/^[0-9]{10}$/, "UTR must be 10 digits").optional().or(z.literal("")),
-  photoIdVerified: z.boolean().optional(),
-  addressVerified: z.boolean().optional(),
 });
 
 type UpdatePersonData = z.infer<typeof updatePersonSchema>;
