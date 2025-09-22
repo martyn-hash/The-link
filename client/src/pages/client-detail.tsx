@@ -903,7 +903,7 @@ export default function ClientDetail() {
                           <Collapsible key={clientService.id} open={isExpanded} onOpenChange={() => 
                             setExpandedServiceId(isExpanded ? null : clientService.id)
                           }>
-                            <div className="rounded-lg border bg-card transition-colors">
+                            <div className="rounded-lg border bg-card transition-all duration-200 hover:shadow-md">
                               <CollapsibleTrigger asChild>
                                 <div 
                                   className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors cursor-pointer w-full"
@@ -914,11 +914,11 @@ export default function ClientDetail() {
                                 >
                                   <div className="flex items-center space-x-4">
                                     <div className="flex items-center space-x-2">
-                                      {isExpanded ? (
-                                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                      ) : (
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                      )}
+                                      <ChevronRight 
+                                        className={`h-4 w-4 text-muted-foreground transition-transform duration-200 motion-safe:transition-all ${
+                                          isExpanded ? 'rotate-90' : ''
+                                        }`}
+                                      />
                                       <div>
                                         <h4 className="font-medium" data-testid={`text-service-name-${clientService.service.id}`}>
                                           {clientService.service.name}
@@ -961,8 +961,8 @@ export default function ClientDetail() {
                                 </div>
                               </CollapsibleTrigger>
                               
-                              <CollapsibleContent>
-                                <div className="px-4 pb-4 border-t bg-muted/20" data-testid={`section-service-details-${clientService.id}`}>
+                              <CollapsibleContent className="overflow-hidden motion-safe:data-[state=open]:animate-in motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:fade-out-0 motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:slide-up-1 motion-safe:data-[state=open]:slide-down-1">
+                                <div className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-service-details-${clientService.id}`}>
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                                     {/* Service Owner Section */}
                                     <div className="space-y-3">
@@ -971,8 +971,8 @@ export default function ClientDetail() {
                                         <h5 className="font-medium text-sm">Service Owner</h5>
                                       </div>
                                       {clientService.serviceOwner ? (
-                                        <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border">
-                                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border shadow-sm hover:shadow-md transition-shadow duration-200">
+                                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
                                             <UserIcon className="h-4 w-4 text-primary" />
                                           </div>
                                           <div>
@@ -996,10 +996,15 @@ export default function ClientDetail() {
                                       {clientService.roleAssignments && clientService.roleAssignments.length > 0 ? (
                                         <div className="space-y-2">
                                           {clientService.roleAssignments.map((assignment) => (
-                                            <div key={assignment.id} className="flex items-center justify-between p-2 rounded bg-background border">
-                                              <div>
-                                                <p className="font-medium text-xs">{assignment.workRole.name}</p>
-                                                <p className="text-xs text-muted-foreground">{assignment.user.firstName} {assignment.user.lastName}</p>
+                                            <div key={assignment.id} className="flex items-center justify-between p-3 rounded-lg bg-background border shadow-sm hover:shadow-md transition-all duration-200 hover:border-primary/20">
+                                              <div className="flex items-center space-x-3">
+                                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-secondary/30 to-secondary/10 flex items-center justify-center">
+                                                  <UserIcon className="h-3 w-3 text-secondary-foreground" />
+                                                </div>
+                                                <div>
+                                                  <p className="font-medium text-sm">{assignment.workRole.name}</p>
+                                                  <p className="text-xs text-muted-foreground">{assignment.user.firstName} {assignment.user.lastName}</p>
+                                                </div>
                                               </div>
                                             </div>
                                           ))}
@@ -1016,14 +1021,23 @@ export default function ClientDetail() {
                                         <h5 className="font-medium text-sm">Projects</h5>
                                       </div>
                                       <div className="space-y-2">
-                                        <div className="p-3 rounded-lg bg-background border border-dashed">
-                                          <p className="text-sm text-muted-foreground text-center">
-                                            Project details will be available here soon
-                                          </p>
-                                          <div className="flex justify-center space-x-4 mt-2 text-xs text-muted-foreground">
-                                            <span>2 Open</span>
-                                            <span>•</span>
-                                            <span>5 Completed</span>
+                                        <div className="p-4 rounded-lg bg-gradient-to-br from-background to-muted/20 border border-dashed border-muted/50 hover:border-muted transition-colors duration-200">
+                                          <div className="flex items-center justify-center space-x-2 mb-2">
+                                            <Briefcase className="h-4 w-4 text-muted-foreground" />
+                                            <p className="text-sm text-muted-foreground text-center font-medium">
+                                              Project details coming soon
+                                            </p>
+                                          </div>
+                                          <div className="flex justify-center space-x-4 text-xs">
+                                            <div className="flex items-center space-x-1">
+                                              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                              <span className="text-blue-600 font-medium">2 Open</span>
+                                            </div>
+                                            <span className="text-muted-foreground">•</span>
+                                            <div className="flex items-center space-x-1">
+                                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                              <span className="text-green-600 font-medium">5 Completed</span>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
