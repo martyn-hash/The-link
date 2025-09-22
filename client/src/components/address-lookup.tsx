@@ -6,15 +6,20 @@ import { Search, MapPin, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
+interface GetAddressResponse {
+  latitude: number;
+  longitude: number;
+  addresses: string[];
+}
+
 interface AddressResult {
-  line_1: string;
-  line_2?: string;
-  line_3?: string;
-  line_4?: string;
-  locality: string;
-  town_or_city: string;
-  county: string;
-  district: string;
+  formatted: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  county?: string;
+  region?: string;
+  postcode: string;
   country: string;
 }
 
@@ -74,11 +79,27 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
         return;
       }
 
-      const data = await response.json();
-      setAddresses(data.addresses || []);
+      const data: GetAddressResponse = await response.json();
+      
+      // Transform getaddress.io response to our format
+      const transformedAddresses: AddressResult[] = (data.addresses || []).map((addressString, index) => {
+        const parts = addressString.split(', ');
+        return {
+          formatted: addressString,
+          line1: parts[0] || '',
+          line2: parts[1] || undefined,
+          city: parts[parts.length - 3] || '',
+          county: parts[parts.length - 2] || '',
+          region: parts[parts.length - 2] || '',
+          postcode: postcode.trim().toUpperCase(),
+          country: 'United Kingdom'
+        };
+      });
+      
+      setAddresses(transformedAddresses);
       setHasSearched(true);
 
-      if (!data.addresses || data.addresses.length === 0) {
+      if (!transformedAddresses || transformedAddresses.length === 0) {
         toast({
           title: "No addresses found",
           description: "No addresses were found for this postcode.",
@@ -100,16 +121,12 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
 
   const handleAddressSelect = (selectedAddress: AddressResult) => {
     const formattedAddress = {
-      addressLine1: selectedAddress.line_1,
-      addressLine2: selectedAddress.line_2 ? 
-        [selectedAddress.line_2, selectedAddress.line_3, selectedAddress.line_4]
-          .filter(Boolean)
-          .join(", ") 
-        : "",
-      locality: selectedAddress.locality || selectedAddress.town_or_city,
-      region: selectedAddress.county || selectedAddress.district,
-      postalCode: postcode.toUpperCase(),
-      country: selectedAddress.country || "England",
+      addressLine1: selectedAddress.line1,
+      addressLine2: selectedAddress.line2 || "",
+      locality: selectedAddress.city,
+      region: selectedAddress.county || selectedAddress.region || "",
+      postalCode: selectedAddress.postcode,
+      country: selectedAddress.country,
     };
 
     onAddressSelect(formattedAddress);
