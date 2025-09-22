@@ -1762,9 +1762,55 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProjectType(id: string): Promise<void> {
+    // Check if the project type exists
+    const projectType = await this.getProjectTypeById(id);
+    if (!projectType) {
+      throw new Error("Project type not found");
+    }
+
+    // Check for active projects using this project type
+    const activeProjectCount = await this.countActiveProjectsUsingProjectType(id);
+    if (activeProjectCount > 0) {
+      throw new Error(`Cannot delete project type '${projectType.name}' because ${activeProjectCount} active project${activeProjectCount > 1 ? 's are' : ' is'} currently using this project type. Please archive or reassign these projects first.`);
+    }
+
+    // Check for archived/inactive projects using this project type
+    const allProjectCount = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(projects)
+      .where(eq(projects.projectTypeId, id));
+    const totalProjects = allProjectCount[0]?.count || 0;
+    
+    if (totalProjects > 0) {
+      throw new Error(`Cannot delete project type '${projectType.name}' because ${totalProjects} project${totalProjects > 1 ? 's are' : ' is'} still linked to this project type (including archived/inactive projects). Please reassign or delete these projects first.`);
+    }
+
+    // Check for kanban stages using this project type
+    const stagesCount = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(kanbanStages)
+      .where(eq(kanbanStages.projectTypeId, id));
+    const totalStages = stagesCount[0]?.count || 0;
+    
+    if (totalStages > 0) {
+      throw new Error(`Cannot delete project type '${projectType.name}' because ${totalStages} kanban stage${totalStages > 1 ? 's are' : ' is'} linked to this project type. Please delete or reassign these stages first.`);
+    }
+
+    // Check for change reasons using this project type
+    const reasonsCount = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(changeReasons)
+      .where(eq(changeReasons.projectTypeId, id));
+    const totalReasons = reasonsCount[0]?.count || 0;
+    
+    if (totalReasons > 0) {
+      throw new Error(`Cannot delete project type '${projectType.name}' because ${totalReasons} change reason${totalReasons > 1 ? 's are' : ' is'} linked to this project type. Please delete or reassign these change reasons first.`);
+    }
+
+    // All checks passed, safe to delete
     const result = await db.delete(projectTypes).where(eq(projectTypes.id, id));
     if (result.rowCount === 0) {
-      throw new Error("Project description not found");
+      throw new Error("Project type not found");
     }
   }
 

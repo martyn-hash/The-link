@@ -2046,11 +2046,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project description:", error);
       
-      if (error instanceof Error && error instanceof Error && error.message && error.message.includes("Project description not found")) {
-        return res.status(404).json({ message: "Project description not found" });
+      if (error instanceof Error && error.message && error.message.includes("Project type not found")) {
+        return res.status(404).json({ message: "Project type not found" });
+      } else if (error instanceof Error && error.message && error.message.includes("Cannot delete project type")) {
+        // Return the specific error message from storage layer which explains exactly what's preventing deletion
+        return res.status(409).json({ message: error.message });
       }
       
-      res.status(400).json({ message: "Failed to delete project description" });
+      res.status(400).json({ message: "Failed to delete project type" });
     }
   });
 
@@ -2148,8 +2151,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (error instanceof Error && error.message && error.message.includes("Project type not found")) {
         res.status(404).json({ message: "Project type not found" });
-      } else if (error instanceof Error && error.message && error.message.includes("cannot delete")) {
-        res.status(409).json({ message: "Cannot delete project type: it is being used by existing projects" });
+      } else if (error instanceof Error && error.message && error.message.includes("Cannot delete project type")) {
+        // Return the specific error message from storage layer which explains exactly what's preventing deletion
+        res.status(409).json({ message: error.message });
       } else {
         res.status(400).json({ message: "Failed to delete project type" });
       }
