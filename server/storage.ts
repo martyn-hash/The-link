@@ -307,7 +307,11 @@ export interface IStorage {
   // Client Services CRUD
   getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } })[]>;
   getClientServiceById(id: string): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } }) | undefined>;
-  getClientServicesByClientId(clientId: string): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]>;
+  getClientServicesByClientId(clientId: string): Promise<(ClientService & { 
+    service: Service & { projectType: ProjectType }; 
+    serviceOwner?: User; 
+    roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
+  })[]>;
   getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]>;
   createClientService(clientService: InsertClientService): Promise<ClientService>;
   updateClientService(id: string, clientService: Partial<InsertClientService>): Promise<ClientService>;
@@ -3655,7 +3659,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getClientServicesByClientId(clientId: string): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]> {
+  async getClientServicesByClientId(clientId: string): Promise<(ClientService & { 
+    service: Service & { projectType: ProjectType }; 
+    serviceOwner?: User; 
+    roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
+  })[]> {
+    // First, get the basic client services with service owner details
     const results = await db
       .select({
         id: clientServices.id,
@@ -3669,8 +3678,6 @@ export class DatabaseStorage implements IStorage {
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
-
-
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
         projectTypeId: projectTypes.id,
@@ -3679,39 +3686,64 @@ export class DatabaseStorage implements IStorage {
         projectTypeActive: projectTypes.active,
         projectTypeOrder: projectTypes.order,
         projectTypeCreatedAt: projectTypes.createdAt,
+        // Service owner details
+        serviceOwnerId_data: users.id,
+        serviceOwnerFirstName: users.firstName,
+        serviceOwnerLastName: users.lastName,
+        serviceOwnerEmail: users.email,
+        serviceOwnerRole: users.role,
+        serviceOwnerCreatedAt: users.createdAt,
       })
       .from(clientServices)
       .innerJoin(services, eq(clientServices.serviceId, services.id))
       .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
+      .leftJoin(users, eq(clientServices.serviceOwnerId, users.id))
       .where(eq(clientServices.clientId, clientId));
     
-    return results.map(result => ({
-      id: result.id,
-      clientId: result.clientId,
-      serviceId: result.serviceId,
-      serviceOwnerId: result.serviceOwnerId,
-      frequency: result.frequency,
-      nextStartDate: result.nextStartDate,
-      nextDueDate: result.nextDueDate,
-      createdAt: result.createdAt,
-      service: {
-        id: result.serviceId_data,
-        name: result.serviceName,
-        description: result.serviceDescription,
-        projectTypeId: result.projectTypeId,
-
-        udfDefinitions: result.serviceUdfDefinitions,
-        createdAt: result.serviceCreatedAt,
-        projectType: {
-          id: result.projectTypeId,
-          name: result.projectTypeName,
-          description: result.projectTypeDescription,
-          active: result.projectTypeActive,
-          order: result.projectTypeOrder,
-          createdAt: result.projectTypeCreatedAt,
-        },
-      },
-    }));
+    // For each client service, get its role assignments
+    const clientServicesWithRoles = await Promise.all(
+      results.map(async (result) => {
+        const roleAssignments = await this.getActiveClientServiceRoleAssignments(result.id);
+        
+        return {
+          id: result.id,
+          clientId: result.clientId,
+          serviceId: result.serviceId,
+          serviceOwnerId: result.serviceOwnerId,
+          frequency: result.frequency,
+          nextStartDate: result.nextStartDate,
+          nextDueDate: result.nextDueDate,
+          createdAt: result.createdAt,
+          service: {
+            id: result.serviceId_data,
+            name: result.serviceName,
+            description: result.serviceDescription,
+            projectTypeId: result.projectTypeId,
+            udfDefinitions: result.serviceUdfDefinitions,
+            createdAt: result.serviceCreatedAt,
+            projectType: result.projectTypeId ? {
+              id: result.projectTypeId,
+              name: result.projectTypeName!,
+              description: result.projectTypeDescription!,
+              active: result.projectTypeActive!,
+              order: result.projectTypeOrder!,
+              createdAt: result.projectTypeCreatedAt!,
+            } : undefined,
+          },
+          serviceOwner: result.serviceOwnerId_data ? {
+            id: result.serviceOwnerId_data,
+            firstName: result.serviceOwnerFirstName!,
+            lastName: result.serviceOwnerLastName!,
+            email: result.serviceOwnerEmail!,
+            role: result.serviceOwnerRole!,
+            createdAt: result.serviceOwnerCreatedAt!,
+          } : undefined,
+          roleAssignments,
+        };
+      })
+    );
+    
+    return clientServicesWithRoles;
   }
 
   async getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]> {
