@@ -1,23 +1,236 @@
 import { useParams } from "wouter";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, User } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, User, Clock, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getQueryFn } from "@/lib/queryClient";
+import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
-import type { Client, Person, ClientPerson } from "@shared/schema";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useToast } from "@/hooks/use-toast";
+import type { Client, Person, ClientPerson, Service, ClientService } from "@shared/schema";
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
+type ClientServiceWithService = ClientService & { 
+  service: Service & { 
+    projectType: { id: string; name: string; description: string | null; serviceId: string | null; active: boolean | null; order: number; createdAt: Date | null } 
+  } 
+};
+
+// Form schema for adding services
+const addServiceSchema = z.object({
+  serviceId: z.string().min(1, "Service is required"),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]),
+  nextStartDate: z.string().optional(),
+  nextDueDate: z.string().optional(),
+  serviceOwnerId: z.string().optional(),
+});
+
+type AddServiceData = z.infer<typeof addServiceSchema>;
 
 interface PersonCardProps {
   clientPerson: ClientPersonWithPerson;
   expandedPersonId: string | null;
   onToggleExpand: () => void;
+}
+
+interface AddServiceModalProps {
+  clientId: string;
+  onSuccess: () => void;
+}
+
+function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { toast } = useToast();
+  
+  const form = useForm<AddServiceData>({
+    resolver: zodResolver(addServiceSchema),
+    defaultValues: {
+      frequency: "monthly",
+      nextStartDate: "",
+      nextDueDate: "",
+      serviceOwnerId: "",
+    },
+  });
+
+  // Fetch available services
+  const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
+    queryKey: ['/api/services/active'],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
+  // Create client service mutation
+  const createClientServiceMutation = useMutation({
+    mutationFn: (data: AddServiceData) => 
+      apiRequest("POST", "/api/client-services", {
+        clientId,
+        serviceId: data.serviceId,
+        frequency: data.frequency,
+        nextStartDate: data.nextStartDate || null,
+        nextDueDate: data.nextDueDate || null,
+        serviceOwnerId: data.serviceOwnerId || null,
+      }),
+    onSuccess: () => {
+      toast({
+        title: "Service Added",
+        description: "Service has been successfully added to the client.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/client-services/client', clientId] });
+      form.reset();
+      setIsOpen(false);
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to add service. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: AddServiceData) => {
+    createClientServiceMutation.mutate(data);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-add-service">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Service
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Service</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="serviceId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Service</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-service">
+                        <SelectValue placeholder="Select a service" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {servicesLoading ? (
+                        <div className="p-2 text-center text-muted-foreground">Loading services...</div>
+                      ) : services && services.length > 0 ? (
+                        services.map((service) => (
+                          <SelectItem key={service.id} value={service.id}>
+                            {service.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="p-2 text-center text-muted-foreground">No services available</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="frequency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Frequency</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-frequency">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="annually">Annually</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="nextStartDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Next Start Date (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date" 
+                      {...field} 
+                      data-testid="input-next-start-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="nextDueDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Next Due Date (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date" 
+                      {...field} 
+                      data-testid="input-next-due-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end space-x-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsOpen(false)}
+                data-testid="button-cancel-add-service"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createClientServiceMutation.isPending}
+                data-testid="button-save-service"
+              >
+                {createClientServiceMutation.isPending ? "Adding..." : "Add Service"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function PersonCard({ clientPerson, expandedPersonId, onToggleExpand }: PersonCardProps) {
@@ -124,6 +337,13 @@ export default function ClientDetail() {
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
     retry: 1, // Retry once on failure
+  });
+
+  // Fetch client services
+  const { data: clientServices, isLoading: servicesLoading, error: servicesError, refetch: refetchServices } = useQuery<ClientServiceWithService[]>({
+    queryKey: [`/api/client-services/client/${id}`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!id && !!client,
   });
 
   if (isLoading) {
@@ -380,13 +600,88 @@ export default function ClientDetail() {
           <TabsContent value="services" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Services</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Services</CardTitle>
+                  <AddServiceModal clientId={client.id} onSuccess={refetchServices} />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Services management will be implemented here.
-                  </p>
+                <div data-testid="section-client-services">
+                  {servicesLoading ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : servicesError ? (
+                    <div className="text-center py-8">
+                      <p className="text-destructive mb-2">
+                        Failed to load services
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        Please try refreshing the page or contact support if the issue persists.
+                      </p>
+                    </div>
+                  ) : clientServices && clientServices.length > 0 ? (
+                    <div className="space-y-3">
+                      {clientServices.map((clientService) => (
+                        <div 
+                          key={clientService.id} 
+                          className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                          data-testid={`service-row-${clientService.service.id}`}
+                        >
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2">
+                              <Settings className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <h4 className="font-medium" data-testid={`text-service-name-${clientService.service.id}`}>
+                                  {clientService.service.name}
+                                </h4>
+                                {clientService.service.description && (
+                                  <p className="text-sm text-muted-foreground">
+                                    {clientService.service.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center space-x-6 text-sm">
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <Badge variant="secondary" data-testid={`badge-frequency-${clientService.service.id}`}>
+                                {clientService.frequency.charAt(0).toUpperCase() + clientService.frequency.slice(1)}
+                              </Badge>
+                            </div>
+                            
+                            {clientService.nextStartDate && (
+                              <div className="text-muted-foreground">
+                                <span className="text-xs block">Next Start:</span>
+                                <span data-testid={`text-next-start-${clientService.service.id}`}>
+                                  {new Date(clientService.nextStartDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {clientService.nextDueDate && (
+                              <div className="text-muted-foreground">
+                                <span className="text-xs block">Next Due:</span>
+                                <span data-testid={`text-next-due-${clientService.service.id}`}>
+                                  {new Date(clientService.nextDueDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">
+                        No services have been added to this client yet.
+                      </p>
+                      <AddServiceModal clientId={client.id} onSuccess={refetchServices} />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
