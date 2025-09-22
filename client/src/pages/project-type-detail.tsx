@@ -1310,7 +1310,9 @@ export default function ProjectTypeDetail() {
                               setEditingStage({
                                 id: stage.id,
                                 name: stage.name,
-                                assignedRole: stage.assignedRole || "client_manager",
+                                assignedRole: stage.assignedRole || undefined,
+                                assignedWorkRoleId: (stage as any).assignedWorkRoleId || undefined,
+                                assignedUserId: (stage as any).assignedUserId || undefined,
                                 order: stage.order,
                                 color: stage.color || "#6b7280",
                                 maxInstanceTime: stage.maxInstanceTime || undefined,
