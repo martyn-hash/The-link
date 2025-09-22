@@ -228,6 +228,88 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     },
   });
 
+  // Force delete mutations
+  const [forceDeleteDialog, setForceDeleteDialog] = useState<{ 
+    open: boolean; 
+    projectType: any | null; 
+    dependencies: any | null;
+    confirmName: string;
+  }>({
+    open: false,
+    projectType: null,
+    dependencies: null,
+    confirmName: '',
+  });
+
+  const getDependencySummaryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("GET", `/api/config/project-types/${id}/dependency-summary`);
+    },
+    onSuccess: (data) => {
+      setForceDeleteDialog(prev => ({
+        ...prev,
+        dependencies: data,
+      }));
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to get dependency summary",
+        variant: "destructive",
+      });
+      setForceDeleteDialog(prev => ({ ...prev, open: false }));
+    },
+  });
+
+  const forceDeleteProjectTypeMutation = useMutation({
+    mutationFn: async ({ id, confirmName }: { id: string; confirmName: string }) => {
+      return await apiRequest("POST", `/api/config/project-types/${id}/force-delete`, { confirmName });
+    },
+    onSuccess: (data, { id: deletedId }) => {
+      toast({ 
+        title: "Success", 
+        description: data.message || "Project type and all dependencies deleted successfully",
+        duration: 5000,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/kanban-stages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/change-reasons"] });
+      // Reset selected project type if it was deleted
+      if (selectedProjectTypeId === deletedId) {
+        setSelectedProjectTypeId(null);
+      }
+      // Close the dialog
+      setForceDeleteDialog({ open: false, projectType: null, dependencies: null, confirmName: '' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to force delete project type",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleForceDelete = (projectType: any) => {
+    setForceDeleteDialog({
+      open: true,
+      projectType,
+      dependencies: null,
+      confirmName: '',
+    });
+    getDependencySummaryMutation.mutate(projectType.id);
+  };
+
+  const handleConfirmForceDelete = () => {
+    if (forceDeleteDialog.projectType && forceDeleteDialog.confirmName === forceDeleteDialog.projectType.name) {
+      forceDeleteProjectTypeMutation.mutate({
+        id: forceDeleteDialog.projectType.id,
+        confirmName: forceDeleteDialog.confirmName,
+      });
+    }
+  };
+
   // Stage mutations
   const createStageMutation = useMutation({
     mutationFn: async (stage: Omit<EditingStage, 'id'>) => {
@@ -686,6 +768,17 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 data-testid={`button-delete-project-type-${projectType.id}`}
                               >
                                 <Trash2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleForceDelete(projectType)}
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                data-testid={`button-force-delete-project-type-${projectType.id}`}
+                                title="Force delete with all dependencies"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span className="ml-1 text-xs">⚠️</span>
                               </Button>
                             </div>
                           </div>
