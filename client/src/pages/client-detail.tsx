@@ -844,17 +844,215 @@ export default function ClientDetail() {
                       </p>
                     </div>
                   ) : relatedPeople && relatedPeople.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {relatedPeople.map((clientPerson) => (
-                        <PersonCard 
-                          key={clientPerson.id}
-                          clientPerson={clientPerson}
-                          expandedPersonId={expandedPersonId}
-                          onToggleExpand={() => setExpandedPersonId(
-                            expandedPersonId === clientPerson.person.id ? null : clientPerson.person.id
-                          )}
-                        />
-                      ))}
+                    <div className="space-y-3">
+                      {relatedPeople.map((clientPerson) => {
+                        const isExpanded = expandedPersonId === clientPerson.person.id;
+                        return (
+                          <Collapsible key={clientPerson.id} open={isExpanded} onOpenChange={() => 
+                            setExpandedPersonId(isExpanded ? null : clientPerson.person.id)
+                          }>
+                            <div className="rounded-lg border bg-card transition-all duration-200 hover:shadow-md">
+                              <CollapsibleTrigger asChild>
+                                <div 
+                                  className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors cursor-pointer w-full"
+                                  data-testid={`person-row-${clientPerson.person.id}`}
+                                  role="button"
+                                  aria-expanded={isExpanded}
+                                  data-accordion-trigger={`button-toggle-person-${clientPerson.id}`}
+                                >
+                                  <div className="flex items-center space-x-4">
+                                    <div className="flex items-center space-x-2">
+                                      <ChevronRight 
+                                        className={`h-4 w-4 text-muted-foreground transition-transform duration-200 motion-safe:transition-all ${
+                                          isExpanded ? 'rotate-90' : ''
+                                        }`}
+                                      />
+                                      <div>
+                                        <h4 className="font-medium" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                                          {clientPerson.person.fullName}
+                                        </h4>
+                                        {clientPerson.officerRole && (
+                                          <p className="text-sm text-muted-foreground">
+                                            {clientPerson.officerRole}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-6 text-sm">
+                                    {clientPerson.isPrimaryContact && (
+                                      <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
+                                        Primary Contact
+                                      </Badge>
+                                    )}
+                                    
+                                    {clientPerson.person.nationality && (
+                                      <div className="text-muted-foreground">
+                                        <span className="text-xs block">Nationality:</span>
+                                        <span data-testid={`text-nationality-${clientPerson.person.id}`}>
+                                          {clientPerson.person.nationality.charAt(0).toUpperCase() + clientPerson.person.nationality.slice(1).replace('_', ' ')}
+                                        </span>
+                                      </div>
+                                    )}
+                                    
+                                    {clientPerson.person.dateOfBirth && (
+                                      <div className="text-muted-foreground">
+                                        <span className="text-xs block">Date of Birth:</span>
+                                        <span data-testid={`text-dob-${clientPerson.person.id}`}>
+                                          {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+                              
+                              <CollapsibleContent className="overflow-hidden motion-safe:data-[state=open]:animate-in motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:fade-out-0 motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:slide-up-1 motion-safe:data-[state=open]:slide-down-1">
+                                <div className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-person-details-${clientPerson.id}`}>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                                    {/* Contact Information Section */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center space-x-2">
+                                        <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                        <h5 className="font-medium text-sm">Contact Information</h5>
+                                      </div>
+                                      <div className="space-y-2">
+                                        {clientPerson.person.email && (
+                                          <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border shadow-sm">
+                                            <Mail className="h-4 w-4 text-muted-foreground" />
+                                            <div>
+                                              <p className="text-xs text-muted-foreground">Email</p>
+                                              <p className="font-medium text-sm" data-testid={`text-person-email-${clientPerson.id}`}>
+                                                {clientPerson.person.email}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {clientPerson.person.telephone && (
+                                          <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border shadow-sm">
+                                            <Phone className="h-4 w-4 text-muted-foreground" />
+                                            <div>
+                                              <p className="text-xs text-muted-foreground">Phone</p>
+                                              <p className="font-medium text-sm" data-testid={`text-person-phone-${clientPerson.id}`}>
+                                                {clientPerson.person.telephone}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {!clientPerson.person.email && !clientPerson.person.telephone && (
+                                          <p className="text-sm text-muted-foreground italic">No contact information available</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Address Section */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center space-x-2">
+                                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                                        <h5 className="font-medium text-sm">Address</h5>
+                                      </div>
+                                      {clientPerson.person.addressLine1 ? (
+                                        <div className="p-3 rounded-lg bg-background border shadow-sm">
+                                          <div className="space-y-1 text-sm">
+                                            <div>{clientPerson.person.addressLine1}</div>
+                                            {clientPerson.person.addressLine2 && <div>{clientPerson.person.addressLine2}</div>}
+                                            <div>
+                                              {[clientPerson.person.locality, clientPerson.person.region, clientPerson.person.postalCode]
+                                                .filter(Boolean)
+                                                .join(", ")}
+                                            </div>
+                                            {clientPerson.person.country && <div>{clientPerson.person.country}</div>}
+                                          </div>
+                                          {clientPerson.person.addressVerified && (
+                                            <div className="flex items-center space-x-1 mt-2">
+                                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                              <span className="text-xs text-green-600 font-medium">Address Verified</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground italic">No address information available</p>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Verification & Details Section */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center space-x-2">
+                                        <Settings className="h-4 w-4 text-muted-foreground" />
+                                        <h5 className="font-medium text-sm">Verification & Details</h5>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div className="flex items-center space-x-1">
+                                            <div className={`w-2 h-2 rounded-full ${
+                                              clientPerson.person.photoIdVerified ? 'bg-green-500' : 'bg-gray-300'
+                                            }`}></div>
+                                            <span className={clientPerson.person.photoIdVerified ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                                              Photo ID
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center space-x-1">
+                                            <div className={`w-2 h-2 rounded-full ${
+                                              clientPerson.person.addressVerified ? 'bg-green-500' : 'bg-gray-300'
+                                            }`}></div>
+                                            <span className={clientPerson.person.addressVerified ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                                              Address
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center space-x-1">
+                                            <div className={`w-2 h-2 rounded-full ${
+                                              clientPerson.person.isMainContact ? 'bg-blue-500' : 'bg-gray-300'
+                                            }`}></div>
+                                            <span className={clientPerson.person.isMainContact ? 'text-blue-600 font-medium' : 'text-muted-foreground'}>
+                                              Main Contact
+                                            </span>
+                                          </div>
+                                        </div>
+                                        
+                                        {(clientPerson.person.niNumber || clientPerson.person.personalUtrNumber) && (
+                                          <div className="mt-3 p-3 rounded-lg bg-background border border-dashed">
+                                            <div className="space-y-1 text-xs">
+                                              {clientPerson.person.niNumber && (
+                                                <div>
+                                                  <span className="text-muted-foreground">NI Number: </span>
+                                                  <span className="font-mono">{clientPerson.person.niNumber}</span>
+                                                </div>
+                                              )}
+                                              {clientPerson.person.personalUtrNumber && (
+                                                <div>
+                                                  <span className="text-muted-foreground">UTR: </span>
+                                                  <span className="font-mono">{clientPerson.person.personalUtrNumber}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        <div className="mt-3">
+                                          <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="w-full"
+                                            data-testid={`button-edit-person-${clientPerson.id}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              // TODO: Implement edit mode
+                                              alert('Edit person functionality coming soon!');
+                                            }}
+                                          >
+                                            Edit Details
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </div>
+                          </Collapsible>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8">
