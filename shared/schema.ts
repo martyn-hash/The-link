@@ -394,11 +394,15 @@ export const clientServices = pgTable("client_services", {
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
   serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Service owner assigned for this client-service mapping
+  frequency: varchar("frequency").notNull().default("monthly"), // monthly, quarterly, annually, etc.
+  nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
+  nextDueDate: timestamp("next_due_date"), // Next due date for the service
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_client_services_client_id").on(table.clientId),
   index("idx_client_services_service_id").on(table.serviceId),
   index("idx_client_services_service_owner_id").on(table.serviceOwnerId),
+  index("idx_client_services_next_due_date").on(table.nextDueDate), // Index for scheduling queries
   unique("unique_client_service").on(table.clientId, table.serviceId),
 ]);
 
@@ -914,7 +918,13 @@ export const insertServiceRoleSchema = createInsertSchema(serviceRoles).omit({
 export const insertClientServiceSchema = createInsertSchema(clientServices).omit({
   id: true,
   createdAt: true,
+}).extend({
+  frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).default("monthly"),
+  nextStartDate: z.string().datetime().optional().or(z.null()),
+  nextDueDate: z.string().datetime().optional().or(z.null()),
 });
+
+export const updateClientServiceSchema = insertClientServiceSchema.partial();
 
 // Client service role assignments schema
 export const insertClientServiceRoleAssignmentSchema = createInsertSchema(clientServiceRoleAssignments).omit({
