@@ -959,11 +959,11 @@ function PersonEditForm({
             <div className="space-y-3">
               <AddressLookup
                 onAddressSelect={(address) => {
-                  form.setValue("addressLine1", address.line1);
-                  form.setValue("addressLine2", address.line2 || "");
-                  form.setValue("locality", address.city);
-                  form.setValue("region", address.county || address.region || "");
-                  form.setValue("postalCode", address.postcode);
+                  form.setValue("addressLine1", address.addressLine1);
+                  form.setValue("addressLine2", address.addressLine2 || "");
+                  form.setValue("locality", address.locality);
+                  form.setValue("region", address.region);
+                  form.setValue("postalCode", address.postalCode);
                   form.setValue("country", address.country);
                 }}
                 value={

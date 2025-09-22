@@ -6,10 +6,12 @@ import { Search, MapPin, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-interface GetAddressResponse {
-  latitude: number;
-  longitude: number;
-  addresses: string[];
+interface GetAddressAutocompleteResponse {
+  suggestions: {
+    address: string;
+    url: string;
+    id: string;
+  }[];
 }
 
 interface AddressResult {
@@ -43,17 +45,17 @@ interface AddressLookupProps {
 }
 
 export default function AddressLookup({ onAddressSelect, value }: AddressLookupProps) {
-  const [postcode, setPostcode] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const { toast } = useToast();
 
   const searchAddresses = async () => {
-    if (!postcode.trim()) {
+    if (!searchTerm.trim()) {
       toast({
-        title: "Postcode required",
-        description: "Please enter a postcode to search for addresses",
+        title: "Search term required",
+        description: "Please enter an address or postcode to search",
         variant: "destructive",
       });
       return;
@@ -63,13 +65,13 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
     setHasSearched(false);
 
     try {
-      const response = await fetch(`/api/address-lookup/${encodeURIComponent(postcode.trim())}`);
+      const response = await fetch(`/api/address-lookup/${encodeURIComponent(searchTerm.trim())}`);
       
       if (!response.ok) {
         if (response.status === 404) {
           toast({
             title: "No addresses found",
-            description: "No addresses were found for this postcode. Please check the postcode and try again.",
+            description: "No addresses were found for this search. Please try a different term.",
             variant: "destructive",
           });
           setAddresses([]);
@@ -79,19 +81,19 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
         return;
       }
 
-      const data: GetAddressResponse = await response.json();
+      const data: GetAddressAutocompleteResponse = await response.json();
       
-      // Transform getaddress.io response to our format
-      const transformedAddresses: AddressResult[] = (data.addresses || []).map((addressString, index) => {
-        const parts = addressString.split(', ');
+      // Transform getaddress.io autocomplete response to our format
+      const transformedAddresses: AddressResult[] = (data.suggestions || []).map((suggestion) => {
+        const parts = suggestion.address.split(', ');
         return {
-          formatted: addressString,
+          formatted: suggestion.address,
           line1: parts[0] || '',
           line2: parts[1] || undefined,
           city: parts[parts.length - 3] || '',
           county: parts[parts.length - 2] || '',
           region: parts[parts.length - 2] || '',
-          postcode: postcode.trim().toUpperCase(),
+          postcode: parts[parts.length - 1] || '',
           country: 'United Kingdom'
         };
       });
@@ -102,7 +104,7 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
       if (!transformedAddresses || transformedAddresses.length === 0) {
         toast({
           title: "No addresses found",
-          description: "No addresses were found for this postcode.",
+          description: "No addresses were found for this search term.",
           variant: "destructive",
         });
       }
@@ -148,20 +150,19 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
     <div className="space-y-4">
       <div className="flex items-center space-x-2">
         <div className="flex-1">
-          <Label htmlFor="postcode">Postcode</Label>
+          <Label htmlFor="searchTerm">Address or Postcode</Label>
           <div className="flex space-x-2 mt-1">
             <Input
-              id="postcode"
-              placeholder="Enter UK postcode (e.g., SW1A 1AA)"
-              value={postcode}
-              onChange={(e) => setPostcode(e.target.value)}
+              id="searchTerm"
+              placeholder="Enter address or postcode (e.g., 10 Downing Street, SW1A 1AA)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               onKeyPress={handleKeyPress}
-              className="uppercase"
-              data-testid="input-postcode"
+              data-testid="input-address-search"
             />
             <Button 
               onClick={searchAddresses}
-              disabled={isLoading || !postcode.trim()}
+              disabled={isLoading || !searchTerm.trim()}
               data-testid="button-search-address"
             >
               {isLoading ? (

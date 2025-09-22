@@ -723,7 +723,7 @@ export const insertPersonSchema = createInsertSchema(people).omit({
     "swiss", "syrian", "taiwanese", "tajik", "tanzanian", "thai", "togolese", "tongan", "trinidadian_or_tobagonian", "tunisian",
     "turkish", "tuvaluan", "ugandan", "ukrainian", "uruguayan", "uzbekistani", "venezuelan", "vietnamese", "welsh", "yemenite",
     "zambian", "zimbabwean"
-  ]).optional(),
+  ]).optional().or(z.literal("")),
 });
 
 export const insertClientPersonSchema = createInsertSchema(clientPeople).omit({

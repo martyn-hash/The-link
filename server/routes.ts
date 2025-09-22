@@ -3673,13 +3673,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Address lookup endpoint using getaddress.io
-  app.get('/api/address-lookup/:postcode', isAuthenticated, async (req: any, res) => {
+  // Address lookup endpoint using getaddress.io autocomplete API
+  app.get('/api/address-lookup/:term', isAuthenticated, async (req: any, res) => {
     try {
-      const { postcode } = req.params;
+      const { term } = req.params;
       
-      if (!postcode || postcode.trim().length === 0) {
-        return res.status(400).json({ error: 'Postcode is required' });
+      if (!term || term.trim().length === 0) {
+        return res.status(400).json({ error: 'Search term is required' });
       }
 
       const apiKey = process.env.GETADDRESS_API_KEY;
@@ -3688,13 +3688,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Address lookup service not configured' });
       }
 
-      const cleanPostcode = postcode.trim().replace(/\s+/g, '').toUpperCase();
-      const url = `https://api.getaddress.io/find/${encodeURIComponent(cleanPostcode)}?api-key=${apiKey}`;
+      const cleanTerm = term.trim();
+      const url = `https://api.getaddress.io/autocomplete/${encodeURIComponent(cleanTerm)}?api-key=${apiKey}`;
       
       const response = await fetch(url);
       
       if (response.status === 404) {
-        return res.status(404).json({ error: 'No addresses found for this postcode' });
+        return res.status(404).json({ error: 'No addresses found for this search term' });
       }
       
       if (!response.ok) {
