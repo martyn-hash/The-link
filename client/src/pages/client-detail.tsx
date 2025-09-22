@@ -539,7 +539,7 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
 
 // PersonCard component removed - using Accordion pattern
 
-// Component for viewing person details (read-only mode)
+// Component for viewing person details (read-only mode) - shows all fields like edit form
 function PersonViewMode({ 
   clientPerson, 
   revealedIdentifiers, 
@@ -552,194 +552,247 @@ function PersonViewMode({
   onEdit: () => void;
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-      {/* Contact Information Section */}
-      <div className="space-y-3">
-        <div className="flex items-center space-x-2">
-          <UserIcon className="h-4 w-4 text-muted-foreground" />
-          <h5 className="font-medium text-sm">Contact Information</h5>
-        </div>
-        <div className="space-y-2">
-          {clientPerson.person.email && (
-            <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border shadow-sm">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p className="font-medium text-sm" data-testid={`text-person-email-${clientPerson.id}`}>
-                  {clientPerson.person.email}
-                </p>
-              </div>
-            </div>
-          )}
-          {clientPerson.person.telephone && (
-            <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border shadow-sm">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Phone</p>
-                <p className="font-medium text-sm" data-testid={`text-person-phone-${clientPerson.id}`}>
-                  {clientPerson.person.telephone}
-                </p>
-              </div>
-            </div>
-          )}
-          {!clientPerson.person.email && !clientPerson.person.telephone && (
-            <p className="text-sm text-muted-foreground italic">No contact information available</p>
-          )}
-        </div>
-      </div>
-      
-      {/* Address Section */}
-      <div className="space-y-3">
-        <div className="flex items-center space-x-2">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <h5 className="font-medium text-sm">Address</h5>
-        </div>
-        {clientPerson.person.addressLine1 ? (
-          <div className="p-3 rounded-lg bg-background border shadow-sm">
-            <div className="space-y-1 text-sm">
-              <div>{clientPerson.person.addressLine1}</div>
-              {clientPerson.person.addressLine2 && <div>{clientPerson.person.addressLine2}</div>}
-              <div>
-                {[clientPerson.person.locality, clientPerson.person.region, clientPerson.person.postalCode]
-                  .filter(Boolean)
-                  .join(", ")}
-              </div>
-              {clientPerson.person.country && <div>{clientPerson.person.country}</div>}
-            </div>
-            {clientPerson.person.addressVerified && (
-              <div className="flex items-center space-x-1 mt-2">
-                <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                <span className="text-xs text-green-600 font-medium">Address Verified</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground italic">No address information available</p>
-        )}
-      </div>
-      
-      {/* Verification & Details Section */}
-      <div className="space-y-3">
-        <div className="flex items-center space-x-2">
-          <Settings className="h-4 w-4 text-muted-foreground" />
-          <h5 className="font-medium text-sm">Verification & Details</h5>
-        </div>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex items-center space-x-1">
-              <div className={`w-2 h-2 rounded-full ${
-                clientPerson.person.photoIdVerified ? 'bg-green-500' : 'bg-gray-300'
-              }`}></div>
-              <span className={clientPerson.person.photoIdVerified ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
-                Photo ID
-              </span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className={`w-2 h-2 rounded-full ${
-                clientPerson.person.addressVerified ? 'bg-green-500' : 'bg-gray-300'
-              }`}></div>
-              <span className={clientPerson.person.addressVerified ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
-                Address
-              </span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className={`w-2 h-2 rounded-full ${
-                clientPerson.person.isMainContact ? 'bg-blue-500' : 'bg-gray-300'
-              }`}></div>
-              <span className={clientPerson.person.isMainContact ? 'text-blue-600 font-medium' : 'text-muted-foreground'}>
-                Main Contact
-              </span>
-            </div>
-          </div>
+    <div className="space-y-6 pt-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Basic Information */}
+        <div className="space-y-4">
+          <h5 className="font-medium text-sm flex items-center">
+            <UserIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+            Basic Information
+          </h5>
           
-          {(clientPerson.person.niNumber || clientPerson.person.personalUtrNumber) && (
-            <div className="mt-3 p-3 rounded-lg bg-background border border-dashed">
-              <div className="space-y-2 text-xs">
-                {clientPerson.person.niNumber && (
-                  <div className="flex items-center justify-between">
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Full Name</label>
+              <p className="text-sm mt-1" data-testid={`view-fullName-${clientPerson.id}`}>
+                {clientPerson.person.fullName || 'Not provided'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Title</label>
+              <p className="text-sm mt-1" data-testid={`view-title-${clientPerson.id}`}>
+                {clientPerson.person.title || 'Not provided'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
+              <p className="text-sm mt-1" data-testid={`view-dateOfBirth-${clientPerson.id}`}>
+                {clientPerson.person.dateOfBirth ? new Date(clientPerson.person.dateOfBirth).toLocaleDateString() : 'Not provided'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Nationality</label>
+              <p className="text-sm mt-1" data-testid={`view-nationality-${clientPerson.id}`}>
+                {clientPerson.person.nationality ? clientPerson.person.nationality.charAt(0).toUpperCase() + clientPerson.person.nationality.slice(1) : 'Not provided'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Occupation</label>
+              <p className="text-sm mt-1" data-testid={`view-occupation-${clientPerson.id}`}>
+                {clientPerson.person.occupation || 'Not provided'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Phone</label>
+              <p className="text-sm mt-1" data-testid={`view-telephone-${clientPerson.id}`}>
+                {clientPerson.person.telephone || 'Not provided'}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Email</label>
+              <p className="text-sm mt-1" data-testid={`view-email-${clientPerson.id}`}>
+                {clientPerson.person.email || 'Not provided'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Address Information */}
+        <div className="space-y-4">
+          <h5 className="font-medium text-sm flex items-center">
+            <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+            Address Information
+          </h5>
+          
+          {clientPerson.person.addressLine1 ? (
+            <div className="p-4 rounded-lg bg-background border">
+              <div className="space-y-1 text-sm">
+                <div className="font-medium">{clientPerson.person.addressLine1}</div>
+                {clientPerson.person.addressLine2 && <div>{clientPerson.person.addressLine2}</div>}
+                <div>
+                  {[clientPerson.person.locality, clientPerson.person.region, clientPerson.person.postalCode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </div>
+                {clientPerson.person.country && <div>{clientPerson.person.country}</div>}
+              </div>
+              {clientPerson.person.addressVerified && (
+                <div className="flex items-center space-x-2 mt-3 pt-3 border-t">
+                  <Check className="w-4 h-4 text-green-600" />
+                  <span className="text-sm text-green-600 font-medium">Address Verified</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic p-4 border rounded-lg bg-muted/30">
+              No address information available
+            </p>
+          )}
+        </div>
+
+        {/* Verification & Sensitive Information */}
+        <div className="space-y-4">
+          <h5 className="font-medium text-sm flex items-center">
+            <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
+            Verification & Details
+          </h5>
+          
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium">Main Contact</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {clientPerson.person.isMainContact ? (
+                    <>
+                      <Check className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-600 font-medium">Yes</span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No</span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium">Photo ID Verified</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {clientPerson.person.photoIdVerified ? (
+                    <>
+                      <Check className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-600 font-medium">Verified</span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Not verified</span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium">Address Verified</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {clientPerson.person.addressVerified ? (
+                    <>
+                      <Check className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-600 font-medium">Verified</span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Not verified</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {(clientPerson.person.niNumber || clientPerson.person.personalUtrNumber) && (
+              <div className="p-4 rounded-lg border border-dashed bg-muted/30">
+                <h6 className="text-sm font-medium mb-3">Sensitive Information</h6>
+                <div className="space-y-3">
+                  {clientPerson.person.niNumber && (
                     <div>
-                      <span className="text-muted-foreground">NI Number: </span>
-                      <span className="font-mono" data-testid={`text-ni-number-${clientPerson.id}`}>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-muted-foreground">NI Number</label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs"
+                          data-testid={`button-reveal-ni-${clientPerson.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const key = `ni-${clientPerson.person.id}`;
+                            setRevealedIdentifiers(prev => {
+                              const next = new Set(prev);
+                              if (next.has(key)) {
+                                next.delete(key);
+                              } else {
+                                next.add(key);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          {revealedIdentifiers.has(`ni-${clientPerson.person.id}`) ? 'Hide' : 'Show'}
+                        </Button>
+                      </div>
+                      <p className="font-mono text-sm mt-1" data-testid={`text-ni-number-${clientPerson.id}`}>
                         {revealedIdentifiers.has(`ni-${clientPerson.person.id}`) 
                           ? clientPerson.person.niNumber 
                           : maskIdentifier(clientPerson.person.niNumber, 2)}
-                      </span>
+                      </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-xs"
-                      data-testid={`button-reveal-ni-${clientPerson.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const key = `ni-${clientPerson.person.id}`;
-                        setRevealedIdentifiers(prev => {
-                          const next = new Set(prev);
-                          if (next.has(key)) {
-                            next.delete(key);
-                          } else {
-                            next.add(key);
-                          }
-                          return next;
-                        });
-                      }}
-                    >
-                      {revealedIdentifiers.has(`ni-${clientPerson.person.id}`) ? 'Hide' : 'Show'}
-                    </Button>
-                  </div>
-                )}
-                {clientPerson.person.personalUtrNumber && (
-                  <div className="flex items-center justify-between">
+                  )}
+                  {clientPerson.person.personalUtrNumber && (
                     <div>
-                      <span className="text-muted-foreground">UTR: </span>
-                      <span className="font-mono" data-testid={`text-utr-number-${clientPerson.id}`}>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-muted-foreground">Personal UTR</label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs"
+                          data-testid={`button-reveal-utr-${clientPerson.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const key = `utr-${clientPerson.person.id}`;
+                            setRevealedIdentifiers(prev => {
+                              const next = new Set(prev);
+                              if (next.has(key)) {
+                                next.delete(key);
+                              } else {
+                                next.add(key);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          {revealedIdentifiers.has(`utr-${clientPerson.person.id}`) ? 'Hide' : 'Show'}
+                        </Button>
+                      </div>
+                      <p className="font-mono text-sm mt-1" data-testid={`text-utr-number-${clientPerson.id}`}>
                         {revealedIdentifiers.has(`utr-${clientPerson.person.id}`) 
                           ? clientPerson.person.personalUtrNumber 
                           : maskIdentifier(clientPerson.person.personalUtrNumber, 2)}
-                      </span>
+                      </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-xs"
-                      data-testid={`button-reveal-utr-${clientPerson.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const key = `utr-${clientPerson.person.id}`;
-                        setRevealedIdentifiers(prev => {
-                          const next = new Set(prev);
-                          if (next.has(key)) {
-                            next.delete(key);
-                          } else {
-                            next.add(key);
-                          }
-                          return next;
-                        });
-                      }}
-                    >
-                      {revealedIdentifiers.has(`utr-${clientPerson.person.id}`) ? 'Hide' : 'Show'}
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-          
-          <div className="mt-3">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full"
-              data-testid={`button-edit-person-${clientPerson.id}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-            >
-              Edit Details
-            </Button>
+            )}
           </div>
         </div>
+      </div>
+
+      <div className="flex justify-end pt-4 border-t">
+        <Button 
+          variant="outline" 
+          size="sm"
+          data-testid={`button-edit-person-${clientPerson.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+        >
+          Edit Details
+        </Button>
       </div>
     </div>
   );
