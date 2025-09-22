@@ -351,8 +351,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/clients/:id - Get single client by ID
   app.get("/api/clients/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const paramValidation = validateParams(paramUuidSchema, req.params);
+      // Validate path parameters - accept both UUID and string IDs for clients
+      const clientIdSchema = z.object({ 
+        id: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -406,8 +409,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PUT /api/clients/:id - Update client (admin only)
   app.put("/api/clients/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const paramValidation = validateParams(paramUuidSchema, req.params);
+      // Validate path parameters - accept both UUID and string IDs for clients
+      const clientIdSchema = z.object({ 
+        id: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -494,8 +500,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DELETE /api/clients/:id - Delete client (admin only)
   app.delete("/api/clients/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const paramValidation = validateParams(paramUuidSchema, req.params);
+      // Validate path parameters - accept both UUID and string IDs for clients
+      const clientIdSchema = z.object({ 
+        id: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
