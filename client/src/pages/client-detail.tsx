@@ -971,100 +971,52 @@ function PersonEditForm({
               Address Information
             </h5>
             
-            <AddressLookup
-              onAddressSelect={(address) => {
-                form.setValue("addressLine1", address.line1);
-                form.setValue("addressLine2", address.line2 || "");
-                form.setValue("locality", address.city);
-                form.setValue("region", address.county || address.region || "");
-                form.setValue("postalCode", address.postcode);
-                form.setValue("country", address.country);
-              }}
-            />
-            
-            <FormField
-              control={form.control}
-              name="addressLine1"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address Line 1</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-addressLine1-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <div className="space-y-3">
+              <AddressLookup
+                onAddressSelect={(address) => {
+                  form.setValue("addressLine1", address.line1);
+                  form.setValue("addressLine2", address.line2 || "");
+                  form.setValue("locality", address.city);
+                  form.setValue("region", address.county || address.region || "");
+                  form.setValue("postalCode", address.postcode);
+                  form.setValue("country", address.country);
+                }}
+                value={
+                  clientPerson.person.addressLine1 ? {
+                    addressLine1: clientPerson.person.addressLine1,
+                    addressLine2: clientPerson.person.addressLine2 || "",
+                    locality: clientPerson.person.locality || "",
+                    region: clientPerson.person.region || "",
+                    postalCode: clientPerson.person.postalCode || "",
+                    country: clientPerson.person.country || ""
+                  } : undefined
+                }
+                data-testid={`input-address-lookup-${clientPerson.id}`}
+              />
+              
+              {/* Current address display */}
+              {(form.watch("addressLine1") || clientPerson.person.addressLine1) && (
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <div className="text-sm text-muted-foreground mb-2">Current Address:</div>
+                  <div className="text-sm space-y-1">
+                    <div>{form.watch("addressLine1") || clientPerson.person.addressLine1}</div>
+                    {(form.watch("addressLine2") || clientPerson.person.addressLine2) && (
+                      <div>{form.watch("addressLine2") || clientPerson.person.addressLine2}</div>
+                    )}
+                    <div>
+                      {[
+                        form.watch("locality") || clientPerson.person.locality,
+                        form.watch("region") || clientPerson.person.region,
+                        form.watch("postalCode") || clientPerson.person.postalCode
+                      ].filter(Boolean).join(", ")}
+                    </div>
+                    {(form.watch("country") || clientPerson.person.country) && (
+                      <div>{form.watch("country") || clientPerson.person.country}</div>
+                    )}
+                  </div>
+                </div>
               )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="addressLine2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address Line 2</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-addressLine2-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="locality"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>City</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-locality-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="region"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Region</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-region-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="postalCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Postal Code</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-postalCode-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="country"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Country</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-country-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            </div>
           </div>
 
           {/* Verification & Sensitive Information */}
@@ -1514,6 +1466,9 @@ export default function ClientDetail() {
                                       <span data-testid={`text-person-phone-preview-${clientPerson.person.id}`}>
                                         {clientPerson.person.telephone}
                                       </span>
+                                    )}
+                                    {!clientPerson.person.email && !clientPerson.person.telephone && !clientPerson.officerRole && (
+                                      <span className="italic">No contact info</span>
                                     )}
                                   </div>
                                 </div>
