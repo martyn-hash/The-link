@@ -63,6 +63,24 @@ import { nanoid } from "nanoid";
 // Form schemas
 const createServiceFormSchema = baseInsertServiceSchema.extend({
   roleIds: z.array(z.string()).default([]),
+}).superRefine((data, ctx) => {
+  // Conditional validation: CH fields required when CH is enabled
+  if (data.isCompaniesHouseConnected) {
+    if (!data.chStartDateField) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Start date field is required when Companies House connection is enabled",
+        path: ["chStartDateField"],
+      });
+    }
+    if (!data.chDueDateField) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Due date field is required when Companies House connection is enabled",
+        path: ["chDueDateField"],
+      });
+    }
+  }
 });
 
 const createWorkRoleFormSchema = insertWorkRoleSchema;
@@ -301,6 +319,9 @@ export default function Services() {
       description: "",
       roleIds: [],
       udfDefinitions: [],
+      isCompaniesHouseConnected: false,
+      chStartDateField: "",
+      chDueDateField: "",
     },
   });
 
@@ -542,6 +563,9 @@ export default function Services() {
       description: service.description ?? "",
       roleIds: service.roles.map(role => role.id),
       udfDefinitions: Array.isArray(service.udfDefinitions) ? service.udfDefinitions : [],
+      isCompaniesHouseConnected: service.isCompaniesHouseConnected ?? false,
+      chStartDateField: service.chStartDateField ?? "",
+      chDueDateField: service.chDueDateField ?? "",
     });
     setViewMode('edit-service');
   };
@@ -727,13 +751,24 @@ export default function Services() {
                               <TableCell className="font-medium">{service.name}</TableCell>
                               <TableCell>{service.description || "—"}</TableCell>
                               <TableCell>
-                                <Badge 
-                                  variant="default" 
-                                  className="bg-green-500 text-white"
-                                  data-testid={`status-${service.id}`}
-                                >
-                                  Active
-                                </Badge>
+                                <div className="flex gap-1 flex-wrap">
+                                  <Badge 
+                                    variant="default" 
+                                    className="bg-green-500 text-white"
+                                    data-testid={`status-${service.id}`}
+                                  >
+                                    Active
+                                  </Badge>
+                                  {service.isCompaniesHouseConnected && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="bg-blue-500 text-white"
+                                      data-testid={`ch-status-${service.id}`}
+                                    >
+                                      CH
+                                    </Badge>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
@@ -842,6 +877,84 @@ export default function Services() {
                             )}
                           />
 
+                          {/* Companies House Connection Section */}
+                          <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-sm font-medium">Companies House Integration</h3>
+                            </div>
+                            
+                            <FormField
+                              control={serviceForm.control}
+                              name="isCompaniesHouseConnected"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                  <div className="space-y-0.5">
+                                    <FormLabel htmlFor="ch-connection-switch">Enable Companies House Connection</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      Auto-populate dates from client Companies House data (accounts and confirmation statement deadlines)
+                                    </div>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      id="ch-connection-switch"
+                                      checked={field.value || false}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="switch-ch-connection"
+                                      aria-describedby="ch-connection-description"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            {serviceForm.watch("isCompaniesHouseConnected") && (
+                              <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                  control={serviceForm.control}
+                                  name="chStartDateField"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Start Date Field</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field">
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select CH field" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          <SelectItem value="nextAccountsPeriodEnd">Next Accounts Period End</SelectItem>
+                                          <SelectItem value="confirmationStatementNextMadeUpTo">Confirmation Statement Next Made Up To</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                
+                                <FormField
+                                  control={serviceForm.control}
+                                  name="chDueDateField"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Due Date Field</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field">
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select CH field" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          <SelectItem value="nextAccountsDue">Next Accounts Due</SelectItem>
+                                          <SelectItem value="confirmationStatementNextDue">Confirmation Statement Next Due</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            )}
+                          </div>
 
                           <FormField
                             control={serviceForm.control}
@@ -966,6 +1079,84 @@ export default function Services() {
                             )}
                           />
 
+                          {/* Companies House Connection Section */}
+                          <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-sm font-medium">Companies House Integration</h3>
+                            </div>
+                            
+                            <FormField
+                              control={serviceForm.control}
+                              name="isCompaniesHouseConnected"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                  <div className="space-y-0.5">
+                                    <FormLabel htmlFor="ch-connection-switch">Enable Companies House Connection</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      Auto-populate dates from client Companies House data (accounts and confirmation statement deadlines)
+                                    </div>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      id="ch-connection-switch"
+                                      checked={field.value || false}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="switch-ch-connection"
+                                      aria-describedby="ch-connection-description"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            {serviceForm.watch("isCompaniesHouseConnected") && (
+                              <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                  control={serviceForm.control}
+                                  name="chStartDateField"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Start Date Field</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field">
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select CH field" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          <SelectItem value="nextAccountsPeriodEnd">Next Accounts Period End</SelectItem>
+                                          <SelectItem value="confirmationStatementNextMadeUpTo">Confirmation Statement Next Made Up To</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                
+                                <FormField
+                                  control={serviceForm.control}
+                                  name="chDueDateField"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Due Date Field</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field">
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select CH field" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          <SelectItem value="nextAccountsDue">Next Accounts Due</SelectItem>
+                                          <SelectItem value="confirmationStatementNextDue">Confirmation Statement Next Due</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            )}
+                          </div>
 
                           <FormField
                             control={serviceForm.control}
