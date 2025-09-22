@@ -1442,16 +1442,25 @@ export default function ClientDetail() {
                                   <h4 className="font-medium" data-testid={`text-person-name-${clientPerson.person.id}`}>
                                     {clientPerson.person.fullName}
                                   </h4>
-                                  <div className="flex items-center space-x-2 mt-1">
+                                  <div className="flex items-center space-x-2 mt-1 text-sm text-muted-foreground">
                                     {clientPerson.officerRole && (
-                                      <p className="text-sm text-muted-foreground">
-                                        {clientPerson.officerRole}
-                                      </p>
+                                      <span>{clientPerson.officerRole}</span>
                                     )}
-                                    {clientPerson.person.nationality && clientPerson.person.occupation && (
-                                      <p className="text-sm text-muted-foreground">
-                                        • {clientPerson.person.nationality.charAt(0).toUpperCase() + clientPerson.person.nationality.slice(1).replace('_', ' ')} • {clientPerson.person.occupation}
-                                      </p>
+                                    {clientPerson.officerRole && (clientPerson.person.email || clientPerson.person.telephone) && (
+                                      <span>•</span>
+                                    )}
+                                    {clientPerson.person.email && (
+                                      <span data-testid={`text-person-email-preview-${clientPerson.person.id}`}>
+                                        {clientPerson.person.email}
+                                      </span>
+                                    )}
+                                    {clientPerson.person.email && clientPerson.person.telephone && (
+                                      <span>•</span>
+                                    )}
+                                    {clientPerson.person.telephone && (
+                                      <span data-testid={`text-person-phone-preview-${clientPerson.person.id}`}>
+                                        {clientPerson.person.telephone}
+                                      </span>
                                     )}
                                   </div>
                                 </div>
