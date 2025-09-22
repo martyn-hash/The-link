@@ -3313,7 +3313,7 @@ export class DatabaseStorage implements IStorage {
 
   async createClientService(clientServiceData: InsertClientService): Promise<ClientService> {
     // Validate that client exists
-    const client = await this.getUser(clientServiceData.clientId);
+    const client = await this.getClientById(clientServiceData.clientId);
     if (!client) {
       throw new Error(`Client with ID '${clientServiceData.clientId}' not found`);
     }
@@ -3327,9 +3327,7 @@ export class DatabaseStorage implements IStorage {
     // Check if mapping already exists
     const mappingExists = await this.checkClientServiceMappingExists(clientServiceData.clientId, clientServiceData.serviceId);
     if (mappingExists) {
-      const clientName = client.firstName && client.lastName 
-        ? `${client.firstName} ${client.lastName}` 
-        : client.email || `ID: ${client.id}`;
+      const clientName = client.name || client.email || `ID: ${client.id}`;
       throw new Error(`Client-service mapping already exists between client '${clientName}' and service '${service.name}'. Each client can only be mapped to a service once.`);
     }
 

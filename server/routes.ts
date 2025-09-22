@@ -731,9 +731,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/clients/:id/services - Get all services for a client (alias for /api/client-services/client/:clientId)
   app.get("/api/clients/:id/services", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      // Validate UUID parameter
+      // Validate client ID parameter - accept both UUID and string IDs for clients
       const paramValidation = z.object({
-        id: z.string().uuid("Invalid client ID format")
+        id: z.string().min(1, "Client ID is required")
       }).safeParse(req.params);
       
       if (!paramValidation.success) {
@@ -756,9 +756,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/clients/:id/people - Get people related to a specific client
   app.get("/api/clients/:id/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      // Validate UUID parameter
+      // Validate client ID parameter - accept both UUID and string IDs for clients
       const paramValidation = z.object({
-        id: z.string().uuid("Invalid client ID format")
+        id: z.string().min(1, "Client ID is required")
       }).safeParse(req.params);
       
       if (!paramValidation.success) {
@@ -2760,8 +2760,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/client-services/client/:clientId - Get services for a specific client
   app.get("/api/client-services/client/:clientId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      // Validate path parameters - accept both UUID and string IDs for clients
+      const clientIdSchema = z.object({ 
+        clientId: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
