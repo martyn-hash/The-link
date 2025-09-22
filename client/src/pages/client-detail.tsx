@@ -5,12 +5,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, UserIcon, Clock, Settings } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment } from "@shared/schema";
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
 type ClientServiceWithService = ClientService & { 
@@ -30,6 +31,26 @@ type ClientServiceWithService = ClientService & {
 // Types for enhanced service data
 type ServiceWithDetails = Service & {
   roles: WorkRole[];
+};
+
+// Enhanced client service type that includes service owner and role assignments
+type EnhancedClientService = ClientService & {
+  service: Service & {
+    projectType?: {
+      id: string;
+      name: string;
+      description: string | null;
+      serviceId: string | null;
+      active: boolean | null;
+      order: number;
+      createdAt: Date | null;
+    };
+  };
+  serviceOwner?: User;
+  roleAssignments: (ClientServiceRoleAssignment & {
+    workRole: WorkRole;
+    user: User;
+  })[];
 };
 
 // Form schema for adding services
@@ -576,6 +597,7 @@ export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
 
   const { data: client, isLoading, error } = useQuery<Client>({
     queryKey: [`/api/clients/${id}`],
@@ -592,7 +614,7 @@ export default function ClientDetail() {
   });
 
   // Fetch client services
-  const { data: clientServices, isLoading: servicesLoading, error: servicesError, refetch: refetchServices } = useQuery<ClientServiceWithService[]>({
+  const { data: clientServices, isLoading: servicesLoading, error: servicesError, refetch: refetchServices } = useQuery<EnhancedClientService[]>({
     queryKey: [`/api/client-services/client/${id}`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
@@ -875,56 +897,144 @@ export default function ClientDetail() {
                     </div>
                   ) : clientServices && clientServices.length > 0 ? (
                     <div className="space-y-3">
-                      {clientServices.map((clientService) => (
-                        <div 
-                          key={clientService.id} 
-                          className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                          data-testid={`service-row-${clientService.service.id}`}
-                        >
-                          <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-2">
-                              <Settings className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <h4 className="font-medium" data-testid={`text-service-name-${clientService.service.id}`}>
-                                  {clientService.service.name}
-                                </h4>
-                                {clientService.service.description && (
-                                  <p className="text-sm text-muted-foreground">
-                                    {clientService.service.description}
-                                  </p>
-                                )}
-                              </div>
+                      {clientServices.map((clientService) => {
+                        const isExpanded = expandedServiceId === clientService.id;
+                        return (
+                          <Collapsible key={clientService.id} open={isExpanded} onOpenChange={() => 
+                            setExpandedServiceId(isExpanded ? null : clientService.id)
+                          }>
+                            <div className="rounded-lg border bg-card transition-colors">
+                              <CollapsibleTrigger asChild>
+                                <div 
+                                  className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors cursor-pointer w-full"
+                                  data-testid={`service-row-${clientService.service.id}`}
+                                  role="button"
+                                  aria-expanded={isExpanded}
+                                  data-accordion-trigger={`button-toggle-service-${clientService.id}`}
+                                >
+                                  <div className="flex items-center space-x-4">
+                                    <div className="flex items-center space-x-2">
+                                      {isExpanded ? (
+                                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                      <div>
+                                        <h4 className="font-medium" data-testid={`text-service-name-${clientService.service.id}`}>
+                                          {clientService.service.name}
+                                        </h4>
+                                        {clientService.service.description && (
+                                          <p className="text-sm text-muted-foreground">
+                                            {clientService.service.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-6 text-sm">
+                                    <div className="flex items-center space-x-1">
+                                      <Clock className="h-4 w-4 text-muted-foreground" />
+                                      <Badge variant="secondary" data-testid={`badge-frequency-${clientService.service.id}`}>
+                                        {clientService.frequency.charAt(0).toUpperCase() + clientService.frequency.slice(1)}
+                                      </Badge>
+                                    </div>
+                                    
+                                    {clientService.nextStartDate && (
+                                      <div className="text-muted-foreground">
+                                        <span className="text-xs block">Next Start:</span>
+                                        <span data-testid={`text-next-start-${clientService.service.id}`}>
+                                          {new Date(clientService.nextStartDate).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                    )}
+                                    
+                                    {clientService.nextDueDate && (
+                                      <div className="text-muted-foreground">
+                                        <span className="text-xs block">Next Due:</span>
+                                        <span data-testid={`text-next-due-${clientService.service.id}`}>
+                                          {new Date(clientService.nextDueDate).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+                              
+                              <CollapsibleContent>
+                                <div className="px-4 pb-4 border-t bg-muted/20" data-testid={`section-service-details-${clientService.id}`}>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                                    {/* Service Owner Section */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center space-x-2">
+                                        <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                        <h5 className="font-medium text-sm">Service Owner</h5>
+                                      </div>
+                                      {clientService.serviceOwner ? (
+                                        <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border">
+                                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <UserIcon className="h-4 w-4 text-primary" />
+                                          </div>
+                                          <div>
+                                            <p className="font-medium text-sm" data-testid={`text-service-owner-${clientService.id}`}>
+                                              {clientService.serviceOwner.firstName} {clientService.serviceOwner.lastName}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">{clientService.serviceOwner.email}</p>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground italic">No service owner assigned</p>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Role Assignments Section */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center space-x-2">
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                        <h5 className="font-medium text-sm">Role Assignments</h5>
+                                      </div>
+                                      {clientService.roleAssignments && clientService.roleAssignments.length > 0 ? (
+                                        <div className="space-y-2">
+                                          {clientService.roleAssignments.map((assignment) => (
+                                            <div key={assignment.id} className="flex items-center justify-between p-2 rounded bg-background border">
+                                              <div>
+                                                <p className="font-medium text-xs">{assignment.workRole.name}</p>
+                                                <p className="text-xs text-muted-foreground">{assignment.user.firstName} {assignment.user.lastName}</p>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground italic">No role assignments</p>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Projects Section (Placeholder) */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center space-x-2">
+                                        <Briefcase className="h-4 w-4 text-muted-foreground" />
+                                        <h5 className="font-medium text-sm">Projects</h5>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <div className="p-3 rounded-lg bg-background border border-dashed">
+                                          <p className="text-sm text-muted-foreground text-center">
+                                            Project details will be available here soon
+                                          </p>
+                                          <div className="flex justify-center space-x-4 mt-2 text-xs text-muted-foreground">
+                                            <span>2 Open</span>
+                                            <span>•</span>
+                                            <span>5 Completed</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
                             </div>
-                          </div>
-                          
-                          <div className="flex items-center space-x-6 text-sm">
-                            <div className="flex items-center space-x-1">
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                              <Badge variant="secondary" data-testid={`badge-frequency-${clientService.service.id}`}>
-                                {clientService.frequency.charAt(0).toUpperCase() + clientService.frequency.slice(1)}
-                              </Badge>
-                            </div>
-                            
-                            {clientService.nextStartDate && (
-                              <div className="text-muted-foreground">
-                                <span className="text-xs block">Next Start:</span>
-                                <span data-testid={`text-next-start-${clientService.service.id}`}>
-                                  {new Date(clientService.nextStartDate).toLocaleDateString()}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {clientService.nextDueDate && (
-                              <div className="text-muted-foreground">
-                                <span className="text-xs block">Next Due:</span>
-                                <span data-testid={`text-next-due-${clientService.service.id}`}>
-                                  {new Date(clientService.nextDueDate).toLocaleDateString()}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                          </Collapsible>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8">
