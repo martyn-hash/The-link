@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, User, Clock, Settings } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronUp, Phone, Mail, UserIcon, Clock, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -18,7 +18,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import type { Client, Person, ClientPerson, Service, ClientService } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole } from "@shared/schema";
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
 type ClientServiceWithService = ClientService & { 
@@ -27,13 +27,18 @@ type ClientServiceWithService = ClientService & {
   } 
 };
 
+// Types for enhanced service data
+type ServiceWithDetails = Service & {
+  roles: WorkRole[];
+};
+
 // Form schema for adding services
 const addServiceSchema = z.object({
   serviceId: z.string().min(1, "Service is required"),
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]),
   nextStartDate: z.string().min(1, "Next start date is required"),
   nextDueDate: z.string().min(1, "Next due date is required"),
-  serviceOwnerId: z.string().optional(),
+  serviceOwnerId: z.string().min(1, "Service owner is required"),
 });
 
 type AddServiceData = z.infer<typeof addServiceSchema>;
@@ -51,6 +56,8 @@ interface AddServiceModalProps {
 
 function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<ServiceWithDetails | null>(null);
+  const [roleAssignments, setRoleAssignments] = useState<Record<string, string>>({});
   const { toast } = useToast();
   
   const form = useForm<AddServiceData>({
@@ -63,30 +70,119 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
     },
   });
 
-  // Fetch available services
-  const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
-    queryKey: ['/api/services/active'],
+  // Fetch client data for Companies House fields
+  const { data: client } = useQuery<Client>({
+    queryKey: [`/api/clients/${clientId}`],
     queryFn: getQueryFn({ on401: "throw" }),
+    enabled: isOpen,
   });
 
-  // Create client service mutation
+  // Fetch available services with roles
+  const { data: services, isLoading: servicesLoading } = useQuery<ServiceWithDetails[]>({
+    queryKey: ['/api/services'],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: isOpen,
+  });
+
+  // Fetch users for role assignments and service owner selection
+  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: isOpen,
+  });
+
+  // Service selection change handler with Companies House auto-population
+  const handleServiceChange = (serviceId: string) => {
+    const service = services?.find(s => s.id === serviceId);
+    if (!service) return;
+    
+    setSelectedService(service);
+    
+    // Reset role assignments when service changes
+    setRoleAssignments({});
+    
+    // Auto-populate Companies House fields if service is CH-connected
+    if (service.isCompaniesHouseConnected && client) {
+      // Force annual frequency
+      form.setValue('frequency', 'annually');
+      
+      // Auto-populate start and due dates from client CH data
+      if (service.chStartDateField && service.chDueDateField) {
+        const startDateValue = client[service.chStartDateField as keyof Client] as string | Date | null;
+        const dueDateValue = client[service.chDueDateField as keyof Client] as string | Date | null;
+        
+        if (startDateValue) {
+          const startDate = new Date(startDateValue);
+          form.setValue('nextStartDate', startDate.toISOString().split('T')[0]);
+        }
+        
+        if (dueDateValue) {
+          const dueDate = new Date(dueDateValue);
+          form.setValue('nextDueDate', dueDate.toISOString().split('T')[0]);
+        }
+      }
+    }
+  };
+  
+  // Handle role assignment changes
+  const handleRoleAssignmentChange = (roleId: string, userId: string) => {
+    setRoleAssignments(prev => ({ ...prev, [roleId]: userId }));
+  };
+  
+  // Validate that all roles are assigned (gracefully handle missing roles data)
+  const areAllRolesAssigned = () => {
+    if (!selectedService || !selectedService.roles || selectedService.roles.length === 0) return true;
+    return selectedService.roles.every(role => roleAssignments[role.id]);
+  };
+  
+  // Check if service has roles that need assignment
+  const hasRolesToAssign = () => {
+    return selectedService?.roles && selectedService.roles.length > 0;
+  };
+
+  // Create client service mutation with role assignments
   const createClientServiceMutation = useMutation({
-    mutationFn: (data: AddServiceData) => 
-      apiRequest("POST", "/api/client-services", {
+    mutationFn: async (data: AddServiceData) => {
+      // Step 1: Create the client service
+      const clientServiceResponse = await apiRequest("POST", "/api/client-services", {
         clientId,
         serviceId: data.serviceId,
         frequency: data.frequency,
         nextStartDate: data.nextStartDate && data.nextStartDate.trim() ? new Date(data.nextStartDate).toISOString() : null,
         nextDueDate: data.nextDueDate && data.nextDueDate.trim() ? new Date(data.nextDueDate).toISOString() : null,
-        serviceOwnerId: data.serviceOwnerId || null,
-      }),
+        serviceOwnerId: data.serviceOwnerId,
+      });
+      
+      const clientService = await clientServiceResponse.json();
+      
+      // Step 2: Create role assignments if any roles are assigned
+      if (selectedService?.roles && Object.keys(roleAssignments).length > 0) {
+        try {
+          const roleAssignmentPromises = Object.entries(roleAssignments).map(([roleId, userId]) => 
+            apiRequest("POST", `/api/client-services/${clientService.id}/role-assignments`, {
+              workRoleId: roleId,
+              userId: userId,
+            })
+          );
+          
+          await Promise.all(roleAssignmentPromises);
+        } catch (roleError) {
+          // Role assignment failed but service was created - inform user
+          throw new Error(`Service was created but role assignments failed: ${roleError instanceof Error ? roleError.message : 'Unknown error'}. Please assign roles manually from the service management page.`);
+        }
+      }
+      
+      return clientService;
+    },
     onSuccess: () => {
       toast({
         title: "Service Added",
         description: "Service has been successfully added to the client.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/client-services/client', clientId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientId}`] });
       form.reset();
+      setSelectedService(null);
+      setRoleAssignments({});
       setIsOpen(false);
       onSuccess();
     },
@@ -100,7 +196,37 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   });
 
   const onSubmit = (data: AddServiceData) => {
+    // Validate role assignments before submission
+    if (!areAllRolesAssigned()) {
+      toast({
+        title: "Incomplete Role Assignments",
+        description: "Please assign users to all required roles before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     createClientServiceMutation.mutate(data);
+  };
+  
+  // Check if Companies House service is selected
+  const isCompaniesHouseService = selectedService?.isCompaniesHouseConnected || false;
+  
+  // Helper to check if field should be disabled (only if CH service AND data was successfully populated)
+  const isFieldDisabled = (fieldName: 'frequency' | 'nextStartDate' | 'nextDueDate') => {
+    if (!isCompaniesHouseService) return false;
+    
+    // Only disable if the field was actually populated with CH data
+    if (fieldName === 'frequency') {
+      return form.getValues('frequency') === 'annually';
+    }
+    if (fieldName === 'nextStartDate') {
+      return !!form.getValues('nextStartDate');
+    }
+    if (fieldName === 'nextDueDate') {
+      return !!form.getValues('nextDueDate');
+    }
+    return false;
   };
 
   return (
@@ -111,103 +237,229 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
           Add Service
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Service</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="serviceId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Service</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-service">
-                        <SelectValue placeholder="Select a service" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {servicesLoading ? (
-                        <div className="p-2 text-center text-muted-foreground">Loading services...</div>
-                      ) : services && services.length > 0 ? (
-                        services.map((service) => (
-                          <SelectItem key={service.id} value={service.id}>
-                            {service.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <div className="p-2 text-center text-muted-foreground">No services available</div>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Column 1: Service Details */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Service Details</h3>
+                <FormField
+                  control={form.control}
+                  name="serviceId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Service</FormLabel>
+                      <Select onValueChange={(value) => { field.onChange(value); handleServiceChange(value); }} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-service">
+                            <SelectValue placeholder="Select a service" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {servicesLoading ? (
+                            <div className="p-2 text-center text-muted-foreground">Loading services...</div>
+                          ) : services && services.length > 0 ? (
+                            services.map((service) => (
+                              <SelectItem key={service.id} value={service.id}>
+                                {service.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-center text-muted-foreground">No services available</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+
+                <FormField
+                  control={form.control}
+                  name="frequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frequency</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        disabled={isFieldDisabled('frequency')}
+                      >
+                        <FormControl>
+                          <SelectTrigger 
+                            data-testid="select-frequency"
+                            className={isFieldDisabled('frequency') ? 'bg-muted text-muted-foreground' : ''}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="quarterly">Quarterly</SelectItem>
+                          <SelectItem value="annually">Annually</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isCompaniesHouseService && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Frequency is automatically set to "Annually" for Companies House services
+                        </p>
                       )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="frequency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Frequency</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-frequency">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                      <SelectItem value="annually">Annually</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="nextStartDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Start Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          data-testid="input-next-start-date"
+                          disabled={isFieldDisabled('nextStartDate')}
+                          className={isFieldDisabled('nextStartDate') ? 'bg-muted text-muted-foreground' : ''}
+                        />
+                      </FormControl>
+                      {isCompaniesHouseService && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Date automatically populated from Companies House data
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="nextStartDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Next Start Date</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      data-testid="input-next-start-date"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="nextDueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Due Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          data-testid="input-next-due-date"
+                          disabled={isFieldDisabled('nextDueDate')}
+                          className={isFieldDisabled('nextDueDate') ? 'bg-muted text-muted-foreground' : ''}
+                        />
+                      </FormControl>
+                      {isCompaniesHouseService && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Date automatically populated from Companies House data
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-            <FormField
-              control={form.control}
-              name="nextDueDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Next Due Date</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      data-testid="input-next-due-date"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              {/* Column 2: Service Owner & Role Assignments */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Owner & Team</h3>
+                
+                <FormField
+                  control={form.control}
+                  name="serviceOwnerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Service Owner *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-service-owner">
+                            <SelectValue placeholder="Select service owner" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {usersLoading ? (
+                            <div className="p-2 text-center text-muted-foreground">Loading users...</div>
+                          ) : users && users.length > 0 ? (
+                            users.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.firstName} {user.lastName}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-center text-muted-foreground">No users available</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Role Assignments Section */}
+                {hasRolesToAssign() && (
+                  <div className="space-y-4">
+                    <div className="border-t pt-4">
+                      <h4 className="font-medium text-sm mb-3">Role Assignments</h4>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        Assign users to the required roles for this service.
+                      </p>
+                      
+                      <div className="space-y-3">
+                        {selectedService?.roles?.map((role) => (
+                          <div key={role.id} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <h5 className="font-medium text-sm">{role.name}</h5>
+                                {role.description && (
+                                  <p className="text-xs text-muted-foreground">{role.description}</p>
+                                )}
+                              </div>
+                            </div>
+                            <Select 
+                              value={roleAssignments[role.id] || ""} 
+                              onValueChange={(userId) => handleRoleAssignmentChange(role.id, userId)}
+                            >
+                              <SelectTrigger className="w-full" data-testid={`select-role-${role.id}`}>
+                                <SelectValue placeholder="Select user" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {usersLoading ? (
+                                  <div className="p-2 text-center text-muted-foreground">Loading users...</div>
+                                ) : users && users.length > 0 ? (
+                                  users.map((user) => (
+                                    <SelectItem key={user.id} value={user.id}>
+                                      {user.firstName} {user.lastName}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="p-2 text-center text-muted-foreground">No users available</div>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Role assignment validation message */}
+                      {hasRolesToAssign() && !areAllRolesAssigned() && (
+                        <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                            Please assign users to all roles before saving the service.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="flex justify-end space-x-2">
               <Button 
@@ -220,7 +472,7 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
               </Button>
               <Button 
                 type="submit" 
-                disabled={createClientServiceMutation.isPending}
+                disabled={createClientServiceMutation.isPending || !areAllRolesAssigned()}
                 data-testid="button-save-service"
               >
                 {createClientServiceMutation.isPending ? "Adding..." : "Add Service"}
@@ -310,7 +562,7 @@ function PersonCard({ clientPerson, expandedPersonId, onToggleExpand }: PersonCa
           
           {clientPerson.person.dateOfBirth && (
             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <User className="w-4 h-4" />
+              <UserIcon className="w-4 h-4" />
               <span>Born: {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}</span>
             </div>
           )}
