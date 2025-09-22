@@ -2160,6 +2160,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get dependency summary for project type (dry run for force delete)
+  app.get("/api/config/project-types/:id/dependency-summary", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const summary = await storage.getProjectTypeDependencySummary(req.params.id);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error getting project type dependency summary:", error);
+      res.status(500).json({ message: "Failed to get dependency summary" });
+    }
+  });
+
+  // Force delete project type with all dependencies
+  app.post("/api/config/project-types/:id/force-delete", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { confirmName } = req.body;
+      
+      if (!confirmName || typeof confirmName !== 'string') {
+        return res.status(400).json({ message: "Confirmation name is required" });
+      }
+
+      const result = await storage.forceDeleteProjectType(req.params.id, confirmName);
+      res.json(result);
+    } catch (error) {
+      console.error("Error force deleting project type:", error);
+      
+      if (error instanceof Error && error.message && error.message.includes("Project type not found")) {
+        res.status(404).json({ message: "Project type not found" });
+      } else if (error instanceof Error && error.message && error.message.includes("name confirmation does not match")) {
+        res.status(400).json({ message: "Project type name confirmation does not match" });
+      } else {
+        res.status(500).json({ message: "Failed to force delete project type" });
+      }
+    }
+  });
+
   // Project-scoped configuration routes
   app.get("/api/config/project-types/:projectTypeId/stages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
