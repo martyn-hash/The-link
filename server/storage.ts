@@ -3096,6 +3096,9 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         serviceOwnerId: clientServices.serviceOwnerId,
+        frequency: clientServices.frequency,
+        nextStartDate: clientServices.nextStartDate,
+        nextDueDate: clientServices.nextDueDate,
         createdAt: clientServices.createdAt,
         clientId_data: clients.id,
         clientName: clients.name,
@@ -3104,7 +3107,7 @@ export class DatabaseStorage implements IStorage {
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
-        serviceProjectTypeId: services.projectTypeId,
+
 
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
@@ -3118,13 +3121,16 @@ export class DatabaseStorage implements IStorage {
       .from(clientServices)
       .innerJoin(clients, eq(clientServices.clientId, clients.id))
       .innerJoin(services, eq(clientServices.serviceId, services.id))
-      .innerJoin(projectTypes, eq(services.projectTypeId, projectTypes.id));
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id));
     
     return results.map(result => ({
       id: result.id,
       clientId: result.clientId,
       serviceId: result.serviceId,
       serviceOwnerId: result.serviceOwnerId,
+      frequency: result.frequency,
+      nextStartDate: result.nextStartDate,
+      nextDueDate: result.nextDueDate,
       createdAt: result.createdAt,
       client: {
         id: result.clientId_data,
@@ -3136,7 +3142,7 @@ export class DatabaseStorage implements IStorage {
         id: result.serviceId_data,
         name: result.serviceName,
         description: result.serviceDescription,
-        projectTypeId: result.serviceProjectTypeId,
+        projectTypeId: result.projectTypeId,
 
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
@@ -3159,6 +3165,9 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         serviceOwnerId: clientServices.serviceOwnerId,
+        frequency: clientServices.frequency,
+        nextStartDate: clientServices.nextStartDate,
+        nextDueDate: clientServices.nextDueDate,
         createdAt: clientServices.createdAt,
         clientId_data: clients.id,
         clientName: clients.name,
@@ -3167,7 +3176,7 @@ export class DatabaseStorage implements IStorage {
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
-        serviceProjectTypeId: services.projectTypeId,
+
 
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
@@ -3181,7 +3190,7 @@ export class DatabaseStorage implements IStorage {
       .from(clientServices)
       .innerJoin(clients, eq(clientServices.clientId, clients.id))
       .innerJoin(services, eq(clientServices.serviceId, services.id))
-      .innerJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
       .where(eq(clientServices.id, id));
     
     if (!result) {
@@ -3204,7 +3213,7 @@ export class DatabaseStorage implements IStorage {
         id: result.serviceId_data,
         name: result.serviceName,
         description: result.serviceDescription,
-        projectTypeId: result.serviceProjectTypeId,
+        projectTypeId: result.projectTypeId,
 
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
@@ -3227,11 +3236,14 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         serviceOwnerId: clientServices.serviceOwnerId,
+        frequency: clientServices.frequency,
+        nextStartDate: clientServices.nextStartDate,
+        nextDueDate: clientServices.nextDueDate,
         createdAt: clientServices.createdAt,
         serviceId_data: services.id,
         serviceName: services.name,
         serviceDescription: services.description,
-        serviceProjectTypeId: services.projectTypeId,
+
 
         serviceUdfDefinitions: services.udfDefinitions,
         serviceCreatedAt: services.createdAt,
@@ -3244,7 +3256,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(clientServices)
       .innerJoin(services, eq(clientServices.serviceId, services.id))
-      .innerJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
       .where(eq(clientServices.clientId, clientId));
     
     return results.map(result => ({
@@ -3252,12 +3264,15 @@ export class DatabaseStorage implements IStorage {
       clientId: result.clientId,
       serviceId: result.serviceId,
       serviceOwnerId: result.serviceOwnerId,
+      frequency: result.frequency,
+      nextStartDate: result.nextStartDate,
+      nextDueDate: result.nextDueDate,
       createdAt: result.createdAt,
       service: {
         id: result.serviceId_data,
         name: result.serviceName,
         description: result.serviceDescription,
-        projectTypeId: result.serviceProjectTypeId,
+        projectTypeId: result.projectTypeId,
 
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
@@ -3280,6 +3295,9 @@ export class DatabaseStorage implements IStorage {
         clientId: clientServices.clientId,
         serviceId: clientServices.serviceId,
         serviceOwnerId: clientServices.serviceOwnerId,
+        frequency: clientServices.frequency,
+        nextStartDate: clientServices.nextStartDate,
+        nextDueDate: clientServices.nextDueDate,
         createdAt: clientServices.createdAt,
         client: {
           id: clients.id,
@@ -3575,7 +3593,7 @@ export class DatabaseStorage implements IStorage {
       const [service] = await db
         .select()
         .from(services)
-        .where(eq(services.projectTypeId, projectTypeId));
+        .where(eq(projectTypes.id, projectTypeId));
       
       if (!service) {
         console.warn(`No service found for project type ID: ${projectTypeId}`);
