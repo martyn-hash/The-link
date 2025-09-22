@@ -208,22 +208,6 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
         </div>
       )}
 
-      {/* Current address display */}
-      {value && (value.addressLine1 || value.locality) && (
-        <div className="p-3 bg-muted/20 rounded-lg border">
-          <Label className="text-sm font-medium">Current Address</Label>
-          <div className="mt-1 text-sm text-muted-foreground">
-            <div>{value.addressLine1}</div>
-            {value.addressLine2 && <div>{value.addressLine2}</div>}
-            <div>
-              {[value.locality, value.region, value.postalCode]
-                .filter(Boolean)
-                .join(", ")}
-            </div>
-            {value.country && <div>{value.country}</div>}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
