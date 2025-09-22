@@ -393,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating client:", error instanceof Error ? error.message : error);
       
       // Handle duplicate name case
-      if (error instanceof Error && error.message.includes("duplicate") || error.message.includes("unique")) {
+      if (error instanceof Error && (error.message.includes("duplicate") || error.message.includes("unique"))) {
         return res.status(409).json({ 
           message: "A client with this name already exists" 
         });
@@ -458,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: "INCOMPLETE_ROLE_ASSIGNMENTS",
             incompleteServices: incompleteServices.map(service => ({
               serviceName: service.serviceName,
-              missingRoles: service.missingRoles.map(role => role.name)
+              missingRoles: service.missingRoles.map((role: any) => role.name)
             }))
           });
         }
@@ -481,7 +481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Handle duplicate name case
-      if (error instanceof Error && error.message.includes("duplicate") || error.message.includes("unique")) {
+      if (error instanceof Error && (error.message.includes("duplicate") || error.message.includes("unique"))) {
         return res.status(409).json({ 
           message: "A client with this name already exists" 
         });
