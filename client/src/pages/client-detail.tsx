@@ -12,6 +12,7 @@ import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -64,11 +65,14 @@ const addServiceSchema = z.object({
 
 type AddServiceData = z.infer<typeof addServiceSchema>;
 
-interface PersonCardProps {
-  clientPerson: ClientPersonWithPerson;
-  expandedPersonId: string | null;
-  onToggleExpand: () => void;
+// Helper function to mask sensitive identifiers
+function maskIdentifier(value: string, visibleChars = 2): string {
+  if (!value || value.length <= visibleChars) return value;
+  const masked = '*'.repeat(Math.max(0, value.length - visibleChars));
+  return masked + value.slice(-visibleChars);
 }
+
+// PersonCardProps removed - using Accordion pattern
 
 interface AddServiceModalProps {
   clientId: string;
@@ -506,98 +510,14 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   );
 }
 
-function PersonCard({ clientPerson, expandedPersonId, onToggleExpand }: PersonCardProps) {
-  const isExpanded = expandedPersonId === clientPerson.person.id;
-  
-  return (
-    <div className="relative">
-      <div 
-        className="cursor-pointer p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-        onClick={onToggleExpand}
-        data-testid={`person-${clientPerson.person.id}`}
-      >
-        <div className="space-y-2">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center space-x-2 mb-1">
-                <h4 className="font-medium text-foreground truncate" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                  {clientPerson.person.fullName}
-                </h4>
-                {isExpanded ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1 mb-2">
-                {clientPerson.officerRole && (
-                  <Badge variant="secondary" className="text-xs" data-testid={`badge-role-${clientPerson.person.id}`}>
-                    {clientPerson.officerRole}
-                  </Badge>
-                )}
-                {clientPerson.isPrimaryContact && (
-                  <Badge variant="default" className="text-xs" data-testid={`badge-primary-${clientPerson.person.id}`}>
-                    Primary Contact
-                  </Badge>
-                )}
-              </div>
-              {(clientPerson.person.nationality || clientPerson.person.occupation) && (
-                <p className="text-sm text-muted-foreground truncate">
-                  {[clientPerson.person.nationality, clientPerson.person.occupation]
-                    .filter(Boolean)
-                    .join(' • ')}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {isExpanded && (
-        <div className="mt-2 p-4 rounded-lg border bg-muted/50 space-y-3">
-          {clientPerson.person.addressLine1 && (
-            <div className="flex items-start space-x-2">
-              <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-              <div className="text-sm text-muted-foreground">
-                {[
-                  clientPerson.person.addressLine1,
-                  clientPerson.person.addressLine2,
-                  clientPerson.person.locality,
-                  clientPerson.person.postalCode
-                ].filter(Boolean).join(', ')}
-              </div>
-            </div>
-          )}
-          
-          {/* Placeholder for phone - extend person schema later */}
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Phone className="w-4 h-4" />
-            <span>Phone number not available</span>
-          </div>
-          
-          {/* Placeholder for email - extend person schema later */}
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Mail className="w-4 h-4" />
-            <span>Email not available</span>
-          </div>
-          
-          {clientPerson.person.dateOfBirth && (
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <UserIcon className="w-4 h-4" />
-              <span>Born: {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+// PersonCard component removed - using Accordion pattern
 
 export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+  const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
 
   const { data: client, isLoading, error } = useQuery<Client>({
     queryKey: [`/api/clients/${id}`],
@@ -607,7 +527,7 @@ export default function ClientDetail() {
 
   // Fetch related people/directors
   const { data: relatedPeople, isLoading: peopleLoading, error: peopleError } = useQuery<ClientPersonWithPerson[]>({
-    queryKey: [`/api/clients/${id}/people`],
+    queryKey: ['/api/clients', id, 'people'],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
     retry: 1, // Retry once on failure
@@ -844,72 +764,65 @@ export default function ClientDetail() {
                       </p>
                     </div>
                   ) : relatedPeople && relatedPeople.length > 0 ? (
-                    <div className="space-y-3">
-                      {relatedPeople.map((clientPerson) => {
-                        const isExpanded = expandedPersonId === clientPerson.person.id;
-                        return (
-                          <Collapsible key={clientPerson.id} open={isExpanded} onOpenChange={() => 
-                            setExpandedPersonId(isExpanded ? null : clientPerson.person.id)
-                          }>
-                            <div className="rounded-lg border bg-card transition-all duration-200 hover:shadow-md">
-                              <CollapsibleTrigger asChild>
-                                <div 
-                                  className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors cursor-pointer w-full"
-                                  data-testid={`person-row-${clientPerson.person.id}`}
-                                  role="button"
-                                  aria-expanded={isExpanded}
-                                  data-accordion-trigger={`button-toggle-person-${clientPerson.id}`}
-                                >
-                                  <div className="flex items-center space-x-4">
-                                    <div className="flex items-center space-x-2">
-                                      <ChevronRight 
-                                        className={`h-4 w-4 text-muted-foreground transition-transform duration-200 motion-safe:transition-all ${
-                                          isExpanded ? 'rotate-90' : ''
-                                        }`}
-                                      />
-                                      <div>
-                                        <h4 className="font-medium" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                                          {clientPerson.person.fullName}
-                                        </h4>
-                                        {clientPerson.officerRole && (
-                                          <p className="text-sm text-muted-foreground">
-                                            {clientPerson.officerRole}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center space-x-6 text-sm">
-                                    {clientPerson.isPrimaryContact && (
-                                      <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
-                                        Primary Contact
-                                      </Badge>
+                    <Accordion
+                      type="single"
+                      collapsible
+                      value={expandedPersonId ?? undefined}
+                      onValueChange={(value) => setExpandedPersonId(value ?? null)}
+                    >
+                      {relatedPeople.map((clientPerson) => (
+                        <AccordionItem key={clientPerson.person.id} value={clientPerson.person.id}>
+                          <AccordionTrigger 
+                            className="text-left hover:no-underline p-4"
+                            data-testid={`person-row-${clientPerson.person.id}`}
+                          >
+                            <div className="flex items-center justify-between w-full mr-4">
+                              <div className="flex items-center space-x-4">
+                                <div>
+                                  <h4 className="font-medium" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                                    {clientPerson.person.fullName}
+                                  </h4>
+                                  <div className="flex items-center space-x-2 mt-1">
+                                    {clientPerson.officerRole && (
+                                      <p className="text-sm text-muted-foreground">
+                                        {clientPerson.officerRole}
+                                      </p>
                                     )}
-                                    
-                                    {clientPerson.person.nationality && (
-                                      <div className="text-muted-foreground">
-                                        <span className="text-xs block">Nationality:</span>
-                                        <span data-testid={`text-nationality-${clientPerson.person.id}`}>
-                                          {clientPerson.person.nationality.charAt(0).toUpperCase() + clientPerson.person.nationality.slice(1).replace('_', ' ')}
-                                        </span>
-                                      </div>
-                                    )}
-                                    
-                                    {clientPerson.person.dateOfBirth && (
-                                      <div className="text-muted-foreground">
-                                        <span className="text-xs block">Date of Birth:</span>
-                                        <span data-testid={`text-dob-${clientPerson.person.id}`}>
-                                          {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
-                                        </span>
-                                      </div>
+                                    {clientPerson.person.nationality && clientPerson.person.occupation && (
+                                      <p className="text-sm text-muted-foreground">
+                                        • {clientPerson.person.nationality.charAt(0).toUpperCase() + clientPerson.person.nationality.slice(1).replace('_', ' ')} • {clientPerson.person.occupation}
+                                      </p>
                                     )}
                                   </div>
                                 </div>
-                              </CollapsibleTrigger>
+                              </div>
                               
-                              <CollapsibleContent className="overflow-hidden motion-safe:data-[state=open]:animate-in motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:fade-out-0 motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:slide-up-1 motion-safe:data-[state=open]:slide-down-1">
-                                <div className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-person-details-${clientPerson.id}`}>
+                              <div className="flex items-center space-x-3 text-sm">
+                                {clientPerson.isPrimaryContact && (
+                                  <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
+                                    Primary Contact
+                                  </Badge>
+                                )}
+                                
+                                {clientPerson.person.isMainContact && (
+                                  <Badge variant="outline" data-testid={`badge-main-contact-${clientPerson.person.id}`}>
+                                    Main Contact
+                                  </Badge>
+                                )}
+                                
+                                {clientPerson.person.dateOfBirth && (
+                                  <div className="text-muted-foreground">
+                                    <span className="text-xs block">Date of Birth:</span>
+                                    <span data-testid={`text-dob-${clientPerson.person.id}`}>
+                                      {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          
+                          <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-person-details-${clientPerson.id}`}>
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                                     {/* Contact Information Section */}
                                     <div className="space-y-3">
@@ -1012,17 +925,71 @@ export default function ClientDetail() {
                                         
                                         {(clientPerson.person.niNumber || clientPerson.person.personalUtrNumber) && (
                                           <div className="mt-3 p-3 rounded-lg bg-background border border-dashed">
-                                            <div className="space-y-1 text-xs">
+                                            <div className="space-y-2 text-xs">
                                               {clientPerson.person.niNumber && (
-                                                <div>
-                                                  <span className="text-muted-foreground">NI Number: </span>
-                                                  <span className="font-mono">{clientPerson.person.niNumber}</span>
+                                                <div className="flex items-center justify-between">
+                                                  <div>
+                                                    <span className="text-muted-foreground">NI Number: </span>
+                                                    <span className="font-mono" data-testid={`text-ni-number-${clientPerson.id}`}>
+                                                      {revealedIdentifiers.has(`ni-${clientPerson.person.id}`) 
+                                                        ? clientPerson.person.niNumber 
+                                                        : maskIdentifier(clientPerson.person.niNumber, 2)}
+                                                    </span>
+                                                  </div>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-6 px-2 text-xs"
+                                                    data-testid={`button-reveal-ni-${clientPerson.id}`}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      const key = `ni-${clientPerson.person.id}`;
+                                                      setRevealedIdentifiers(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(key)) {
+                                                          next.delete(key);
+                                                        } else {
+                                                          next.add(key);
+                                                        }
+                                                        return next;
+                                                      });
+                                                    }}
+                                                  >
+                                                    {revealedIdentifiers.has(`ni-${clientPerson.person.id}`) ? 'Hide' : 'Show'}
+                                                  </Button>
                                                 </div>
                                               )}
                                               {clientPerson.person.personalUtrNumber && (
-                                                <div>
-                                                  <span className="text-muted-foreground">UTR: </span>
-                                                  <span className="font-mono">{clientPerson.person.personalUtrNumber}</span>
+                                                <div className="flex items-center justify-between">
+                                                  <div>
+                                                    <span className="text-muted-foreground">UTR: </span>
+                                                    <span className="font-mono" data-testid={`text-utr-number-${clientPerson.id}`}>
+                                                      {revealedIdentifiers.has(`utr-${clientPerson.person.id}`) 
+                                                        ? clientPerson.person.personalUtrNumber 
+                                                        : maskIdentifier(clientPerson.person.personalUtrNumber, 2)}
+                                                    </span>
+                                                  </div>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-6 px-2 text-xs"
+                                                    data-testid={`button-reveal-utr-${clientPerson.id}`}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      const key = `utr-${clientPerson.person.id}`;
+                                                      setRevealedIdentifiers(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(key)) {
+                                                          next.delete(key);
+                                                        } else {
+                                                          next.add(key);
+                                                        }
+                                                        return next;
+                                                      });
+                                                    }}
+                                                  >
+                                                    {revealedIdentifiers.has(`utr-${clientPerson.person.id}`) ? 'Hide' : 'Show'}
+                                                  </Button>
                                                 </div>
                                               )}
                                             </div>
@@ -1047,13 +1014,10 @@ export default function ClientDetail() {
                                       </div>
                                     </div>
                                   </div>
-                                </div>
-                              </CollapsibleContent>
-                            </div>
-                          </Collapsible>
-                        );
-                      })}
-                    </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
                   ) : (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">
