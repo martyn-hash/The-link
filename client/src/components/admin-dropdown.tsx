@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Settings2, Users, ChevronDown } from "lucide-react";
+import { Settings, Settings2, Users, ChevronDown, FileCheck } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface AdminDropdownProps {
@@ -31,6 +31,11 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       label: "Services",
       href: "/services",
       icon: Settings2,
+    },
+    {
+      label: "CH Changes",
+      href: "/ch-changes", 
+      icon: FileCheck,
     },
     {
       label: "User Management",
