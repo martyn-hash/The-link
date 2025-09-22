@@ -9,6 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -265,10 +275,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     mutationFn: async ({ id, confirmName }: { id: string; confirmName: string }) => {
       return await apiRequest("POST", `/api/config/project-types/${id}/force-delete`, { confirmName });
     },
-    onSuccess: (data, { id: deletedId }) => {
+    onSuccess: (data: any, { id: deletedId }) => {
       toast({ 
         title: "Success", 
-        description: data.message || "Project type and all dependencies deleted successfully",
+        description: data?.message || "Project type and all dependencies deleted successfully",
         duration: 5000,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
@@ -621,6 +631,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   }, [isOpen]);
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden" data-testid="settings-modal">
         <DialogHeader>
@@ -1292,5 +1303,85 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </ScrollArea>
       </DialogContent>
     </Dialog>
+
+    {/* Force Delete Confirmation Dialog */}
+    <AlertDialog open={forceDeleteDialog.open} onOpenChange={(open) => 
+      setForceDeleteDialog(prev => ({ ...prev, open }))
+    }>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Force Delete Project Type</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete the project type <strong>"{forceDeleteDialog.projectType?.name}"</strong> and ALL of its dependencies. This action cannot be undone.
+            
+            {forceDeleteDialog.dependencies && (
+              <div className="mt-4 space-y-2">
+                <div className="text-sm font-medium">The following will be deleted:</div>
+                <div className="text-xs space-y-1 bg-muted p-3 rounded">
+                  {forceDeleteDialog.dependencies.projects > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.projects} project{forceDeleteDialog.dependencies.projects !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.chronologyEntries > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.chronologyEntries} chronology entrie{forceDeleteDialog.dependencies.chronologyEntries !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.kanbanStages > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.kanbanStages} kanban stage{forceDeleteDialog.dependencies.kanbanStages !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.changeReasons > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.changeReasons} change reason{forceDeleteDialog.dependencies.changeReasons !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.stageReasonMaps > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.stageReasonMaps} stage-reason mapping{forceDeleteDialog.dependencies.stageReasonMaps !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.stageApprovals > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.stageApprovals} stage approval{forceDeleteDialog.dependencies.stageApprovals !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.stageApprovalFields > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.stageApprovalFields} approval field{forceDeleteDialog.dependencies.stageApprovalFields !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.reasonCustomFields > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.reasonCustomFields} custom field{forceDeleteDialog.dependencies.reasonCustomFields !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.reasonFieldResponses > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.reasonFieldResponses} field response{forceDeleteDialog.dependencies.reasonFieldResponses !== 1 ? 's' : ''}</div>
+                  )}
+                  {forceDeleteDialog.dependencies.stageApprovalResponses > 0 && (
+                    <div>• {forceDeleteDialog.dependencies.stageApprovalResponses} approval response{forceDeleteDialog.dependencies.stageApprovalResponses !== 1 ? 's' : ''}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <Label htmlFor="confirm-name">Type the project type name to confirm:</Label>
+              <Input
+                id="confirm-name"
+                value={forceDeleteDialog.confirmName}
+                onChange={(e) => setForceDeleteDialog(prev => ({ ...prev, confirmName: e.target.value }))}
+                placeholder={forceDeleteDialog.projectType?.name || ''}
+                className="mt-1"
+                data-testid="input-confirm-project-type-name"
+              />
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="button-cancel-force-delete">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmForceDelete}
+            disabled={
+              forceDeleteProjectTypeMutation.isPending ||
+              !forceDeleteDialog.confirmName ||
+              forceDeleteDialog.confirmName !== forceDeleteDialog.projectType?.name
+            }
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            data-testid="button-confirm-force-delete"
+          >
+            {forceDeleteProjectTypeMutation.isPending ? "Deleting..." : "Force Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
