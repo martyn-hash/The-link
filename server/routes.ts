@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
+import fetch from 'node-fetch';
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
 import { z } from "zod";
@@ -3624,6 +3625,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to run Companies House synchronization",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  // Address lookup endpoint using getaddress.io
+  app.get('/api/address-lookup/:postcode', isAuthenticated, async (req: any, res) => {
+    try {
+      const { postcode } = req.params;
+      
+      if (!postcode || postcode.trim().length === 0) {
+        return res.status(400).json({ error: 'Postcode is required' });
+      }
+
+      const apiKey = process.env.GETADDRESS_API_KEY;
+      if (!apiKey) {
+        console.error('GETADDRESS_API_KEY not found in environment variables');
+        return res.status(500).json({ error: 'Address lookup service not configured' });
+      }
+
+      const cleanPostcode = postcode.trim().replace(/\s+/g, '').toUpperCase();
+      const url = `https://api.getaddress.io/find/${encodeURIComponent(cleanPostcode)}?api-key=${apiKey}`;
+      
+      const response = await fetch(url);
+      
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'No addresses found for this postcode' });
+      }
+      
+      if (!response.ok) {
+        console.error('getaddress.io API error:', response.status, await response.text());
+        return res.status(500).json({ error: 'Address lookup service unavailable' });
+      }
+
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Address lookup error:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
