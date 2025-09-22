@@ -76,8 +76,8 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
         clientId,
         serviceId: data.serviceId,
         frequency: data.frequency,
-        nextStartDate: data.nextStartDate || null,
-        nextDueDate: data.nextDueDate || null,
+        nextStartDate: data.nextStartDate ? new Date(data.nextStartDate).toISOString() : null,
+        nextDueDate: data.nextDueDate ? new Date(data.nextDueDate).toISOString() : null,
         serviceOwnerId: data.serviceOwnerId || null,
       }),
     onSuccess: () => {
