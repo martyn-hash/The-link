@@ -385,6 +385,10 @@ export const services = pgTable("services", {
   name: varchar("name").notNull().unique(),
   description: text("description"),
   udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`), // Array of UDF definitions
+  // Companies House connection fields
+  isCompaniesHouseConnected: boolean("is_companies_house_connected").default(false),
+  chStartDateField: varchar("ch_start_date_field"), // Maps to client field for start date (e.g., 'next_accounts_period_end')
+  chDueDateField: varchar("ch_due_date_field"), // Maps to client field for due date (e.g., 'next_accounts_due')
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -430,6 +434,26 @@ export const workRoles = pgTable("work_roles", {
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Companies House change requests table - for tracking pending CH data changes
+export const chChangeRequests = pgTable("ch_change_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  changeType: varchar("change_type").notNull(), // 'accounts', 'confirmation_statement', 'company_profile'
+  fieldName: varchar("field_name").notNull(), // Field that changed (e.g., 'next_accounts_due')
+  oldValue: text("old_value"), // Previous value as string
+  newValue: text("new_value").notNull(), // New value as string  
+  status: varchar("status").default("pending"), // 'pending', 'approved', 'rejected'
+  detectedAt: timestamp("detected_at").defaultNow(),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: varchar("approved_by").references(() => users.id, { onDelete: "set null" }),
+  notes: text("notes"), // Optional notes from approver
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_ch_change_requests_client_id").on(table.clientId),
+  index("idx_ch_change_requests_status").on(table.status),
+  index("idx_ch_change_requests_change_type").on(table.changeType),
+]);
 
 // Service-Role junction table (many-to-many)
 export const serviceRoles = pgTable("service_roles", {
@@ -898,9 +922,29 @@ export const insertServiceSchema = createInsertSchema(services).omit({
   createdAt: true,
 }).extend({
   udfDefinitions: z.array(udfDefinitionSchema).optional().default([]),
+  isCompaniesHouseConnected: z.boolean().optional().default(false),
+  chStartDateField: z.string().optional(),
+  chDueDateField: z.string().optional(),
+}).refine((data) => {
+  // If CH connected, both field mappings are required
+  if (data.isCompaniesHouseConnected) {
+    return data.chStartDateField && data.chDueDateField;
+  }
+  return true;
+}, {
+  message: "Companies House connected services must specify both start and due date field mappings",
 });
 
 export const updateServiceSchema = insertServiceSchema.partial();
+
+// CH change requests schema
+export const insertChChangeRequestSchema = createInsertSchema(chChangeRequests).omit({
+  id: true,
+  createdAt: true,
+  detectedAt: true,
+});
+
+export const updateChChangeRequestSchema = insertChChangeRequestSchema.partial();
 
 // Work roles schema  
 export const insertWorkRoleSchema = createInsertSchema(workRoles).omit({
@@ -920,8 +964,8 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   createdAt: true,
 }).extend({
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).default("monthly"),
-  nextStartDate: z.string().datetime().min(1, "Next start date is required"),
-  nextDueDate: z.string().datetime().min(1, "Next due date is required"),
+  nextStartDate: z.string().datetime().optional(),
+  nextDueDate: z.string().datetime().optional(),
 });
 
 export const updateClientServiceSchema = insertClientServiceSchema.partial();
@@ -1156,6 +1200,9 @@ export type ClientService = typeof clientServices.$inferSelect;
 export type InsertClientService = z.infer<typeof insertClientServiceSchema>;
 export type ClientServiceRoleAssignment = typeof clientServiceRoleAssignments.$inferSelect;
 export type InsertClientServiceRoleAssignment = z.infer<typeof insertClientServiceRoleAssignmentSchema>;
+export type ChChangeRequest = typeof chChangeRequests.$inferSelect;
+export type InsertChChangeRequest = z.infer<typeof insertChChangeRequestSchema>;
+export type UpdateChChangeRequest = z.infer<typeof updateChChangeRequestSchema>;
 export type Person = typeof people.$inferSelect;
 export type InsertPerson = z.infer<typeof insertPersonSchema>;
 export type ClientPerson = typeof clientPeople.$inferSelect;
