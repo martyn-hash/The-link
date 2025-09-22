@@ -31,8 +31,8 @@ type ClientServiceWithService = ClientService & {
 const addServiceSchema = z.object({
   serviceId: z.string().min(1, "Service is required"),
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]),
-  nextStartDate: z.string().optional(),
-  nextDueDate: z.string().optional(),
+  nextStartDate: z.string().min(1, "Next start date is required"),
+  nextDueDate: z.string().min(1, "Next due date is required"),
   serviceOwnerId: z.string().optional(),
 });
 
@@ -178,7 +178,7 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
               name="nextStartDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Next Start Date (Optional)</FormLabel>
+                  <FormLabel>Next Start Date</FormLabel>
                   <FormControl>
                     <Input 
                       type="date" 
@@ -196,7 +196,7 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
               name="nextDueDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Next Due Date (Optional)</FormLabel>
+                  <FormLabel>Next Due Date</FormLabel>
                   <FormControl>
                     <Input 
                       type="date" 

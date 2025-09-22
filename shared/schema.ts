@@ -920,8 +920,8 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   createdAt: true,
 }).extend({
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).default("monthly"),
-  nextStartDate: z.string().datetime().optional().or(z.null()),
-  nextDueDate: z.string().datetime().optional().or(z.null()),
+  nextStartDate: z.string().datetime().min(1, "Next start date is required"),
+  nextDueDate: z.string().datetime().min(1, "Next due date is required"),
 });
 
 export const updateClientServiceSchema = insertClientServiceSchema.partial();

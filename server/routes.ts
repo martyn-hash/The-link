@@ -2807,11 +2807,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/client-services - Create new client-service mapping (admin only)
   app.post("/api/client-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      console.log("POST /api/client-services called with body:", req.body);
       const validationResult = insertClientServiceSchema.safeParse(req.body);
       
       if (!validationResult.success) {
-        console.log("Validation failed:", validationResult.error.issues);
         return res.status(400).json({ 
           message: "Invalid client service data", 
           errors: validationResult.error.issues 
@@ -2819,7 +2817,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const clientServiceData = validationResult.data;
-      console.log("Validated data:", clientServiceData);
       
       // Convert ISO string dates to Date objects for database insertion
       const dataForStorage = {
@@ -2827,7 +2824,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         nextStartDate: clientServiceData.nextStartDate ? new Date(clientServiceData.nextStartDate) : null,
         nextDueDate: clientServiceData.nextDueDate ? new Date(clientServiceData.nextDueDate) : null,
       };
-      console.log("Data prepared for storage:", dataForStorage);
       
       // Check if client-service mapping already exists
       const mappingExists = await storage.checkClientServiceMappingExists(
