@@ -2818,11 +2818,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const clientServiceData = validationResult.data;
       
+      // Check if service is Companies House connected and auto-populate dates
+      const service = await storage.getServiceById(clientServiceData.serviceId);
+      if (!service) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
+      let finalClientServiceData = { ...clientServiceData };
+      
+      if (service.isCompaniesHouseConnected) {
+        // Force annual frequency for CH services (always set for consistency)
+        finalClientServiceData.frequency = 'annually' as const;
+        
+        // Get client to read CH field values
+        const client = await storage.getClientById(clientServiceData.clientId);
+        if (!client) {
+          return res.status(404).json({ message: "Client not found" });
+        }
+        
+        // Whitelist allowed CH date fields for security
+        const allowedDateFields = ['nextAccountsPeriodEnd', 'nextAccountsDue', 'confirmationStatementNextDue', 'confirmationStatementNextMadeUpTo'];
+        
+        if (!service.chStartDateField || !service.chDueDateField) {
+          return res.status(400).json({ 
+            message: "Companies House service must specify both start and due date field mappings"
+          });
+        }
+        
+        if (!allowedDateFields.includes(service.chStartDateField) || !allowedDateFields.includes(service.chDueDateField)) {
+          return res.status(400).json({ 
+            message: "Invalid CH date field mapping",
+            details: { allowedFields: allowedDateFields }
+          });
+        }
+        
+        // Get and validate date values
+        const startDateField = service.chStartDateField as keyof typeof client;
+        const dueDateField = service.chDueDateField as keyof typeof client;
+        
+        const startDateValue = client[startDateField];
+        const dueDateValue = client[dueDateField];
+        
+        // Coerce and validate dates safely
+        const startDate = startDateValue ? new Date(startDateValue as any) : null;
+        const dueDate = dueDateValue ? new Date(dueDateValue as any) : null;
+        
+        if (!startDate || !dueDate || isNaN(startDate.getTime()) || isNaN(dueDate.getTime())) {
+          return res.status(400).json({ 
+            message: "Companies House service requires client to have valid CH date fields",
+            details: {
+              startDateField: service.chStartDateField,
+              dueDateField: service.chDueDateField,
+              startDateValid: startDate && !isNaN(startDate.getTime()),
+              dueDateValid: dueDate && !isNaN(dueDate.getTime()),
+            }
+          });
+        }
+        
+        // Auto-populate with validated dates
+        finalClientServiceData = {
+          ...finalClientServiceData,
+          nextStartDate: startDate.toISOString(),
+          nextDueDate: dueDate.toISOString(),
+        };
+      }
+      
       // Convert ISO string dates to Date objects for database insertion
       const dataForStorage = {
-        ...clientServiceData,
-        nextStartDate: clientServiceData.nextStartDate ? new Date(clientServiceData.nextStartDate) : null,
-        nextDueDate: clientServiceData.nextDueDate ? new Date(clientServiceData.nextDueDate) : null,
+        ...finalClientServiceData,
+        nextStartDate: finalClientServiceData.nextStartDate ? new Date(finalClientServiceData.nextStartDate) : null,
+        nextDueDate: finalClientServiceData.nextDueDate ? new Date(finalClientServiceData.nextDueDate) : null,
       };
       
       // Check if client-service mapping already exists
@@ -3385,6 +3450,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error resolving project role assignee:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to resolve project role assignee" });
+    }
+  });
+
+  // ===== COMPANIES HOUSE CHANGE REQUESTS API =====
+
+  // GET /api/ch-change-requests - List all pending CH change requests (admin only)
+  app.get("/api/ch-change-requests", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const changeRequests = await storage.getPendingChChangeRequests();
+      res.json(changeRequests);
+    } catch (error) {
+      console.error("Error fetching CH change requests:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch CH change requests" });
+    }
+  });
+
+  // GET /api/ch-change-requests/client/:clientId - Get CH change requests by client (admin only)
+  app.get("/api/ch-change-requests/client/:clientId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = req.params;
+
+      const changeRequests = await storage.getChChangeRequestsByClientId(clientId);
+      res.json(changeRequests);
+    } catch (error) {
+      console.error("Error fetching CH change requests by client:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch CH change requests" });
+    }
+  });
+
+  // POST /api/ch-change-requests/:id/approve - Approve a CH change request (admin only)
+  app.post("/api/ch-change-requests/:id/approve", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { id } = req.params;
+      const { notes } = req.body;
+
+      // Check if request exists and is still pending
+      const existingRequest = await storage.getChChangeRequestById(id);
+      if (!existingRequest) {
+        return res.status(404).json({ message: "Change request not found" });
+      }
+      if (existingRequest.status !== 'pending') {
+        return res.status(409).json({ message: "Change request has already been processed" });
+      }
+
+      // Get current user ID for approvedBy field
+      const currentUser = req.user;
+      if (!currentUser?.id) {
+        return res.status(401).json({ message: "User identification required" });
+      }
+
+      const approvedRequest = await storage.approveChChangeRequest(id, currentUser.id, notes);
+      res.json(approvedRequest);
+    } catch (error) {
+      console.error("Error approving CH change request:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to approve CH change request" });
+    }
+  });
+
+  // POST /api/ch-change-requests/:id/reject - Reject a CH change request (admin only)
+  app.post("/api/ch-change-requests/:id/reject", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { id } = req.params;
+      const { notes } = req.body;
+
+      // Check if request exists and is still pending
+      const existingRequest = await storage.getChChangeRequestById(id);
+      if (!existingRequest) {
+        return res.status(404).json({ message: "Change request not found" });
+      }
+      if (existingRequest.status !== 'pending') {
+        return res.status(409).json({ message: "Change request has already been processed" });
+      }
+
+      // Get current user ID for approvedBy field
+      const currentUser = req.user;
+      if (!currentUser?.id) {
+        return res.status(401).json({ message: "User identification required" });
+      }
+
+      const rejectedRequest = await storage.rejectChChangeRequest(id, currentUser.id, notes);
+      res.json(rejectedRequest);
+    } catch (error) {
+      console.error("Error rejecting CH change request:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to reject CH change request" });
     }
   });
 
