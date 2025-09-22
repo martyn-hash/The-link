@@ -798,6 +798,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/people/:id - Update person details
+  app.patch("/api/people/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = z.object({
+        id: z.string().min(1, "Person ID is required")
+      }).safeParse(req.params);
+      
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid person ID format", 
+          errors: paramValidation.error.issues 
+        });
+      }
+      
+      const { id } = paramValidation.data;
+      
+      // Check if person exists
+      const existingPerson = await storage.getPersonById(id);
+      if (!existingPerson) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+      
+      // Validate request body using the insert schema as partial for updates
+      const validationResult = insertPersonSchema.partial().safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid person data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      // Update the person
+      const updatedPerson = await storage.updatePerson(id, validationResult.data);
+      
+      res.status(200).json(updatedPerson);
+      
+    } catch (error) {
+      console.error("Error updating person:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to update person" });
+    }
+  });
+
   app.post("/api/users", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const { password, ...userData } = req.body;

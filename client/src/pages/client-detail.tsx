@@ -919,7 +919,7 @@ function PersonEditForm({
             </h5>
             
             <AddressLookup
-              onAddressSelected={(address) => {
+              onAddressSelect={(address) => {
                 form.setValue("addressLine1", address.line1);
                 form.setValue("addressLine2", address.line2 || "");
                 form.setValue("locality", address.city);

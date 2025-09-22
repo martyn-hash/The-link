@@ -5,8 +5,8 @@
 :root {
   --background: hsl(210deg 40% 98.04%);
   --foreground: hsl(222.2, 84%, 4.9%);
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(222.22deg 47.37% 11.18%);
+  --card: hsl(0deg 0% 96.08%);
+  --card-foreground: hsl(0deg 0% 0%);
   --popover: hsl(0, 0%, 100%);
   --popover-foreground: hsl(222.22deg 47.37% 11.18%);
   --primary: hsl(202deg 91% 37%);
