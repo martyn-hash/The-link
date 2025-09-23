@@ -4356,52 +4356,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Address details endpoint using getaddress.io get endpoint
-  app.get('/api/address-details/:id', isAuthenticated, async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      
-      if (!id || id.trim().length === 0) {
-        return res.status(400).json({ error: 'Address ID is required' });
-      }
-
-      const apiKey = process.env.GETADDRESS_API_KEY;
-      if (!apiKey) {
-        console.error('GETADDRESS_API_KEY not found in environment variables');
-        return res.status(500).json({ error: 'Address lookup service not configured' });
-      }
-
-      const url = `https://api.getaddress.io/get/${encodeURIComponent(id)}?api-key=${apiKey}`;
-      
-      const response = await fetch(url);
-      
-      if (response.status === 404) {
-        return res.status(404).json({ error: 'Address not found' });
-      }
-      
-      if (!response.ok) {
-        console.error('getaddress.io details API error:', response.status, await response.text());
-        return res.status(500).json({ error: 'Address details service unavailable' });
-      }
-
-      const data = await response.json();
-      
-      // Transform GetAddress.io response to our expected format
-      const transformedAddress = {
-        line1: data.line_1 || "",
-        line2: data.line_2 || "",
-        city: data.town_or_city || "",
-        county: data.county || "",
-        postcode: data.postcode || "",
-        country: "United Kingdom"
-      };
-      
-      res.json(transformedAddress);
-    } catch (error) {
-      console.error('Address details error:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
 
   // Test email endpoint (development only)
   if (process.env.NODE_ENV === 'development') {
