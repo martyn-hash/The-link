@@ -407,6 +407,9 @@ export interface IStorage {
   getPersonTags(personId: string): Promise<(PeopleTagAssignment & { tag: PeopleTag })[]>;
   assignPersonTag(assignment: InsertPeopleTagAssignment): Promise<PeopleTagAssignment>;
   unassignPersonTag(personId: string, tagId: string): Promise<void>;
+  
+  // Development operations
+  clearTestData(): Promise<{ [tableName: string]: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5040,6 +5043,116 @@ export class DatabaseStorage implements IStorage {
           eq(peopleTagAssignments.tagId, tagId)
         )
       );
+  }
+
+  async clearTestData(): Promise<{ [tableName: string]: number }> {
+    // Delete all non-user data in proper order to avoid FK constraint violations
+    // Users table and sessions are preserved
+    const deletionCounts: { [tableName: string]: number } = {};
+    
+    return await db.transaction(async (tx) => {
+      // Phase 1: Delete child records that reference other tables
+      const reasonFieldResponsesResult = await tx.delete(reasonFieldResponses).returning({ id: reasonFieldResponses.id });
+      deletionCounts.reasonFieldResponses = reasonFieldResponsesResult.length;
+
+      const stageApprovalResponsesResult = await tx.delete(stageApprovalResponses).returning({ id: stageApprovalResponses.id });
+      deletionCounts.stageApprovalResponses = stageApprovalResponsesResult.length;
+
+      // Phase 2: Project chronology
+      const projectChronologyResult = await tx.delete(projectChronology).returning({ id: projectChronology.id });
+      deletionCounts.projectChronology = projectChronologyResult.length;
+
+      // Phase 3: Service assignments and relationships
+      const clientServiceRoleAssignmentsResult = await tx.delete(clientServiceRoleAssignments).returning({ id: clientServiceRoleAssignments.id });
+      deletionCounts.clientServiceRoleAssignments = clientServiceRoleAssignmentsResult.length;
+
+      const peopleServicesResult = await tx.delete(peopleServices).returning({ id: peopleServices.id });
+      deletionCounts.peopleServices = peopleServicesResult.length;
+
+      const clientServicesResult = await tx.delete(clientServices).returning({ id: clientServices.id });
+      deletionCounts.clientServices = clientServicesResult.length;
+
+      // Phase 4: Tag assignments
+      const clientTagAssignmentsResult = await tx.delete(clientTagAssignments).returning({ id: clientTagAssignments.id });
+      deletionCounts.clientTagAssignments = clientTagAssignmentsResult.length;
+
+      const peopleTagAssignmentsResult = await tx.delete(peopleTagAssignments).returning({ id: peopleTagAssignments.id });
+      deletionCounts.peopleTagAssignments = peopleTagAssignmentsResult.length;
+
+      // Phase 5: Client-People relationships
+      const clientPeopleResult = await tx.delete(clientPeople).returning({ id: clientPeople.id });
+      deletionCounts.clientPeople = clientPeopleResult.length;
+
+      // Phase 6: Companies House change requests
+      const chChangeRequestsResult = await tx.delete(chChangeRequests).returning({ id: chChangeRequests.id });
+      deletionCounts.chChangeRequests = chChangeRequestsResult.length;
+
+      // Phase 7: Projects
+      const projectsResult = await tx.delete(projects).returning({ id: projects.id });
+      deletionCounts.projects = projectsResult.length;
+
+      // Phase 8: Stage approval fields
+      const stageApprovalFieldsResult = await tx.delete(stageApprovalFields).returning({ id: stageApprovalFields.id });
+      deletionCounts.stageApprovalFields = stageApprovalFieldsResult.length;
+
+      // Phase 9: Stage-reason mappings
+      const stageReasonMapsResult = await tx.delete(stageReasonMaps).returning({ id: stageReasonMaps.id });
+      deletionCounts.stageReasonMaps = stageReasonMapsResult.length;
+
+      // Phase 10: Custom fields
+      const reasonCustomFieldsResult = await tx.delete(reasonCustomFields).returning({ id: reasonCustomFields.id });
+      deletionCounts.reasonCustomFields = reasonCustomFieldsResult.length;
+
+      // Phase 11: Kanban stages
+      const kanbanStagesResult = await tx.delete(kanbanStages).returning({ id: kanbanStages.id });
+      deletionCounts.kanbanStages = kanbanStagesResult.length;
+
+      // Phase 12: Change reasons
+      const changeReasonsResult = await tx.delete(changeReasons).returning({ id: changeReasons.id });
+      deletionCounts.changeReasons = changeReasonsResult.length;
+
+      // Phase 13: Stage approvals
+      const stageApprovalsResult = await tx.delete(stageApprovals).returning({ id: stageApprovals.id });
+      deletionCounts.stageApprovals = stageApprovalsResult.length;
+
+      // Phase 14: Service roles
+      const serviceRolesResult = await tx.delete(serviceRoles).returning({ id: serviceRoles.id });
+      deletionCounts.serviceRoles = serviceRolesResult.length;
+
+      // Phase 15: Project types
+      const projectTypesResult = await tx.delete(projectTypes).returning({ id: projectTypes.id });
+      deletionCounts.projectTypes = projectTypesResult.length;
+
+      // Phase 16: Services
+      const servicesResult = await tx.delete(services).returning({ id: services.id });
+      deletionCounts.services = servicesResult.length;
+
+      // Phase 17: Work roles
+      const workRolesResult = await tx.delete(workRoles).returning({ id: workRoles.id });
+      deletionCounts.workRoles = workRolesResult.length;
+
+      // Phase 18: Client tags
+      const clientTagsResult = await tx.delete(clientTags).returning({ id: clientTags.id });
+      deletionCounts.clientTags = clientTagsResult.length;
+
+      // Phase 19: People tags
+      const peopleTagsResult = await tx.delete(peopleTags).returning({ id: peopleTags.id });
+      deletionCounts.peopleTags = peopleTagsResult.length;
+
+      // Phase 20: People
+      const peopleResult = await tx.delete(people).returning({ id: people.id });
+      deletionCounts.people = peopleResult.length;
+
+      // Phase 21: Clients
+      const clientsResult = await tx.delete(clients).returning({ id: clients.id });
+      deletionCounts.clients = clientsResult.length;
+
+      // Phase 22: Magic link tokens (optional - development-related)
+      const magicLinkTokensResult = await tx.delete(magicLinkTokens).returning({ id: magicLinkTokens.id });
+      deletionCounts.magicLinkTokens = magicLinkTokensResult.length;
+
+      return deletionCounts;
+    });
   }
 }
 
