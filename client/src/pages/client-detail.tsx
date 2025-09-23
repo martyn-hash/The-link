@@ -1765,7 +1765,7 @@ function PersonViewMode({
                           {peopleService.serviceOwner && (
                             <div className="flex items-center space-x-1">
                               <UserIcon className="h-3 w-3" />
-                              <span>Owner: {peopleService.serviceOwner.fullName}</span>
+                              <span>Owner: {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}</span>
                             </div>
                           )}
                           <div className="flex items-center space-x-1">

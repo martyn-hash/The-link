@@ -745,6 +745,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/clients/individual - Create individual client with person
+  app.post("/api/clients/individual", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate request body
+      const bodySchema = z.object({
+        firstName: z.string().min(1, "First name is required"),
+        lastName: z.string().min(1, "Last name is required"),
+        email: z.string().email("Valid email address is required"),
+      });
+      
+      const bodyValidation = bodySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+      
+      const { firstName, lastName, email } = bodyValidation.data;
+      
+      // Create client data with formatted name
+      const clientName = `${firstName} ${lastName} - Self-Assessment`;
+      const clientData = {
+        name: clientName,
+        email: email,
+        clientType: 'individual' as const,
+      };
+      
+      // Create client
+      const client = await storage.createClient(clientData);
+      
+      // Create person data
+      const personData = {
+        fullName: `${firstName} ${lastName}`,
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        isMainContact: true,
+      };
+      
+      // Create person
+      const person = await storage.createPerson(personData);
+      
+      // Link person to client as main contact
+      await storage.linkPersonToClient(
+        client.id, 
+        person.id, 
+        'Self-Assessment Client', // Role description
+        true // Is primary contact
+      );
+      
+      // Return client and person data
+      res.status(201).json({
+        client: client,
+        person: person,
+        message: `Created individual client "${clientName}" with associated person`
+      });
+      
+    } catch (error) {
+      console.error("Error creating individual client:", error instanceof Error ? error.message : error);
+      
+      // Handle duplicate name case
+      if (error instanceof Error && (error.message.includes("duplicate") || error.message.includes("unique"))) {
+        return res.status(409).json({ 
+          message: "A client with this name already exists" 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to create individual client" });
+    }
+  });
+
   // GET /api/clients/:id/services - Get all services for a client (alias for /api/client-services/client/:clientId)
   app.get("/api/clients/:id/services", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

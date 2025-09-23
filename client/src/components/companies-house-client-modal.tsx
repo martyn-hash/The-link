@@ -15,6 +15,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Form,
   FormControl,
   FormField,
@@ -53,7 +59,8 @@ import {
   Search,
   Building,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  User as PersonIcon
 } from "lucide-react";
 
 // Companies House data types
@@ -119,7 +126,14 @@ const companySearchSchema = z.object({
   companyNumber: z.string().min(1, "Company number is required").regex(/^[A-Z0-9]{6,8}$/i, "Invalid UK company number format"),
 });
 
+const individualClientSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Valid email address is required"),
+});
+
 type CompanySearchData = z.infer<typeof companySearchSchema>;
+type IndividualClientData = z.infer<typeof individualClientSchema>;
 
 interface ServiceRoleCompleteness {
   clientServiceId: string;
@@ -160,14 +174,18 @@ export function CompaniesHouseClientModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'services'>('ch-search');
+  const [clientType, setClientType] = useState<'company' | 'individual'>('company');
+  const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'individual-details' | 'services'>('ch-search');
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
   const [selectedOfficers, setSelectedOfficers] = useState<number[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [roleAssignments, setRoleAssignments] = useState<Record<string, Record<string, string>>>({});
+  const [serviceOwnerAssignments, setServiceOwnerAssignments] = useState<Record<string, string>>({});
   const [validationErrors, setValidationErrors] = useState<ServiceRoleCompleteness[]>([]);
+  const [createdClientId, setCreatedClientId] = useState<string | null>(null);
 
   const isEditing = !!client;
+  const effectiveClientId = client?.id || createdClientId;
 
   // Company search form
   const searchForm = useForm<CompanySearchData>({
@@ -177,20 +195,34 @@ export function CompaniesHouseClientModal({
     },
   });
 
+  // Individual client form
+  const individualForm = useForm<IndividualClientData>({
+    resolver: zodResolver(individualClientSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+    },
+  });
+
   // Reset state when modal opens/closes or client changes
   useEffect(() => {
     if (client) {
       setStep('services'); // Start on services step for editing
     } else {
+      setClientType('company'); // Default to company mode
       setStep('ch-search'); // Start on CH search for creation
       setSelectedCompany(null);
       setSelectedOfficers([]);
       setSelectedServices([]);
       setRoleAssignments({});
+      setServiceOwnerAssignments({});
       setValidationErrors([]);
+      setCreatedClientId(null);
       searchForm.reset();
+      individualForm.reset();
     }
-  }, [client, searchForm, open]);
+  }, [client, searchForm, individualForm, open]);
 
   // Fetch services (excluding personal services for client assignment)
   const { data: services, isLoading: servicesLoading } = useQuery<ServiceWithDetails[]>({
@@ -208,21 +240,46 @@ export function CompaniesHouseClientModal({
 
   // Fetch existing client services when editing
   const { data: existingClientServices } = useQuery<(ClientService & { service: ServiceWithDetails })[]>({
-    queryKey: ["/api/client-services/client", client?.id],
-    enabled: open && isEditing && !!client?.id,
+    queryKey: ["/api/client-services/client", effectiveClientId],
+    enabled: open && !!effectiveClientId,
     retry: false,
   });
 
   // Fetch service role completeness for existing client
   const { data: roleCompleteness, refetch: refetchCompleteness } = useQuery<ServiceRoleCompletenessResponse>({
-    queryKey: ["/api/clients", client?.id, "service-role-completeness"],
-    enabled: open && isEditing && !!client?.id,
+    queryKey: ["/api/clients", effectiveClientId, "service-role-completeness"],
+    enabled: open && !!effectiveClientId,
     retry: false,
   });
 
   // Search for company using Companies House API
   const [searchQuery, setSearchQuery] = useState("");
   const [companySearchResults, setCompanySearchResults] = useState<CompanySearchResult[]>([]);
+  
+  // Individual client creation mutation
+  const createIndividualClientMutation = useMutation({
+    mutationFn: async (data: IndividualClientData) => {
+      const response = await apiRequest("POST", "/api/clients/individual", data);
+      const result = await response.json() as { client: Client; person: any };
+      return result;
+    },
+    onSuccess: (result) => {
+      setCreatedClientId(result.client.id);
+      setStep('services'); // Move to services assignment step
+      toast({ 
+        title: "Success", 
+        description: "Individual client created successfully"
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create individual client",
+        variant: "destructive",
+      });
+    },
+  });
+
   const [isSearching, setIsSearching] = useState(false);
 
   const searchCompanies = async (query: string) => {
@@ -289,18 +346,13 @@ export function CompaniesHouseClientModal({
       return await response.json() as { client: Client & { people: any[] }, message: string };
     },
     onSuccess: (data) => {
+      setCreatedClientId(data.client.id);
+      setStep('services'); // Move to services assignment step
       toast({
         title: "Success",
         description: data.message,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      
-      // Close the modal and navigate to client detail view
-      onSuccess?.();
-      onOpenChange(false);
-      
-      // Navigate to the client detail page
-      setLocation(`/clients/${data.client.id}`);
     },
     onError: (error: any) => {
       console.error("Error creating client:", error);
@@ -579,23 +631,487 @@ export function CompaniesHouseClientModal({
     );
   };
 
-  // For now, we'll show a placeholder for services step since it's complex
+  // Individual client details step
+  const renderIndividualDetailsStep = () => (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <PersonIcon className="h-5 w-5 text-blue-600" />
+        <h3 className="text-lg font-semibold">Individual Client Details</h3>
+      </div>
+      
+      <Form {...individualForm}>
+        <form onSubmit={individualForm.handleSubmit((data) => {
+          createIndividualClientMutation.mutate(data);
+        })} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={individualForm.control}
+              name="firstName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>First Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Enter first name"
+                      data-testid="input-first-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={individualForm.control}
+              name="lastName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Last Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Enter last name"
+                      data-testid="input-last-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          
+          <FormField
+            control={individualForm.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email Address</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="email"
+                    placeholder="Enter email address"
+                    data-testid="input-email"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={createIndividualClientMutation.isPending}
+              data-testid="button-create-individual-client"
+            >
+              {createIndividualClientMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Create Individual Client
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </div>
+  );
+
+  // Service assignment mutation for created clients
+  const assignServicesMutation = useMutation({
+    mutationFn: async () => {
+      if (!effectiveClientId || selectedServices.length === 0) {
+        throw new Error("No client ID or services selected");
+      }
+
+      // Create all client-service mappings in parallel
+      const clientServicePromises = selectedServices.map(serviceId => {
+        const payload: any = {
+          clientId: effectiveClientId,
+          serviceId,
+        };
+        
+        // Add serviceOwnerId if assigned for this service
+        const assignedOwnerId = serviceOwnerAssignments[serviceId];
+        if (assignedOwnerId && assignedOwnerId.trim() !== "") {
+          payload.serviceOwnerId = assignedOwnerId;
+        }
+        
+        return apiRequest("POST", "/api/client-services", payload);
+      });
+      
+      await Promise.all(clientServicePromises);
+      
+      // Get the created client services to get their IDs
+      const clientServicesResponse = await apiRequest("GET", `/api/client-services/client/${effectiveClientId}`);
+      const clientServices = await clientServicesResponse.json() as (ClientService & { service: ServiceWithDetails })[];
+      
+      // Create all role assignments in parallel
+      const roleAssignmentPromises: Promise<any>[] = [];
+      
+      for (const clientService of clientServices) {
+        if (selectedServices.includes(clientService.serviceId)) {
+          const serviceRoles = clientService.service.roles;
+          
+          for (const role of serviceRoles) {
+            const assignedUserId = roleAssignments[clientService.serviceId]?.[role.id];
+            if (assignedUserId) {
+              roleAssignmentPromises.push(
+                apiRequest("POST", `/api/client-services/${clientService.id}/role-assignments`, {
+                  clientServiceId: clientService.id,
+                  workRoleId: role.id,
+                  userId: assignedUserId,
+                  isActive: true,
+                })
+              );
+            }
+          }
+        }
+      }
+      
+      // Execute all role assignments in parallel
+      await Promise.all(roleAssignmentPromises);
+      
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Services and role assignments completed successfully!",
+      });
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-services/client", effectiveClientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", effectiveClientId, "service-role-completeness"] });
+      
+      onSuccess?.();
+      onOpenChange(false);
+      
+      // Navigate to the client detail page
+      if (effectiveClientId) {
+        setLocation(`/clients/${effectiveClientId}`);
+      }
+    },
+    onError: (error: any) => {
+      console.error("Error assigning services:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign services and roles",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Service handling functions
+  const handleServiceToggle = (serviceId: string) => {
+    setSelectedServices(prev => 
+      prev.includes(serviceId) 
+        ? prev.filter(id => id !== serviceId)
+        : [...prev, serviceId]
+    );
+  };
+
+  const handleRoleAssignmentChange = (serviceId: string, roleId: string, userId: string) => {
+    setRoleAssignments(prev => ({
+      ...prev,
+      [serviceId]: {
+        ...prev[serviceId],
+        [roleId]: userId,
+      }
+    }));
+  };
+
+  // Validate role completeness
+  const validateRoleCompleteness = () => {
+    if (!services || selectedServices.length === 0) return { isValid: true, errors: [] };
+    
+    const errors: ServiceRoleCompleteness[] = [];
+    
+    for (const serviceId of selectedServices) {
+      const service = services.find(s => s.id === serviceId);
+      if (service) {
+        const missingRoles: { id: string; name: string }[] = [];
+        const assignedRoles: { id: string; name: string; assignedUser: string }[] = [];
+        
+        for (const role of service.roles) {
+          const assignedUserId = roleAssignments[serviceId]?.[role.id];
+          if (!assignedUserId) {
+            missingRoles.push({ id: role.id, name: role.name });
+          } else {
+            const assignedUser = users?.find(u => u.id === assignedUserId);
+            assignedRoles.push({ 
+              id: role.id, 
+              name: role.name, 
+              assignedUser: assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unknown User'
+            });
+          }
+        }
+        
+        if (missingRoles.length > 0) {
+          errors.push({
+            clientServiceId: serviceId,
+            serviceName: service.name,
+            serviceId: serviceId,
+            isComplete: false,
+            missingRoles,
+            assignedRoles
+          });
+        }
+      }
+    }
+    
+    return { isValid: errors.length === 0, errors };
+  };
+
   const renderServicesStep = () => (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Building2 className="h-5 w-5 text-blue-600" />
         <h3 className="text-lg font-semibold">Service Assignment</h3>
       </div>
-      <Alert>
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          Service assignment functionality will be implemented in the next phase.
-          For now, the client has been created successfully.
-        </AlertDescription>
-      </Alert>
+      <p className="text-sm text-muted-foreground">
+        Select services to assign to this client and assign users to required roles.
+      </p>
+
+      {servicesLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="border rounded-lg p-4">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <Skeleton className="h-3 w-48 mb-2" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {services?.map((service) => (
+            <Card 
+              key={service.id} 
+              className={`cursor-pointer border-2 transition-colors ${
+                selectedServices.includes(service.id) 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-muted hover:border-primary/50'
+              }`}
+              onClick={() => handleServiceToggle(service.id)}
+              data-testid={`card-service-${service.id}`}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-base">{service.name}</CardTitle>
+                  {selectedServices.includes(service.id) && (
+                    <CheckCircle className="w-5 h-5 text-primary" />
+                  )}
+                </div>
+                {service.description && (
+                  <CardDescription className="text-sm">
+                    {service.description}
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Users className="w-4 h-4" />
+                  <span>{service.roles.length} role(s) required</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {service.roles.map((role) => (
+                    <Badge key={role.id} variant="secondary" className="text-xs">
+                      {role.name}
+                    </Badge>
+                  ))}
+                </div>
+                
+                {/* Service Owner Selection - only show for selected services */}
+                {selectedServices.includes(service.id) && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Service Owner Assignment
+                      </label>
+                      <Select
+                        value={serviceOwnerAssignments[service.id] || "none"}
+                        onValueChange={(value) => {
+                          setServiceOwnerAssignments(prev => ({
+                            ...prev,
+                            [service.id]: value === "none" ? "" : (value || "")
+                          }));
+                        }}
+                        data-testid={`select-service-owner-${service.id}`}
+                      >
+                        <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
+                          <SelectValue placeholder="Choose service owner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" key="none">No service owner assigned</SelectItem>
+                          {users?.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Role assignments for selected services */}
+      {selectedServices.length > 0 && (
+        <div className="space-y-4">
+          <Separator />
+          <div className="flex items-center gap-2">
+            <UserCheck className="w-5 h-5" />
+            <h3 className="text-lg font-medium">Role Assignments</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Assign users to the required roles for each selected service.
+          </p>
+
+          {/* Validation errors display */}
+          {validationErrors.length > 0 && (
+            <Alert variant="destructive" data-testid="alert-validation-errors">
+              <AlertTriangle className="w-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">Service role assignments are incomplete:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {validationErrors.map((error) => (
+                      <li key={error.clientServiceId}>
+                        <strong>{error.serviceName}</strong>: {error.missingRoles.map(r => r.name).join(", ")} need user assignments
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-sm">Please assign users to all required roles before finishing.</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {selectedServices.map((serviceId) => {
+            const service = services?.find(s => s.id === serviceId);
+            if (!service) return null;
+
+            const serviceValidationError = validationErrors.find(error => error.serviceId === serviceId);
+            const hasValidationErrors = !!serviceValidationError;
+
+            return (
+              <Card key={serviceId} data-testid={`card-role-assignment-${serviceId}`} 
+                    className={hasValidationErrors ? "border-destructive" : ""}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{service.name}</CardTitle>
+                    {hasValidationErrors && (
+                      <Badge variant="destructive" className="text-xs">
+                        <UserX className="w-3 h-3 mr-1" />
+                        Incomplete
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {service.roles.map((role) => {
+                    const isRoleMissing = serviceValidationError?.missingRoles.some(mr => mr.id === role.id);
+                    return (
+                      <div key={role.id} className="flex items-center gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className={`font-medium text-sm ${isRoleMissing ? 'text-destructive' : ''}`}>
+                            {role.name}
+                            {isRoleMissing && <span className="ml-1 text-destructive">*</span>}
+                          </p>
+                          {role.description && (
+                            <p className="text-xs text-muted-foreground">{role.description}</p>
+                          )}
+                          {isRoleMissing && (
+                            <p className="text-xs text-destructive">This role requires a user assignment</p>
+                          )}
+                        </div>
+                        <div className="w-48">
+                          <Select 
+                            value={roleAssignments[serviceId]?.[role.id] || ""}
+                            onValueChange={(userId) => {
+                              handleRoleAssignmentChange(serviceId, role.id, userId);
+                              // Clear validation errors when user makes assignments
+                              if (validationErrors.length > 0) {
+                                const newValidation = validateRoleCompleteness();
+                                setValidationErrors(newValidation.errors);
+                              }
+                            }}
+                            data-testid={`select-role-assignment-${serviceId}-${role.id}`}
+                          >
+                            <SelectTrigger className={`w-full ${isRoleMissing ? 'border-destructive' : ''}`}>
+                              <SelectValue placeholder="Select user" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {users?.map((user) => (
+                                <SelectItem key={user.id} value={user.id}>
+                                  {user.firstName} {user.lastName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+      
       <div className="flex justify-end">
-        <Button onClick={() => { onSuccess?.(); onOpenChange(false); }} data-testid="button-finish">
-          Finish
+        <Button 
+          onClick={() => { 
+            // If no services selected, just finish without assignments
+            if (selectedServices.length === 0) {
+              onSuccess?.();
+              onOpenChange(false);
+              if (effectiveClientId) {
+                setLocation(`/clients/${effectiveClientId}`);
+              }
+              return;
+            }
+
+            // Validate role completeness before assigning
+            const validation = validateRoleCompleteness();
+            if (!validation.isValid) {
+              setValidationErrors(validation.errors);
+              toast({
+                title: "Incomplete Role Assignments",
+                description: `${validation.errors.length} service(s) have incomplete role assignments.`,
+                variant: "destructive",
+              });
+              return;
+            }
+            
+            // Assign services and roles
+            assignServicesMutation.mutate();
+          }} 
+          disabled={assignServicesMutation.isPending}
+          data-testid="button-finish"
+        >
+          {assignServicesMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Assigning Services...
+            </>
+          ) : (
+            "Finish"
+          )}
         </Button>
       </div>
     </div>
@@ -606,7 +1122,7 @@ export function CompaniesHouseClientModal({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Edit Client" : "Create Client from Companies House"}
+            {isEditing ? "Edit Client" : "Create New Client"}
           </DialogTitle>
           <DialogDescription>
             {isEditing 
@@ -615,13 +1131,50 @@ export function CompaniesHouseClientModal({
                 ? "Search for a company using Companies House data"
                 : step === 'ch-confirm'
                   ? "Confirm company details and select officers"
-                  : "Assign services and roles to the client"
+                  : step === 'individual-details'
+                    ? "Enter individual client details"
+                    : "Assign services and roles to the client"
             }
           </DialogDescription>
         </DialogHeader>
 
-        {!isEditing && step === 'ch-search' && renderCompanySearchStep()}
-        {!isEditing && step === 'ch-confirm' && renderCompanyConfirmStep()}
+        {!isEditing && (
+          <Tabs value={clientType} onValueChange={(value) => {
+            setClientType(value as 'company' | 'individual');
+            // Reset to appropriate first step based on selection
+            if (value === 'company') {
+              setStep('ch-search');
+            } else {
+              setStep('individual-details');
+            }
+            // Reset any previous state
+            setSelectedCompany(null);
+            setSelectedOfficers([]);
+            searchForm.reset();
+            individualForm.reset();
+          }} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="company" data-testid="tab-company">
+                <Building className="w-4 h-4 mr-2" />
+                Company
+              </TabsTrigger>
+              <TabsTrigger value="individual" data-testid="tab-individual">
+                <PersonIcon className="w-4 h-4 mr-2" />
+                Individual
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="company" className="mt-6">
+              {step === 'ch-search' && renderCompanySearchStep()}
+              {step === 'ch-confirm' && renderCompanyConfirmStep()}
+            </TabsContent>
+            
+            <TabsContent value="individual" className="mt-6">
+              {step === 'individual-details' && renderIndividualDetailsStep()}
+            </TabsContent>
+          </Tabs>
+        )}
+
         {step === 'services' && renderServicesStep()}
       </DialogContent>
     </Dialog>
