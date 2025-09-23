@@ -264,21 +264,13 @@ export function CompaniesHouseClientModal({
     // Parse the suggestion address into components
     const addressParts = suggestion.address.split(', ');
     
-    // Extract and decode postcode from URL if available
-    let postcode = "";
-    if (suggestion.url) {
-      const urlParts = suggestion.url.split('/');
-      const rawPostcode = urlParts[urlParts.length - 1];
-      // Decode URL-encoded postcode
-      postcode = decodeURIComponent(rawPostcode);
-    }
-    
-    // Populate form fields with parsed address data
+    // Populate form fields with available address data from autocomplete
+    // Note: GetAddress.io autocomplete doesn't include postcode - user will need to enter manually
     individualForm.setValue("address.line1", addressParts[0] || "");
     individualForm.setValue("address.line2", "");
     individualForm.setValue("address.city", addressParts[1] || "");
     individualForm.setValue("address.county", addressParts[2] || "");
-    individualForm.setValue("address.postcode", postcode);
+    individualForm.setValue("address.postcode", ""); // Empty - user enters manually
     individualForm.setValue("address.country", "United Kingdom");
     
     // Update the address query field with the selected address
