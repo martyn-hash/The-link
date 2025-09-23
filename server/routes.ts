@@ -84,7 +84,7 @@ const paramPeopleServiceIdSchema = z.object({
 });
 
 const paramPersonIdSchema = z.object({ 
-  personId: z.string().min(1, "Person ID is required") 
+  personId: z.string().min(1, "Person ID is required") // Note: People IDs are text, not UUID in existing database
 });
 
 const paramApprovalIdSchema = z.object({ 
@@ -551,16 +551,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Company relationship API routes
+  // Person-Company many-to-many relationship API routes
   
-  // POST /api/clients/:id/link-company - Link individual client to company
-  app.post("/api/clients/:id/link-company", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/people/:personId/companies - List all companies for a person
+  app.get("/api/people/:personId/companies", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const clientIdSchema = z.object({ 
-        id: z.string().min(1, "Client ID is required")
-      });
-      const paramValidation = validateParams(clientIdSchema, req.params);
+      const paramValidation = validateParams(paramPersonIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -568,9 +564,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Validate request body
+      const { personId } = paramValidation.data;
+      
+      // Verify person exists
+      const person = await storage.getPersonById(personId);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+
+      // Get all client relationships for the person
+      const allClientRelationships = await storage.getClientPeopleByPersonId(personId);
+      
+      // Filter to only include company clients (not individuals)
+      const companyRelationships = allClientRelationships.filter(
+        relationship => relationship.client.clientType === 'company'
+      );
+      
+      res.json(companyRelationships);
+    } catch (error) {
+      console.error("Error fetching person companies:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("not found")) {
+          return res.status(404).json({ message: error.message });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to fetch person companies" });
+    }
+  });
+
+  // POST /api/people/:personId/companies - Link person to a company
+  app.post("/api/people/:personId/companies", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramPersonIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
       const linkCompanySchema = z.object({
-        companyClientId: z.string().min(1, "Company client ID is required")
+        clientId: z.string().min(1, "Client ID is required").uuid("Invalid client ID format"),
+        officerRole: z.string().optional(),
+        isPrimaryContact: z.boolean().optional()
       });
       const bodyValidation = linkCompanySchema.safeParse(req.body);
       if (!bodyValidation.success) {
@@ -580,37 +618,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { id: individualClientId } = paramValidation.data;
-      const { companyClientId } = bodyValidation.data;
+      const { personId } = paramValidation.data;
+      const { clientId, officerRole, isPrimaryContact } = bodyValidation.data;
 
-      const updatedClient = await storage.linkClientToCompany(individualClientId, companyClientId);
-      res.json(updatedClient);
+      // Verify person exists
+      const person = await storage.getPersonById(personId);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+
+      // Verify client exists and is a company
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Company client not found" });
+      }
+      if (client.clientType !== 'company') {
+        return res.status(400).json({ message: "Target client must be a company" });
+      }
+
+      const clientPerson = await storage.linkPersonToClient(clientId, personId, officerRole, isPrimaryContact);
+      res.status(201).json(clientPerson);
     } catch (error) {
-      console.error("Error linking client to company:", error instanceof Error ? error.message : error);
+      console.error("Error linking person to company:", error instanceof Error ? error.message : error);
       
       if (error instanceof Error) {
         if (error.message.includes("not found")) {
           return res.status(404).json({ message: error.message });
         }
-        if (error.message.includes("not an individual client") || 
-            error.message.includes("not a company client") ||
-            error.message.includes("Cannot link a client to itself")) {
+        if (error.message.includes("duplicate key") || error.message.includes("already linked")) {
+          return res.status(409).json({ message: "Person is already linked to this company" });
+        }
+        if (error.message.includes("not a company") || error.message.includes("must be")) {
           return res.status(400).json({ message: error.message });
         }
       }
       
-      res.status(500).json({ message: "Failed to link client to company" });
+      res.status(500).json({ message: "Failed to link person to company" });
     }
   });
 
-  // DELETE /api/clients/:id/link-company - Unlink individual client from company
-  app.delete("/api/clients/:id/link-company", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // DELETE /api/people/:personId/companies/:clientId - Unlink person from a company
+  app.delete("/api/people/:personId/companies/:clientId", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const clientIdSchema = z.object({ 
-        id: z.string().min(1, "Client ID is required")
-      });
-      const paramValidation = validateParams(clientIdSchema, req.params);
+      const paramValidation = validateParams(
+        paramPersonIdSchema.merge(paramClientIdSchema), 
+        req.params
+      );
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -618,30 +671,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { id: individualClientId } = paramValidation.data;
-      const updatedClient = await storage.unlinkClientFromCompany(individualClientId);
-      res.json(updatedClient);
+      const { personId, clientId } = paramValidation.data;
+      
+      // Verify person exists
+      const person = await storage.getPersonById(personId);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+
+      // Verify client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Company client not found" });
+      }
+
+      await storage.unlinkPersonFromClient(clientId, personId);
+      res.status(204).send();
     } catch (error) {
-      console.error("Error unlinking client from company:", error instanceof Error ? error.message : error);
+      console.error("Error unlinking person from company:", error instanceof Error ? error.message : error);
       
       if (error instanceof Error) {
         if (error.message.includes("not found")) {
           return res.status(404).json({ message: error.message });
         }
+        if (error.message.includes("not linked") || error.message.includes("no relationship")) {
+          return res.status(404).json({ message: "Person is not linked to this company" });
+        }
       }
       
-      res.status(500).json({ message: "Failed to unlink client from company" });
+      res.status(500).json({ message: "Failed to unlink person from company" });
     }
   });
 
-  // GET /api/clients/:id/related-company - Get related company for individual client
-  app.get("/api/clients/:id/related-company", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // POST /api/people/:personId/convert-to-company-client - Convert individual client to company client
+  app.post("/api/people/:personId/convert-to-company-client", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
-      // Validate path parameters
-      const clientIdSchema = z.object({ 
-        id: z.string().min(1, "Client ID is required")
-      });
-      const paramValidation = validateParams(clientIdSchema, req.params);
+      const paramValidation = validateParams(paramPersonIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -649,17 +714,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { id: individualClientId } = paramValidation.data;
-      const relatedCompany = await storage.getRelatedCompany(individualClientId);
+      const conversionSchema = z.object({
+        companyData: insertClientSchema.partial(),
+        oldIndividualClientId: z.string().uuid().optional()
+      });
+      const bodyValidation = conversionSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request body", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const { personId } = paramValidation.data;
+      const { companyData, oldIndividualClientId } = bodyValidation.data;
+
+      const result = await storage.convertIndividualToCompanyClient(personId, companyData, oldIndividualClientId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error converting individual to company client:", error instanceof Error ? error.message : error);
       
-      if (!relatedCompany) {
-        return res.status(404).json({ message: "No related company found" });
+      if (error instanceof Error) {
+        if (error.message.includes("not found") || error.message.includes("required")) {
+          return res.status(400).json({ message: error.message });
+        }
+        if (error.message.includes("duplicate") || error.message.includes("already exists") || error.message.includes("unique")) {
+          return res.status(409).json({ message: "Company with this name or number already exists" });
+        }
       }
       
-      res.json(relatedCompany);
-    } catch (error) {
-      console.error("Error fetching related company:", error instanceof Error ? error.message : error);
-      res.status(500).json({ message: "Failed to fetch related company" });
+      res.status(500).json({ message: "Failed to convert individual to company client" });
     }
   });
 
