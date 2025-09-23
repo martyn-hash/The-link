@@ -94,11 +94,11 @@ const updatePersonSchema = insertPersonSchema.partial().extend({
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
   email2: z.string().email("Invalid email format").optional().or(z.literal("")),
   telephone2: z.string().optional().or(z.literal("")),
-  linkedinUrl: z.string().url("Invalid LinkedIn URL").optional().or(z.literal("")),
-  instagramUrl: z.string().url("Invalid Instagram URL").optional().or(z.literal("")),
-  twitterUrl: z.string().url("Invalid Twitter/X URL").optional().or(z.literal("")),
-  facebookUrl: z.string().url("Invalid Facebook URL").optional().or(z.literal("")),
-  tiktokUrl: z.string().url("Invalid TikTok URL").optional().or(z.literal("")),
+  linkedinUrl: z.union([z.string().url("Invalid LinkedIn URL"), z.literal("")]).optional(),
+  instagramUrl: z.union([z.string().url("Invalid Instagram URL"), z.literal("")]).optional(),
+  twitterUrl: z.union([z.string().url("Invalid Twitter/X URL"), z.literal("")]).optional(),
+  facebookUrl: z.union([z.string().url("Invalid Facebook URL"), z.literal("")]).optional(),
+  tiktokUrl: z.union([z.string().url("Invalid TikTok URL"), z.literal("")]).optional(),
 });
 
 type UpdatePersonData = z.infer<typeof updatePersonSchema>;
@@ -1496,6 +1496,15 @@ function PersonEditForm({
       personalUtrNumber: clientPerson.person.personalUtrNumber || "",
       photoIdVerified: clientPerson.person.photoIdVerified || false,
       addressVerified: clientPerson.person.addressVerified || false,
+      // Extended contact information
+      telephone2: clientPerson.person.telephone2 || "",
+      email2: clientPerson.person.email2 || "",
+      // Social media URLs
+      linkedinUrl: clientPerson.person.linkedinUrl || "",
+      instagramUrl: clientPerson.person.instagramUrl || "",
+      twitterUrl: clientPerson.person.twitterUrl || "",
+      facebookUrl: clientPerson.person.facebookUrl || "",
+      tiktokUrl: clientPerson.person.tiktokUrl || "",
     },
   });
 
@@ -1600,33 +1609,6 @@ function PersonEditForm({
               )}
             />
             
-            <FormField
-              control={form.control}
-              name="telephone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid={`input-telephone-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="email" data-testid={`input-email-${clientPerson.id}`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </div>
 
           {/* Address Information */}
