@@ -427,6 +427,8 @@ export const services = pgTable("services", {
   isCompaniesHouseConnected: boolean("is_companies_house_connected").default(false),
   chStartDateField: varchar("ch_start_date_field"), // Maps to client field for start date (e.g., 'next_accounts_period_end')
   chDueDateField: varchar("ch_due_date_field"), // Maps to client field for due date (e.g., 'next_accounts_due')
+  // Personal service flag - if true, this service is for individuals, not clients/companies
+  isPersonalService: boolean("is_personal_service").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -993,6 +995,7 @@ export const baseInsertServiceSchema = createInsertSchema(services).omit({
   isCompaniesHouseConnected: z.boolean().optional().default(false),
   chStartDateField: z.string().optional(),
   chDueDateField: z.string().optional(),
+  isPersonalService: z.boolean().optional().default(false),
 });
 
 // Services schema with validation
