@@ -74,7 +74,8 @@ function formatBirthDate(dateOfBirth: string | Date | null): string {
     if (match) {
       const [, year, month] = match;
       // This looks like a partial date - show as month/year
-      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+      // Use UTC to avoid timezone issues
+      const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1));
       
       // Validate the constructed date
       if (isNaN(date.getTime())) {
