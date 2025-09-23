@@ -758,9 +758,14 @@ export function CompaniesHouseClientModal({
       
       for (const clientService of clientServices) {
         if (selectedServices.includes(clientService.serviceId)) {
-          const serviceRoles = clientService.service.roles;
+          // Get service roles from the services data instead of clientService.service
+          const service = services?.find(s => s.id === clientService.serviceId);
+          if (!service || !service.roles) {
+            console.warn(`Service ${clientService.serviceId} not found or has no roles`);
+            continue;
+          }
           
-          for (const role of serviceRoles) {
+          for (const role of service.roles) {
             const assignedUserId = roleAssignments[clientService.serviceId]?.[role.id];
             if (assignedUserId) {
               roleAssignmentPromises.push(

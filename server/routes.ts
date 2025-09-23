@@ -776,8 +776,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create client
       const client = await storage.createClient(clientData);
       
-      // Create person data
+      // Create person data with generated ID
+      const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const personData = {
+        id: personId,
         fullName: `${firstName} ${lastName}`,
         firstName: firstName,
         lastName: lastName,
