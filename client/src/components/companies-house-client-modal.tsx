@@ -130,6 +130,14 @@ const individualClientSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email address is required"),
+  address: z.object({
+    line1: z.string().min(1, "Address line 1 is required"),
+    line2: z.string().optional(),
+    city: z.string().min(1, "Town/City is required"),
+    county: z.string().optional(),
+    postcode: z.string().min(1, "Postcode is required").regex(/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i, "Invalid UK postcode format"),
+    country: z.string().default("United Kingdom"),
+  }),
 });
 
 type CompanySearchData = z.infer<typeof companySearchSchema>;
@@ -196,6 +204,14 @@ export function CompaniesHouseClientModal({
       firstName: "",
       lastName: "",
       email: "",
+      address: {
+        line1: "",
+        line2: "",
+        city: "",
+        county: "",
+        postcode: "",
+        country: "United Kingdom",
+      },
     },
   });
 
@@ -215,6 +231,54 @@ export function CompaniesHouseClientModal({
   // Search for company using Companies House API
   const [searchQuery, setSearchQuery] = useState("");
   const [companySearchResults, setCompanySearchResults] = useState<CompanySearchResult[]>([]);
+  
+  // Address lookup state
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+
+  // Postcode lookup function using a free UK postcode API
+  const lookupPostcode = async (postcode: string) => {
+    setIsLoadingAddresses(true);
+    try {
+      // Using postcodes.io - a free UK postcode API
+      const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.result) {
+          // Create a formatted address from the postcode data
+          const address = {
+            formatted_address: `${data.result.admin_district}, ${data.result.country}`,
+            line1: "",
+            line2: "",
+            city: data.result.admin_district || data.result.parish || "",
+            county: data.result.admin_county || "",
+            postcode: data.result.postcode,
+            country: "United Kingdom"
+          };
+          setAddressSuggestions([address]);
+        } else {
+          setAddressSuggestions([]);
+        }
+      } else {
+        setAddressSuggestions([]);
+      }
+    } catch (error) {
+      console.log("Address lookup failed - user can enter manually");
+      setAddressSuggestions([]);
+    }
+    setIsLoadingAddresses(false);
+  };
+
+  // Select address from suggestions
+  const selectAddress = (address: any) => {
+    individualForm.setValue("address.line1", address.line1);
+    individualForm.setValue("address.line2", address.line2);
+    individualForm.setValue("address.city", address.city);
+    individualForm.setValue("address.county", address.county);
+    individualForm.setValue("address.postcode", address.postcode);
+    individualForm.setValue("address.country", address.country);
+    setAddressSuggestions([]);
+  };
   
   // Individual client creation mutation
   const createIndividualClientMutation = useMutation({
@@ -640,6 +704,154 @@ export function CompaniesHouseClientModal({
               </FormItem>
             )}
           />
+          
+          {/* Address Fields */}
+          <div className="space-y-4 border-t pt-4">
+            <h4 className="font-medium text-gray-900">Address</h4>
+            
+            <FormField
+              control={individualForm.control}
+              name="address.postcode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Postcode</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Enter postcode (e.g., SW1A 1AA)"
+                      data-testid="input-postcode"
+                      onChange={async (e) => {
+                        field.onChange(e);
+                        const postcode = e.target.value.trim();
+                        if (postcode.length >= 5) {
+                          await lookupPostcode(postcode);
+                        }
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  {isLoadingAddresses && (
+                    <p className="text-sm text-gray-500">Looking up addresses...</p>
+                  )}
+                </FormItem>
+              )}
+            />
+
+            {addressSuggestions.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Select Address:
+                </label>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {addressSuggestions.map((address, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      className="w-full text-left p-2 text-sm border rounded hover:bg-gray-50 focus:bg-gray-50"
+                      onClick={() => selectAddress(address)}
+                      data-testid={`button-select-address-${index}`}
+                    >
+                      {address.formatted_address}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 gap-4">
+              <FormField
+                control={individualForm.control}
+                name="address.line1"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address Line 1</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Enter address line 1"
+                        data-testid="input-address-line1"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={individualForm.control}
+                name="address.line2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address Line 2 (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Enter address line 2"
+                        data-testid="input-address-line2"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={individualForm.control}
+                  name="address.city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Town/City</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Enter town/city"
+                          data-testid="input-city"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={individualForm.control}
+                  name="address.county"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>County (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Enter county"
+                          data-testid="input-county"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={individualForm.control}
+                name="address.country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Enter country"
+                        data-testid="input-country"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
           
           <div className="flex justify-end">
             <Button

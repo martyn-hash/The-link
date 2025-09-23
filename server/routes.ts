@@ -753,6 +753,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: z.string().min(1, "First name is required"),
         lastName: z.string().min(1, "Last name is required"),
         email: z.string().email("Valid email address is required"),
+        address: z.object({
+          line1: z.string().min(1, "Address line 1 is required"),
+          line2: z.string().optional(),
+          city: z.string().min(1, "Town/City is required"),
+          county: z.string().optional(),
+          postcode: z.string().min(1, "Postcode is required"),
+          country: z.string().default("United Kingdom"),
+        }),
       });
       
       const bodyValidation = bodySchema.safeParse(req.body);
@@ -763,20 +771,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const { firstName, lastName, email } = bodyValidation.data;
+      const { firstName, lastName, email, address } = bodyValidation.data;
       
-      // Create client data with formatted name
+      // Create client data with formatted name and address
       const clientName = `${firstName} ${lastName} - Personal Tax Client`;
       const clientData = {
         name: clientName,
         email: email,
         clientType: 'individual' as const,
+        registeredAddress1: address.line1,
+        registeredAddress2: address.line2 || null,
+        registeredPostcode: address.postcode,
       };
       
       // Create client
       const client = await storage.createClient(clientData);
       
-      // Create person data with generated ID
+      // Create person data with generated ID and address
       const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const personData = {
         id: personId,
@@ -784,6 +795,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: firstName,
         lastName: lastName,
         email: email,
+        addressLine1: address.line1,
+        addressLine2: address.line2 || null,
         isMainContact: true,
       };
       
