@@ -2547,7 +2547,7 @@ export default function ClientDetail() {
           throw new Error(`Failed to fetch services for company ${companyId}`);
         }
         const services = await response.json();
-        return services.map((service: any) => ({ ...service, companyId, companyName: companyConnections.find(conn => conn.client.id === companyId)?.client.fullName }));
+        return services.map((service: any) => ({ ...service, companyId, companyName: companyConnections.find(conn => conn.client.id === companyId)?.client.name }));
       });
       
       const allServices = await Promise.all(servicesPromises);
@@ -2730,6 +2730,7 @@ export default function ClientDetail() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Main Content */}
@@ -3079,7 +3080,7 @@ export default function ClientDetail() {
                                 </div>
                                 <div>
                                   <h4 className="font-medium text-lg" data-testid={`text-company-name-${connection.client.id}`}>
-                                    {connection.client.fullName}
+                                    {connection.client.name}
                                   </h4>
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     {connection.officerRole && (
@@ -3253,17 +3254,6 @@ export default function ClientDetail() {
           </TabsContent>
         </Tabs>
       </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">Client Not Found</h1>
-        <p className="text-muted-foreground mb-6">The client you're looking for could not be found.</p>
-      </div>
     </div>
   );
-  }
-
-export default ClientDetail;
+}
