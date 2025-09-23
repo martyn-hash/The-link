@@ -2629,14 +2629,16 @@ export default function ClientDetail() {
                       </p>
                     </div>
                   ) : relatedPeople && relatedPeople.length > 0 ? (
-                    <Accordion
-                      type="single"
-                      collapsible
-                      value={expandedPersonId ?? undefined}
-                      onValueChange={(value) => setExpandedPersonId(value ?? null)}
-                    >
-                      {relatedPeople.map((clientPerson) => (
-                        <AccordionItem key={clientPerson.person.id} value={clientPerson.person.id} className="mb-4 border rounded-lg">
+                    <div className="bg-background space-y-4">
+                      <Accordion
+                        type="single"
+                        collapsible
+                        value={expandedPersonId ?? undefined}
+                        onValueChange={(value) => setExpandedPersonId(value ?? null)}
+                        className="space-y-4"
+                      >
+                        {relatedPeople.map((clientPerson) => (
+                          <AccordionItem key={clientPerson.person.id} value={clientPerson.person.id} className="border rounded-lg bg-card">
                           <AccordionTrigger 
                             className="text-left hover:no-underline p-4"
                             data-testid={`person-row-${clientPerson.person.id}`}
@@ -2734,7 +2736,8 @@ export default function ClientDetail() {
                           </AccordionContent>
                         </AccordionItem>
                       ))}
-                    </Accordion>
+                      </Accordion>
+                    </div>
                   ) : (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">
