@@ -749,11 +749,6 @@ export function CompaniesHouseClientModal({
                       data-testid={`button-select-address-${index}`}
                     >
                       <div className="font-medium">{address.address}</div>
-                      {address.url && (
-                        <div className="text-gray-500 text-xs">
-                          {address.url}
-                        </div>
-                      )}
                     </button>
                   ))}
                 </div>
