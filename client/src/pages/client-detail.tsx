@@ -47,6 +47,48 @@ function formatPersonName(fullName: string): string {
   return fullName;
 }
 
+// Utility function to format birth dates from Companies House (which only provides month/year)
+function formatBirthDate(dateOfBirth: string | Date | null): string {
+  if (!dateOfBirth) return 'Not provided';
+  
+  // Handle string inputs - detect if this looks like a partial date from Companies House
+  if (typeof dateOfBirth === 'string') {
+    // Pattern for partial dates: "YYYY-MM" or "YYYY-MM-01" with optional time suffix
+    const partialDatePattern = /^(\d{4})-(\d{2})(?:-01(?:T00:00:00(?:\.\d+)?Z?)?)?$/;
+    const match = dateOfBirth.match(partialDatePattern);
+    
+    if (match) {
+      const [, year, month] = match;
+      // This looks like a partial date - show as month/year
+      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+      
+      // Validate the constructed date
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-GB', { 
+        month: 'long', 
+        year: 'numeric',
+        timeZone: 'UTC'
+      });
+    }
+  }
+  
+  // For full dates or non-matching patterns, create date object
+  const date = new Date(dateOfBirth);
+  
+  // Handle invalid dates
+  if (isNaN(date.getTime())) {
+    return 'Invalid date';
+  }
+  
+  // Show full date for complete date information
+  return date.toLocaleDateString('en-GB', {
+    timeZone: 'UTC'
+  });
+}
+
 type ClientPersonWithPerson = ClientPerson & { person: Person };
 type ClientServiceWithService = ClientService & { 
   service: Service & { 
@@ -1107,7 +1149,7 @@ function PersonViewMode({
             <div>
               <label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
               <p className="text-sm mt-1" data-testid={`view-dateOfBirth-${clientPerson.id}`}>
-                {clientPerson.person.dateOfBirth ? new Date(clientPerson.person.dateOfBirth).toLocaleDateString() : 'Not provided'}
+                {formatBirthDate(clientPerson.person.dateOfBirth)}
               </p>
             </div>
             
@@ -2405,7 +2447,7 @@ export default function ClientDetail() {
                                       <div className="text-right">
                                         <div className="text-xs">Date of Birth</div>
                                         <div className="text-sm font-medium" data-testid={`text-dob-${clientPerson.person.id}`}>
-                                          {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
+                                          {formatBirthDate(clientPerson.person.dateOfBirth)}
                                         </div>
                                       </div>
                                     </div>
