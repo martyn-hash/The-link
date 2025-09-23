@@ -2636,7 +2636,7 @@ export default function ClientDetail() {
                       onValueChange={(value) => setExpandedPersonId(value ?? null)}
                     >
                       {relatedPeople.map((clientPerson) => (
-                        <AccordionItem key={clientPerson.person.id} value={clientPerson.person.id}>
+                        <AccordionItem key={clientPerson.person.id} value={clientPerson.person.id} className="mb-4 border rounded-lg">
                           <AccordionTrigger 
                             className="text-left hover:no-underline p-4"
                             data-testid={`person-row-${clientPerson.person.id}`}
