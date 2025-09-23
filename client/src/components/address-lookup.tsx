@@ -1,10 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Search, MapPin, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+
+// Debounce utility function
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 
 interface GetAddressAutocompleteResponse {
   suggestions: {
@@ -51,13 +63,33 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
   const [hasSearched, setHasSearched] = useState(false);
   const { toast } = useToast();
 
-  const searchAddresses = async () => {
-    if (!searchTerm.trim()) {
-      toast({
-        title: "Search term required",
-        description: "Please enter an address or postcode to search",
-        variant: "destructive",
-      });
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce(async (term: string) => {
+      if (term.trim().length >= 3) {
+        await searchAddresses(term);
+      } else {
+        setAddresses([]);
+        setHasSearched(false);
+      }
+    }, 500),
+    []
+  );
+
+  // Effect to trigger search when searchTerm changes
+  useEffect(() => {
+    if (searchTerm) {
+      debouncedSearch(searchTerm);
+    } else {
+      setAddresses([]);
+      setHasSearched(false);
+    }
+  }, [searchTerm, debouncedSearch]);
+
+  const searchAddresses = async (term?: string) => {
+    const searchValue = term || searchTerm;
+    
+    if (!searchValue.trim()) {
       return;
     }
 
@@ -65,16 +97,12 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
     setHasSearched(false);
 
     try {
-      const response = await fetch(`/api/address-lookup/${encodeURIComponent(searchTerm.trim())}`);
+      const response = await fetch(`/api/address-lookup/${encodeURIComponent(searchValue.trim())}`);
       
       if (!response.ok) {
         if (response.status === 404) {
-          toast({
-            title: "No addresses found",
-            description: "No addresses were found for this search. Please try a different term.",
-            variant: "destructive",
-          });
           setAddresses([]);
+          setHasSearched(true);
         } else {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -100,21 +128,8 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
       
       setAddresses(transformedAddresses);
       setHasSearched(true);
-
-      if (!transformedAddresses || transformedAddresses.length === 0) {
-        toast({
-          title: "No addresses found",
-          description: "No addresses were found for this search term.",
-          variant: "destructive",
-        });
-      }
     } catch (error) {
       console.error("Address lookup error:", error);
-      toast({
-        title: "Address lookup failed",
-        description: "Unable to search for addresses. Please try again later.",
-        variant: "destructive",
-      });
       setAddresses([]);
     } finally {
       setIsLoading(false);
@@ -148,31 +163,26 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center space-x-2">
-        <div className="flex-1">
-          <Label htmlFor="searchTerm">Address or Postcode</Label>
-          <div className="flex space-x-2 mt-1">
-            <Input
-              id="searchTerm"
-              placeholder="Enter address or postcode (e.g., 10 Downing Street, SW1A 1AA)"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyPress={handleKeyPress}
-              data-testid="input-address-search"
-            />
-            <Button 
-              onClick={searchAddresses}
-              disabled={isLoading || !searchTerm.trim()}
-              data-testid="button-search-address"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
+      <div className="space-y-2">
+        <Label htmlFor="searchTerm">Address or Postcode</Label>
+        <div className="relative">
+          <Input
+            id="searchTerm"
+            placeholder="Start typing address (e.g., 11 Primrose Crescent, Worcester...)"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            data-testid="input-address-search"
+            className="pr-10"
+          />
+          {isLoading && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Type at least 3 characters to see suggestions
+        </p>
       </div>
 
       {hasSearched && addresses.length > 0 && (
@@ -208,6 +218,11 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
         </div>
       )}
 
+      {hasSearched && addresses.length === 0 && searchTerm.length >= 3 && (
+        <div className="text-sm text-muted-foreground">
+          No addresses found for "{searchTerm}". Try a different search term.
+        </div>
+      )}
     </div>
   );
 }

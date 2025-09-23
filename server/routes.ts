@@ -799,6 +799,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/clients/:id/people - Add a new person to a client
+  app.post("/api/clients/:id/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate client ID parameter
+      const paramValidation = z.object({
+        id: z.string().min(1, "Client ID is required")
+      }).safeParse(req.params);
+      
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID format", 
+          errors: paramValidation.error.issues 
+        });
+      }
+      
+      const { id: clientId } = paramValidation.data;
+      
+      // Check if client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      
+      // Validate request body
+      const validationResult = insertPersonSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid person data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const personData = validationResult.data;
+      
+      // Generate unique ID for the person
+      const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const personWithId = { ...personData, id: personId };
+      
+      // Create the person
+      const newPerson = await storage.createPerson(personWithId);
+      
+      // Associate the person with the client
+      const relationshipId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const clientPersonData = {
+        id: relationshipId,
+        clientId: clientId,
+        personId: newPerson.id,
+        isPrimaryContact: false, // Default to false, can be updated later
+        officerRole: null, // Default null, can be set if needed
+      };
+      
+      const clientPerson = await storage.createClientPerson(clientPersonData);
+      
+      // Return the full ClientPersonWithPerson object for consistency
+      const result = {
+        ...clientPerson,
+        person: newPerson
+      };
+      
+      res.status(201).json(result);
+      
+    } catch (error) {
+      console.error("Error creating person for client:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to create person" });
+    }
+  });
+
   // PATCH /api/people/:id - Update person details
   app.patch("/api/people/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

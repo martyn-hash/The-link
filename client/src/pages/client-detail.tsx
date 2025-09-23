@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -73,6 +73,13 @@ type AddServiceData = z.infer<typeof addServiceSchema>;
 const updatePersonSchema = insertPersonSchema.partial().extend({
   fullName: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  email2: z.string().email("Invalid email format").optional().or(z.literal("")),
+  telephone2: z.string().optional().or(z.literal("")),
+  linkedinUrl: z.string().url("Invalid LinkedIn URL").optional().or(z.literal("")),
+  instagramUrl: z.string().url("Invalid Instagram URL").optional().or(z.literal("")),
+  twitterUrl: z.string().url("Invalid Twitter/X URL").optional().or(z.literal("")),
+  facebookUrl: z.string().url("Invalid Facebook URL").optional().or(z.literal("")),
+  tiktokUrl: z.string().url("Invalid TikTok URL").optional().or(z.literal("")),
 });
 
 type UpdatePersonData = z.infer<typeof updatePersonSchema>;
@@ -522,6 +529,507 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   );
 }
 
+// Add Person Modal Component
+function AddPersonModal({ 
+  clientId, 
+  isOpen, 
+  onClose, 
+  onSave, 
+  isSaving 
+}: {
+  clientId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: InsertPersonData) => void;
+  isSaving: boolean;
+}) {
+  const form = useForm<InsertPersonData>({
+    resolver: zodResolver(insertPersonSchema),
+    defaultValues: {
+      fullName: "",
+      title: "",
+      dateOfBirth: "",
+      nationality: "",
+      occupation: "",
+      telephone: "",
+      email: "",
+      telephone2: "",
+      email2: "",
+      linkedinUrl: "",
+      twitterUrl: "",
+      facebookUrl: "",
+      instagramUrl: "",
+      tiktokUrl: "",
+      address: "",
+      postcode: "",
+      city: "",
+      county: "",
+      country: "",
+      addressVerified: false,
+      niNumber: "",
+      personalUtrNumber: "",
+      identityVerified: false,
+      isMainContact: false,
+    },
+  });
+
+  const handleSubmit = (data: InsertPersonData) => {
+    onSave(data);
+  };
+
+  const handleAddressSelect = (addressData: any) => {
+    // Map from AddressLookup format to form fields
+    form.setValue("address", addressData.addressLine1 || "");
+    form.setValue("postcode", addressData.postalCode || "");
+    form.setValue("city", addressData.locality || "");
+    form.setValue("county", addressData.region || "");
+    form.setValue("country", addressData.country || "United Kingdom");
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Person</DialogTitle>
+        </DialogHeader>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h5 className="font-medium text-sm flex items-center">
+                  <UserIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Basic Information
+                </h5>
+                
+                <FormField
+                  control={form.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name *</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-fullName" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Title</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-title" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="dateOfBirth"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date of Birth</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-dateOfBirth" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="nationality"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nationality</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-nationality" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="occupation"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Occupation</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-occupation" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="isMainContact"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={field.onChange}
+                          data-testid="input-isMainContact"
+                        />
+                      </FormControl>
+                      <FormLabel>Main Contact</FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Address Information */}
+              <div className="space-y-4">
+                <h5 className="font-medium text-sm flex items-center">
+                  <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Address Information
+                </h5>
+                
+                <div>
+                  <label className="text-sm font-medium">Address Lookup</label>
+                  <AddressLookup 
+                    onAddressSelect={handleAddressSelect}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Start typing to search for addresses
+                  </p>
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-address" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="postcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Postcode</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-postcode" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>City</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-city" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="county"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>County</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-county" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="country"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Country</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-country" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Verification & Other */}
+              <div className="space-y-4">
+                <h5 className="font-medium text-sm flex items-center">
+                  <Shield className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Verification & Other
+                </h5>
+                
+                <FormField
+                  control={form.control}
+                  name="niNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>NI Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-niNumber" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="personalUtrNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Personal UTR</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-personalUtrNumber" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="identityVerified"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={field.onChange}
+                          data-testid="input-identityVerified"
+                        />
+                      </FormControl>
+                      <FormLabel>Identity Verified</FormLabel>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="addressVerified"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={field.onChange}
+                          data-testid="input-addressVerified"
+                        />
+                      </FormControl>
+                      <FormLabel>Address Verified</FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Contact Information - New 1-column section */}
+            <div className="space-y-4 border-t pt-6">
+              <h5 className="font-medium text-sm flex items-center">
+                <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+                Contact Information
+              </h5>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Primary Contact */}
+                <div className="space-y-4">
+                  <h6 className="text-sm font-medium">Primary Contact Details</h6>
+                  
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} data-testid="input-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="telephone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-telephone" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Secondary Contact */}
+                <div className="space-y-4">
+                  <h6 className="text-sm font-medium">Additional Contact Details</h6>
+                  
+                  <FormField
+                    control={form.control}
+                    name="email2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Secondary Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} data-testid="input-email2" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="telephone2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Secondary Phone</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-telephone2" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Social Media */}
+              <div className="space-y-4">
+                <h6 className="text-sm font-medium">Social Media & Professional Profiles</h6>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="linkedinUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LinkedIn URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://linkedin.com/in/..." data-testid="input-linkedinUrl" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="twitterUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Twitter/X URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://twitter.com/..." data-testid="input-twitterUrl" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="facebookUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Facebook URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://facebook.com/..." data-testid="input-facebookUrl" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="instagramUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Instagram URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://instagram.com/..." data-testid="input-instagramUrl" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="tiktokUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>TikTok URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://tiktok.com/@..." data-testid="input-tiktokUrl" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4 border-t">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onClose}
+                data-testid="button-cancel-add-person"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isSaving}
+                data-testid="button-save-add-person"
+              >
+                {isSaving ? "Adding..." : "Add Person"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // PersonCard component removed - using Accordion pattern
 
 // Component for viewing person details (read-only mode) - shows all fields like edit form
@@ -763,6 +1271,172 @@ function PersonViewMode({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Extended Contact Information - New 1-column section */}
+      <div className="space-y-4 border-t pt-6">
+        <h5 className="font-medium text-sm flex items-center">
+          <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+          Contact Information
+        </h5>
+        
+        <div className="grid grid-cols-1 gap-4">
+          {/* Primary contact info */}
+          <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+            <h6 className="text-sm font-medium text-muted-foreground">Primary Contact Details</h6>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
+              </div>
+              <div>
+                <span className="font-medium">Phone:</span> {clientPerson.person.telephone || "Not provided"}
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary contact info */}
+          {(clientPerson.person.email2 || clientPerson.person.telephone2) && (
+            <div className="space-y-3">
+              <h6 className="text-sm font-medium">Additional Contact Details</h6>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Secondary Email</label>
+                  <p className="text-sm mt-1" data-testid={`view-email2-${clientPerson.id}`}>
+                    {clientPerson.person.email2 || 'Not provided'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Secondary Phone</label>
+                  <p className="text-sm mt-1" data-testid={`view-telephone2-${clientPerson.id}`}>
+                    {clientPerson.person.telephone2 || 'Not provided'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Social media profiles */}
+          {(clientPerson.person.linkedinUrl || 
+            clientPerson.person.twitterUrl || 
+            clientPerson.person.facebookUrl || 
+            clientPerson.person.instagramUrl || 
+            clientPerson.person.tiktokUrl) && (
+            <div className="space-y-3">
+              <h6 className="text-sm font-medium">Social Media & Professional Profiles</h6>
+              <div className="grid grid-cols-1 gap-3">
+                {clientPerson.person.linkedinUrl && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
+                    <div className="text-blue-600">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-muted-foreground">LinkedIn</label>
+                      <a 
+                        href={clientPerson.person.linkedinUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline block"
+                        data-testid={`view-linkedinUrl-${clientPerson.id}`}
+                      >
+                        {clientPerson.person.linkedinUrl}
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {clientPerson.person.twitterUrl && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
+                    <div className="text-black dark:text-white">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-muted-foreground">Twitter/X</label>
+                      <a 
+                        href={clientPerson.person.twitterUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm text-black dark:text-white hover:underline block"
+                        data-testid={`view-twitterUrl-${clientPerson.id}`}
+                      >
+                        {clientPerson.person.twitterUrl}
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {clientPerson.person.facebookUrl && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
+                    <div className="text-blue-600">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-muted-foreground">Facebook</label>
+                      <a 
+                        href={clientPerson.person.facebookUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline block"
+                        data-testid={`view-facebookUrl-${clientPerson.id}`}
+                      >
+                        {clientPerson.person.facebookUrl}
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {clientPerson.person.instagramUrl && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
+                    <div className="text-pink-600">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.618 5.367 11.986 11.988 11.986C18.636 23.973 24 18.605 24 11.987 24 5.367 18.636.001 12.017.001zm5.568 16.855c-.778.778-1.697 1.139-2.773 1.139H9.188c-1.076 0-1.995-.361-2.773-1.139S5.276 15.158 5.276 14.082V9.917c0-1.076.361-1.995 1.139-2.773s1.697-1.139 2.773-1.139h5.624c1.076 0 1.995.361 2.773 1.139s1.139 1.697 1.139 2.773v4.165c0 1.076-.361 1.995-1.139 2.773zm-8.195-7.638a3.82 3.82 0 013.821-3.821c2.108 0 3.821 1.713 3.821 3.821s-1.713 3.821-3.821 3.821a3.82 3.82 0 01-3.821-3.821zm6.148-1.528a.905.905 0 11-1.81 0 .905.905 0 011.81 0z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-muted-foreground">Instagram</label>
+                      <a 
+                        href={clientPerson.person.instagramUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm text-pink-600 hover:underline block"
+                        data-testid={`view-instagramUrl-${clientPerson.id}`}
+                      >
+                        {clientPerson.person.instagramUrl}
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {clientPerson.person.tiktokUrl && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
+                    <div className="text-black dark:text-white">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-muted-foreground">TikTok</label>
+                      <a 
+                        href={clientPerson.person.tiktokUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm text-black dark:text-white hover:underline block"
+                        data-testid={`view-tiktokUrl-${clientPerson.id}`}
+                      >
+                        {clientPerson.person.tiktokUrl}
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1115,6 +1789,175 @@ function PersonEditForm({
           </div>
         </div>
 
+        {/* Extended Contact Information - New 1-column section */}
+        <div className="space-y-4 border-t pt-6">
+          <h5 className="font-medium text-sm flex items-center">
+            <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+            Contact Information
+          </h5>
+          
+          <div className="grid grid-cols-1 gap-4">
+            {/* Primary contact info - read only display for reference */}
+            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+              <h6 className="text-sm font-medium text-muted-foreground">Primary Contact Details</h6>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
+                </div>
+                <div>
+                  <span className="font-medium">Phone:</span> {clientPerson.person.telephone || "Not provided"}
+                </div>
+              </div>
+            </div>
+
+            {/* Secondary contact fields */}
+            <div className="space-y-4">
+              <h6 className="text-sm font-medium">Additional Contact Details</h6>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="email2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Secondary Email</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="email" 
+                          placeholder="secondary@example.com"
+                          data-testid={`input-email2-${clientPerson.id}`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="telephone2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Secondary Phone</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="tel" 
+                          placeholder="+44 1234 567890"
+                          data-testid={`input-telephone2-${clientPerson.id}`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Social media fields */}
+            <div className="space-y-4">
+              <h6 className="text-sm font-medium">Social Media & Professional Profiles</h6>
+              
+              <div className="space-y-3">
+                <FormField
+                  control={form.control}
+                  name="linkedinUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>LinkedIn Profile</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder="https://linkedin.com/in/username"
+                          data-testid={`input-linkedinUrl-${clientPerson.id}`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="twitterUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Twitter/X Profile</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="https://x.com/username"
+                            data-testid={`input-twitterUrl-${clientPerson.id}`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="facebookUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Facebook Profile</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="https://facebook.com/username"
+                            data-testid={`input-facebookUrl-${clientPerson.id}`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="instagramUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Instagram Profile</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="https://instagram.com/username"
+                            data-testid={`input-instagramUrl-${clientPerson.id}`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="tiktokUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>TikTok Profile</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="https://tiktok.com/@username"
+                            data-testid={`input-tiktokUrl-${clientPerson.id}`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-end space-x-2 pt-4 border-t">
           <Button 
             type="button" 
@@ -1146,6 +1989,7 @@ export default function ClientDetail() {
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
 
   const { data: client, isLoading, error } = useQuery<Client>({
     queryKey: [`/api/clients/${id}`],
@@ -1185,6 +2029,28 @@ export default function ClientDetail() {
       toast({
         title: "Error",
         description: error?.message || "Failed to update person details",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for creating new person
+  const createPersonMutation = useMutation({
+    mutationFn: async (data: InsertPersonData) => {
+      return await apiRequest("POST", `/api/clients/${id}/people`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'people'] });
+      setIsAddPersonModalOpen(false);
+      toast({
+        title: "Success",
+        description: "Person added successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to add person",
         variant: "destructive",
       });
     },
@@ -1387,10 +2253,7 @@ export default function ClientDetail() {
                     variant="outline" 
                     size="sm" 
                     data-testid="button-add-person"
-                    onClick={() => {
-                      // TODO: Implement add person modal/form
-                      alert('Add person functionality coming soon!');
-                    }}
+                    onClick={() => setIsAddPersonModalOpen(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add
@@ -1426,60 +2289,75 @@ export default function ClientDetail() {
                             className="text-left hover:no-underline p-4"
                             data-testid={`person-row-${clientPerson.person.id}`}
                           >
-                            <div className="flex items-center justify-between w-full mr-4">
-                              <div className="flex items-center space-x-4">
-                                <div>
-                                  <h4 className="font-medium" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                                    {clientPerson.person.fullName}
-                                  </h4>
-                                  <div className="flex items-center space-x-2 mt-1 text-sm text-muted-foreground">
+                            <div className="flex items-start justify-between w-full mr-4">
+                              <div className="flex-1 space-y-3">
+                                {/* Header with name and role */}
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h4 className="font-medium text-lg" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                                      {clientPerson.person.fullName}
+                                    </h4>
                                     {clientPerson.officerRole && (
-                                      <span>{clientPerson.officerRole}</span>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        {clientPerson.officerRole}
+                                      </p>
                                     )}
-                                    {clientPerson.officerRole && (clientPerson.person.email || clientPerson.person.telephone) && (
-                                      <span>•</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    {clientPerson.isPrimaryContact && (
+                                      <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
+                                        Primary Contact
+                                      </Badge>
                                     )}
-                                    {clientPerson.person.email && (
-                                      <span data-testid={`text-person-email-preview-${clientPerson.person.id}`}>
-                                        {clientPerson.person.email}
-                                      </span>
-                                    )}
-                                    {clientPerson.person.email && clientPerson.person.telephone && (
-                                      <span>•</span>
-                                    )}
-                                    {clientPerson.person.telephone && (
-                                      <span data-testid={`text-person-phone-preview-${clientPerson.person.id}`}>
-                                        {clientPerson.person.telephone}
-                                      </span>
-                                    )}
-                                    {!clientPerson.person.email && !clientPerson.person.telephone && !clientPerson.officerRole && (
-                                      <span className="italic">No contact info</span>
+                                    
+                                    {clientPerson.person.isMainContact && (
+                                      <Badge variant="outline" data-testid={`badge-main-contact-${clientPerson.person.id}`}>
+                                        Main Contact
+                                      </Badge>
                                     )}
                                   </div>
                                 </div>
-                              </div>
-                              
-                              <div className="flex items-center space-x-3 text-sm">
-                                {clientPerson.isPrimaryContact && (
-                                  <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
-                                    Primary Contact
-                                  </Badge>
-                                )}
-                                
-                                {clientPerson.person.isMainContact && (
-                                  <Badge variant="outline" data-testid={`badge-main-contact-${clientPerson.person.id}`}>
-                                    Main Contact
-                                  </Badge>
-                                )}
-                                
-                                {clientPerson.person.dateOfBirth && (
-                                  <div className="text-muted-foreground">
-                                    <span className="text-xs block">Date of Birth:</span>
-                                    <span data-testid={`text-dob-${clientPerson.person.id}`}>
-                                      {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                )}
+
+                                {/* Contact Information - Prominently displayed */}
+                                <div className="flex items-center space-x-6">
+                                  {clientPerson.person.email && (
+                                    <div className="flex items-center space-x-2">
+                                      <Mail className="h-4 w-4 text-muted-foreground" />
+                                      <span className="text-sm font-medium" data-testid={`text-person-email-preview-${clientPerson.person.id}`}>
+                                        {clientPerson.person.email}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  {clientPerson.person.telephone && (
+                                    <div className="flex items-center space-x-2">
+                                      <Phone className="h-4 w-4 text-muted-foreground" />
+                                      <span className="text-sm font-medium" data-testid={`text-person-phone-preview-${clientPerson.person.id}`}>
+                                        {clientPerson.person.telephone}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  {!clientPerson.person.email && !clientPerson.person.telephone && (
+                                    <div className="flex items-center space-x-2 text-muted-foreground">
+                                      <UserIcon className="h-4 w-4" />
+                                      <span className="text-sm italic">No contact info available</span>
+                                    </div>
+                                  )}
+                                  
+                                  {clientPerson.person.dateOfBirth && (
+                                    <div className="flex items-center space-x-2 text-muted-foreground ml-auto">
+                                      <Calendar className="h-4 w-4" />
+                                      <div className="text-right">
+                                        <div className="text-xs">Date of Birth</div>
+                                        <div className="text-sm font-medium" data-testid={`text-dob-${clientPerson.person.id}`}>
+                                          {new Date(clientPerson.person.dateOfBirth).toLocaleDateString()}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </AccordionTrigger>
@@ -1788,6 +2666,15 @@ export default function ClientDetail() {
         </Tabs>
       </div>
       </div>
+      
+      {/* Add Person Modal */}
+      <AddPersonModal
+        clientId={client.id}
+        isOpen={isAddPersonModalOpen}
+        onClose={() => setIsAddPersonModalOpen(false)}
+        onSave={(data) => createPersonMutation.mutate(data)}
+        isSaving={createPersonMutation.isPending}
+      />
     </div>
   );
 }
