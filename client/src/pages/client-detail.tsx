@@ -25,7 +25,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService } from "@shared/schema";
 import { insertPersonSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
@@ -211,7 +211,7 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   const { data: clientPeople, isLoading: peopleLoading } = useQuery<ClientPersonWithPerson[]>({
     queryKey: [`/api/clients/${clientId}/people`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: isOpen && selectedService?.isPersonalService,
+    enabled: Boolean(isOpen && selectedService?.isPersonalService),
   });
 
   // Fetch users for role assignments and service owner selection
@@ -804,15 +804,15 @@ function AddPersonModal({
       facebookUrl: "",
       instagramUrl: "",
       tiktokUrl: "",
-      address: "",
-      postcode: "",
-      city: "",
-      county: "",
+      addressLine1: "",
+      postalCode: "",
+      locality: "",
+      region: "",
       country: "",
       addressVerified: false,
       niNumber: "",
       personalUtrNumber: "",
-      identityVerified: false,
+      photoIdVerified: false,
       isMainContact: false,
     },
   });
@@ -823,10 +823,10 @@ function AddPersonModal({
 
   const handleAddressSelect = (addressData: any) => {
     // Map from AddressLookup format to form fields
-    form.setValue("address", addressData.addressLine1 || "");
-    form.setValue("postcode", addressData.postalCode || "");
-    form.setValue("city", addressData.locality || "");
-    form.setValue("county", addressData.region || "");
+    form.setValue("addressLine1", addressData.addressLine1 || "");
+    form.setValue("postalCode", addressData.postalCode || "");
+    form.setValue("locality", addressData.locality || "");
+    form.setValue("region", addressData.region || "");
     form.setValue("country", addressData.country || "United Kingdom");
   };
 
@@ -868,7 +868,7 @@ function AddPersonModal({
                     <FormItem>
                       <FormLabel>Title</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-title" />
+                        <Input {...field} value={field.value || ""} data-testid="input-title" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -882,7 +882,7 @@ function AddPersonModal({
                     <FormItem>
                       <FormLabel>Date of Birth</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} data-testid="input-dateOfBirth" />
+                        <Input type="date" {...field} value={field.value || ""} data-testid="input-dateOfBirth" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -910,7 +910,7 @@ function AddPersonModal({
                     <FormItem>
                       <FormLabel>Occupation</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-occupation" />
+                        <Input {...field} value={field.value || ""} data-testid="input-occupation" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -925,7 +925,7 @@ function AddPersonModal({
                       <FormControl>
                         <input
                           type="checkbox"
-                          checked={field.value}
+                          checked={field.value || false}
                           onChange={field.onChange}
                           data-testid="input-isMainContact"
                         />
@@ -955,12 +955,12 @@ function AddPersonModal({
                 
                 <FormField
                   control={form.control}
-                  name="address"
+                  name="addressLine1"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Address</FormLabel>
+                      <FormLabel>Address Line 1</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-address" />
+                        <Input {...field} value={field.value || ""} data-testid="input-addressLine1" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -969,12 +969,12 @@ function AddPersonModal({
                 
                 <FormField
                   control={form.control}
-                  name="postcode"
+                  name="postalCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Postcode</FormLabel>
+                      <FormLabel>Postal Code</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-postcode" />
+                        <Input {...field} value={field.value || ""} data-testid="input-postalCode" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -983,12 +983,12 @@ function AddPersonModal({
                 
                 <FormField
                   control={form.control}
-                  name="city"
+                  name="locality"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>City</FormLabel>
+                      <FormLabel>Locality</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-city" />
+                        <Input {...field} value={field.value || ""} data-testid="input-locality" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -997,12 +997,12 @@ function AddPersonModal({
                 
                 <FormField
                   control={form.control}
-                  name="county"
+                  name="region"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>County</FormLabel>
+                      <FormLabel>Region</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-county" />
+                        <Input {...field} value={field.value || ""} data-testid="input-region" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1016,7 +1016,7 @@ function AddPersonModal({
                     <FormItem>
                       <FormLabel>Country</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-country" />
+                        <Input {...field} value={field.value || ""} data-testid="input-country" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1038,7 +1038,7 @@ function AddPersonModal({
                     <FormItem>
                       <FormLabel>NI Number</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-niNumber" />
+                        <Input {...field} value={field.value || ""} data-testid="input-niNumber" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1052,7 +1052,7 @@ function AddPersonModal({
                     <FormItem>
                       <FormLabel>Personal UTR</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-personalUtrNumber" />
+                        <Input {...field} value={field.value || ""} data-testid="input-personalUtrNumber" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1061,18 +1061,18 @@ function AddPersonModal({
                 
                 <FormField
                   control={form.control}
-                  name="identityVerified"
+                  name="photoIdVerified"
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                       <FormControl>
                         <input
                           type="checkbox"
-                          checked={field.value}
+                          checked={field.value || false}
                           onChange={field.onChange}
-                          data-testid="input-identityVerified"
+                          data-testid="input-photoIdVerified"
                         />
                       </FormControl>
-                      <FormLabel>Identity Verified</FormLabel>
+                      <FormLabel>Photo ID Verified</FormLabel>
                     </FormItem>
                   )}
                 />
@@ -1085,7 +1085,7 @@ function AddPersonModal({
                       <FormControl>
                         <input
                           type="checkbox"
-                          checked={field.value}
+                          checked={field.value || false}
                           onChange={field.onChange}
                           data-testid="input-addressVerified"
                         />
@@ -1130,7 +1130,7 @@ function AddPersonModal({
                       <FormItem>
                         <FormLabel>Phone</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-telephone" />
+                          <Input {...field} value={field.value || ""} data-testid="input-telephone" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1370,7 +1370,7 @@ function PersonViewMode({
             // Add locality, region, postal code (avoiding duplicates)
             const locationParts = [person.locality, person.region, person.postalCode]
               .filter(part => part && part.trim() && !usedValues.has(part.trim().toLowerCase()))
-              .map(part => part.trim());
+              .map(part => part!.trim());
             
             if (locationParts.length > 0) {
               addressParts.push(locationParts.join(", "));
@@ -1804,7 +1804,7 @@ function PersonEditForm({
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input {...field} data-testid={`input-title-${clientPerson.id}`} />
+                    <Input {...field} value={field.value || ""} data-testid={`input-title-${clientPerson.id}`} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1818,7 +1818,7 @@ function PersonEditForm({
                 <FormItem>
                   <FormLabel>Date of Birth</FormLabel>
                   <FormControl>
-                    <Input {...field} type="date" data-testid={`input-dateOfBirth-${clientPerson.id}`} />
+                    <Input {...field} value={field.value || ""} type="date" data-testid={`input-dateOfBirth-${clientPerson.id}`} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1862,7 +1862,7 @@ function PersonEditForm({
                 <FormItem>
                   <FormLabel>Occupation</FormLabel>
                   <FormControl>
-                    <Input {...field} data-testid={`input-occupation-${clientPerson.id}`} />
+                    <Input {...field} value={field.value || ""} data-testid={`input-occupation-${clientPerson.id}`} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1924,7 +1924,7 @@ function PersonEditForm({
                   </div>
                   <FormControl>
                     <Switch
-                      checked={field.value}
+                      checked={field.value || false}
                       onCheckedChange={field.onChange}
                       data-testid={`switch-isMainContact-${clientPerson.id}`}
                     />
@@ -1940,7 +1940,7 @@ function PersonEditForm({
                 <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                   <FormControl>
                     <Checkbox
-                      checked={field.value}
+                      checked={field.value || false}
                       onCheckedChange={field.onChange}
                       data-testid={`checkbox-photoIdVerified-${clientPerson.id}`}
                     />
@@ -1962,7 +1962,7 @@ function PersonEditForm({
                 <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                   <FormControl>
                     <Checkbox
-                      checked={field.value}
+                      checked={field.value || false}
                       onCheckedChange={field.onChange}
                       data-testid={`checkbox-addressVerified-${clientPerson.id}`}
                     />
@@ -2234,6 +2234,13 @@ export default function ClientDetail() {
   // Fetch client services
   const { data: clientServices, isLoading: servicesLoading, error: servicesError, refetch: refetchServices } = useQuery<EnhancedClientService[]>({
     queryKey: [`/api/client-services/client/${id}`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!id && !!client,
+  });
+
+  // Fetch personal services for people related to this client
+  const { data: peopleServices, isLoading: peopleServicesLoading, error: peopleServicesError, refetch: refetchPeopleServices } = useQuery<(PeopleService & { person: Person; service: Service; serviceOwner?: User })[]>({
+    queryKey: [`/api/people-services/client/${id}`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
   });
@@ -2843,6 +2850,93 @@ export default function ClientDetail() {
                         No services have been added to this client yet.
                       </p>
                       <AddServiceModal clientId={client.id} onSuccess={refetchServices} />
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Personal Services Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-red-500">Personal Services</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div data-testid="section-personal-services">
+                  {peopleServicesLoading ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : peopleServicesError ? (
+                    <div className="text-center py-8">
+                      <p className="text-destructive mb-2">
+                        Failed to load personal services
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        Please try refreshing the page or contact support if the issue persists.
+                      </p>
+                    </div>
+                  ) : peopleServices && peopleServices.length > 0 ? (
+                    <div className="space-y-3">
+                      {peopleServices.map((peopleService) => (
+                        <div key={peopleService.id} className="rounded-lg border bg-card transition-all duration-200 hover:shadow-md">
+                          <div className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div>
+                                  <h4 className="font-medium flex items-center gap-2" data-testid={`text-personal-service-name-${peopleService.service.id}`}>
+                                    {peopleService.service.name}
+                                    <Badge variant="secondary" className="text-xs">Personal Service</Badge>
+                                  </h4>
+                                  {peopleService.service.description && (
+                                    <p className="text-sm text-muted-foreground">
+                                      {peopleService.service.description}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center space-x-4 mt-2 text-sm">
+                                    <div className="flex items-center space-x-1">
+                                      <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                      <span className="text-muted-foreground">Assigned to:</span>
+                                      <span className="font-medium">{peopleService.person ? formatPersonName(peopleService.person.fullName) : 'Unknown Person'}</span>
+                                    </div>
+                                    {peopleService.serviceOwner && (
+                                      <div className="flex items-center space-x-1">
+                                        <Settings className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-muted-foreground">Owner:</span>
+                                        <span className="font-medium">
+                                          {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-muted-foreground text-sm">
+                                {peopleService.createdAt && (
+                                  <span>Added {new Date(peopleService.createdAt).toLocaleDateString()}</span>
+                                )}
+                              </div>
+                            </div>
+                            {peopleService.notes && (
+                              <div className="mt-3 p-3 bg-muted/30 rounded-lg">
+                                <p className="text-sm text-muted-foreground">
+                                  <span className="font-medium">Notes:</span> {peopleService.notes}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">
+                        No personal services have been assigned to people related to this client yet.
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Use the "Add Service" button above to assign personal services to individuals.
+                      </p>
                     </div>
                   )}
                 </div>

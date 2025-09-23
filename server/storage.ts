@@ -364,6 +364,7 @@ export interface IStorage {
   getPeopleServiceById(id: string): Promise<(PeopleService & { person: Person; service: Service }) | undefined>;
   getPeopleServicesByPersonId(personId: string): Promise<(PeopleService & { service: Service })[]>;
   getPeopleServicesByServiceId(serviceId: string): Promise<(PeopleService & { person: Person })[]>;
+  getPeopleServicesByClientId(clientId: string): Promise<(PeopleService & { person: Person; service: Service; serviceOwner?: User })[]>;
   createPeopleService(peopleService: InsertPeopleService): Promise<PeopleService>;
   updatePeopleService(id: string, peopleService: Partial<InsertPeopleService>): Promise<PeopleService>;
   deletePeopleService(id: string): Promise<void>;
@@ -4514,6 +4515,42 @@ export class DatabaseStorage implements IStorage {
       notes: result.notes,
       createdAt: result.createdAt,
       person: result.person!,
+    }));
+  }
+
+  async getPeopleServicesByClientId(clientId: string): Promise<(PeopleService & { person: Person; service: Service; serviceOwner?: User })[]> {
+    const results = await db
+      .select({
+        id: peopleServices.id,
+        personId: peopleServices.personId,
+        serviceId: peopleServices.serviceId,
+        serviceOwnerId: peopleServices.serviceOwnerId,
+        notes: peopleServices.notes,
+        createdAt: peopleServices.createdAt,
+        // Person details
+        person: people,
+        // Service details
+        service: services,
+        // Service owner details (optional)
+        serviceOwner: users,
+      })
+      .from(peopleServices)
+      .leftJoin(people, eq(peopleServices.personId, people.id))
+      .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .leftJoin(users, eq(peopleServices.serviceOwnerId, users.id))
+      .leftJoin(clientPeople, eq(people.id, clientPeople.personId))
+      .where(eq(clientPeople.clientId, clientId));
+
+    return results.map(result => ({
+      id: result.id,
+      personId: result.personId,
+      serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      person: result.person!,
+      service: result.service!,
+      serviceOwner: result.serviceOwner || undefined,
     }));
   }
 

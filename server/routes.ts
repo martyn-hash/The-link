@@ -3470,6 +3470,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/people-services/client/:clientId - Get all personal services for people related to a client
+  app.get("/api/people-services/client/:clientId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const validation = validateParams(paramClientIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid client ID", errors: validation.errors });
+      }
+
+      const { clientId } = validation.data;
+      
+      // Check if client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Get all personal services for people related to this client
+      const allPeopleServices = await storage.getPeopleServicesByClientId(clientId);
+      
+      res.json(allPeopleServices);
+    } catch (error) {
+      console.error("Error fetching client people services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client people services" });
+    }
+  });
+
   // POST /api/people-services - Create a new people service
   app.post("/api/people-services", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
