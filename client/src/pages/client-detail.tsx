@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -2384,6 +2384,75 @@ export default function ClientDetail() {
     },
   });
 
+  // Related Company functionality for individual clients
+  const [showCompanySelection, setShowCompanySelection] = useState(false);
+
+  // Query to fetch related company data
+  const { data: relatedCompany, isLoading: relatedCompanyLoading } = useQuery<Client>({
+    queryKey: [`/api/clients/${id}/related-company`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!id && !!client && client.clientType === 'individual' && !!client.relatedCompanyId,
+  });
+
+  // Query to fetch all company clients for selection
+  const { data: companyClients } = useQuery<Client[]>({
+    queryKey: ['/api/clients?search='],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: showCompanySelection,
+  });
+
+  // Mutation to link individual client to company
+  const linkToCompanyMutation = useMutation({
+    mutationFn: async (companyClientId: string) => {
+      return await apiRequest("POST", `/api/clients/${id}/link-company`, {
+        companyClientId
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}/related-company`] });
+      setShowCompanySelection(false);
+      toast({
+        title: "Success",
+        description: "Successfully linked to company",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to link to company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation to unlink client from company
+  const unlinkFromCompanyMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", `/api/clients/${id}/link-company`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}/related-company`] });
+      toast({
+        title: "Success",
+        description: "Successfully removed company link",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to remove company link",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Filter company clients (exclude individuals and current client)
+  const availableCompanies = companyClients?.filter(
+    c => c.clientType === 'company' && c.id !== id
+  ) || [];
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -2762,6 +2831,81 @@ export default function ClientDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Related Company Section - Only show for individual clients */}
+            {client.clientType === 'individual' && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      Related Company
+                    </CardTitle>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      data-testid="button-link-company"
+                      onClick={() => setShowCompanySelection(true)}
+                      disabled={linkToCompanyMutation.isPending}
+                    >
+                      <Link className="h-4 w-4 mr-2" />
+                      {linkToCompanyMutation.isPending ? "Linking..." : "Link Company"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div data-testid="section-related-company">
+                    {client.relatedCompanyId ? (
+                      <div className="p-4 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                              <Building2 className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-lg" data-testid="text-related-company-name">
+                                {relatedCompanyLoading ? "Loading..." : (relatedCompany?.fullName || "Unknown Company")}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                Company relationship
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            data-testid="button-remove-company-link"
+                            onClick={() => unlinkFromCompanyMutation.mutate()}
+                            disabled={unlinkFromCompanyMutation.isPending}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Building2 className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                        <p className="text-muted-foreground mb-4">
+                          No company linked to this individual client.
+                        </p>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Link this individual to a company when they start a business or need business services.
+                        </p>
+                        <Button 
+                          variant="outline"
+                          data-testid="button-link-company-empty"
+                          onClick={() => setShowCompanySelection(true)}
+                          disabled={linkToCompanyMutation.isPending}
+                        >
+                          <Link className="h-4 w-4 mr-2" />
+                          {linkToCompanyMutation.isPending ? "Linking..." : "Link to Company"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
@@ -3136,6 +3280,59 @@ export default function ClientDetail() {
       </div>
       </div>
       
+      {/* Company Selection Modal */}
+      <Dialog open={showCompanySelection} onOpenChange={setShowCompanySelection}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link to Company</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select a company to link this individual client to:
+            </p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {availableCompanies.length > 0 ? (
+                availableCompanies.map((company) => (
+                  <div
+                    key={company.id}
+                    className="p-3 border rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                    onClick={() => linkToCompanyMutation.mutate(company.id)}
+                    data-testid={`company-option-${company.id}`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Building2 className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium">{company.fullName}</h4>
+                        {company.companyNumber && (
+                          <p className="text-sm text-muted-foreground">
+                            {company.companyNumber}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center py-4 text-muted-foreground">
+                  No company clients available for linking.
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowCompanySelection(false)}
+                disabled={linkToCompanyMutation.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Person Modal */}
       <AddPersonModal
         clientId={client.id}

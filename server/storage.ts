@@ -124,6 +124,11 @@ export interface IStorage {
   updateClient(id: string, client: Partial<InsertClient>): Promise<Client>;
   deleteClient(id: string): Promise<void>;
   
+  // Company relationship operations
+  linkClientToCompany(individualClientId: string, companyClientId: string): Promise<Client>;
+  unlinkClientFromCompany(individualClientId: string): Promise<Client>;
+  getRelatedCompany(individualClientId: string): Promise<Client | undefined>;
+  
   // Companies House specific client operations
   getClientByCompanyNumber(companyNumber: string): Promise<Client | undefined>;
   upsertClientFromCH(clientData: Partial<InsertClient>): Promise<Client>;
@@ -1137,6 +1142,78 @@ export class DatabaseStorage implements IStorage {
           eq(clientPeople.personId, personId)
         )
       );
+  }
+
+  // Company relationship operations
+  async linkClientToCompany(individualClientId: string, companyClientId: string): Promise<Client> {
+    // Validate that individual client exists and is of type 'individual'
+    const individualClient = await this.getClientById(individualClientId);
+    if (!individualClient) {
+      throw new Error(`Individual client with ID '${individualClientId}' not found`);
+    }
+    if (individualClient.clientType !== 'individual') {
+      throw new Error(`Client '${individualClient.name}' is not an individual client`);
+    }
+
+    // Validate that company client exists and is of type 'company'
+    const companyClient = await this.getClientById(companyClientId);
+    if (!companyClient) {
+      throw new Error(`Company client with ID '${companyClientId}' not found`);
+    }
+    if (companyClient.clientType !== 'company') {
+      throw new Error(`Client '${companyClient.name}' is not a company client`);
+    }
+
+    // Prevent self-linking (additional check beyond database constraint)
+    if (individualClientId === companyClientId) {
+      throw new Error('Cannot link a client to itself');
+    }
+
+    // Update the individual client with the company relationship
+    const [updatedClient] = await db
+      .update(clients)
+      .set({ relatedCompanyId: companyClientId })
+      .where(eq(clients.id, individualClientId))
+      .returning();
+
+    if (!updatedClient) {
+      throw new Error(`Failed to link client '${individualClient.name}' to company '${companyClient.name}'`);
+    }
+
+    return updatedClient;
+  }
+
+  async unlinkClientFromCompany(individualClientId: string): Promise<Client> {
+    // Validate that individual client exists
+    const individualClient = await this.getClientById(individualClientId);
+    if (!individualClient) {
+      throw new Error(`Individual client with ID '${individualClientId}' not found`);
+    }
+
+    // Update the individual client to remove the company relationship
+    const [updatedClient] = await db
+      .update(clients)
+      .set({ relatedCompanyId: null })
+      .where(eq(clients.id, individualClientId))
+      .returning();
+
+    if (!updatedClient) {
+      throw new Error(`Failed to unlink client '${individualClient.name}' from company`);
+    }
+
+    return updatedClient;
+  }
+
+  async getRelatedCompany(individualClientId: string): Promise<Client | undefined> {
+    // Get the individual client with related company ID
+    const individualClient = await this.getClientById(individualClientId);
+    if (!individualClient || !individualClient.relatedCompanyId) {
+      return undefined;
+    }
+
+    // Get the related company client
+    const companyClient = await this.getClientById(individualClient.relatedCompanyId);
+    return companyClient;
   }
 
   // Project operations

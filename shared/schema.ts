@@ -11,6 +11,8 @@ import {
   pgEnum,
   check,
   unique,
+  alias,
+  AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -156,7 +158,14 @@ export const clients = pgTable("clients", {
   confirmationStatementOverdue: boolean("confirmation_statement_overdue").default(false), // Existing field
   // Metadata - Full CH API response for audit trail (existing in database)
   companiesHouseData: jsonb("companies_house_data"), // Existing field
-});
+  // Optional company relationship - for individual clients who need to be linked to a company
+  relatedCompanyId: varchar("related_company_id").references(() => clients.id, { onDelete: "set null" }),
+}, (table) => ({
+  // Index for faster lookups on related company
+  relatedCompanyIdx: index("clients_related_company_idx").on(table.relatedCompanyId),
+  // Prevent self-linking
+  noSelfLink: check("no_self_link", sql`related_company_id != id`),
+}));
 
 // People table - matches existing database structure
 export const people = pgTable("people", {
@@ -543,10 +552,20 @@ export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => 
   }),
 }));
 
-export const clientsRelations = relations(clients, ({ many }) => ({
+export const clientsRelations = relations(clients, ({ many, one }) => ({
   projects: many(projects),
   clientServices: many(clientServices),
   clientPeople: many(clientPeople),
+  // Optional company relationship for individual clients
+  relatedCompany: one(clients, { 
+    fields: [clients.relatedCompanyId], 
+    references: [clients.id],
+    relationName: "clientCompanyRelation"
+  }),
+  // Reverse relation - individuals linked to this company
+  linkedIndividuals: many(clients, {
+    relationName: "clientCompanyRelation"
+  }),
 }));
 
 export const peopleRelations = relations(people, ({ many }) => ({

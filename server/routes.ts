@@ -551,6 +551,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Company relationship API routes
+  
+  // POST /api/clients/:id/link-company - Link individual client to company
+  app.post("/api/clients/:id/link-company", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const clientIdSchema = z.object({ 
+        id: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      // Validate request body
+      const linkCompanySchema = z.object({
+        companyClientId: z.string().min(1, "Company client ID is required")
+      });
+      const bodyValidation = linkCompanySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request body", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const { id: individualClientId } = paramValidation.data;
+      const { companyClientId } = bodyValidation.data;
+
+      const updatedClient = await storage.linkClientToCompany(individualClientId, companyClientId);
+      res.json(updatedClient);
+    } catch (error) {
+      console.error("Error linking client to company:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("not found")) {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error.message.includes("not an individual client") || 
+            error.message.includes("not a company client") ||
+            error.message.includes("Cannot link a client to itself")) {
+          return res.status(400).json({ message: error.message });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to link client to company" });
+    }
+  });
+
+  // DELETE /api/clients/:id/link-company - Unlink individual client from company
+  app.delete("/api/clients/:id/link-company", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const clientIdSchema = z.object({ 
+        id: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { id: individualClientId } = paramValidation.data;
+      const updatedClient = await storage.unlinkClientFromCompany(individualClientId);
+      res.json(updatedClient);
+    } catch (error) {
+      console.error("Error unlinking client from company:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("not found")) {
+          return res.status(404).json({ message: error.message });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to unlink client from company" });
+    }
+  });
+
+  // GET /api/clients/:id/related-company - Get related company for individual client
+  app.get("/api/clients/:id/related-company", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const clientIdSchema = z.object({ 
+        id: z.string().min(1, "Client ID is required")
+      });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { id: individualClientId } = paramValidation.data;
+      const relatedCompany = await storage.getRelatedCompany(individualClientId);
+      
+      if (!relatedCompany) {
+        return res.status(404).json({ message: "No related company found" });
+      }
+      
+      res.json(relatedCompany);
+    } catch (error) {
+      console.error("Error fetching related company:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch related company" });
+    }
+  });
+
   // Companies House API routes
   
   // GET /api/companies-house/search - Search for companies
