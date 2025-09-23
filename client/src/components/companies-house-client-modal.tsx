@@ -232,52 +232,64 @@ export function CompaniesHouseClientModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [companySearchResults, setCompanySearchResults] = useState<CompanySearchResult[]>([]);
   
-  // Address lookup state
+  // Address auto-complete state
+  const [addressQuery, setAddressQuery] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
 
-  // Postcode lookup function using a free UK postcode API
-  const lookupPostcode = async (postcode: string) => {
-    setIsLoadingAddresses(true);
-    try {
-      // Using postcodes.io - a free UK postcode API
-      const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.result) {
-          // Create a formatted address from the postcode data
-          const address = {
-            formatted_address: `${data.result.admin_district}, ${data.result.country}`,
-            line1: "",
-            line2: "",
-            city: data.result.admin_district || data.result.parish || "",
-            county: data.result.admin_county || "",
-            postcode: data.result.postcode,
-            country: "United Kingdom"
-          };
-          setAddressSuggestions([address]);
-        } else {
+  // Debounced address lookup
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (addressQuery.trim().length >= 3) {
+        setIsLoadingAddresses(true);
+        try {
+          const response = await apiRequest("GET", `/api/address-lookup/${encodeURIComponent(addressQuery)}`);
+          const data = await response.json();
+          setAddressSuggestions(data.suggestions || []);
+        } catch (error) {
+          console.log("Address lookup failed - user can enter manually");
           setAddressSuggestions([]);
         }
+        setIsLoadingAddresses(false);
       } else {
         setAddressSuggestions([]);
       }
-    } catch (error) {
-      console.log("Address lookup failed - user can enter manually");
-      setAddressSuggestions([]);
-    }
-    setIsLoadingAddresses(false);
-  };
+    }, 300);
 
-  // Select address from suggestions
-  const selectAddress = (address: any) => {
-    individualForm.setValue("address.line1", address.line1);
-    individualForm.setValue("address.line2", address.line2);
-    individualForm.setValue("address.city", address.city);
-    individualForm.setValue("address.county", address.county);
-    individualForm.setValue("address.postcode", address.postcode);
-    individualForm.setValue("address.country", address.country);
+    return () => clearTimeout(timer);
+  }, [addressQuery]);
+
+  // Select address from suggestions and fetch detailed address data
+  const selectAddress = async (suggestion: any) => {
+    if (!suggestion.id) {
+      console.log("No address ID available for details lookup");
+      return;
+    }
+
+    setIsLoadingAddresses(true);
+    try {
+      const response = await apiRequest("GET", `/api/address-details/${encodeURIComponent(suggestion.id)}`);
+      const addressDetails = await response.json();
+      
+      // Populate form fields with structured address data
+      individualForm.setValue("address.line1", addressDetails.line1 || "");
+      individualForm.setValue("address.line2", addressDetails.line2 || "");
+      individualForm.setValue("address.city", addressDetails.city || "");
+      individualForm.setValue("address.county", addressDetails.county || "");
+      individualForm.setValue("address.postcode", addressDetails.postcode || "");
+      individualForm.setValue("address.country", addressDetails.country || "United Kingdom");
+      
+      // Update the address query field with the first line
+      setAddressQuery(addressDetails.line1 || suggestion.address || "");
+      
+    } catch (error) {
+      console.log("Failed to fetch address details - user can enter manually");
+      // Fallback: set just the suggestion text
+      setAddressQuery(suggestion.address || "");
+    }
+    
     setAddressSuggestions([]);
+    setIsLoadingAddresses(false);
   };
   
   // Individual client creation mutation
@@ -705,27 +717,26 @@ export function CompaniesHouseClientModal({
             )}
           />
           
-          {/* Address Fields */}
+          {/* Address Fields with GetAddress Auto-complete */}
           <div className="space-y-4 border-t pt-4">
             <h4 className="font-medium text-gray-900">Address</h4>
+            <p className="text-sm text-gray-600">Start typing your address and select from the suggestions</p>
             
             <FormField
               control={individualForm.control}
-              name="address.postcode"
+              name="address.line1"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Postcode</FormLabel>
+                  <FormLabel>Address</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="Enter postcode (e.g., SW1A 1AA)"
-                      data-testid="input-postcode"
-                      onChange={async (e) => {
+                      id="individual-address-line1"
+                      placeholder="Start typing your address..."
+                      data-testid="input-address-line1"
+                      onChange={(e) => {
                         field.onChange(e);
-                        const postcode = e.target.value.trim();
-                        if (postcode.length >= 5) {
-                          await lookupPostcode(postcode);
-                        }
+                        setAddressQuery(e.target.value);
                       }}
                     />
                   </FormControl>
@@ -742,16 +753,21 @@ export function CompaniesHouseClientModal({
                 <label className="text-sm font-medium text-gray-700">
                   Select Address:
                 </label>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div className="space-y-1 max-h-32 overflow-y-auto border rounded-md bg-white shadow-sm">
                   {addressSuggestions.map((address, index) => (
                     <button
                       key={index}
                       type="button"
-                      className="w-full text-left p-2 text-sm border rounded hover:bg-gray-50 focus:bg-gray-50"
+                      className="w-full text-left p-3 text-sm hover:bg-gray-50 focus:bg-gray-50 first:rounded-t-md last:rounded-b-md border-b last:border-b-0"
                       onClick={() => selectAddress(address)}
                       data-testid={`button-select-address-${index}`}
                     >
-                      {address.formatted_address}
+                      <div className="font-medium">{address.address}</div>
+                      {address.url && (
+                        <div className="text-gray-500 text-xs">
+                          {address.url}
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -761,24 +777,6 @@ export function CompaniesHouseClientModal({
             <div className="grid grid-cols-1 gap-4">
               <FormField
                 control={individualForm.control}
-                name="address.line1"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Address Line 1</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Enter address line 1"
-                        data-testid="input-address-line1"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={individualForm.control}
                 name="address.line2"
                 render={({ field }) => (
                   <FormItem>
@@ -786,7 +784,7 @@ export function CompaniesHouseClientModal({
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder="Enter address line 2"
+                        placeholder="Apartment, suite, etc."
                         data-testid="input-address-line2"
                       />
                     </FormControl>
@@ -805,7 +803,7 @@ export function CompaniesHouseClientModal({
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Enter town/city"
+                          placeholder="Auto-populated"
                           data-testid="input-city"
                         />
                       </FormControl>
@@ -819,11 +817,11 @@ export function CompaniesHouseClientModal({
                   name="address.county"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>County (Optional)</FormLabel>
+                      <FormLabel>County</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Enter county"
+                          placeholder="Auto-populated"
                           data-testid="input-county"
                         />
                       </FormControl>
@@ -833,23 +831,43 @@ export function CompaniesHouseClientModal({
                 />
               </div>
               
-              <FormField
-                control={individualForm.control}
-                name="address.country"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Country</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Enter country"
-                        data-testid="input-country"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={individualForm.control}
+                  name="address.postcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Postcode</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Auto-populated"
+                          data-testid="input-postcode"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={individualForm.control}
+                  name="address.country"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Country</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Auto-populated"
+                          data-testid="input-country"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
           </div>
           
