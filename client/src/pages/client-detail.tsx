@@ -121,13 +121,13 @@ type EnhancedClientService = ClientService & {
   })[];
 };
 
-// Form schema for adding services
+// Form schema for adding services (conditional validation based on service type)
 const addServiceSchema = z.object({
   serviceId: z.string().min(1, "Service is required"),
-  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]),
-  nextStartDate: z.string().min(1, "Next start date is required"),
-  nextDueDate: z.string().min(1, "Next due date is required"),
-  serviceOwnerId: z.string().min(1, "Service owner is required"),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(),
+  nextStartDate: z.string().optional(),
+  nextDueDate: z.string().optional(),
+  serviceOwnerId: z.string().optional(),
 });
 
 type AddServiceData = z.infer<typeof addServiceSchema>;
@@ -180,6 +180,7 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceWithDetails | null>(null);
   const [roleAssignments, setRoleAssignments] = useState<Record<string, string>>({});
+  const [selectedPersonId, setSelectedPersonId] = useState<string>("");
   const { toast } = useToast();
   
   const form = useForm<AddServiceData>({
@@ -199,11 +200,18 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
     enabled: isOpen,
   });
 
-  // Fetch available services with roles
+  // Fetch available services with roles (ALL services including personal services)
   const { data: services, isLoading: servicesLoading } = useQuery<ServiceWithDetails[]>({
     queryKey: ['/api/services'],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: isOpen,
+  });
+
+  // Fetch related people for this client (needed for personal service assignment)
+  const { data: clientPeople, isLoading: peopleLoading } = useQuery<ClientPersonWithPerson[]>({
+    queryKey: [`/api/clients/${clientId}/people`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: isOpen && selectedService?.isPersonalService,
   });
 
   // Fetch users for role assignments and service owner selection
@@ -213,15 +221,16 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
     enabled: isOpen,
   });
 
-  // Service selection change handler with Companies House auto-population
+  // Service selection change handler with Companies House auto-population and personal service detection
   const handleServiceChange = (serviceId: string) => {
     const service = services?.find(s => s.id === serviceId);
     if (!service) return;
     
     setSelectedService(service);
     
-    // Reset role assignments when service changes
+    // Reset assignments when service changes
     setRoleAssignments({});
+    setSelectedPersonId("");
     
     // Auto-populate Companies House fields if service is CH-connected
     if (service.isCompaniesHouseConnected && client) {
@@ -256,11 +265,64 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
     if (!selectedService || !selectedService.roles || selectedService.roles.length === 0) return true;
     return selectedService.roles.every(role => roleAssignments[role.id]);
   };
+
+  // Validate form is ready for submission
+  const canSubmit = () => {
+    if (!selectedService) return false;
+    if (isPersonalService) {
+      return !!selectedPersonId; // Personal service requires person selection
+    } else {
+      return areAllRolesAssigned(); // Client service requires role assignments
+    }
+  };
   
   // Check if service has roles that need assignment
   const hasRolesToAssign = () => {
     return selectedService?.roles && selectedService.roles.length > 0;
   };
+
+  // Check if selected service is personal service
+  const isPersonalService = selectedService?.isPersonalService || false;
+
+  // Handle person selection change
+  const handlePersonChange = (personId: string) => {
+    setSelectedPersonId(personId);
+  };
+
+  // Create people service mutation for personal services
+  const createPeopleServiceMutation = useMutation({
+    mutationFn: async (data: AddServiceData) => {
+      const peopleServiceResponse = await apiRequest("POST", "/api/people-services", {
+        personId: selectedPersonId,
+        serviceId: data.serviceId,
+        serviceOwnerId: data.serviceOwnerId || null,
+        notes: null,
+      });
+      
+      return await peopleServiceResponse.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Personal Service Added",
+        description: "Personal service has been successfully assigned to the person.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/people-services/service/${selectedService?.id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${clientId}/people`] });
+      form.reset();
+      setSelectedService(null);
+      setSelectedPersonId("");
+      setRoleAssignments({});
+      setIsOpen(false);
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to add personal service. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Create client service mutation with role assignments
   const createClientServiceMutation = useMutation({
@@ -318,17 +380,63 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
   });
 
   const onSubmit = (data: AddServiceData) => {
-    // Validate role assignments before submission
-    if (!areAllRolesAssigned()) {
-      toast({
-        title: "Incomplete Role Assignments",
-        description: "Please assign users to all required roles before saving.",
-        variant: "destructive",
-      });
-      return;
+    // Handle personal services vs client services
+    if (isPersonalService) {
+      // Validate person selection for personal services
+      if (!selectedPersonId) {
+        toast({
+          title: "Person Required",
+          description: "Please select a person to assign this personal service to.",
+          variant: "destructive",
+        });
+        return;
+      }
+      createPeopleServiceMutation.mutate(data);
+    } else {
+      // Validate required fields for client services
+      if (!data.frequency) {
+        toast({
+          title: "Frequency Required",
+          description: "Please select a frequency for this client service.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!data.nextStartDate) {
+        toast({
+          title: "Start Date Required", 
+          description: "Please select a next start date for this client service.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!data.nextDueDate) {
+        toast({
+          title: "Due Date Required",
+          description: "Please select a next due date for this client service.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!data.serviceOwnerId) {
+        toast({
+          title: "Service Owner Required",
+          description: "Please select a service owner for this client service.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Validate role assignments for client services
+      if (!areAllRolesAssigned()) {
+        toast({
+          title: "Incomplete Role Assignments",
+          description: "Please assign users to all required roles before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
+      createClientServiceMutation.mutate(data);
     }
-    
-    createClientServiceMutation.mutate(data);
   };
   
   // Check if Companies House service is selected
@@ -388,6 +496,9 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
                             services.map((service) => (
                               <SelectItem key={service.id} value={service.id}>
                                 {service.name}
+                                {service.isPersonalService && (
+                                  <Badge variant="secondary" className="ml-2 text-xs">Personal Service</Badge>
+                                )}
                               </SelectItem>
                             ))
                           ) : (
@@ -400,6 +511,48 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
                   )}
                 />
 
+                {/* Person Selection - Only shown for personal services */}
+                {isPersonalService && (
+                  <div className="space-y-2">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <UserIcon className="w-4 h-4 text-blue-600" />
+                        <h4 className="font-medium text-blue-900 dark:text-blue-100">Personal Service Assignment</h4>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-200 mb-4">
+                        This is a personal service. Please select the person to assign this service to.
+                      </p>
+                      {peopleLoading ? (
+                        <div className="text-sm text-muted-foreground">Loading related people...</div>
+                      ) : clientPeople && clientPeople.length > 0 ? (
+                        <div>
+                          <label className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 block">
+                            Select Person <span className="text-red-500">*</span>
+                          </label>
+                          <Select onValueChange={handlePersonChange} value={selectedPersonId}>
+                            <SelectTrigger data-testid="select-person" className="bg-white dark:bg-gray-800">
+                              <SelectValue placeholder="Choose a person to assign this service to" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientPeople.map((clientPerson) => (
+                                <SelectItem key={clientPerson.person.id} value={clientPerson.person.id}>
+                                  {formatPersonName(clientPerson.person.fullName)}
+                                  {clientPerson.person.email && (
+                                    <span className="text-muted-foreground ml-2">({clientPerson.person.email})</span>
+                                  )}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-amber-700 dark:text-amber-200">
+                          No people are associated with this client yet. Please add people to the client first.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}
@@ -524,8 +677,8 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
                   )}
                 />
 
-                {/* Role Assignments Section */}
-                {hasRolesToAssign() && (
+                {/* Role Assignments Section - Only show for client services */}
+                {hasRolesToAssign() && !isPersonalService && (
                   <div className="space-y-4">
                     <div className="border-t pt-4">
                       <h4 className="font-medium text-sm mb-3">Role Assignments</h4>
@@ -570,10 +723,19 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
                       </div>
                       
                       {/* Role assignment validation message */}
-                      {hasRolesToAssign() && !areAllRolesAssigned() && (
+                      {hasRolesToAssign() && !areAllRolesAssigned() && !isPersonalService && (
                         <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                           <p className="text-sm text-yellow-800 dark:text-yellow-200">
                             Please assign users to all roles before saving the service.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Personal service validation message */}
+                      {isPersonalService && !selectedPersonId && (
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <p className="text-sm text-blue-800 dark:text-blue-200">
+                            Please select a person to assign this personal service to.
                           </p>
                         </div>
                       )}
@@ -594,10 +756,13 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
               </Button>
               <Button 
                 type="submit" 
-                disabled={createClientServiceMutation.isPending || !areAllRolesAssigned()}
+                disabled={createClientServiceMutation.isPending || createPeopleServiceMutation.isPending || !canSubmit()}
                 data-testid="button-save-service"
               >
-                {createClientServiceMutation.isPending ? "Adding..." : "Add Service"}
+                {(createClientServiceMutation.isPending || createPeopleServiceMutation.isPending) ? 
+                  "Adding..." : 
+                  isPersonalService ? "Assign Personal Service" : "Add Service"
+                }
               </Button>
             </div>
           </form>
