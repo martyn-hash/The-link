@@ -88,6 +88,21 @@ const addServiceSchema = z.object({
 
 type AddServiceData = z.infer<typeof addServiceSchema>;
 
+// Validation schema for adding new person data
+const addPersonSchema = insertPersonSchema.extend({
+  fullName: z.string().min(1, "Full name is required"),
+  email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  email2: z.string().email("Invalid email format").optional().or(z.literal("")),
+  telephone2: z.string().optional().or(z.literal("")),
+  linkedinUrl: z.union([z.string().url("Invalid LinkedIn URL"), z.literal("")]).optional(),
+  instagramUrl: z.union([z.string().url("Invalid Instagram URL"), z.literal("")]).optional(),
+  twitterUrl: z.union([z.string().url("Invalid Twitter/X URL"), z.literal("")]).optional(),
+  facebookUrl: z.union([z.string().url("Invalid Facebook URL"), z.literal("")]).optional(),
+  tiktokUrl: z.union([z.string().url("Invalid TikTok URL"), z.literal("")]).optional(),
+});
+
+type InsertPersonData = z.infer<typeof addPersonSchema>;
+
 // Validation schema for updating person data - use shared schema for consistency
 const updatePersonSchema = insertPersonSchema.partial().extend({
   fullName: z.string().min(1, "Full name is required"),
@@ -722,7 +737,6 @@ function AddPersonModal({
                   <label className="text-sm font-medium">Address Lookup</label>
                   <AddressLookup 
                     onAddressSelect={handleAddressSelect}
-                    className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Start typing to search for addresses
@@ -1491,11 +1505,11 @@ function PersonEditForm({
       region: clientPerson.person.region || "",
       postalCode: clientPerson.person.postalCode || "",
       country: clientPerson.person.country || "",
-      isMainContact: clientPerson.person.isMainContact || false,
+      isMainContact: Boolean(clientPerson.person.isMainContact),
       niNumber: clientPerson.person.niNumber || "",
       personalUtrNumber: clientPerson.person.personalUtrNumber || "",
-      photoIdVerified: clientPerson.person.photoIdVerified || false,
-      addressVerified: clientPerson.person.addressVerified || false,
+      photoIdVerified: Boolean(clientPerson.person.photoIdVerified),
+      addressVerified: Boolean(clientPerson.person.addressVerified),
       // Extended contact information
       telephone2: clientPerson.person.telephone2 || "",
       email2: clientPerson.person.email2 || "",
