@@ -2529,6 +2529,33 @@ export default function ClientDetail() {
     enabled: !!id && !!client && client.clientType === 'individual',
   });
 
+  // Query to fetch client services for all connected companies (for individual clients)
+  const companyServicesQueries = useQuery<ClientServiceWithService[]>({
+    queryKey: ['connected-company-services', (companyConnections ?? []).map(conn => conn.client.id)],
+    queryFn: async () => {
+      const connectedCompanyIds = (companyConnections ?? []).map(conn => conn.client.id);
+      if (client?.clientType !== 'individual' || connectedCompanyIds.length === 0) {
+        return [];
+      }
+      
+      // Fetch services for all connected companies
+      const servicesPromises = connectedCompanyIds.map(async (companyId) => {
+        const response = await fetch(`/api/client-services/client/${companyId}`, {
+          credentials: 'include'
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch services for company ${companyId}`);
+        }
+        const services = await response.json();
+        return services.map((service: any) => ({ ...service, companyId, companyName: companyConnections.find(conn => conn.client.id === companyId)?.client.fullName }));
+      });
+      
+      const allServices = await Promise.all(servicesPromises);
+      return allServices.flat();
+    },
+    enabled: !!client && client.clientType === 'individual' && (companyConnections?.length ?? 0) > 0,
+  });
+
   // Query to fetch all company clients for selection
   const { data: companyClients } = useQuery<Client[]>({
     queryKey: ['/api/clients?search='],
@@ -2613,7 +2640,7 @@ export default function ClientDetail() {
   });
 
   // Filter company clients (exclude individuals, current client, and already connected companies)
-  const connectedCompanyIds = companyConnections.map(conn => conn.client.id);
+  const connectedCompanyIds = (companyConnections ?? []).map(conn => conn.client.id);
   const availableCompanies = companyClients?.filter(
     c => c.clientType === 'company' && c.id !== id && !connectedCompanyIds.includes(c.id)
   ) || [];
@@ -3109,8 +3136,8 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
-            {/* Client Services Section - Only show for company clients */}
-            {client.clientType === 'company' && (
+            {/* Client Services Section - Show for company clients OR individual clients with company connections */}
+            {(client.clientType === 'company' || (client.clientType === 'individual' && (companyConnections?.length ?? 0) > 0)) && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -3120,183 +3147,50 @@ export default function ClientDetail() {
                 </CardHeader>
                 <CardContent>
                   <div data-testid="section-client-services">
-                    {servicesLoading ? (
-                      <div className="space-y-3">
-                        <Skeleton className="h-16 w-full" />
-                        <Skeleton className="h-16 w-full" />
-                      </div>
-                    ) : servicesError ? (
-                      <div className="text-center py-8">
-                        <p className="text-destructive mb-2">
-                          Failed to load services
-                        </p>
-                        <p className="text-muted-foreground text-sm">
-                          Please try refreshing the page or contact support if the issue persists.
-                        </p>
-                      </div>
-                    ) : clientServices && clientServices.length > 0 ? (
-                      <div className="space-y-3">
-                        {clientServices.map((clientService) => {
-                          const isExpanded = expandedServiceId === clientService.id;
-                          return (
-                            <Collapsible key={clientService.id} open={isExpanded} onOpenChange={() => 
-                              setExpandedServiceId(isExpanded ? null : clientService.id)
-                            }>
-                              <div className="rounded-lg border bg-card transition-all duration-200 hover:shadow-md">
-                                <CollapsibleTrigger asChild>
-                                  <div 
-                                    className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors cursor-pointer w-full"
-                                    data-testid={`service-row-${clientService.service.id}`}
-                                    role="button"
-                                    aria-expanded={isExpanded}
-                                    data-accordion-trigger={`button-toggle-service-${clientService.id}`}
-                                  >
-                                    <div className="flex items-center space-x-4">
-                                      <div className="flex items-center space-x-2">
-                                        <ChevronRight 
-                                          className={`h-4 w-4 text-muted-foreground transition-transform duration-200 motion-safe:transition-all ${
-                                            isExpanded ? 'rotate-90' : ''
-                                          }`}
-                                        />
-                                        <div>
-                                          <h4 className="font-medium" data-testid={`text-service-name-${clientService.service.id}`}>
-                                            {clientService.service.name}
-                                          </h4>
-                                          {clientService.service.description && (
-                                            <p className="text-sm text-muted-foreground">
-                                              {clientService.service.description}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center space-x-6 text-sm">
-                                      <div className="flex items-center space-x-1">
-                                        <Clock className="h-4 w-4 text-muted-foreground" />
-                                        <Badge variant="secondary" data-testid={`badge-frequency-${clientService.service.id}`}>
-                                          {clientService.frequency.charAt(0).toUpperCase() + clientService.frequency.slice(1)}
-                                        </Badge>
-                                      </div>
-                                      
-                                      {clientService.nextStartDate && (
-                                        <div className="text-muted-foreground">
-                                          <span className="text-xs block">Next Start:</span>
-                                          <span data-testid={`text-next-start-${clientService.service.id}`}>
-                                            {new Date(clientService.nextStartDate).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                      )}
-                                      
-                                      {clientService.nextDueDate && (
-                                        <div className="text-muted-foreground">
-                                          <span className="text-xs block">Next Due:</span>
-                                          <span data-testid={`text-next-due-${clientService.service.id}`}>
-                                            {new Date(clientService.nextDueDate).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </CollapsibleTrigger>
-                                
-                                <CollapsibleContent className="overflow-hidden motion-safe:data-[state=open]:animate-in motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:fade-out-0 motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:slide-up-1 motion-safe:data-[state=open]:slide-down-1">
-                                  <div className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-service-details-${clientService.id}`}>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-                                      {/* Service Owner Section */}
-                                      <div className="space-y-3">
-                                        <div className="flex items-center space-x-2">
-                                          <UserIcon className="h-4 w-4 text-muted-foreground" />
-                                          <h5 className="font-medium text-sm">Service Owner</h5>
-                                        </div>
-                                        {clientService.serviceOwner ? (
-                                          <div className="flex items-center space-x-3 p-3 rounded-lg bg-background border shadow-sm hover:shadow-md transition-shadow duration-200">
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
-                                              <UserIcon className="h-4 w-4 text-primary" />
-                                            </div>
-                                            <div>
-                                              <p className="font-medium text-sm" data-testid={`text-service-owner-${clientService.id}`}>
-                                                {clientService.serviceOwner.firstName} {clientService.serviceOwner.lastName}
-                                              </p>
-                                              <p className="text-xs text-muted-foreground">{clientService.serviceOwner.email}</p>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <p className="text-sm text-muted-foreground italic">No service owner assigned</p>
-                                        )}
-                                      </div>
-                                      
-                                      {/* Role Assignments Section */}
-                                      <div className="space-y-3">
-                                        <div className="flex items-center space-x-2">
-                                          <Users className="h-4 w-4 text-muted-foreground" />
-                                          <h5 className="font-medium text-sm">Role Assignments</h5>
-                                        </div>
-                                        {clientService.roleAssignments && clientService.roleAssignments.length > 0 ? (
-                                          <div className="space-y-2">
-                                            {clientService.roleAssignments.map((assignment) => (
-                                              <div key={assignment.id} className="flex items-center justify-between p-3 rounded-lg bg-background border shadow-sm hover:shadow-md transition-all duration-200 hover:border-primary/20">
-                                                <div className="flex items-center space-x-3">
-                                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-secondary/30 to-secondary/10 flex items-center justify-center">
-                                                    <UserIcon className="h-3 w-3 text-secondary-foreground" />
-                                                  </div>
-                                                  <div>
-                                                    <p className="font-medium text-sm">{assignment.workRole.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{assignment.user.firstName} {assignment.user.lastName}</p>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="text-sm text-muted-foreground italic">No role assignments</p>
-                                        )}
-                                      </div>
-                                      
-                                      {/* Projects Section (Placeholder) */}
-                                      <div className="space-y-3">
-                                        <div className="flex items-center space-x-2">
-                                          <Briefcase className="h-4 w-4 text-muted-foreground" />
-                                          <h5 className="font-medium text-sm">Projects</h5>
-                                        </div>
-                                        <div className="space-y-2">
-                                          <div className="p-4 rounded-lg bg-gradient-to-br from-background to-muted/20 border border-dashed border-muted/50 hover:border-muted transition-colors duration-200">
-                                            <div className="flex items-center justify-center space-x-2 mb-2">
-                                              <Briefcase className="h-4 w-4 text-muted-foreground" />
-                                              <p className="text-sm text-muted-foreground text-center font-medium">
-                                                Project details coming soon
-                                              </p>
-                                            </div>
-                                            <div className="flex justify-center space-x-4 text-xs">
-                                              <div className="flex items-center space-x-1">
-                                                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                                <span className="text-blue-600 font-medium">2 Open</span>
-                                              </div>
-                                              <span className="text-muted-foreground">•</span>
-                                              <div className="flex items-center space-x-1">
-                                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                <span className="text-green-600 font-medium">5 Completed</span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </CollapsibleContent>
+                    {(() => {
+                      // Simple conditional logic for data source
+                      const isIndividualWithConnections = client.clientType === 'individual' && (companyConnections?.length ?? 0) > 0;
+                      const displayServices = isIndividualWithConnections ? companyServicesQueries.data : clientServices;
+                      const loading = isIndividualWithConnections ? companyServicesQueries.isLoading : servicesLoading;
+                      const error = isIndividualWithConnections ? companyServicesQueries.isError : servicesError;
+                      
+                      if (loading) {
+                        return (
+                          <div className="space-y-3">
+                            <Skeleton className="h-16 w-full" />
+                            <Skeleton className="h-16 w-full" />
+                          </div>
+                        );
+                      }
+                      
+                      if (error) {
+                        return (
+                          <div className="text-center py-8">
+                            <p className="text-destructive mb-2">Failed to load services</p>
+                            <p className="text-muted-foreground text-sm">Please try refreshing the page or contact support if the issue persists.</p>
+                          </div>
+                        );
+                      }
+                      
+                      if (displayServices && displayServices.length > 0) {
+                        return (
+                          <div className="space-y-3">
+                            {displayServices.map((clientService) => (
+                              <div key={clientService.id} className="p-4 border rounded-lg">
+                                <h4 className="font-medium">{clientService.service?.name || 'Service'}</h4>
+                                <p className="text-sm text-muted-foreground">{clientService.service?.description || 'No description'}</p>
                               </div>
-                            </Collapsible>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground mb-4">
-                          No client services have been added yet.
-                        </p>
-                        <AddServiceModal clientId={client.id} clientType={client.clientType} onSuccess={refetchServices} />
-                      </div>
-                    )}
+                            ))}
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground mb-4">No client services have been added yet.</p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -3323,78 +3217,21 @@ export default function ClientDetail() {
                     </div>
                   ) : peopleServicesError ? (
                     <div className="text-center py-8">
-                      <p className="text-destructive mb-2">
-                        Failed to load personal services
-                      </p>
-                      <p className="text-muted-foreground text-sm">
-                        Please try refreshing the page or contact support if the issue persists.
-                      </p>
+                      <p className="text-destructive mb-2">Failed to load personal services</p>
+                      <p className="text-muted-foreground text-sm">Please try refreshing the page or contact support if the issue persists.</p>
                     </div>
                   ) : peopleServices && peopleServices.length > 0 ? (
                     <div className="space-y-3">
                       {peopleServices.map((peopleService) => (
-                        <div key={peopleService.id} className="rounded-lg border bg-card transition-all duration-200 hover:shadow-md">
-                          <div className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-4">
-                                <div>
-                                  <h4 className="font-medium flex items-center gap-2" data-testid={`text-personal-service-name-${peopleService.service.id}`}>
-                                    {peopleService.service.name}
-                                    {client.clientType === 'company' && (
-                                      <Badge variant="secondary" className="text-xs">Personal Service</Badge>
-                                    )}
-                                  </h4>
-                                  {peopleService.service.description && (
-                                    <p className="text-sm text-muted-foreground">
-                                      {peopleService.service.description}
-                                    </p>
-                                  )}
-                                  <div className="flex items-center space-x-4 mt-2 text-sm">
-                                    <div className="flex items-center space-x-1">
-                                      <UserIcon className="h-4 w-4 text-muted-foreground" />
-                                      <span className="text-muted-foreground">Assigned to:</span>
-                                      <span className="font-medium">{peopleService.person ? formatPersonName(peopleService.person.fullName) : 'Unknown Person'}</span>
-                                    </div>
-                                    {peopleService.serviceOwner && (
-                                      <div className="flex items-center space-x-1">
-                                        <Settings className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-muted-foreground">Owner:</span>
-                                        <span className="font-medium">
-                                          {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-muted-foreground text-sm">
-                                {peopleService.createdAt && (
-                                  <span>Added {new Date(peopleService.createdAt).toLocaleDateString()}</span>
-                                )}
-                              </div>
-                            </div>
-                            {peopleService.notes && (
-                              <div className="mt-3 p-3 bg-muted/30 rounded-lg">
-                                <p className="text-sm text-muted-foreground">
-                                  <span className="font-medium">Notes:</span> {peopleService.notes}
-                                </p>
-                              </div>
-                            )}
-                          </div>
+                        <div key={peopleService.id} className="p-4 border rounded-lg">
+                          <h4 className="font-medium">{peopleService.service?.name || 'Service'}</h4>
+                          <p className="text-sm text-muted-foreground">{peopleService.service?.description || 'No description'}</p>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="text-center py-8">
-                      <p className="text-muted-foreground mb-4">
-                        {client.clientType === 'individual' 
-                          ? 'No services have been assigned yet.'
-                          : 'No personal services have been assigned to people related to this client yet.'
-                        }
-                      </p>
-                      {client.clientType === 'individual' && (
-                        <AddServiceModal clientId={client.id} clientType={client.clientType} onSuccess={() => { refetchServices(); refetchPeopleServices(); }} />
-                      )}
+                      <p className="text-muted-foreground mb-4">No personal services have been added yet.</p>
                     </div>
                   )}
                 </div>
@@ -3409,159 +3246,24 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Open projects will be displayed here.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="communications" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Communications</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Communication history will be shown here.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="chronology" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Chronology</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Timeline of events will be displayed here.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="documents" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Documents</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Client documents will be managed here.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="tasks" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Task management will be available here.
-                  </p>
+                  <p className="text-muted-foreground">Projects management coming soon.</p>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-4">Client Not Found</h1>
+        <p className="text-muted-foreground mb-6">The client you're looking for could not be found.</p>
       </div>
-      
-      {/* Company Selection Modal */}
-      <Dialog open={showCompanySelection} onOpenChange={setShowCompanySelection}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Company Connection</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select a company to connect this person to:
-            </p>
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {availableCompanies.length > 0 ? (
-                availableCompanies.map((company) => (
-                  <div
-                    key={company.id}
-                    className="p-3 border rounded-lg hover:bg-muted cursor-pointer transition-colors"
-                    onClick={() => linkToCompanyMutation.mutate({ 
-                      companyClientId: company.id,
-                      officerRole: undefined,
-                      isPrimaryContact: false
-                    })}
-                    data-testid={`company-option-${company.id}`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Building2 className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">{company.fullName}</h4>
-                        {company.companyNumber && (
-                          <p className="text-sm text-muted-foreground">
-                            {company.companyNumber}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center py-4 text-muted-foreground">
-                  {companyConnections.length > 0 
-                    ? "All available companies are already connected."
-                    : "No company clients available for connection."
-                  }
-                </p>
-              )}
-            </div>
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowCompanySelection(false)}
-                disabled={linkToCompanyMutation.isPending}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Company Creation Modal */}
-      <Dialog open={showCompanyCreation} onOpenChange={setShowCompanyCreation}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New Company</DialogTitle>
-          </DialogHeader>
-          <CompanyCreationForm 
-            onSubmit={(data) => convertToCompanyMutation.mutate(data)}
-            onCancel={() => setShowCompanyCreation(false)}
-            isSubmitting={convertToCompanyMutation.isPending}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Person Modal */}
-      <AddPersonModal
-        clientId={client.id}
-        isOpen={isAddPersonModalOpen}
-        onClose={() => setIsAddPersonModalOpen(false)}
-        onSave={(data) => createPersonMutation.mutate(data)}
-        isSaving={createPersonMutation.isPending}
-      />
     </div>
   );
-}
+  }
+
+export default ClientDetail;
