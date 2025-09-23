@@ -877,6 +877,31 @@ export default function Services() {
                             )}
                           />
 
+                          {/* Personal Service Section */}
+                          <FormField
+                            control={serviceForm.control}
+                            name="isPersonalService"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                  <FormLabel htmlFor="personal-service-switch">Personal Service</FormLabel>
+                                  <div className="text-sm text-muted-foreground">
+                                    Mark this service as being for individuals rather than companies (e.g., Self-Assessments)
+                                  </div>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    id="personal-service-switch"
+                                    checked={field.value || false}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-personal-service"
+                                    aria-describedby="personal-service-description"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
                           {/* Companies House Connection Section */}
                           <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
                             <div className="flex items-center space-x-2">
@@ -1075,6 +1100,31 @@ export default function Services() {
                                   />
                                 </FormControl>
                                 <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Personal Service Section */}
+                          <FormField
+                            control={serviceForm.control}
+                            name="isPersonalService"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                  <FormLabel htmlFor="personal-service-switch">Personal Service</FormLabel>
+                                  <div className="text-sm text-muted-foreground">
+                                    Mark this service as being for individuals rather than companies (e.g., Self-Assessments)
+                                  </div>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    id="personal-service-switch"
+                                    checked={field.value || false}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-personal-service"
+                                    aria-describedby="personal-service-description"
+                                  />
+                                </FormControl>
                               </FormItem>
                             )}
                           />
