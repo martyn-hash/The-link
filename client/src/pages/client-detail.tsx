@@ -26,6 +26,25 @@ import { useToast } from "@/hooks/use-toast";
 import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment } from "@shared/schema";
 import { insertPersonSchema } from "@shared/schema";
 
+// Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
+function formatPersonName(fullName: string): string {
+  if (!fullName) return '';
+  
+  // Check if name is in "LASTNAME, Firstname" format
+  if (fullName.includes(',')) {
+    const [lastName, firstName] = fullName.split(',').map(part => part.trim());
+    
+    // Convert to proper case and return "Firstname Lastname"
+    const formattedFirstName = firstName.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    const formattedLastName = lastName.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    
+    return `${formattedFirstName} ${formattedLastName}`;
+  }
+  
+  // If not in comma format, return as is (already in proper format)
+  return fullName;
+}
+
 type ClientPersonWithPerson = ClientPerson & { person: Person };
 type ClientServiceWithService = ClientService & { 
   service: Service & { 
@@ -1058,7 +1077,7 @@ function PersonViewMode({
             <div>
               <label className="text-sm font-medium text-muted-foreground">Full Name</label>
               <p className="text-sm mt-1" data-testid={`view-fullName-${clientPerson.id}`}>
-                {clientPerson.person.fullName || 'Not provided'}
+                {formatPersonName(clientPerson.person.fullName) || 'Not provided'}
               </p>
             </div>
             
@@ -1090,19 +1109,6 @@ function PersonViewMode({
               </p>
             </div>
             
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Phone</label>
-              <p className="text-sm mt-1" data-testid={`view-telephone-${clientPerson.id}`}>
-                {clientPerson.person.telephone || 'Not provided'}
-              </p>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Email</label>
-              <p className="text-sm mt-1" data-testid={`view-email-${clientPerson.id}`}>
-                {clientPerson.person.email || 'Not provided'}
-              </p>
-            </div>
           </div>
         </div>
 
@@ -1276,10 +1282,10 @@ function PersonViewMode({
 
       {/* Extended Contact Information - New 1-column section */}
       <div className="space-y-4 border-t pt-6">
-        <h5 className="font-medium text-sm flex items-center">
-          <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+        <h4 className="font-bold text-base flex items-center border-b pb-2 mb-4">
+          <Phone className="h-5 w-5 mr-2 text-primary" />
           Contact Information
-        </h5>
+        </h4>
         
         <div className="grid grid-cols-1 gap-4">
           {/* Primary contact info */}
@@ -1653,28 +1659,6 @@ function PersonEditForm({
                 data-testid={`input-address-lookup-${clientPerson.id}`}
               />
               
-              {/* Current address display */}
-              {(form.watch("addressLine1") || clientPerson.person.addressLine1) && (
-                <div className="p-3 rounded-lg border bg-muted/30">
-                  <div className="text-sm text-muted-foreground mb-2">Current Address:</div>
-                  <div className="text-sm space-y-1">
-                    <div>{form.watch("addressLine1") || clientPerson.person.addressLine1}</div>
-                    {(form.watch("addressLine2") || clientPerson.person.addressLine2) && (
-                      <div>{form.watch("addressLine2") || clientPerson.person.addressLine2}</div>
-                    )}
-                    <div>
-                      {[
-                        form.watch("locality") || clientPerson.person.locality,
-                        form.watch("region") || clientPerson.person.region,
-                        form.watch("postalCode") || clientPerson.person.postalCode
-                      ].filter(Boolean).join(", ")}
-                    </div>
-                    {(form.watch("country") || clientPerson.person.country) && (
-                      <div>{form.watch("country") || clientPerson.person.country}</div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -2295,7 +2279,7 @@ export default function ClientDetail() {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <h4 className="font-medium text-lg" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                                      {clientPerson.person.fullName}
+                                      {formatPersonName(clientPerson.person.fullName)}
                                     </h4>
                                     {clientPerson.officerRole && (
                                       <p className="text-sm text-muted-foreground mt-1">
