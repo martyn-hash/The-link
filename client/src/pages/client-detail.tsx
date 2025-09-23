@@ -3138,7 +3138,20 @@ export default function ClientDetail() {
 
           <TabsContent value="services" className="space-y-6">
             {/* Client Services Section - Show for company clients OR individual clients with company connections */}
-            {(client.clientType === 'company' || (client.clientType === 'individual' && (companyConnections?.length ?? 0) > 0)) && (
+            {(() => {
+              // Handle legacy data where clientType might be null for companies
+              const isCompany = client?.clientType === 'company' || 
+                                (client?.clientType === null && client?.companyNumber); // Legacy companies have null clientType but have companyNumber
+              const isIndividualWithConnections = client?.clientType === 'individual' && (companyConnections?.length ?? 0) > 0;
+              
+              console.log('DEBUG: client?.clientType:', client?.clientType);
+              console.log('DEBUG: client?.companyNumber:', client?.companyNumber);
+              console.log('DEBUG: isCompany:', isCompany);
+              console.log('DEBUG: isIndividualWithConnections:', isIndividualWithConnections);
+              console.log('DEBUG: conditional result:', (isCompany || isIndividualWithConnections));
+              
+              return (isCompany || isIndividualWithConnections);
+            })() && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
