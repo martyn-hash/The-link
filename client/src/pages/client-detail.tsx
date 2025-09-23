@@ -1280,12 +1280,14 @@ function PersonViewMode({
   clientPerson, 
   revealedIdentifiers, 
   setRevealedIdentifiers, 
-  onEdit 
+  onEdit,
+  peopleServices 
 }: {
   clientPerson: ClientPersonWithPerson;
   revealedIdentifiers: Set<string>;
   setRevealedIdentifiers: (fn: (prev: Set<string>) => Set<string>) => void;
   onEdit: () => void;
+  peopleServices?: (PeopleService & { person: Person; service: Service; serviceOwner?: User })[];
 }) {
   return (
     <div className="space-y-6 pt-4">
@@ -1705,6 +1707,74 @@ function PersonViewMode({
           </div>
         </div>
       </div>
+
+      {/* Personal Services section */}
+      {peopleServices && (
+        <div className="space-y-4 border-t pt-6">
+          <h4 className="font-bold text-base flex items-center border-b pb-2 mb-4">
+            <Settings className="h-5 w-5 mr-2 text-primary" />
+            Personal Services
+          </h4>
+
+          {(() => {
+            const personServices = peopleServices.filter(ps => ps.personId === clientPerson.person.id);
+            
+            if (personServices.length === 0) {
+              return (
+                <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center">
+                  <p className="text-sm text-muted-foreground italic">
+                    No personal services assigned to this person
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {personServices.map((peopleService) => (
+                  <div 
+                    key={peopleService.id}
+                    className="p-4 rounded-lg border bg-background"
+                    data-testid={`personal-service-${peopleService.id}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h5 className="font-medium text-sm mb-2">{peopleService.service.name}</h5>
+                        {peopleService.service.description && (
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {peopleService.service.description}
+                          </p>
+                        )}
+                        
+                        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                          {peopleService.serviceOwner && (
+                            <div className="flex items-center space-x-1">
+                              <UserIcon className="h-3 w-3" />
+                              <span>Owner: {peopleService.serviceOwner.fullName}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>Assigned: {formatDate(peopleService.createdAt)}</span>
+                          </div>
+                        </div>
+                        
+                        {peopleService.notes && (
+                          <div className="mt-2 p-2 rounded bg-muted/50">
+                            <p className="text-xs text-muted-foreground">
+                              <strong>Notes:</strong> {peopleService.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <div className="flex justify-end pt-4 border-t">
         <Button 
@@ -2644,6 +2714,7 @@ export default function ClientDetail() {
                                 revealedIdentifiers={revealedIdentifiers}
                                 setRevealedIdentifiers={setRevealedIdentifiers}
                                 onEdit={() => setEditingPersonId(clientPerson.person.id)}
+                                peopleServices={peopleServices}
                               />
                             )}
                           </AccordionContent>
