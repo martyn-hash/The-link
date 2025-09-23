@@ -21,6 +21,7 @@ import Clients from "@/pages/clients";
 import ClientDetail from "@/pages/client-detail";
 import Services from "@/pages/services";
 import ChChanges from "@/pages/ch-changes";
+import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
 
 function Router() {
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/users" component={Users} />
       <Route path="/services" component={Services} />
       <Route path="/ch-changes" component={ChChanges} />
+      <Route path="/tags" component={Tags} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
       

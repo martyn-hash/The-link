@@ -22,6 +22,10 @@ import {
   clientServices,
   clientServiceRoleAssignments,
   chChangeRequests,
+  clientTags,
+  peopleTags,
+  clientTagAssignments,
+  peopleTagAssignments,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -72,6 +76,14 @@ import {
   type ChChangeRequest,
   type InsertChChangeRequest,
   type UpdateChChangeRequest,
+  type ClientTag,
+  type InsertClientTag,
+  type PeopleTag,
+  type InsertPeopleTag,
+  type ClientTagAssignment,
+  type InsertClientTagAssignment,
+  type PeopleTagAssignment,
+  type InsertPeopleTagAssignment,
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
@@ -360,6 +372,14 @@ export interface IStorage {
   // Companies House Data Synchronization
   detectChDataChanges(clientId: string, newChData: any): Promise<ChChangeRequest[]>;
   applyChChangeRequests(requestIds: string[]): Promise<void>;
+  
+  // Tag operations
+  getAllClientTags(): Promise<ClientTag[]>;
+  createClientTag(tag: InsertClientTag): Promise<ClientTag>;
+  deleteClientTag(id: string): Promise<void>;
+  getAllPeopleTags(): Promise<PeopleTag[]>;
+  createPeopleTag(tag: InsertPeopleTag): Promise<PeopleTag>;
+  deletePeopleTag(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4547,6 +4567,33 @@ export class DatabaseStorage implements IStorage {
   async applyChChangeRequests(requestIds: string[]): Promise<void> {
     // TODO: Implement
     throw new Error("Method not implemented.");
+  }
+
+  // Tag operations implementation
+  async getAllClientTags(): Promise<ClientTag[]> {
+    return await db.select().from(clientTags).orderBy(clientTags.name);
+  }
+
+  async createClientTag(tag: InsertClientTag): Promise<ClientTag> {
+    const [created] = await db.insert(clientTags).values(tag).returning();
+    return created;
+  }
+
+  async deleteClientTag(id: string): Promise<void> {
+    await db.delete(clientTags).where(eq(clientTags.id, id));
+  }
+
+  async getAllPeopleTags(): Promise<PeopleTag[]> {
+    return await db.select().from(peopleTags).orderBy(peopleTags.name);
+  }
+
+  async createPeopleTag(tag: InsertPeopleTag): Promise<PeopleTag> {
+    const [created] = await db.insert(peopleTags).values(tag).returning();
+    return created;
+  }
+
+  async deletePeopleTag(id: string): Promise<void> {
+    await db.delete(peopleTags).where(eq(peopleTags.id, id));
   }
 }
 

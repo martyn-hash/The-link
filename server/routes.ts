@@ -39,6 +39,8 @@ import {
   insertClientSchema,
   insertClientServiceSchema,
   insertClientServiceRoleAssignmentSchema,
+  insertClientTagSchema,
+  insertPeopleTagSchema,
   type User,
 } from "@shared/schema";
 
@@ -1225,6 +1227,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting impersonation state:", error);
       res.status(500).json({ message: "Failed to get impersonation state" });
+    }
+  });
+
+  // Tag management routes (admin only)
+  app.get("/api/client-tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const tags = await storage.getAllClientTags();
+      res.json(tags);
+    } catch (error) {
+      console.error("Error fetching client tags:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client tags" });
+    }
+  });
+
+  app.post("/api/client-tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validatedData = insertClientTagSchema.parse(req.body);
+      const tag = await storage.createClientTag(validatedData);
+      res.status(201).json(tag);
+    } catch (error) {
+      console.error("Error creating client tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to create client tag" });
+    }
+  });
+
+  app.delete("/api/client-tags/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      await storage.deleteClientTag(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting client tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to delete client tag" });
+    }
+  });
+
+  app.get("/api/people-tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const tags = await storage.getAllPeopleTags();
+      res.json(tags);
+    } catch (error) {
+      console.error("Error fetching people tags:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch people tags" });
+    }
+  });
+
+  app.post("/api/people-tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validatedData = insertPeopleTagSchema.parse(req.body);
+      const tag = await storage.createPeopleTag(validatedData);
+      res.status(201).json(tag);
+    } catch (error) {
+      console.error("Error creating people tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to create people tag" });
+    }
+  });
+
+  app.delete("/api/people-tags/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      await storage.deletePeopleTag(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting people tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to delete people tag" });
     }
   });
 

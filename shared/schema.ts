@@ -1288,6 +1288,77 @@ export type InsertPerson = z.infer<typeof insertPersonSchema>;
 export type ClientPerson = typeof clientPeople.$inferSelect;
 export type InsertClientPerson = z.infer<typeof insertClientPersonSchema>;
 
+// Tags tables for client and people categorization
+export const clientTags = pgTable("client_tags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  color: varchar("color").notNull().default("#3b82f6"), // Default blue color
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const peopleTags = pgTable("people_tags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  color: varchar("color").notNull().default("#3b82f6"), // Default blue color  
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Junction tables for many-to-many relationships
+export const clientTagAssignments = pgTable("client_tag_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  tagId: varchar("tag_id").notNull().references(() => clientTags.id, { onDelete: "cascade" }),
+  assignedAt: timestamp("assigned_at").defaultNow(),
+  assignedBy: varchar("assigned_by").notNull().references(() => users.id),
+}, (table) => ({
+  // Prevent duplicate tag assignments
+  uniqueClientTag: unique().on(table.clientId, table.tagId),
+}));
+
+export const peopleTagAssignments = pgTable("people_tag_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  personId: varchar("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
+  tagId: varchar("tag_id").notNull().references(() => peopleTags.id, { onDelete: "cascade" }),
+  assignedAt: timestamp("assigned_at").defaultNow(),
+  assignedBy: varchar("assigned_by").notNull().references(() => users.id),
+}, (table) => ({
+  // Prevent duplicate tag assignments
+  uniquePersonTag: unique().on(table.personId, table.tagId),
+}));
+
+// Zod schemas for tags
+export const insertClientTagSchema = createInsertSchema(clientTags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPeopleTagSchema = createInsertSchema(peopleTags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertClientTagAssignmentSchema = createInsertSchema(clientTagAssignments).omit({
+  id: true,
+  assignedAt: true,
+});
+
+export const insertPeopleTagAssignmentSchema = createInsertSchema(peopleTagAssignments).omit({
+  id: true,
+  assignedAt: true,
+});
+
+// Type exports
+export type ClientTag = typeof clientTags.$inferSelect;
+export type InsertClientTag = z.infer<typeof insertClientTagSchema>;
+export type PeopleTag = typeof peopleTags.$inferSelect;
+export type InsertPeopleTag = z.infer<typeof insertPeopleTagSchema>;
+export type ClientTagAssignment = typeof clientTagAssignments.$inferSelect;
+export type InsertClientTagAssignment = z.infer<typeof insertClientTagAssignmentSchema>;
+export type PeopleTagAssignment = typeof peopleTagAssignments.$inferSelect;
+export type InsertPeopleTagAssignment = z.infer<typeof insertPeopleTagAssignmentSchema>;
+
 // Extended types with relations
 export type ProjectWithRelations = Project & {
   client: Client;

@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import AddressLookup from "@/components/address-lookup";
+import AddressMap from "@/components/address-map";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -2136,6 +2137,13 @@ export default function ClientDetail() {
                     Company #{client.companyNumber}
                   </>
                 )}
+                {client.dateOfCreation && (
+                  <>
+                    {client.companyNumber && <span className="mx-2">•</span>}
+                    <Calendar className="w-4 h-4 mr-1" />
+                    Formed: {new Date(client.dateOfCreation).toLocaleDateString()}
+                  </>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -2175,74 +2183,89 @@ export default function ClientDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Basic Information */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Company Name</label>
-                      <p className="font-medium" data-testid="text-company-name">
-                        {client.companiesHouseName || client.name}
-                      </p>
-                    </div>
-                    
-                    {client.companyNumber && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Company Number</label>
-                        <p className="font-medium" data-testid="text-company-number">
-                          {client.companyNumber}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {client.companyType && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Company Type</label>
-                        <p className="font-medium" data-testid="text-company-type">
-                          {client.companyType}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {client.dateOfCreation && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Date of Creation</label>
-                        <p className="font-medium flex items-center gap-1" data-testid="text-date-creation">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(client.dateOfCreation).toLocaleDateString()}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                {(() => {
+                  // Create formatted address string for the map
+                  const addressParts = [
+                    client.registeredAddress1,
+                    client.registeredAddress2,
+                    client.registeredAddress3,
+                    client.registeredPostcode,
+                    client.registeredCountry
+                  ].filter(Boolean);
+                  const fullAddress = addressParts.join(', ');
+                  const hasAddress = addressParts.length > 0;
 
-                  {/* Address Information */}
-                  <div className="space-y-3">
-                    {(client.registeredAddress1 || client.registeredPostcode) && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          Registered Address
-                        </label>
-                        <div className="space-y-1" data-testid="text-company-address">
-                          {client.registeredAddress1 && <p>{client.registeredAddress1}</p>}
-                          {client.registeredAddress2 && <p>{client.registeredAddress2}</p>}
-                          {client.registeredAddress3 && <p>{client.registeredAddress3}</p>}
-                          {client.registeredPostcode && <p>{client.registeredPostcode}</p>}
-                          {client.registeredCountry && <p>{client.registeredCountry}</p>}
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Registered Office Address */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <MapPin className="w-5 h-5 text-primary" />
+                          <h3 className="text-lg font-semibold">Registered Office</h3>
                         </div>
-                      </div>
-                    )}
+                        
+                        {hasAddress ? (
+                          <div className="p-4 rounded-lg bg-muted/30 border">
+                            <div className="space-y-1" data-testid="text-company-address">
+                              {client.registeredAddress1 && <p className="font-medium">{client.registeredAddress1}</p>}
+                              {client.registeredAddress2 && <p>{client.registeredAddress2}</p>}
+                              {client.registeredAddress3 && <p>{client.registeredAddress3}</p>}
+                              {client.registeredPostcode && <p className="font-medium">{client.registeredPostcode}</p>}
+                              {client.registeredCountry && <p className="text-muted-foreground">{client.registeredCountry}</p>}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-muted-foreground italic p-4 border rounded-lg bg-muted/30">
+                            No registered address available
+                          </p>
+                        )}
 
-                    {client.email && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Email</label>
-                        <p className="font-medium" data-testid="text-company-email">
-                          {client.email}
-                        </p>
-                      </div>
-                    )}
+                        {client.email && (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                              <Mail className="w-4 h-4" />
+                              Company Email
+                            </label>
+                            <p className="font-medium" data-testid="text-company-email">
+                              {client.email}
+                            </p>
+                          </div>
+                        )}
 
-                  </div>
-                </div>
+                        {client.companyType && (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                              <Building2 className="w-4 h-4" />
+                              Company Type
+                            </label>
+                            <p className="font-medium" data-testid="text-company-type">
+                              {client.companyType}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Google Maps */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <MapPin className="w-5 h-5 text-primary" />
+                          <h3 className="text-lg font-semibold">Location</h3>
+                        </div>
+                        
+                        {hasAddress ? (
+                          <AddressMap 
+                            address={fullAddress}
+                            className="h-[300px]"
+                          />
+                        ) : (
+                          <div className="h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center">
+                            <p className="text-muted-foreground">No address available for map display</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {client.companyNumber && (
                   <div className="pt-4 border-t">
