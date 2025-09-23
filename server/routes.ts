@@ -78,6 +78,14 @@ const paramClientServiceIdSchema = z.object({
   clientServiceId: z.string().min(1, "Client service ID is required").uuid("Invalid client service ID format") 
 });
 
+const paramPeopleServiceIdSchema = z.object({ 
+  peopleServiceId: z.string().min(1, "People service ID is required").uuid("Invalid people service ID format") 
+});
+
+const paramPersonIdSchema = z.object({ 
+  personId: z.string().min(1, "Person ID is required") 
+});
+
 const paramApprovalIdSchema = z.object({ 
   approvalId: z.string().min(1, "Approval ID is required").uuid("Invalid approval ID format") 
 });
@@ -3407,6 +3415,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting client service:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to delete client service" });
+    }
+  });
+
+  // ==================================================
+  // PEOPLE SERVICES API ROUTES  
+  // ==================================================
+
+  // GET /api/people-services - Get all people services (admin only)
+  app.get("/api/people-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const peopleServices = await storage.getAllPeopleServices();
+      res.json(peopleServices);
+    } catch (error) {
+      console.error("Error fetching people services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch people services" });
+    }
+  });
+
+  // GET /api/people-services/person/:personId - Get services for a specific person
+  app.get("/api/people-services/person/:personId", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const validation = validateParams(paramPersonIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid person ID", errors: validation.errors });
+      }
+
+      const { personId } = validation.data;
+      const peopleServices = await storage.getPeopleServicesByPersonId(personId);
+      res.json(peopleServices);
+    } catch (error) {
+      console.error("Error fetching people services by person:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch people services" });
+    }
+  });
+
+  // GET /api/people-services/service/:serviceId - Get people for a specific service
+  app.get("/api/people-services/service/:serviceId", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const validation = validateParams(paramServiceIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid service ID", errors: validation.errors });
+      }
+
+      const { serviceId } = validation.data;
+      const peopleServices = await storage.getPeopleServicesByServiceId(serviceId);
+      res.json(peopleServices);
+    } catch (error) {
+      console.error("Error fetching people services by service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch people services" });
+    }
+  });
+
+  // POST /api/people-services - Create a new people service
+  app.post("/api/people-services", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate request body using Zod schema
+      const validation = insertPeopleServiceSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid people service data", 
+          errors: validation.error.issues 
+        });
+      }
+
+      const peopleServiceData = validation.data;
+
+      // Verify the service is a personal service before creation
+      const service = await storage.getServiceById(peopleServiceData.serviceId);
+      if (!service) {
+        return res.status(404).json({ message: `Service with ID '${peopleServiceData.serviceId}' not found` });
+      }
+      if (!service.isPersonalService) {
+        return res.status(400).json({ message: `Service '${service.name}' is not a personal service and cannot be assigned to people` });
+      }
+
+      // Create the people service
+      const newPeopleService = await storage.createPeopleService(peopleServiceData);
+      
+      // Fetch the complete people service with relations
+      const completePeopleService = await storage.getPeopleServiceById(newPeopleService.id);
+      
+      res.status(201).json(completePeopleService);
+    } catch (error) {
+      console.error("Error creating people service:", error instanceof Error ? error.message : error);
+      
+      // Handle specific validation errors
+      if (error instanceof Error) {
+        if (error.message.includes('not found')) {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error.message.includes('not a personal service')) {
+          return res.status(400).json({ message: error.message });
+        }
+        if (error.message.includes('mapping already exists')) {
+          return res.status(409).json({ message: error.message });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to create people service" });
+    }
+  });
+
+  // PUT /api/people-services/:peopleServiceId - Update a people service
+  app.put("/api/people-services/:peopleServiceId", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramPeopleServiceIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid people service ID", errors: paramValidation.errors });
+      }
+
+      // Validate request body - partial update
+      const validation = insertPeopleServiceSchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid people service data", 
+          errors: validation.error.issues 
+        });
+      }
+
+      const { peopleServiceId } = paramValidation.data;
+      const peopleServiceData = validation.data;
+
+      // If serviceId is being changed, verify it's a personal service
+      if (peopleServiceData.serviceId) {
+        const service = await storage.getServiceById(peopleServiceData.serviceId);
+        if (!service) {
+          return res.status(404).json({ message: `Service with ID '${peopleServiceData.serviceId}' not found` });
+        }
+        if (!service.isPersonalService) {
+          return res.status(400).json({ message: `Service '${service.name}' is not a personal service and cannot be assigned to people` });
+        }
+      }
+
+      // Update the people service
+      const updatedPeopleService = await storage.updatePeopleService(peopleServiceId, peopleServiceData);
+      
+      // Fetch the complete people service with relations
+      const completePeopleService = await storage.getPeopleServiceById(updatedPeopleService.id);
+      
+      res.json(completePeopleService);
+    } catch (error) {
+      console.error("Error updating people service:", error instanceof Error ? error.message : error);
+      
+      // Handle specific validation errors
+      if (error instanceof Error) {
+        if (error.message.includes('not found')) {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error.message.includes('not a personal service')) {
+          return res.status(400).json({ message: error.message });
+        }
+        if (error.message.includes('mapping already exists')) {
+          return res.status(409).json({ message: error.message });
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to update people service" });
+    }
+  });
+
+  // DELETE /api/people-services/:peopleServiceId - Delete a people service
+  app.delete("/api/people-services/:peopleServiceId", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const validation = validateParams(paramPeopleServiceIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid people service ID", errors: validation.errors });
+      }
+
+      const { peopleServiceId } = validation.data;
+
+      // Delete the people service
+      await storage.deletePeopleService(peopleServiceId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting people service:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error && error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      
+      res.status(500).json({ message: "Failed to delete people service" });
     }
   });
 
