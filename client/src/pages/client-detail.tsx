@@ -2302,6 +2302,136 @@ function PersonEditForm({
   );
 }
 
+// Company Creation Form Component
+function CompanyCreationForm({ onSubmit, onCancel, isSubmitting }: {
+  onSubmit: (data: { companyName: string; companyNumber?: string; officerRole?: string; isPrimaryContact?: boolean; }) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}) {
+  const form = useForm({
+    resolver: zodResolver(z.object({
+      companyName: z.string().min(1, "Company name is required"),
+      companyNumber: z.string().optional(),
+      officerRole: z.string().optional(),
+      isPrimaryContact: z.boolean().optional().default(false)
+    })),
+    defaultValues: {
+      companyName: "",
+      companyNumber: "",
+      officerRole: "",
+      isPrimaryContact: false
+    }
+  });
+
+  const handleSubmit = (data: any) => {
+    onSubmit({
+      companyName: data.companyName,
+      companyNumber: data.companyNumber || undefined,
+      officerRole: data.officerRole || undefined,
+      isPrimaryContact: data.isPrimaryContact || false
+    });
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="companyName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Company Name *</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter company name" {...field} data-testid="input-company-name" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="companyNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Company Number</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter company number (optional)" {...field} data-testid="input-company-number" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="officerRole"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Your Role</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g. Director, Secretary (optional)" {...field} data-testid="input-officer-role" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="isPrimaryContact"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Primary Contact</FormLabel>
+                <div className="text-sm text-muted-foreground">
+                  Mark this person as the main contact for the company
+                </div>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="switch-primary-contact"
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            data-testid="button-cancel-company-creation"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            data-testid="button-submit-company-creation"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Creating...
+              </>
+            ) : (
+              <>
+                <Building2 className="h-4 w-4 mr-2" />
+                Create Company
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+
 export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -2386,6 +2516,7 @@ export default function ClientDetail() {
 
   // Company Connections functionality for individual clients (many-to-many)
   const [showCompanySelection, setShowCompanySelection] = useState(false);
+  const [showCompanyCreation, setShowCompanyCreation] = useState(false);
 
   // Query to fetch company connections for this person (many-to-many)
   const { data: companyConnections = [], isLoading: connectionsLoading } = useQuery<Array<{
@@ -2447,6 +2578,35 @@ export default function ClientDetail() {
       toast({
         title: "Error",
         description: error?.message || "Failed to remove company connection",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation to convert individual client to company client
+  const convertToCompanyMutation = useMutation({
+    mutationFn: async (companyData: { 
+      companyName: string; 
+      companyNumber?: string; 
+      officerRole?: string; 
+      isPrimaryContact?: boolean;
+    }) => {
+      return await apiRequest("POST", `/api/people/${id}/convert-to-company-client`, companyData);
+    },
+    onSuccess: (result: any) => {
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}/companies`] });
+      setShowCompanyCreation(false);
+      toast({
+        title: "Success",
+        description: `Successfully created company "${result.companyClient.fullName}" and linked to this person`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create company",
         variant: "destructive",
       });
     },
@@ -2851,16 +3011,27 @@ export default function ClientDetail() {
                         </Badge>
                       )}
                     </CardTitle>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      data-testid="button-add-company-connection"
-                      onClick={() => setShowCompanySelection(true)}
-                      disabled={linkToCompanyMutation.isPending}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      {linkToCompanyMutation.isPending ? "Connecting..." : "Add Company"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        data-testid="button-add-company-connection"
+                        onClick={() => setShowCompanySelection(true)}
+                        disabled={linkToCompanyMutation.isPending}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        {linkToCompanyMutation.isPending ? "Connecting..." : "Add Company"}
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        data-testid="button-create-company"
+                        onClick={() => setShowCompanyCreation(true)}
+                      >
+                        <Building2 className="h-4 w-4 mr-2" />
+                        Create Company
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -3366,6 +3537,20 @@ export default function ClientDetail() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Company Creation Modal */}
+      <Dialog open={showCompanyCreation} onOpenChange={setShowCompanyCreation}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Company</DialogTitle>
+          </DialogHeader>
+          <CompanyCreationForm 
+            onSubmit={(data) => convertToCompanyMutation.mutate(data)}
+            onCancel={() => setShowCompanyCreation(false)}
+            isSubmitting={convertToCompanyMutation.isPending}
+          />
         </DialogContent>
       </Dialog>
 
