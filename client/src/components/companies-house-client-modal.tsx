@@ -260,22 +260,44 @@ export function CompaniesHouseClientModal({
   }, [addressQuery]);
 
   // Select address from suggestions and populate form fields
-  const selectAddress = (suggestion: any) => {
-    // Parse the suggestion address into components
-    const addressParts = suggestion.address.split(', ');
+  const selectAddress = async (suggestion: any) => {
+    if (!suggestion.id) {
+      console.log("No address ID available");
+      return;
+    }
+
+    setIsLoadingAddresses(true);
+    try {
+      // Fetch full address details including postcode
+      const response = await apiRequest("GET", `/api/address-details/${encodeURIComponent(suggestion.id)}`);
+      const addressDetails = await response.json();
+      
+      // Populate form fields with complete address data
+      individualForm.setValue("address.line1", addressDetails.line1 || "");
+      individualForm.setValue("address.line2", addressDetails.line2 || "");
+      individualForm.setValue("address.city", addressDetails.city || "");
+      individualForm.setValue("address.county", addressDetails.county || "");
+      individualForm.setValue("address.postcode", addressDetails.postcode || "");
+      individualForm.setValue("address.country", "United Kingdom");
+      
+      // Update the address query field with the first line
+      setAddressQuery(addressDetails.line1 || suggestion.address);
+      
+    } catch (error) {
+      console.log("Failed to fetch address details");
+      // Fallback to parsing suggestion
+      const addressParts = suggestion.address.split(', ');
+      individualForm.setValue("address.line1", addressParts[0] || "");
+      individualForm.setValue("address.line2", "");
+      individualForm.setValue("address.city", addressParts[1] || "");
+      individualForm.setValue("address.county", addressParts[2] || "");
+      individualForm.setValue("address.postcode", "");
+      individualForm.setValue("address.country", "United Kingdom");
+      setAddressQuery(suggestion.address);
+    }
     
-    // Populate form fields with available address data from autocomplete
-    // Note: GetAddress.io autocomplete doesn't include postcode - user will need to enter manually
-    individualForm.setValue("address.line1", addressParts[0] || "");
-    individualForm.setValue("address.line2", "");
-    individualForm.setValue("address.city", addressParts[1] || "");
-    individualForm.setValue("address.county", addressParts[2] || "");
-    individualForm.setValue("address.postcode", ""); // Empty - user enters manually
-    individualForm.setValue("address.country", "United Kingdom");
-    
-    // Update the address query field with the selected address
-    setAddressQuery(suggestion.address);
     setAddressSuggestions([]);
+    setIsLoadingAddresses(false);
   };
   
   // Individual client creation mutation
