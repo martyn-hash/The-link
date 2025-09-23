@@ -192,9 +192,9 @@ export function CompaniesHouseClientModal({
     }
   }, [client, searchForm, open]);
 
-  // Fetch services
+  // Fetch services (excluding personal services for client assignment)
   const { data: services, isLoading: servicesLoading } = useQuery<ServiceWithDetails[]>({
-    queryKey: ["/api/services"],
+    queryKey: ["/api/services/client-assignable"],
     enabled: open,
     retry: false,
   });

@@ -3224,6 +3224,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Service not found" });
       }
       
+      // Prevent personal services from being assigned to clients
+      if (service.isPersonalService) {
+        return res.status(400).json({ 
+          message: "Personal services cannot be assigned to clients",
+          serviceId: service.id,
+          serviceName: service.name
+        });
+      }
+      
       let finalClientServiceData = { ...clientServiceData };
       
       if (service.isCompaniesHouseConnected) {
@@ -3347,6 +3356,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Invalid client service data", 
           errors: validationResult.error.issues 
         });
+      }
+      
+      // If serviceId is being updated, prevent personal services from being assigned to clients
+      if (validationResult.data.serviceId) {
+        const service = await storage.getServiceById(validationResult.data.serviceId);
+        if (!service) {
+          return res.status(404).json({ message: "Service not found" });
+        }
+        
+        if (service.isPersonalService) {
+          return res.status(400).json({ 
+            message: "Personal services cannot be assigned to clients",
+            serviceId: service.id,
+            serviceName: service.name
+          });
+        }
       }
 
       const clientService = await storage.updateClientService(id, validationResult.data);
