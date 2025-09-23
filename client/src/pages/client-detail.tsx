@@ -2384,14 +2384,18 @@ export default function ClientDetail() {
     },
   });
 
-  // Related Company functionality for individual clients
+  // Company Connections functionality for individual clients (many-to-many)
   const [showCompanySelection, setShowCompanySelection] = useState(false);
 
-  // Query to fetch related company data
-  const { data: relatedCompany, isLoading: relatedCompanyLoading } = useQuery<Client>({
-    queryKey: [`/api/clients/${id}/related-company`],
+  // Query to fetch company connections for this person (many-to-many)
+  const { data: companyConnections = [], isLoading: connectionsLoading } = useQuery<Array<{
+    client: Client;
+    officerRole?: string;
+    isPrimaryContact?: boolean;
+  }>>({
+    queryKey: [`/api/people/${id}/companies`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client && client.clientType === 'individual' && !!client.relatedCompanyId,
+    enabled: !!id && !!client && client.clientType === 'individual',
   });
 
   // Query to fetch all company clients for selection
@@ -2401,16 +2405,17 @@ export default function ClientDetail() {
     enabled: showCompanySelection,
   });
 
-  // Mutation to link individual client to company
+  // Mutation to link person to a company
   const linkToCompanyMutation = useMutation({
-    mutationFn: async (companyClientId: string) => {
-      return await apiRequest("POST", `/api/clients/${id}/link-company`, {
-        companyClientId
+    mutationFn: async (data: { companyClientId: string; officerRole?: string; isPrimaryContact?: boolean }) => {
+      return await apiRequest("POST", `/api/people/${id}/companies`, {
+        clientId: data.companyClientId,
+        officerRole: data.officerRole,
+        isPrimaryContact: data.isPrimaryContact
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}/related-company`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}/companies`] });
       setShowCompanySelection(false);
       toast({
         title: "Success",
@@ -2426,31 +2431,31 @@ export default function ClientDetail() {
     },
   });
 
-  // Mutation to unlink client from company
+  // Mutation to unlink person from a company
   const unlinkFromCompanyMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("DELETE", `/api/clients/${id}/link-company`);
+    mutationFn: async (companyClientId: string) => {
+      return await apiRequest("DELETE", `/api/people/${id}/companies/${companyClientId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}/related-company`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}/companies`] });
       toast({
         title: "Success",
-        description: "Successfully removed company link",
+        description: "Successfully removed company connection",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error?.message || "Failed to remove company link",
+        description: error?.message || "Failed to remove company connection",
         variant: "destructive",
       });
     },
   });
 
-  // Filter company clients (exclude individuals and current client)
+  // Filter company clients (exclude individuals, current client, and already connected companies)
+  const connectedCompanyIds = companyConnections.map(conn => conn.client.id);
   const availableCompanies = companyClients?.filter(
-    c => c.clientType === 'company' && c.id !== id
+    c => c.clientType === 'company' && c.id !== id && !connectedCompanyIds.includes(c.id)
   ) || [];
 
   if (isLoading) {
@@ -2832,73 +2837,97 @@ export default function ClientDetail() {
               </CardContent>
             </Card>
 
-            {/* Related Company Section - Only show for individual clients */}
+            {/* Company Connections Section - Only show for individual clients */}
             {client.clientType === 'individual' && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Building2 className="w-5 h-5" />
-                      Related Company
+                      Company Connections
+                      {companyConnections.length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {companyConnections.length}
+                        </Badge>
+                      )}
                     </CardTitle>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      data-testid="button-link-company"
+                      data-testid="button-add-company-connection"
                       onClick={() => setShowCompanySelection(true)}
                       disabled={linkToCompanyMutation.isPending}
                     >
-                      <Link className="h-4 w-4 mr-2" />
-                      {linkToCompanyMutation.isPending ? "Linking..." : "Link Company"}
+                      <Plus className="h-4 w-4 mr-2" />
+                      {linkToCompanyMutation.isPending ? "Connecting..." : "Add Company"}
                     </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div data-testid="section-related-company">
-                    {client.relatedCompanyId ? (
-                      <div className="p-4 rounded-lg border bg-card">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
-                              <Building2 className="h-6 w-6 text-primary" />
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-lg" data-testid="text-related-company-name">
-                                {relatedCompanyLoading ? "Loading..." : (relatedCompany?.fullName || "Unknown Company")}
-                              </h4>
-                              <p className="text-sm text-muted-foreground">
-                                Company relationship
-                              </p>
+                  <div data-testid="section-company-connections">
+                    {connectionsLoading ? (
+                      <div className="space-y-3">
+                        <Skeleton className="h-16 w-full" />
+                        <Skeleton className="h-16 w-full" />
+                      </div>
+                    ) : companyConnections.length > 0 ? (
+                      <div className="space-y-3">
+                        {companyConnections.map((connection, index) => (
+                          <div key={connection.client.id} className="p-4 rounded-lg border bg-card" data-testid={`company-connection-${connection.client.id}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                                  <Building2 className="h-6 w-6 text-primary" />
+                                </div>
+                                <div>
+                                  <h4 className="font-medium text-lg" data-testid={`text-company-name-${connection.client.id}`}>
+                                    {connection.client.fullName}
+                                  </h4>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    {connection.officerRole && (
+                                      <Badge variant="outline" className="text-xs">
+                                        {connection.officerRole}
+                                      </Badge>
+                                    )}
+                                    {connection.isPrimaryContact && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        Primary Contact
+                                      </Badge>
+                                    )}
+                                    {!connection.officerRole && !connection.isPrimaryContact && "Company connection"}
+                                  </div>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                data-testid={`button-remove-company-connection-${connection.client.id}`}
+                                onClick={() => unlinkFromCompanyMutation.mutate(connection.client.id)}
+                                disabled={unlinkFromCompanyMutation.isPending}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            data-testid="button-remove-company-link"
-                            onClick={() => unlinkFromCompanyMutation.mutate()}
-                            disabled={unlinkFromCompanyMutation.isPending}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="text-center py-8">
                         <Building2 className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                         <p className="text-muted-foreground mb-4">
-                          No company linked to this individual client.
+                          No companies connected to this individual client.
                         </p>
                         <p className="text-sm text-muted-foreground mb-4">
-                          Link this individual to a company when they start a business or need business services.
+                          Connect this person to companies they are associated with as directors, shareholders, or contacts.
                         </p>
                         <Button 
                           variant="outline"
-                          data-testid="button-link-company-empty"
+                          data-testid="button-add-first-company-connection"
                           onClick={() => setShowCompanySelection(true)}
                           disabled={linkToCompanyMutation.isPending}
                         >
-                          <Link className="h-4 w-4 mr-2" />
-                          {linkToCompanyMutation.isPending ? "Linking..." : "Link to Company"}
+                          <Plus className="h-4 w-4 mr-2" />
+                          {linkToCompanyMutation.isPending ? "Connecting..." : "Add Company Connection"}
                         </Button>
                       </div>
                     )}
@@ -3284,11 +3313,11 @@ export default function ClientDetail() {
       <Dialog open={showCompanySelection} onOpenChange={setShowCompanySelection}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Link to Company</DialogTitle>
+            <DialogTitle>Add Company Connection</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Select a company to link this individual client to:
+              Select a company to connect this person to:
             </p>
             <div className="max-h-60 overflow-y-auto space-y-2">
               {availableCompanies.length > 0 ? (
@@ -3296,7 +3325,11 @@ export default function ClientDetail() {
                   <div
                     key={company.id}
                     className="p-3 border rounded-lg hover:bg-muted cursor-pointer transition-colors"
-                    onClick={() => linkToCompanyMutation.mutate(company.id)}
+                    onClick={() => linkToCompanyMutation.mutate({ 
+                      companyClientId: company.id,
+                      officerRole: undefined,
+                      isPrimaryContact: false
+                    })}
                     data-testid={`company-option-${company.id}`}
                   >
                     <div className="flex items-center space-x-3">
@@ -3316,7 +3349,10 @@ export default function ClientDetail() {
                 ))
               ) : (
                 <p className="text-center py-4 text-muted-foreground">
-                  No company clients available for linking.
+                  {companyConnections.length > 0 
+                    ? "All available companies are already connected."
+                    : "No company clients available for connection."
+                  }
                 </p>
               )}
             </div>
