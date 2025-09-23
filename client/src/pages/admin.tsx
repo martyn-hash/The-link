@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -10,7 +11,18 @@ import UserManagementModal from "@/components/user-management-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Settings, Users, FileText, BarChart } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Upload, Settings, Users, FileText, BarChart, Trash2 } from "lucide-react";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -18,6 +30,8 @@ export default function Admin() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/projects"],
@@ -30,6 +44,46 @@ export default function Admin() {
     enabled: isAuthenticated && !!user && user?.role === 'admin',
     retry: false,
   }) as { data: any[] | undefined, isLoading: boolean };
+
+  // Delete test data mutation
+  const deleteTestDataMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/admin/delete-test-data", { confirm: "DELETE" });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Test Data Deleted",
+        description: `Successfully deleted ${data.totalDeleted} records across all tables.`,
+        variant: "default",
+      });
+      
+      // Invalidate all relevant queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/people"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/services"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/people-tags"] });
+      
+      // Close dialog and reset form
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete test data. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteTestData = () => {
+    if (deleteConfirmText === "DELETE") {
+      deleteTestDataMutation.mutate();
+    }
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -236,6 +290,17 @@ export default function Admin() {
                       <Settings className="w-3 h-3 mr-2" />
                       Configure
                     </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={deleteTestDataMutation.isPending}
+                      data-testid="button-delete-test-data"
+                    >
+                      <Trash2 className="w-3 h-3 mr-2" />
+                      {deleteTestDataMutation.isPending ? "Deleting..." : "Delete Test Data"}
+                    </Button>
                   </>
                 )}
               </CardContent>
@@ -345,6 +410,55 @@ export default function Admin() {
           />
         </>
       )}
+      
+      {/* Delete Test Data Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Test Data</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will permanently delete ALL data except user accounts:
+              <br />• All projects and project history
+              <br />• All clients and people
+              <br />• All services and configurations  
+              <br />• All tags and relationships
+              <br />
+              <strong>This action cannot be undone.</strong>
+              <br /><br />
+              Type <strong>DELETE</strong> to confirm this action:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="my-4">
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              data-testid="input-delete-confirm"
+            />
+          </div>
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setDeleteConfirmText("");
+                setShowDeleteConfirm(false);
+              }}
+              data-testid="button-cancel-delete"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTestData}
+              disabled={deleteConfirmText !== "DELETE" || deleteTestDataMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteTestDataMutation.isPending ? "Deleting..." : "Delete Test Data"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
