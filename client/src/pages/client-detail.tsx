@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import AddressLookup from "@/components/address-lookup";
 import AddressMap from "@/components/address-map";
+import TagManager from "@/components/tag-manager";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -2243,6 +2244,19 @@ export default function ClientDetail() {
                             </p>
                           </div>
                         )}
+
+                        {/* Client Tags */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                            <Building2 className="w-4 h-4" />
+                            Client Tags
+                          </label>
+                          <TagManager 
+                            entityId={client.id} 
+                            entityType="client" 
+                            className="mt-2"
+                          />
+                        </div>
                       </div>
 
                       {/* Google Maps */}

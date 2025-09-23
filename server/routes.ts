@@ -41,6 +41,8 @@ import {
   insertClientServiceRoleAssignmentSchema,
   insertClientTagSchema,
   insertPeopleTagSchema,
+  insertClientTagAssignmentSchema,
+  insertPeopleTagAssignmentSchema,
   type User,
 } from "@shared/schema";
 
@@ -1306,6 +1308,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting people tag:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to delete people tag" });
+    }
+  });
+
+  // Tag assignment routes (admin and manager)
+  app.get("/api/clients/:clientId/tags", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const tags = await storage.getClientTags(req.params.clientId);
+      res.json(tags);
+    } catch (error) {
+      console.error("Error fetching client tags:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client tags" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      const assignmentData = {
+        ...req.body,
+        clientId: req.params.clientId,
+        assignedBy: effectiveUserId,
+      };
+      
+      const validatedData = insertClientTagAssignmentSchema.parse(assignmentData);
+      const assignment = await storage.assignClientTag(validatedData);
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Error assigning client tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to assign client tag" });
+    }
+  });
+
+  app.delete("/api/clients/:clientId/tags/:tagId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const clientValidation = validateParams(paramClientIdSchema, req.params);
+      const tagValidation = validateParams({ tagId: z.string().uuid() }, req.params);
+      
+      if (!clientValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID", 
+          errors: clientValidation.errors 
+        });
+      }
+      
+      if (!tagValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid tag ID", 
+          errors: tagValidation.errors 
+        });
+      }
+      
+      await storage.unassignClientTag(req.params.clientId, req.params.tagId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error unassigning client tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to unassign client tag" });
+    }
+  });
+
+  app.get("/api/people/:personId/tags", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams({ personId: z.string().uuid() }, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const tags = await storage.getPersonTags(req.params.personId);
+      res.json(tags);
+    } catch (error) {
+      console.error("Error fetching person tags:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch person tags" });
+    }
+  });
+
+  app.post("/api/people/:personId/tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams({ personId: z.string().uuid() }, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      const assignmentData = {
+        ...req.body,
+        personId: req.params.personId,
+        assignedBy: effectiveUserId,
+      };
+      
+      const validatedData = insertPeopleTagAssignmentSchema.parse(assignmentData);
+      const assignment = await storage.assignPersonTag(validatedData);
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Error assigning person tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to assign person tag" });
+    }
+  });
+
+  app.delete("/api/people/:personId/tags/:tagId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const personValidation = validateParams({ personId: z.string().uuid() }, req.params);
+      const tagValidation = validateParams({ tagId: z.string().uuid() }, req.params);
+      
+      if (!personValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid person ID", 
+          errors: personValidation.errors 
+        });
+      }
+      
+      if (!tagValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid tag ID", 
+          errors: tagValidation.errors 
+        });
+      }
+      
+      await storage.unassignPersonTag(req.params.personId, req.params.tagId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error unassigning person tag:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to unassign person tag" });
     }
   });
 

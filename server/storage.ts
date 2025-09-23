@@ -380,6 +380,14 @@ export interface IStorage {
   getAllPeopleTags(): Promise<PeopleTag[]>;
   createPeopleTag(tag: InsertPeopleTag): Promise<PeopleTag>;
   deletePeopleTag(id: string): Promise<void>;
+  
+  // Tag assignment operations
+  getClientTags(clientId: string): Promise<(ClientTagAssignment & { tag: ClientTag })[]>;
+  assignClientTag(assignment: InsertClientTagAssignment): Promise<ClientTagAssignment>;
+  unassignClientTag(clientId: string, tagId: string): Promise<void>;
+  getPersonTags(personId: string): Promise<(PeopleTagAssignment & { tag: PeopleTag })[]>;
+  assignPersonTag(assignment: InsertPeopleTagAssignment): Promise<PeopleTagAssignment>;
+  unassignPersonTag(personId: string, tagId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4594,6 +4602,71 @@ export class DatabaseStorage implements IStorage {
 
   async deletePeopleTag(id: string): Promise<void> {
     await db.delete(peopleTags).where(eq(peopleTags.id, id));
+  }
+
+  // Tag assignment operations implementation
+  async getClientTags(clientId: string): Promise<(ClientTagAssignment & { tag: ClientTag })[]> {
+    return await db
+      .select({
+        id: clientTagAssignments.id,
+        clientId: clientTagAssignments.clientId,
+        tagId: clientTagAssignments.tagId,
+        assignedAt: clientTagAssignments.assignedAt,
+        assignedBy: clientTagAssignments.assignedBy,
+        tag: clientTags,
+      })
+      .from(clientTagAssignments)
+      .innerJoin(clientTags, eq(clientTagAssignments.tagId, clientTags.id))
+      .where(eq(clientTagAssignments.clientId, clientId))
+      .orderBy(clientTags.name);
+  }
+
+  async assignClientTag(assignment: InsertClientTagAssignment): Promise<ClientTagAssignment> {
+    const [created] = await db.insert(clientTagAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async unassignClientTag(clientId: string, tagId: string): Promise<void> {
+    await db
+      .delete(clientTagAssignments)
+      .where(
+        and(
+          eq(clientTagAssignments.clientId, clientId),
+          eq(clientTagAssignments.tagId, tagId)
+        )
+      );
+  }
+
+  async getPersonTags(personId: string): Promise<(PeopleTagAssignment & { tag: PeopleTag })[]> {
+    return await db
+      .select({
+        id: peopleTagAssignments.id,
+        personId: peopleTagAssignments.personId,
+        tagId: peopleTagAssignments.tagId,
+        assignedAt: peopleTagAssignments.assignedAt,
+        assignedBy: peopleTagAssignments.assignedBy,
+        tag: peopleTags,
+      })
+      .from(peopleTagAssignments)
+      .innerJoin(peopleTags, eq(peopleTagAssignments.tagId, peopleTags.id))
+      .where(eq(peopleTagAssignments.personId, personId))
+      .orderBy(peopleTags.name);
+  }
+
+  async assignPersonTag(assignment: InsertPeopleTagAssignment): Promise<PeopleTagAssignment> {
+    const [created] = await db.insert(peopleTagAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async unassignPersonTag(personId: string, tagId: string): Promise<void> {
+    await db
+      .delete(peopleTagAssignments)
+      .where(
+        and(
+          eq(peopleTagAssignments.personId, personId),
+          eq(peopleTagAssignments.tagId, tagId)
+        )
+      );
   }
 }
 
