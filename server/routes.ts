@@ -43,6 +43,7 @@ import {
   insertPeopleTagSchema,
   insertClientTagAssignmentSchema,
   insertPeopleTagAssignmentSchema,
+  insertPeopleServiceSchema,
   type User,
 } from "@shared/schema";
 

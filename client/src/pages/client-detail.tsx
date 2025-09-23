@@ -511,48 +511,6 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
                   )}
                 />
 
-                {/* Person Selection - Only shown for personal services */}
-                {isPersonalService && (
-                  <div className="space-y-2">
-                    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-center gap-2 mb-3">
-                        <UserIcon className="w-4 h-4 text-blue-600" />
-                        <h4 className="font-medium text-blue-900 dark:text-blue-100">Personal Service Assignment</h4>
-                      </div>
-                      <p className="text-sm text-blue-700 dark:text-blue-200 mb-4">
-                        This is a personal service. Please select the person to assign this service to.
-                      </p>
-                      {peopleLoading ? (
-                        <div className="text-sm text-muted-foreground">Loading related people...</div>
-                      ) : clientPeople && clientPeople.length > 0 ? (
-                        <div>
-                          <label className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 block">
-                            Select Person <span className="text-red-500">*</span>
-                          </label>
-                          <Select onValueChange={handlePersonChange} value={selectedPersonId}>
-                            <SelectTrigger data-testid="select-person" className="bg-white dark:bg-gray-800">
-                              <SelectValue placeholder="Choose a person to assign this service to" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {clientPeople.map((clientPerson) => (
-                                <SelectItem key={clientPerson.person.id} value={clientPerson.person.id}>
-                                  {formatPersonName(clientPerson.person.fullName)}
-                                  {clientPerson.person.email && (
-                                    <span className="text-muted-foreground ml-2">({clientPerson.person.email})</span>
-                                  )}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-amber-700 dark:text-amber-200">
-                          No people are associated with this client yet. Please add people to the client first.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 <FormField
                   control={form.control}
@@ -677,8 +635,51 @@ function AddServiceModal({ clientId, onSuccess }: AddServiceModalProps) {
                   )}
                 />
 
-                {/* Role Assignments Section - Only show for client services */}
-                {hasRolesToAssign() && !isPersonalService && (
+                {/* Person Selection - Only shown for personal services */}
+                {isPersonalService && (
+                  <div className="space-y-2">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <UserIcon className="w-4 h-4 text-blue-600" />
+                        <h4 className="font-medium text-blue-900 dark:text-blue-100">Personal Service Assignment</h4>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-200 mb-4">
+                        This is a personal service. Please select the person to assign this service to.
+                      </p>
+                      {peopleLoading ? (
+                        <div className="text-sm text-muted-foreground">Loading related people...</div>
+                      ) : clientPeople && clientPeople.length > 0 ? (
+                        <div>
+                          <label className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 block">
+                            Select Person <span className="text-red-500">*</span>
+                          </label>
+                          <Select onValueChange={handlePersonChange} value={selectedPersonId}>
+                            <SelectTrigger data-testid="select-person" className="bg-white dark:bg-gray-800">
+                              <SelectValue placeholder="Choose a person to assign this service to" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientPeople.map((clientPerson) => (
+                                <SelectItem key={clientPerson.person.id} value={clientPerson.person.id}>
+                                  {formatPersonName(clientPerson.person.fullName)}
+                                  {clientPerson.person.email && (
+                                    <span className="text-muted-foreground ml-2">({clientPerson.person.email})</span>
+                                  )}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-amber-700 dark:text-amber-200">
+                          No people are associated with this client yet. Please add people to the client first.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Role Assignments Section */}
+                {hasRolesToAssign() && (
                   <div className="space-y-4">
                     <div className="border-t pt-4">
                       <h4 className="font-medium text-sm mb-3">Role Assignments</h4>
