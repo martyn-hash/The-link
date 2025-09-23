@@ -766,7 +766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { firstName, lastName, email } = bodyValidation.data;
       
       // Create client data with formatted name
-      const clientName = `${firstName} ${lastName} - Self-Assessment`;
+      const clientName = `${firstName} ${lastName} - Personal Tax Client`;
       const clientData = {
         name: clientName,
         email: email,
@@ -794,7 +794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.linkPersonToClient(
         client.id, 
         person.id, 
-        'Self-Assessment Client', // Role description
+        'Personal Tax Client', // Role description
         true // Is primary contact
       );
       
