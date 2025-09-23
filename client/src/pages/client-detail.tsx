@@ -47,6 +47,20 @@ function formatPersonName(fullName: string): string {
   return fullName;
 }
 
+// Utility function to format general dates
+function formatDate(date: string | Date | null): string {
+  if (!date) return 'Not provided';
+  
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(dateObj.getTime())) return 'Invalid date';
+  
+  return dateObj.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
 // Utility function to format birth dates from Companies House (which only provides month/year)
 function formatBirthDate(dateOfBirth: string | Date | null): string {
   if (!dateOfBirth) return 'Not provided';
