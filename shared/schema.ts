@@ -450,6 +450,21 @@ export const clientServices = pgTable("client_services", {
   unique("unique_client_service").on(table.clientId, table.serviceId),
 ]);
 
+// People services table - links people to personal services
+export const peopleServices = pgTable("people_services", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
+  serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Service owner assigned for this person-service mapping
+  notes: text("notes"), // Specific notes for this person's service
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_people_services_person_id").on(table.personId),
+  index("idx_people_services_service_id").on(table.serviceId),
+  index("idx_people_services_service_owner_id").on(table.serviceOwnerId),
+  unique("unique_person_service").on(table.personId, table.serviceId),
+]);
+
 // Client service role assignments table - maps users to roles for client services
 export const clientServiceRoleAssignments = pgTable("client_service_role_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -536,6 +551,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
 
 export const peopleRelations = relations(people, ({ many }) => ({
   clientPeople: many(clientPeople),
+  peopleServices: many(peopleServices),
 }));
 
 export const clientPeopleRelations = relations(clientPeople, ({ one }) => ({
@@ -1053,6 +1069,14 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
 
 export const updateClientServiceSchema = insertClientServiceSchema.partial();
 
+// People services schema
+export const insertPeopleServiceSchema = createInsertSchema(peopleServices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updatePeopleServiceSchema = insertPeopleServiceSchema.partial();
+
 // Client service role assignments schema
 export const insertClientServiceRoleAssignmentSchema = createInsertSchema(clientServiceRoleAssignments).omit({
   id: true,
@@ -1198,6 +1222,7 @@ export const projectTypesRelations = relations(projectTypes, ({ many, one }) => 
 export const servicesRelations = relations(services, ({ one, many }) => ({
   serviceRoles: many(serviceRoles),
   clientServices: many(clientServices),
+  peopleServices: many(peopleServices),
 }));
 
 export const clientServicesRelations = relations(clientServices, ({ one, many }) => ({
@@ -1215,6 +1240,22 @@ export const clientServicesRelations = relations(clientServices, ({ one, many })
     relationName: "clientServiceOwner",
   }),
   roleAssignments: many(clientServiceRoleAssignments),
+}));
+
+export const peopleServicesRelations = relations(peopleServices, ({ one }) => ({
+  person: one(people, {
+    fields: [peopleServices.personId],
+    references: [people.id],
+  }),
+  service: one(services, {
+    fields: [peopleServices.serviceId],
+    references: [services.id],
+  }),
+  serviceOwner: one(users, {
+    fields: [peopleServices.serviceOwnerId],
+    references: [users.id],
+    relationName: "peopleServiceOwner",
+  }),
 }));
 
 export const workRolesRelations = relations(workRoles, ({ many }) => ({
@@ -1281,6 +1322,8 @@ export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 export type ClientService = typeof clientServices.$inferSelect;
 export type InsertClientService = z.infer<typeof insertClientServiceSchema>;
+export type PeopleService = typeof peopleServices.$inferSelect;
+export type InsertPeopleService = z.infer<typeof insertPeopleServiceSchema>;
 export type ClientServiceRoleAssignment = typeof clientServiceRoleAssignments.$inferSelect;
 export type InsertClientServiceRoleAssignment = z.infer<typeof insertClientServiceRoleAssignmentSchema>;
 export type ChChangeRequest = typeof chChangeRequests.$inferSelect;
