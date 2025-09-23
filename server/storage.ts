@@ -20,6 +20,7 @@ import {
   workRoles,
   serviceRoles,
   clientServices,
+  peopleServices,
   clientServiceRoleAssignments,
   chChangeRequests,
   clientTags,
@@ -71,6 +72,8 @@ import {
   type InsertServiceRole,
   type ClientService,
   type InsertClientService,
+  type PeopleService,
+  type InsertPeopleService,
   type ClientServiceRoleAssignment,
   type InsertClientServiceRoleAssignment,
   type ChChangeRequest,
@@ -355,6 +358,16 @@ export interface IStorage {
   validateClientServiceRoleCompleteness(clientId: string, serviceId: string): Promise<{ isComplete: boolean; missingRoles: string[]; assignedRoles: { roleName: string; userName: string }[] }>;
   checkClientServiceMappingExists(clientId: string, serviceId: string): Promise<boolean>;
   validateAssignedRolesAgainstService(serviceId: string, roleIds: string[]): Promise<{ isValid: boolean; invalidRoles: string[]; allowedRoles: string[] }>;
+  
+  // People Services CRUD
+  getAllPeopleServices(): Promise<(PeopleService & { person: Person; service: Service })[]>;
+  getPeopleServiceById(id: string): Promise<(PeopleService & { person: Person; service: Service }) | undefined>;
+  getPeopleServicesByPersonId(personId: string): Promise<(PeopleService & { service: Service })[]>;
+  getPeopleServicesByServiceId(serviceId: string): Promise<(PeopleService & { person: Person })[]>;
+  createPeopleService(peopleService: InsertPeopleService): Promise<PeopleService>;
+  updatePeopleService(id: string, peopleService: Partial<InsertPeopleService>): Promise<PeopleService>;
+  deletePeopleService(id: string): Promise<void>;
+  checkPeopleServiceMappingExists(personId: string, serviceId: string): Promise<boolean>;
   
   // Service Owner Resolution
   resolveServiceOwner(clientId: string, projectTypeId: string): Promise<User | undefined>;
@@ -4380,6 +4393,239 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(clientServices.clientId, clientId),
         eq(clientServices.serviceId, serviceId)
+      ))
+      .limit(1);
+    
+    return !!existing;
+  }
+
+  // People Services CRUD operations
+  async getAllPeopleServices(): Promise<(PeopleService & { person: Person; service: Service })[]> {
+    const results = await db
+      .select({
+        id: peopleServices.id,
+        personId: peopleServices.personId,
+        serviceId: peopleServices.serviceId,
+        serviceOwnerId: peopleServices.serviceOwnerId,
+        notes: peopleServices.notes,
+        createdAt: peopleServices.createdAt,
+        // Person details
+        person: people,
+        // Service details  
+        service: services,
+      })
+      .from(peopleServices)
+      .leftJoin(people, eq(peopleServices.personId, people.id))
+      .leftJoin(services, eq(peopleServices.serviceId, services.id));
+
+    return results.map(result => ({
+      id: result.id,
+      personId: result.personId,
+      serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      person: result.person!,
+      service: result.service!,
+    }));
+  }
+
+  async getPeopleServiceById(id: string): Promise<(PeopleService & { person: Person; service: Service }) | undefined> {
+    const [result] = await db
+      .select({
+        id: peopleServices.id,
+        personId: peopleServices.personId,
+        serviceId: peopleServices.serviceId,
+        serviceOwnerId: peopleServices.serviceOwnerId,
+        notes: peopleServices.notes,
+        createdAt: peopleServices.createdAt,
+        // Person details
+        person: people,
+        // Service details
+        service: services,
+      })
+      .from(peopleServices)
+      .leftJoin(people, eq(peopleServices.personId, people.id))
+      .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .where(eq(peopleServices.id, id));
+
+    if (!result) return undefined;
+
+    return {
+      id: result.id,
+      personId: result.personId,
+      serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      person: result.person!,
+      service: result.service!,
+    };
+  }
+
+  async getPeopleServicesByPersonId(personId: string): Promise<(PeopleService & { service: Service })[]> {
+    const results = await db
+      .select({
+        id: peopleServices.id,
+        personId: peopleServices.personId,
+        serviceId: peopleServices.serviceId,
+        serviceOwnerId: peopleServices.serviceOwnerId,
+        notes: peopleServices.notes,
+        createdAt: peopleServices.createdAt,
+        // Service details
+        service: services,
+      })
+      .from(peopleServices)
+      .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .where(eq(peopleServices.personId, personId));
+
+    return results.map(result => ({
+      id: result.id,
+      personId: result.personId,
+      serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      service: result.service!,
+    }));
+  }
+
+  async getPeopleServicesByServiceId(serviceId: string): Promise<(PeopleService & { person: Person })[]> {
+    const results = await db
+      .select({
+        id: peopleServices.id,
+        personId: peopleServices.personId,
+        serviceId: peopleServices.serviceId,
+        serviceOwnerId: peopleServices.serviceOwnerId,
+        notes: peopleServices.notes,
+        createdAt: peopleServices.createdAt,
+        // Person details
+        person: people,
+      })
+      .from(peopleServices)
+      .leftJoin(people, eq(peopleServices.personId, people.id))
+      .where(eq(peopleServices.serviceId, serviceId));
+
+    return results.map(result => ({
+      id: result.id,
+      personId: result.personId,
+      serviceId: result.serviceId,
+      serviceOwnerId: result.serviceOwnerId,
+      notes: result.notes,
+      createdAt: result.createdAt,
+      person: result.person!,
+    }));
+  }
+
+  async createPeopleService(peopleServiceData: InsertPeopleService): Promise<PeopleService> {
+    // Validate that person exists
+    const person = await this.getPersonById(peopleServiceData.personId);
+    if (!person) {
+      throw new Error(`Person with ID '${peopleServiceData.personId}' not found`);
+    }
+
+    // Validate that service exists and is a personal service
+    const service = await this.getServiceById(peopleServiceData.serviceId);
+    if (!service) {
+      throw new Error(`Service with ID '${peopleServiceData.serviceId}' not found`);
+    }
+
+    if (!service.isPersonalService) {
+      throw new Error(`Service '${service.name}' is not a personal service and cannot be assigned to people`);
+    }
+
+    // Check if mapping already exists
+    const mappingExists = await this.checkPeopleServiceMappingExists(peopleServiceData.personId, peopleServiceData.serviceId);
+    if (mappingExists) {
+      const personName = person.fullName || `ID: ${person.id}`;
+      throw new Error(`Person-service mapping already exists between person '${personName}' and service '${service.name}'. Each person can only be mapped to a service once.`);
+    }
+
+    // Validate service owner if provided
+    if (peopleServiceData.serviceOwnerId) {
+      const serviceOwner = await this.getUser(peopleServiceData.serviceOwnerId);
+      if (!serviceOwner) {
+        throw new Error(`Service owner with ID '${peopleServiceData.serviceOwnerId}' not found`);
+      }
+    }
+
+    const [newPeopleService] = await db.insert(peopleServices).values(peopleServiceData).returning();
+    return newPeopleService;
+  }
+
+  async updatePeopleService(id: string, peopleServiceData: Partial<InsertPeopleService>): Promise<PeopleService> {
+    // Validate that the people service exists
+    const existing = await this.getPeopleServiceById(id);
+    if (!existing) {
+      throw new Error(`People service with ID '${id}' not found`);
+    }
+
+    // Validate service if serviceId is being changed
+    if (peopleServiceData.serviceId) {
+      const service = await this.getServiceById(peopleServiceData.serviceId);
+      if (!service) {
+        throw new Error(`Service with ID '${peopleServiceData.serviceId}' not found`);
+      }
+
+      if (!service.isPersonalService) {
+        throw new Error(`Service '${service.name}' is not a personal service and cannot be assigned to people`);
+      }
+
+      // Check for conflicts if the person-service combination is changing
+      const newPersonId = peopleServiceData.personId || existing.personId;
+      const newServiceId = peopleServiceData.serviceId;
+
+      if (newServiceId !== existing.serviceId || newPersonId !== existing.personId) {
+        const mappingExists = await this.checkPeopleServiceMappingExists(newPersonId, newServiceId);
+        if (mappingExists) {
+          throw new Error(`Person-service mapping already exists for the new person-service combination. Each person can only be mapped to a service once.`);
+        }
+      }
+    }
+
+    // Validate person if personId is being changed
+    if (peopleServiceData.personId) {
+      const person = await this.getPersonById(peopleServiceData.personId);
+      if (!person) {
+        throw new Error(`Person with ID '${peopleServiceData.personId}' not found`);
+      }
+    }
+
+    // Validate service owner if provided
+    if (peopleServiceData.serviceOwnerId) {
+      const serviceOwner = await this.getUser(peopleServiceData.serviceOwnerId);
+      if (!serviceOwner) {
+        throw new Error(`Service owner with ID '${peopleServiceData.serviceOwnerId}' not found`);
+      }
+    }
+
+    const [updatedPeopleService] = await db
+      .update(peopleServices)
+      .set(peopleServiceData)
+      .where(eq(peopleServices.id, id))
+      .returning();
+
+    if (!updatedPeopleService) {
+      throw new Error("People service not found");
+    }
+
+    return updatedPeopleService;
+  }
+
+  async deletePeopleService(id: string): Promise<void> {
+    const result = await db.delete(peopleServices).where(eq(peopleServices.id, id));
+    if (result.rowCount === 0) {
+      throw new Error("People service not found");
+    }
+  }
+
+  async checkPeopleServiceMappingExists(personId: string, serviceId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(peopleServices)
+      .where(and(
+        eq(peopleServices.personId, personId),
+        eq(peopleServices.serviceId, serviceId)
       ))
       .limit(1);
     
