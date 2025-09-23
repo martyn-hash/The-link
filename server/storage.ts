@@ -92,7 +92,7 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt, or, ilike } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, or, ilike, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -296,6 +296,7 @@ export interface IStorage {
   // Services CRUD
   getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
+  getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
   createService(service: InsertService): Promise<Service>;
   updateService(id: string, service: Partial<InsertService>): Promise<Service>;
@@ -3348,6 +3349,40 @@ export class DatabaseStorage implements IStorage {
     const servicesData = await db
       .select()
       .from(services);
+
+    // Get all service roles in one query
+    const allServiceRoles = await db
+      .select({
+        serviceId: serviceRoles.serviceId,
+        role: workRoles,
+      })
+      .from(serviceRoles)
+      .leftJoin(workRoles, eq(serviceRoles.roleId, workRoles.id));
+
+    // Group roles by service ID
+    const rolesByServiceId = allServiceRoles.reduce((acc, item) => {
+      if (!acc[item.serviceId]) {
+        acc[item.serviceId] = [];
+      }
+      if (item.role) {
+        acc[item.serviceId].push(item.role);
+      }
+      return acc;
+    }, {} as Record<string, WorkRole[]>);
+
+    // Combine services with their roles
+    return servicesData.map((service) => ({
+      ...service,
+      roles: rolesByServiceId[service.id] || [],
+    }));
+  }
+
+  async getClientAssignableServices(): Promise<(Service & { roles: WorkRole[] })[]> {
+    // Get services that are NOT personal services (for client assignment)
+    const servicesData = await db
+      .select()
+      .from(services)
+      .where(or(eq(services.isPersonalService, false), isNull(services.isPersonalService)));
 
     // Get all service roles in one query
     const allServiceRoles = await db

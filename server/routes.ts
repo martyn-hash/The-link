@@ -2817,6 +2817,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/services/client-assignable - Get services that can be assigned to clients (excludes personal services)
+  app.get("/api/services/client-assignable", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const services = await storage.getClientAssignableServices();
+      res.json(services);
+    } catch (error) {
+      console.error("Error fetching client-assignable services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client-assignable services" });
+    }
+  });
+
   // GET /api/services/:id - Get service by ID
   app.get("/api/services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
