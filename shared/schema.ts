@@ -158,14 +158,7 @@ export const clients = pgTable("clients", {
   confirmationStatementOverdue: boolean("confirmation_statement_overdue").default(false), // Existing field
   // Metadata - Full CH API response for audit trail (existing in database)
   companiesHouseData: jsonb("companies_house_data"), // Existing field
-  // Optional company relationship - for individual clients who need to be linked to a company
-  relatedCompanyId: varchar("related_company_id").references(() => clients.id, { onDelete: "set null" }),
-}, (table) => ({
-  // Index for faster lookups on related company
-  relatedCompanyIdx: index("clients_related_company_idx").on(table.relatedCompanyId),
-  // Prevent self-linking
-  noSelfLink: check("no_self_link", sql`related_company_id != id`),
-}));
+});
 
 // People table - matches existing database structure
 export const people = pgTable("people", {
@@ -209,13 +202,16 @@ export const people = pgTable("people", {
 
 // Client-People relationships - matches existing database structure
 export const clientPeople = pgTable("client_people", {
-  id: text("id").primaryKey(), // Existing field - uses text, not varchar
-  clientId: text("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }), // Existing field
-  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }), // Existing field
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`), // Generate IDs for new records
+  clientId: text("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }), // Keep as text to match existing database
+  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }), // Match people.id type
   officerRole: text("officer_role"), // Existing field
   isPrimaryContact: boolean("is_primary_contact"), // Existing field
   createdAt: timestamp("created_at").defaultNow(), // Existing field
-});
+}, (table) => ({
+  // Unique constraint for many-to-many relationship - prevent duplicate person-company links
+  uniquePersonCompany: unique("unique_person_company").on(table.clientId, table.personId),
+}));
 
 // Projects table (individual client work items)
 export const projects = pgTable("projects", {
@@ -552,20 +548,11 @@ export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => 
   }),
 }));
 
-export const clientsRelations = relations(clients, ({ many, one }) => ({
+export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
   clientServices: many(clientServices),
   clientPeople: many(clientPeople),
-  // Optional company relationship for individual clients
-  relatedCompany: one(clients, { 
-    fields: [clients.relatedCompanyId], 
-    references: [clients.id],
-    relationName: "clientCompanyRelation"
-  }),
-  // Reverse relation - individuals linked to this company
-  linkedIndividuals: many(clients, {
-    relationName: "clientCompanyRelation"
-  }),
+  // Many-to-many person-company relationships are now handled via clientPeople junction table
 }));
 
 export const peopleRelations = relations(people, ({ many }) => ({
