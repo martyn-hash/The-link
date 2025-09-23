@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, Shield } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -817,7 +817,7 @@ function AddPersonModal({
               {/* Verification & Other */}
               <div className="space-y-4">
                 <h5 className="font-medium text-sm flex items-center">
-                  <Shield className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <ShieldCheck className="h-4 w-4 mr-2 text-muted-foreground" />
                   Verification & Other
                 </h5>
                 
