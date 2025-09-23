@@ -3144,19 +3144,21 @@ export default function ClientDetail() {
                                 (client?.clientType === null && client?.companyNumber); // Legacy companies have null clientType but have companyNumber
               const isIndividualWithConnections = client?.clientType === 'individual' && (companyConnections?.length ?? 0) > 0;
               
-              console.log('DEBUG: client?.clientType:', client?.clientType);
-              console.log('DEBUG: client?.companyNumber:', client?.companyNumber);
-              console.log('DEBUG: isCompany:', isCompany);
-              console.log('DEBUG: isIndividualWithConnections:', isIndividualWithConnections);
-              console.log('DEBUG: conditional result:', (isCompany || isIndividualWithConnections));
-              
               return (isCompany || isIndividualWithConnections);
             })() && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>Client Services</CardTitle>
-                    <AddServiceModal clientId={client.id} clientType={client.clientType} onSuccess={refetchServices} />
+                    <AddServiceModal 
+                      clientId={client.id} 
+                      clientType={
+                        client.clientType === null && client.companyNumber 
+                          ? 'company' 
+                          : (client.clientType as 'company' | 'individual' | undefined)
+                      } 
+                      onSuccess={refetchServices} 
+                    />
                   </div>
                 </CardHeader>
                 <CardContent>
