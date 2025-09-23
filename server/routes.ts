@@ -4629,6 +4629,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
+  // POST /api/admin/delete-test-data - Delete all test data (development only)
+  app.post("/api/admin/delete-test-data", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Block access in production environment
+      if (process.env.NODE_ENV === 'production') {
+        console.warn(`Blocked delete-test-data attempt in production by user ${req.user?.effectiveUserId || req.user?.id}`);
+        return res.status(403).json({ 
+          message: "Delete test data is not available in production environment" 
+        });
+      }
+
+      // Validate request body and confirmation
+      const bodySchema = z.object({
+        confirm: z.string().min(1, "Confirmation is required")
+      });
+      
+      const bodyValidation = bodySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const { confirm } = bodyValidation.data;
+      
+      // Require exact confirmation string
+      if (confirm !== "DELETE") {
+        return res.status(400).json({ 
+          message: "Confirmation string must be exactly 'DELETE'" 
+        });
+      }
+
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      console.log(`Admin user ${effectiveUserId} initiated delete-test-data operation`);
+      
+      // Execute the deletion
+      const deletionCounts = await storage.clearTestData();
+      
+      // Calculate total deleted records
+      const totalDeleted = Object.values(deletionCounts).reduce((sum: number, count: number) => sum + count, 0);
+      
+      console.log(`Delete-test-data completed by user ${effectiveUserId}:`, {
+        totalDeleted,
+        details: deletionCounts
+      });
+      
+      res.json({ 
+        message: "Test data deleted successfully",
+        totalDeleted,
+        deletionCounts
+      });
+    } catch (error) {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      console.error(`Delete-test-data failed for user ${effectiveUserId}:`, error instanceof Error ? error.message : error);
+      
+      res.status(500).json({ 
+        message: "Failed to delete test data",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
