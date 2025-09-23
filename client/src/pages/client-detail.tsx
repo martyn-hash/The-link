@@ -1133,30 +1133,62 @@ function PersonViewMode({
             Address Information
           </h5>
           
-          {clientPerson.person.addressLine1 ? (
-            <div className="p-4 rounded-lg bg-background border">
-              <div className="space-y-1 text-sm">
-                <div className="font-medium">{clientPerson.person.addressLine1}</div>
-                {clientPerson.person.addressLine2 && <div>{clientPerson.person.addressLine2}</div>}
-                <div>
-                  {[clientPerson.person.locality, clientPerson.person.region, clientPerson.person.postalCode]
-                    .filter(Boolean)
-                    .join(", ")}
+          {(() => {
+            const person = clientPerson.person;
+            const hasAddress = !!(person.addressLine1 || person.addressLine2 || person.locality || person.region || person.postalCode || person.country);
+            
+            if (!hasAddress) {
+              return (
+                <p className="text-sm text-muted-foreground italic p-4 border rounded-lg bg-muted/30">
+                  No address information available
+                </p>
+              );
+            }
+
+            // Create address lines while removing duplicates
+            const addressParts = [];
+            const usedValues = new Set();
+            
+            // Add address lines if they exist and aren't duplicates
+            [person.addressLine1, person.addressLine2].forEach(line => {
+              if (line && line.trim() && !usedValues.has(line.trim().toLowerCase())) {
+                addressParts.push(line.trim());
+                usedValues.add(line.trim().toLowerCase());
+              }
+            });
+            
+            // Add locality, region, postal code (avoiding duplicates)
+            const locationParts = [person.locality, person.region, person.postalCode]
+              .filter(part => part && part.trim() && !usedValues.has(part.trim().toLowerCase()))
+              .map(part => part.trim());
+            
+            if (locationParts.length > 0) {
+              addressParts.push(locationParts.join(", "));
+            }
+            
+            // Add country if not already included
+            if (person.country && person.country.trim() && !usedValues.has(person.country.trim().toLowerCase())) {
+              addressParts.push(person.country.trim());
+            }
+
+            return (
+              <div className="p-4 rounded-lg bg-background border">
+                <div className="space-y-1 text-sm" data-testid={`text-person-address-${clientPerson.id}`}>
+                  {addressParts.map((part, index) => (
+                    <div key={index} className={index === 0 ? "font-medium" : ""}>
+                      {part}
+                    </div>
+                  ))}
                 </div>
-                {clientPerson.person.country && <div>{clientPerson.person.country}</div>}
+                {person.addressVerified && (
+                  <div className="flex items-center space-x-2 mt-3 pt-3 border-t">
+                    <Check className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-600 font-medium">Address Verified</span>
+                  </div>
+                )}
               </div>
-              {clientPerson.person.addressVerified && (
-                <div className="flex items-center space-x-2 mt-3 pt-3 border-t">
-                  <Check className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-600 font-medium">Address Verified</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic p-4 border rounded-lg bg-muted/30">
-              No address information available
-            </p>
-          )}
+            );
+          })()}
         </div>
 
         {/* Verification & Sensitive Information */}
@@ -1337,13 +1369,13 @@ function PersonViewMode({
           )}
 
           {/* Social media profiles */}
-          {(clientPerson.person.linkedinUrl || 
-            clientPerson.person.twitterUrl || 
-            clientPerson.person.facebookUrl || 
-            clientPerson.person.instagramUrl || 
-            clientPerson.person.tiktokUrl) && (
-            <div className="space-y-3">
-              <h6 className="text-sm font-medium">Social Media & Professional Profiles</h6>
+          <div className="space-y-3">
+            <h6 className="text-sm font-medium">Social Media & Professional Profiles</h6>
+            {(clientPerson.person.linkedinUrl || 
+              clientPerson.person.twitterUrl || 
+              clientPerson.person.facebookUrl || 
+              clientPerson.person.instagramUrl || 
+              clientPerson.person.tiktokUrl) ? (
               <div className="grid grid-cols-1 gap-3">
                 {clientPerson.person.linkedinUrl && (
                   <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
@@ -1455,8 +1487,12 @@ function PersonViewMode({
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground italic p-4 border rounded-lg bg-muted/30" data-testid={`text-no-social-links-${clientPerson.id}`}>
+                No social media profiles provided
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
