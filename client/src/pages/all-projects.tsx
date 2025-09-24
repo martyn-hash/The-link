@@ -51,7 +51,7 @@ export default function AllProjects() {
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    enabled: isAuthenticated && !!user && (user.isAdmin || user.canSeeAdminMenu),
+    enabled: isAuthenticated && Boolean(user?.isAdmin || user?.canSeeAdminMenu),
     retry: false,
   });
 
@@ -226,7 +226,7 @@ export default function AllProjects() {
                     {(users || []).map((u: User) => (
                       <SelectItem key={u.id} value={u.id}>
                         {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email} 
-                        ({u.role.replace('_', ' ')})
+                        ({u.isAdmin ? "Admin" : u.canSeeAdminMenu ? "Manager" : "User"})
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -57,7 +57,7 @@ export default function ProjectTypes() {
 
   // Redirect non-admin users
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !user.isAdmin) {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
@@ -94,7 +94,7 @@ export default function ProjectTypes() {
   // Fetch services
   const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
     queryKey: ["/api/services"],
-    enabled: isAuthenticated && !!user && user.role === "admin",
+    enabled: isAuthenticated && Boolean(user?.isAdmin),
     retry: false,
   });
 

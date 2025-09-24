@@ -131,25 +131,15 @@ export default function Projects() {
   } : null;
 
   const getRoleSpecificTitle = () => {
-    switch (user.role) {
-      case 'bookkeeper':
-        return 'My Bookkeeping Projects';
-      case 'client_manager':
-        return 'My Client Projects';
-      default:
-        return 'My Projects';
-    }
+    if (user.isAdmin) return 'My Projects';
+    if (user.canSeeAdminMenu) return 'My Projects';
+    return 'My Projects';
   };
 
   const getRoleSpecificDescription = () => {
-    switch (user.role) {
-      case 'bookkeeper':
-        return 'Projects assigned to you for bookkeeping work';
-      case 'client_manager':
-        return 'Projects you manage for clients';
-      default:
-        return 'Projects you are connected with';
-    }
+    if (user.isAdmin) return 'Projects you are connected with';
+    if (user.canSeeAdminMenu) return 'Projects you are connected with';
+    return 'Projects assigned to you';
   };
 
   return (

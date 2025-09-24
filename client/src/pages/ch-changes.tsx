@@ -218,7 +218,7 @@ export default function ChChanges() {
     );
   }
 
-  if (user.role !== 'admin') {
+  if (!user.isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

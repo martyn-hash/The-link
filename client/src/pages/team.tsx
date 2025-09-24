@@ -11,7 +11,7 @@ export default function TeamOverview() {
   // Fetch users data for team overview
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ['/api/users'],
-    enabled: isAuthenticated && (user.role === 'admin' || user.role === 'manager'),
+    enabled: isAuthenticated && Boolean(user?.isAdmin || user?.canSeeAdminMenu),
   });
 
   // Fetch projects data for workload analysis
@@ -31,7 +31,7 @@ export default function TeamOverview() {
     );
   }
 
-  if (!isAuthenticated || !['admin', 'manager'].includes(user.role)) {
+  if (!isAuthenticated || !(user.isAdmin || user.canSeeAdminMenu)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -44,10 +44,9 @@ export default function TeamOverview() {
 
   const teamStats = users ? {
     totalMembers: users.length,
-    adminCount: users.filter((u: any) => u.role === 'admin').length,
-    managerCount: users.filter((u: any) => u.role === 'manager').length,
-    clientManagerCount: users.filter((u: any) => u.role === 'client_manager').length,
-    bookkeeperCount: users.filter((u: any) => u.role === 'bookkeeper').length,
+    adminCount: users.filter((u: any) => u.isAdmin).length,
+    managerCount: users.filter((u: any) => u.canSeeAdminMenu && !u.isAdmin).length,
+    regularUserCount: users.filter((u: any) => !u.isAdmin && !u.canSeeAdminMenu).length,
   } : null;
 
   const workloadStats = projects ? {
