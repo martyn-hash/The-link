@@ -444,6 +444,7 @@ export const clientServices = pgTable("client_services", {
   frequency: varchar("frequency").notNull().default("monthly"), // monthly, quarterly, annually, etc.
   nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
   nextDueDate: timestamp("next_due_date"), // Next due date for the service
+  isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_client_services_client_id").on(table.clientId),
@@ -460,6 +461,7 @@ export const peopleServices = pgTable("people_services", {
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
   serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Service owner assigned for this person-service mapping
   notes: text("notes"), // Specific notes for this person's service
+  isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_people_services_person_id").on(table.personId),

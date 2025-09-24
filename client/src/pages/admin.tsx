@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Upload, Settings, Users, FileText, BarChart, Trash2 } from "lucide-react";
+import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube } from "lucide-react";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -32,6 +32,7 @@ export default function Admin() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [showSchedulingActions, setShowSchedulingActions] = useState(false);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/projects"],
@@ -41,7 +42,7 @@ export default function Admin() {
 
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
-    enabled: isAuthenticated && !!user && user?.isAdmin,
+    enabled: !!(isAuthenticated && user && user?.isAdmin),
     retry: false,
   }) as { data: any[] | undefined, isLoading: boolean };
 
@@ -77,6 +78,56 @@ export default function Admin() {
         variant: "destructive",
       });
     },
+  });
+
+  // Project scheduling mutations
+  const runSchedulingMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/project-scheduling/run", {});
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Scheduling Complete",
+        description: `Created ${data.projectsCreated} projects, rescheduled ${data.servicesRescheduled} services.`,
+        variant: "default",
+      });
+      
+      // Refresh project data
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Scheduling Failed",
+        description: error.message || "Failed to run project scheduling. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const runDryRunMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/project-scheduling/test-dry-run", {});
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Dry Run Complete",
+        description: `Test run found ${data.servicesFoundDue} services that would be processed.`,
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Dry Run Failed",
+        description: error.message || "Failed to run scheduling test. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: schedulingAnalysis, refetch: refetchAnalysis } = useQuery({
+    queryKey: ["/api/project-scheduling/analysis"],
+    enabled: false, // Only fetch when manually triggered
+    retry: false,
   });
 
   const handleDeleteTestData = () => {
@@ -296,6 +347,52 @@ export default function Admin() {
                       <Settings className="w-3 h-3 mr-2" />
                       Configure
                     </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => setShowSchedulingActions(!showSchedulingActions)}
+                      data-testid="button-scheduling-actions"
+                    >
+                      <Clock className="w-3 h-3 mr-2" />
+                      Project Scheduling
+                    </Button>
+                    {showSchedulingActions && (
+                      <div className="ml-4 space-y-1 border-l border-border pl-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full justify-start text-xs"
+                          onClick={() => runSchedulingMutation.mutate()}
+                          disabled={runSchedulingMutation.isPending}
+                          data-testid="button-run-scheduling"
+                        >
+                          <PlayCircle className="w-3 h-3 mr-2" />
+                          {runSchedulingMutation.isPending ? "Running..." : "Run Now"}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full justify-start text-xs"
+                          onClick={() => runDryRunMutation.mutate()}
+                          disabled={runDryRunMutation.isPending}
+                          data-testid="button-dry-run-scheduling"
+                        >
+                          <TestTube className="w-3 h-3 mr-2" />
+                          {runDryRunMutation.isPending ? "Testing..." : "Test Run"}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full justify-start text-xs"
+                          onClick={() => refetchAnalysis()}
+                          data-testid="button-scheduling-analysis"
+                        >
+                          <BarChart className="w-3 h-3 mr-2" />
+                          Analysis
+                        </Button>
+                      </div>
+                    )}
                     <Button 
                       variant="destructive" 
                       size="sm" 
