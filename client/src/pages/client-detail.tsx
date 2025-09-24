@@ -2734,8 +2734,8 @@ export default function ClientDetail() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 pt-2 pb-6">
-        <Tabs defaultValue="overview" className="flex flex-col">
+      <div className="container mx-auto px-6 pt-0 pb-6">
+        <Tabs defaultValue="overview" className="flex flex-col -mt-4">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
