@@ -4527,8 +4527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         errorsEncountered: result.errorsEncountered,
         errors: result.errors,
         summary: result.summary,
-        executionTimeMs: result.executionTimeMs,
-        timestamp: result.timestamp
+        executionTimeMs: result.executionTimeMs
       });
     } catch (error) {
       console.error("Error running project scheduling:", error instanceof Error ? error.message : error);
@@ -4557,6 +4556,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/project-scheduling/monitoring - Get scheduling system monitoring data (admin only)
+  app.get("/api/project-scheduling/monitoring", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const [runLogs, latestRun] = await Promise.all([
+        storage.getSchedulingRunLogs(10), // Get last 10 runs
+        storage.getLatestSchedulingRunLog()
+      ]);
+      
+      // Calculate statistics from recent runs
+      const stats = {
+        totalRuns: runLogs.length,
+        successfulRuns: runLogs.filter(run => run.status === 'success').length,
+        failedRuns: runLogs.filter(run => run.status === 'failure').length,
+        partialFailureRuns: runLogs.filter(run => run.status === 'partial_failure').length,
+        totalProjectsCreated: runLogs.reduce((sum, run) => sum + (run.projectsCreated || 0), 0),
+        totalServicesRescheduled: runLogs.reduce((sum, run) => sum + (run.servicesRescheduled || 0), 0),
+        totalErrorsEncountered: runLogs.reduce((sum, run) => sum + (run.errorsEncountered || 0), 0),
+        totalChServicesSkipped: runLogs.reduce((sum, run) => sum + (run.chServicesSkipped || 0), 0),
+        averageExecutionTime: runLogs.length > 0 
+          ? Math.round(runLogs.reduce((sum, run) => sum + (run.executionTimeMs || 0), 0) / runLogs.length)
+          : 0
+      };
+
+      res.json({
+        message: "Scheduling monitoring data retrieved",
+        latestRun,
+        recentRuns: runLogs,
+        statistics: stats,
+        systemStatus: latestRun?.status || 'unknown'
+      });
+    } catch (error) {
+      console.error("Error getting scheduling monitoring data:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to get scheduling monitoring data",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // POST /api/project-scheduling/test-dry-run - Test scheduling without creating projects (admin only)
   app.post("/api/project-scheduling/test-dry-run", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
@@ -4572,8 +4610,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         errorsEncountered: result.errorsEncountered,
         errors: result.errors,
         summary: result.summary,
-        executionTimeMs: result.executionTimeMs,
-        timestamp: result.timestamp
+        executionTimeMs: result.executionTimeMs
       });
     } catch (error) {
       console.error("Error running test project scheduling:", error instanceof Error ? error.message : error);

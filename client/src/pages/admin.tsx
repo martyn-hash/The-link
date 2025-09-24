@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube } from "lucide-react";
+import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -126,6 +126,12 @@ export default function Admin() {
 
   const { data: schedulingAnalysis, refetch: refetchAnalysis } = useQuery({
     queryKey: ["/api/project-scheduling/analysis"],
+    enabled: false, // Only fetch when manually triggered
+    retry: false,
+  });
+
+  const { data: monitoringData, refetch: refetchMonitoring, isLoading: isLoadingMonitoring } = useQuery({
+    queryKey: ["/api/project-scheduling/monitoring"],
     enabled: false, // Only fetch when manually triggered
     retry: false,
   });
@@ -391,6 +397,17 @@ export default function Admin() {
                           <BarChart className="w-3 h-3 mr-2" />
                           Analysis
                         </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full justify-start text-xs"
+                          onClick={() => refetchMonitoring()}
+                          data-testid="button-scheduling-monitoring"
+                        >
+                          <Activity className="w-3 h-3 mr-2" />
+                          Monitoring
+                          {isLoadingMonitoring && <div className="ml-2 h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />}
+                        </Button>
                       </div>
                     )}
                     <Button 
@@ -492,6 +509,140 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Monitoring Dashboard */}
+          {monitoringData && (monitoringData as any).statistics && (
+            <div className="mt-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Scheduling System Monitoring
+                  </CardTitle>
+                  <CardDescription>
+                    Real-time status and metrics for the automated project scheduling system
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* System Status */}
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${
+                          (monitoringData as any).systemStatus === 'success' ? 'bg-green-500' :
+                          (monitoringData as any).systemStatus === 'partial_failure' ? 'bg-yellow-500' :
+                          (monitoringData as any).systemStatus === 'failure' ? 'bg-red-500' : 'bg-gray-400'
+                        }`} />
+                        <div>
+                          <p className="font-medium">System Status</p>
+                          <p className="text-sm text-muted-foreground">
+                            {(monitoringData as any).systemStatus === 'success' ? 'All systems operational' :
+                             (monitoringData as any).systemStatus === 'partial_failure' ? 'Some issues detected' :
+                             (monitoringData as any).systemStatus === 'failure' ? 'System issues detected' : 'Status unknown'}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={
+                        (monitoringData as any).systemStatus === 'success' ? 'default' :
+                        (monitoringData as any).systemStatus === 'partial_failure' ? 'secondary' : 'destructive'
+                      }>
+                        {(monitoringData as any).systemStatus}
+                      </Badge>
+                    </div>
+
+                    {/* Latest Run Info */}
+                    {(monitoringData as any).latestRun && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Last Run</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date((monitoringData as any).latestRun.runDate).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(monitoringData as any).latestRun.runType} run
+                          </p>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm font-medium">Projects Created</span>
+                          </div>
+                          <p className="text-xl font-bold">{(monitoringData as any).latestRun.projectsCreated || 0}</p>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <TrendingUp className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-medium">Services Rescheduled</span>
+                          </div>
+                          <p className="text-xl font-bold">{(monitoringData as any).latestRun.servicesRescheduled || 0}</p>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <AlertCircle className="h-4 w-4 text-orange-500" />
+                            <span className="text-sm font-medium">Errors</span>
+                          </div>
+                          <p className="text-xl font-bold">{(monitoringData as any).latestRun.errorsEncountered || 0}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Statistics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold">{(monitoringData as any).statistics.totalRuns}</p>
+                        <p className="text-sm text-muted-foreground">Total Runs</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-600">{(monitoringData as any).statistics.successfulRuns}</p>
+                        <p className="text-sm text-muted-foreground">Successful</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-red-600">{(monitoringData as any).statistics.failedRuns}</p>
+                        <p className="text-sm text-muted-foreground">Failed</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold">{Math.round((monitoringData as any).statistics.averageExecutionTime / 1000)}s</p>
+                        <p className="text-sm text-muted-foreground">Avg Runtime</p>
+                      </div>
+                    </div>
+
+                    {/* Recent Runs */}
+                    {(monitoringData as any).recentRuns?.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3">Recent Runs</h4>
+                        <div className="space-y-2">
+                          {(monitoringData as any).recentRuns.slice(0, 5).map((run: any) => (
+                            <div key={run.id} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${
+                                  run.status === 'success' ? 'bg-green-500' :
+                                  run.status === 'partial_failure' ? 'bg-yellow-500' : 'bg-red-500'
+                                }`} />
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {new Date(run.runDate).toLocaleString()}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {run.runType} run • {run.projectsCreated || 0} projects created
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge variant={run.status === 'success' ? 'default' : 'destructive'} className="text-xs">
+                                {run.status}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </main>
       </div>
 
