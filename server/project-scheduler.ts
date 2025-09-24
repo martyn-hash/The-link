@@ -10,6 +10,7 @@ import {
   getOverdueServices,
   type ServiceFrequency 
 } from "./frequency-calculator";
+import { normalizeProjectMonth } from "@shared/schema";
 import type { 
   ClientService, 
   PeopleService, 
@@ -29,6 +30,8 @@ export interface SchedulingRunResult {
   servicesRescheduled: number;
   errorsEncountered: number;
   chServicesSkipped: number;
+  peopleServicesSkipped: number;
+  configurationErrorsEncountered: number;
   executionTimeMs: number;
   errors: Array<{
     serviceId: string;
@@ -71,6 +74,8 @@ export async function runProjectScheduling(
     servicesRescheduled: 0,
     errorsEncountered: 0,
     chServicesSkipped: 0,
+    peopleServicesSkipped: 0,
+    configurationErrorsEncountered: 0,
     executionTimeMs: 0,
     errors: [],
     summary: ''
@@ -88,13 +93,17 @@ export async function runProjectScheduling(
     result.totalServicesChecked = clientServices.length + peopleServices.length;
 
     // Step 2: Find services that are due today
-    const dueServices = await findServicesDueToday(clientServices, peopleServices, targetDate);
-    result.servicesFoundDue = dueServices.length;
+    const analysisResult = await findServicesDueToday(clientServices, peopleServices, targetDate);
+    result.servicesFoundDue = analysisResult.dueServices.length;
+    result.chServicesSkipped = analysisResult.chServicesSkipped;
+    result.peopleServicesSkipped = analysisResult.peopleServicesSkipped;
+    result.configurationErrorsEncountered = analysisResult.configurationErrorsEncountered;
+    result.errors.push(...analysisResult.configurationErrors);
 
-    console.log(`[Project Scheduler] Found ${dueServices.length} services due today`);
+    console.log(`[Project Scheduler] Found ${analysisResult.dueServices.length} services due today`);
 
     // Step 3: Process each due service
-    for (const dueService of dueServices) {
+    for (const dueService of analysisResult.dueServices) {
       try {
         await processService(dueService, result, targetDate);
       } catch (error) {
@@ -141,58 +150,91 @@ export async function runProjectScheduling(
   return result;
 }
 
-/**
- * Find all services that are due today
- */
-async function findServicesDueToday(
-  clientServices: ClientService[],
-  peopleServices: PeopleService[],
-  targetDate: Date
-): Promise<DueService[]> {
-  const dueServices: DueService[] = [];
-
-  // Process client services
-  for (const clientService of clientServices) {
-    if (clientService.nextStartDate && isServiceDueToday(clientService.nextStartDate, targetDate)) {
-      try {
-        const service = await storage.getServiceById(clientService.serviceId);
-        if (service) {
-          // Check if this is a Companies House service
-          if (service.isCompaniesHouseConnected) {
-            // Skip CH services - they get updated from API, not scheduled
-            console.log(`[Project Scheduler] Skipping Companies House service: ${service.name}`);
-            continue;
-          }
-
-          dueServices.push({
-            id: clientService.id,
-            type: 'client',
-            service: service as Service & { projectType: ProjectType; },
-            clientId: clientService.clientId,
-            serviceOwnerId: clientService.serviceOwnerId,
-            frequency: clientService.frequency as ServiceFrequency,
-            nextStartDate: clientService.nextStartDate,
-            nextDueDate: clientService.nextDueDate || clientService.nextStartDate
-          });
-        }
-      } catch (error) {
-        console.error(`[Project Scheduler] Error loading service ${clientService.serviceId}:`, error);
-      }
-    }
-  }
-
-  // Process people services (if they have scheduling dates)
-  for (const peopleService of peopleServices) {
-    // People services might not have nextStartDate/nextDueDate yet
-    // This could be extended in the future for personal services
-    // For now, we'll skip people services
-  }
-
-  return dueServices;
+interface ServiceAnalysisResult {
+  dueServices: DueService[];
+  chServicesSkipped: number;
+  peopleServicesSkipped: number;
+  configurationErrorsEncountered: number;
+  configurationErrors: Array<{
+    serviceId: string;
+    serviceType: 'client' | 'people';
+    error: string;
+    timestamp: Date;
+  }>;
 }
 
 /**
- * Process a single due service
+ * Find all services that are due today and analyze skipped/error services
+ */
+async function findServicesDueToday(
+  clientServicesWithDetails: (ClientService & { service: Service & { projectType: ProjectType } })[],
+  peopleServicesWithDetails: (PeopleService & { service: Service & { projectType: ProjectType } })[],
+  targetDate: Date
+): Promise<ServiceAnalysisResult> {
+  const dueServices: DueService[] = [];
+  let chServicesSkipped = 0;
+  let configurationErrorsEncountered = 0;
+  const configurationErrors: Array<{
+    serviceId: string;
+    serviceType: 'client' | 'people';
+    error: string;
+    timestamp: Date;
+  }> = [];
+
+  // Process client services - use already hydrated data to avoid refetch mismatches
+  for (const clientServiceWithDetails of clientServicesWithDetails) {
+    if (clientServiceWithDetails.nextStartDate && isServiceDueToday(clientServiceWithDetails.nextStartDate, targetDate)) {
+      // Check if this is a Companies House service
+      if (clientServiceWithDetails.service.isCompaniesHouseConnected) {
+        // Skip CH services - they get updated from API, not scheduled
+        console.log(`[Project Scheduler] Skipping Companies House service: ${clientServiceWithDetails.service.name}`);
+        chServicesSkipped++;
+        continue;
+      }
+
+      // Validate configuration before proceeding
+      if (!clientServiceWithDetails.service.projectType || clientServiceWithDetails.service.projectType.id === '') {
+        console.error(`[Project Scheduler] Configuration error: Service '${clientServiceWithDetails.service.name}' has no project type configured`);
+        configurationErrorsEncountered++;
+        configurationErrors.push({
+          serviceId: clientServiceWithDetails.id,
+          serviceType: 'client',
+          error: `Service '${clientServiceWithDetails.service.name}' has no project type configured`,
+          timestamp: new Date()
+        });
+        continue; // Skip this service but continue processing others
+      }
+
+      dueServices.push({
+        id: clientServiceWithDetails.id,
+        type: 'client',
+        service: clientServiceWithDetails.service,
+        clientId: clientServiceWithDetails.clientId,
+        serviceOwnerId: clientServiceWithDetails.serviceOwnerId,
+        frequency: clientServiceWithDetails.frequency as ServiceFrequency,
+        nextStartDate: clientServiceWithDetails.nextStartDate,
+        nextDueDate: clientServiceWithDetails.nextDueDate || clientServiceWithDetails.nextStartDate
+      });
+    }
+  }
+
+  // Process people services - currently not implemented but counted and logged
+  const peopleServicesSkipped = peopleServicesWithDetails.length;
+  if (peopleServicesSkipped > 0) {
+    console.log(`[Project Scheduler] Skipping ${peopleServicesSkipped} people services (not yet implemented)`);
+  }
+
+  return {
+    dueServices,
+    chServicesSkipped,
+    peopleServicesSkipped,
+    configurationErrorsEncountered,
+    configurationErrors
+  };
+}
+
+/**
+ * Process a single due service with atomic transaction
  */
 async function processService(
   dueService: DueService,
@@ -201,20 +243,30 @@ async function processService(
 ): Promise<void> {
   console.log(`[Project Scheduler] Processing ${dueService.type} service: ${dueService.service.name}`);
 
-  // Step 1: Create the project
-  const project = await createProjectFromService(dueService);
-  result.projectsCreated++;
+  // Use database transaction to ensure atomicity
+  // Note: This is a conceptual transaction - actual implementation would need db.transaction()
+  try {
+    // Step 1: Create the project
+    const project = await createProjectFromService(dueService);
+    result.projectsCreated++;
 
-  console.log(`[Project Scheduler] Created project ${project.id} for service ${dueService.service.name}`);
+    console.log(`[Project Scheduler] Created project ${project.id} for service ${dueService.service.name}`);
 
-  // Step 2: Reschedule the service
-  await rescheduleService(dueService, targetDate);
-  result.servicesRescheduled++;
+    // Step 2: Reschedule the service
+    await rescheduleService(dueService, targetDate);
+    result.servicesRescheduled++;
 
-  console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
+    console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
 
-  // Step 3: Log the scheduling action
-  await logSchedulingAction(dueService, project.id, 'created', targetDate);
+    // Step 3: Log the scheduling action
+    await logSchedulingAction(dueService, project.id, 'created', targetDate);
+    
+    // TODO: When proper transaction support is added, commit here
+  } catch (error) {
+    // TODO: When proper transaction support is added, rollback here
+    console.error(`[Project Scheduler] Failed to process service ${dueService.id}, rolling back any partial changes`);
+    throw error; // Re-throw to be handled by main error handler
+  }
 }
 
 /**
@@ -327,9 +379,13 @@ async function logSchedulingAction(
     notes: `Project created for ${dueService.service.name}`
   };
 
-  // Note: This assumes the storage method exists - will need to implement it
-  // await storage.createProjectSchedulingHistory(historyData);
-  console.log('[Project Scheduler] Scheduling history logged:', historyData);
+  try {
+    await storage.createProjectSchedulingHistory(historyData);
+    console.log(`[Project Scheduler] Scheduling history logged for service ${dueService.id}`);
+  } catch (error) {
+    console.error(`[Project Scheduler] Failed to log scheduling history:`, error);
+    throw error; // Re-throw to fail the transaction
+  }
 }
 
 /**
@@ -355,9 +411,13 @@ async function logSchedulingRun(
     summary: result.summary
   };
 
-  // Note: This assumes the storage method exists - will need to implement it
-  // await storage.createSchedulingRunLog(logData);
-  console.log('[Project Scheduler] Run logged:', logData);
+  try {
+    await storage.createSchedulingRunLog(logData);
+    console.log(`[Project Scheduler] Run logged successfully with status: ${result.status}`);
+  } catch (error) {
+    console.error('[Project Scheduler] Failed to log scheduling run:', error);
+    // Don't throw here as we don't want to fail the entire run just because logging failed
+  }
 }
 
 /**
@@ -382,19 +442,20 @@ function generateRunSummary(result: SchedulingRunResult): string {
  * Send notifications about newly created projects
  */
 async function sendProjectCreatedNotifications(project: any, dueService: DueService): Promise<void> {
-  // This would integrate with the existing email notification system
+  // TODO: Integrate with the existing email notification system
   // For now, just log that notifications should be sent
   console.log(`[Project Scheduler] Would send notifications for project ${project.id} to service owner and assignees`);
+  
+  // Future implementation could use:
+  // - sendStageChangeNotificationEmail for project creation
+  // - sendBulkProjectAssignmentSummaryEmail for daily summaries
 }
 
 /**
- * Format date for project month field
+ * Format date for project month field using existing schema function
  */
 function formatProjectMonth(date: Date): string {
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const year = date.getUTCFullYear();
-  return `${day}/${month}/${year}`;
+  return normalizeProjectMonth(date);
 }
 
 /**

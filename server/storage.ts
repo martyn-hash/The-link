@@ -27,6 +27,8 @@ import {
   peopleTags,
   clientTagAssignments,
   peopleTagAssignments,
+  projectSchedulingHistory,
+  schedulingRunLogs,
   normalizeProjectMonth,
   type User,
   type UpsertUser,
@@ -87,6 +89,10 @@ import {
   type InsertClientTagAssignment,
   type PeopleTagAssignment,
   type InsertPeopleTagAssignment,
+  type ProjectSchedulingHistory,
+  type InsertProjectSchedulingHistory,
+  type SchedulingRunLogs,
+  type InsertSchedulingRunLogs,
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
@@ -410,6 +416,15 @@ export interface IStorage {
   
   // Development operations
   clearTestData(): Promise<{ [tableName: string]: number }>;
+  
+  // Project Scheduling operations
+  getAllClientServicesWithDetails(): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]>;
+  getAllPeopleServicesWithDetails(): Promise<(PeopleService & { service: Service & { projectType: ProjectType } })[]>;
+  createProjectSchedulingHistory(data: InsertProjectSchedulingHistory): Promise<ProjectSchedulingHistory>;
+  getProjectSchedulingHistoryByServiceId(serviceId: string, serviceType: 'client' | 'people'): Promise<ProjectSchedulingHistory[]>;
+  createSchedulingRunLog(data: InsertSchedulingRunLogs): Promise<SchedulingRunLogs>;
+  getSchedulingRunLogs(limit?: number): Promise<SchedulingRunLogs[]>;
+  getLatestSchedulingRunLog(): Promise<SchedulingRunLogs | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5228,6 +5243,100 @@ export class DatabaseStorage implements IStorage {
 
       return deletionCounts;
     });
+  }
+
+  // Project Scheduling operations
+  async getAllClientServicesWithDetails(): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]> {
+    const results = await db
+      .select({
+        clientService: clientServices,
+        service: services,
+        projectType: projectTypes,
+      })
+      .from(clientServices)
+      .innerJoin(services, eq(clientServices.serviceId, services.id))
+      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .where(eq(clientServices.isActive, true))
+      .orderBy(clientServices.clientId, services.name);
+
+    return results.map(result => ({
+      ...result.clientService,
+      service: {
+        ...result.service,
+        projectType: result.projectType
+      }
+    })); // Return all services, including those with null project types for error detection
+  }
+
+  async getAllPeopleServicesWithDetails(): Promise<(PeopleService & { service: Service & { projectType: ProjectType } })[]> {
+    const results = await db
+      .select({
+        peopleService: peopleServices,
+        service: services,
+        projectType: projectTypes,
+      })
+      .from(peopleServices)
+      .innerJoin(services, eq(peopleServices.serviceId, services.id))
+      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .where(eq(peopleServices.isActive, true))
+      .orderBy(peopleServices.personId, services.name);
+
+    return results.map(result => ({
+      ...result.peopleService,
+      service: {
+        ...result.service,
+        projectType: result.projectType
+      }
+    })); // Return all services, including those with null project types for error detection
+  }
+
+  async createProjectSchedulingHistory(data: InsertProjectSchedulingHistory): Promise<ProjectSchedulingHistory> {
+    const [history] = await db
+      .insert(projectSchedulingHistory)
+      .values(data)
+      .returning();
+    return history;
+  }
+
+  async getProjectSchedulingHistoryByServiceId(
+    serviceId: string, 
+    serviceType: 'client' | 'people'
+  ): Promise<ProjectSchedulingHistory[]> {
+    const whereCondition = serviceType === 'client' 
+      ? eq(projectSchedulingHistory.clientServiceId, serviceId)
+      : eq(projectSchedulingHistory.peopleServiceId, serviceId);
+
+    return await db
+      .select()
+      .from(projectSchedulingHistory)
+      .where(whereCondition)
+      .orderBy(desc(projectSchedulingHistory.createdAt))
+      .limit(50); // Limit to last 50 entries for performance
+  }
+
+  async createSchedulingRunLog(data: InsertSchedulingRunLogs): Promise<SchedulingRunLogs> {
+    const [log] = await db
+      .insert(schedulingRunLogs)
+      .values(data)
+      .returning();
+    return log;
+  }
+
+  async getSchedulingRunLogs(limit: number = 20): Promise<SchedulingRunLogs[]> {
+    return await db
+      .select()
+      .from(schedulingRunLogs)
+      .orderBy(desc(schedulingRunLogs.runDate))
+      .limit(limit);
+  }
+
+  async getLatestSchedulingRunLog(): Promise<SchedulingRunLogs | undefined> {
+    const [log] = await db
+      .select()
+      .from(schedulingRunLogs)
+      .orderBy(desc(schedulingRunLogs.runDate))
+      .limit(1);
+    return log;
   }
 }
 

@@ -20,6 +20,10 @@ export function calculateNextServiceDates(
 ): NextDateResult {
   const nextStartDate = new Date(currentStartDate);
   const nextDueDate = new Date(currentDueDate);
+  
+  // Ensure we're working with UTC times to avoid timezone issues
+  nextStartDate.setUTCHours(0, 0, 0, 0);
+  nextDueDate.setUTCHours(0, 0, 0, 0);
 
   switch (frequency) {
     case "daily":
