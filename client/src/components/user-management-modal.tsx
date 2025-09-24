@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Form,
   FormControl,
@@ -21,13 +20,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -50,7 +42,6 @@ const createUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["admin", "manager", "client_manager", "bookkeeper"]),
   password: z.string().min(6, "Password must be at least 6 characters long"),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -62,7 +53,6 @@ const editUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["admin", "manager", "client_manager", "bookkeeper"]),
   password: z.string().min(6, "Password must be at least 6 characters long").optional().or(z.literal("")),
   confirmPassword: z.string().optional(),
 }).refine((data) => {
@@ -84,7 +74,7 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
 
-  const { data: users, isLoading: usersLoading } = useQuery({
+  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
     enabled: isOpen,
   });
@@ -95,7 +85,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
       email: "",
       firstName: "",
       lastName: "",
-      role: "bookkeeper",
       password: "",
       confirmPassword: "",
     },
@@ -108,7 +97,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
         email: selectedUser.email || "",
         firstName: selectedUser.firstName || "",
         lastName: selectedUser.lastName || "",
-        role: selectedUser.role,
         password: "",
         confirmPassword: "",
       });
@@ -117,7 +105,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
         email: "",
         firstName: "",
         lastName: "",
-        role: "bookkeeper",
         password: "",
         confirmPassword: "",
       });
@@ -217,7 +204,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
       email: "",
       firstName: "",
       lastName: "",
-      role: "bookkeeper",
     });
   };
 
@@ -232,19 +218,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
     }
   };
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      admin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      manager: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      client_manager: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      bookkeeper: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-    };
-    return colors[role as keyof typeof colors] || colors.bookkeeper;
-  };
-
-  const getRoleLabel = (role: string) => {
-    return role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -285,7 +258,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
@@ -301,11 +273,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
                             <Mail className="w-3 h-3 text-muted-foreground" />
                             {user.email}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getRoleColor(user.role)}>
-                            {getRoleLabel(user.role)}
-                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -407,29 +374,6 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="role"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Role</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-user-role">
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="manager">Manager</SelectItem>
-                              <SelectItem value="client_manager">Client Manager</SelectItem>
-                              <SelectItem value="bookkeeper">Bookkeeper</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
 
                     <FormField
                       control={form.control}

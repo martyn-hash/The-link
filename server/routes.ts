@@ -130,26 +130,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const originalUserId = req.user.id;
         const originalUser = await storage.getUser(originalUserId);
         
-        if (originalUser && originalUser.role === 'admin') {
+        if (originalUser && originalUser.isAdmin) {
           const effectiveUser = await storage.getEffectiveUser(originalUserId);
           if (effectiveUser && effectiveUser.id !== originalUserId) {
             // Replace user context with impersonated user
             req.user.effectiveUser = effectiveUser;
             req.user.effectiveUserId = effectiveUser.id;
-            req.user.effectiveRole = effectiveUser.role;
+            req.user.effectiveIsAdmin = effectiveUser.isAdmin;
             req.user.isImpersonating = true;
           } else {
             // No impersonation, use original user
             req.user.effectiveUser = originalUser;
             req.user.effectiveUserId = originalUserId;
-            req.user.effectiveRole = originalUser.role;
+            req.user.effectiveIsAdmin = originalUser.isAdmin;
             req.user.isImpersonating = false;
           }
         } else if (originalUser) {
           // Non-admin user, no impersonation possible
           req.user.effectiveUser = originalUser;
           req.user.effectiveUserId = originalUserId;
-          req.user.effectiveRole = originalUser.role;
+          req.user.effectiveIsAdmin = originalUser.isAdmin;
           req.user.isImpersonating = false;
         }
       }
@@ -194,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const originalUserId = req.user!.id;
       const originalUser = await storage.getUser(originalUserId);
-      if (!originalUser || originalUser.role !== 'admin') {
+      if (!originalUser || !originalUser.isAdmin) {
         return res.status(403).json({ message: "Admin access required" });
       }
       next();
@@ -206,8 +206,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to check manager+ role (uses effective user for proper testing)
   const requireManager = async (req: any, res: any, next: any) => {
     try {
-      const effectiveRole = req.user!.effectiveRole;
-      if (!effectiveRole || !['admin', 'manager'].includes(effectiveRole)) {
+      const effectiveUser = req.user!.effectiveUser;
+      if (!effectiveUser || !effectiveUser.isAdmin) {
         return res.status(403).json({ message: "Manager access required" });
       }
       next();
@@ -238,8 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validationResult = adminUserSchema.safeParse({
         email: email?.trim(),
         firstName: firstName?.trim(),
-        lastName: lastName?.trim(),
-        role: 'admin'
+        lastName: lastName?.trim()
       });
 
       if (!validationResult.success) {
@@ -264,6 +263,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.createAdminIfNone({
         ...validationResult.data,
         passwordHash,
+        isAdmin: true,
+        canSeeAdminMenu: true,
       });
 
       if (!result.success) {
@@ -331,7 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.role
+          isAdmin: user.isAdmin
         }
       });
     } catch (error) {
@@ -1758,9 +1759,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
-      const effectiveRole = req.user?.effectiveRole;
+      const effectiveUser = req.user?.effectiveUser;
       
-      if (!effectiveUserId || !effectiveRole) {
+      if (!effectiveUserId || !effectiveUser) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -1771,7 +1772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
       };
 
-      const projects = await storage.getProjectsByUser(effectiveUserId, effectiveRole, filters);
+      const projects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', filters);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
@@ -1803,9 +1804,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
-      const effectiveRole = req.user?.effectiveRole;
+      const effectiveUser = req.user?.effectiveUser;
       
-      if (!effectiveUserId || !effectiveRole) {
+      if (!effectiveUserId || !effectiveUser) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -1822,11 +1823,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if effective user is authorized to move this project
       const canUpdate = 
-        effectiveRole === 'admin' ||
-        effectiveRole === 'manager' ||
+        effectiveUser.isAdmin ||
         project.currentAssigneeId === effectiveUserId ||
-        (effectiveRole === 'client_manager' && project.clientManagerId === effectiveUserId) ||
-        (effectiveRole === 'bookkeeper' && project.bookkeeperId === effectiveUserId);
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
 
       if (!canUpdate) {
         return res.status(403).json({ message: "Not authorized to update this project" });
@@ -1943,9 +1943,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/projects/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
-      const effectiveRole = req.user?.effectiveRole;
+      const effectiveUser = req.user?.effectiveUser;
       
-      if (!effectiveUserId || !effectiveRole) {
+      if (!effectiveUserId || !effectiveUser) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -1964,11 +1964,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if effective user is authorized to update this project
       const canUpdate = 
-        effectiveRole === 'admin' ||
-        effectiveRole === 'manager' ||
+        effectiveUser.isAdmin ||
         project.currentAssigneeId === effectiveUserId ||
-        (effectiveRole === 'client_manager' && project.clientManagerId === effectiveUserId) ||
-        (effectiveRole === 'bookkeeper' && project.bookkeeperId === effectiveUserId);
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
 
       if (!canUpdate) {
         return res.status(403).json({ message: "Not authorized to update this project" });
@@ -2133,7 +2132,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Clear other assignment fields
         stageData.assignedUserId = null;
-        stageData.assignedRole = null;
       } else {
         // Non-service project type: require assignedUserId
         if (!stageData.assignedUserId) {
@@ -2154,7 +2152,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Clear other assignment fields
         stageData.assignedWorkRoleId = null;
-        stageData.assignedRole = null;
       }
       
       const stage = await storage.createKanbanStage(stageData);
@@ -2186,7 +2183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // If assignment fields are being updated, validate them
-      if (updateData.assignedWorkRoleId !== undefined || updateData.assignedUserId !== undefined || updateData.assignedRole !== undefined) {
+      if (updateData.assignedWorkRoleId !== undefined || updateData.assignedUserId !== undefined) {
         const projectType = await storage.getProjectTypeById(existingStage.projectTypeId);
         if (!projectType) {
           return res.status(404).json({ message: "Project type not found" });
@@ -2215,7 +2212,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Clear other assignment fields
           updateData.assignedUserId = null;
-          updateData.assignedRole = null;
         } else {
           // Non-service project type: require assignedUserId
           const userId = updateData.assignedUserId ?? existingStage.assignedUserId;
@@ -2237,7 +2233,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Clear other assignment fields
           updateData.assignedWorkRoleId = null;
-          updateData.assignedRole = null;
         }
       }
       
@@ -3035,9 +3030,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/projects/:projectId/field-responses", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
-      const effectiveRole = req.user?.effectiveRole;
+      const effectiveUser = req.user?.effectiveUser;
       
-      if (!effectiveUserId || !effectiveRole) {
+      if (!effectiveUserId || !effectiveUser) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -3049,8 +3044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if effective user is authorized to view this project
       const canView = 
-        effectiveRole === 'admin' ||
-        effectiveRole === 'manager' ||
+        effectiveUser.isAdmin ||
         project.currentAssigneeId === effectiveUserId ||
         project.clientManagerId === effectiveUserId ||
         project.bookkeeperId === effectiveUserId;

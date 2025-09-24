@@ -462,7 +462,6 @@ export class DatabaseStorage implements IStorage {
             firstName: userData.firstName,
             lastName: userData.lastName,
             profileImageUrl: userData.profileImageUrl,
-            role: userData.role,
             updatedAt: new Date(),
           },
         })
@@ -516,14 +515,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
-    // TYPE FIX: Use proper TypeScript typing instead of 'as any'
-    // Validate role against defined enum values to prevent runtime errors
-    const validRoles = ['admin', 'manager', 'client_manager', 'bookkeeper'] as const;
-    if (!validRoles.includes(role as any)) {
-      console.warn(`Invalid role provided to getUsersByRole: ${role}`);
-      return [];
+    // Only support admin role since other roles are deprecated
+    if (role === 'admin') {
+      return await db.select().from(users).where(eq(users.isAdmin, true));
     }
-    return await db.select().from(users).where(eq(users.role, role as typeof validRoles[number]));
+    // Return empty array for deprecated roles
+    console.warn(`Deprecated role requested: ${role}. Only admin role is supported.`);
+    return [];
   }
 
   // Atomic admin creation to prevent race conditions
@@ -532,7 +530,7 @@ export class DatabaseStorage implements IStorage {
       // Use a transaction to ensure atomicity
       const result = await db.transaction(async (tx) => {
         // Check if any admin users exist within the transaction
-        const adminUsers = await tx.select().from(users).where(eq(users.role, 'admin'));
+        const adminUsers = await tx.select().from(users).where(eq(users.isAdmin, true));
         
         if (adminUsers.length > 0) {
           return { success: false, error: "Admin user already exists. This operation can only be performed once." };
@@ -547,7 +545,8 @@ export class DatabaseStorage implements IStorage {
         // Create the admin user within the transaction
         const [newUser] = await tx.insert(users).values({
           ...userData,
-          role: 'admin' // Ensure role is admin
+          isAdmin: true, // Ensure user is admin
+          canSeeAdminMenu: true
         }).returning();
 
         return { success: true, user: newUser };
@@ -773,7 +772,7 @@ export class DatabaseStorage implements IStorage {
   async startImpersonation(adminUserId: string, targetUserId: string): Promise<void> {
     // Verify admin user exists and has admin role
     const adminUser = await this.getUser(adminUserId);
-    if (!adminUser || adminUser.role !== 'admin') {
+    if (!adminUser || !adminUser.isAdmin) {
       throw new Error("Only admin users can impersonate others");
     }
 
@@ -1573,22 +1572,24 @@ export class DatabaseStorage implements IStorage {
       throw new Error(requiredFieldsValidation.reason || "Required fields validation failed");
     }
 
-    // Determine new assignee based on the stage's assigned role
+    // Determine new assignee based on the stage's assignment
     let newAssigneeId: string;
-    switch (stage.assignedRole) {
-      case "bookkeeper":
-        newAssigneeId = project.bookkeeperId;
-        break;
-      case "client_manager":
+    if (stage.assignedUserId) {
+      // Direct user assignment
+      newAssigneeId = stage.assignedUserId;
+    } else if (stage.assignedWorkRoleId) {
+      // Work role assignment - get the work role name and resolve through client service role assignments
+      const workRole = await this.getWorkRoleById(stage.assignedWorkRoleId);
+      if (workRole) {
+        const roleAssignment = await this.resolveRoleAssigneeForClient(project.clientId, project.projectTypeId, workRole.name);
+        newAssigneeId = roleAssignment?.id || project.clientManagerId;
+      } else {
+        console.warn(`Work role ${stage.assignedWorkRoleId} not found, using client manager`);
         newAssigneeId = project.clientManagerId;
-        break;
-      case "admin":
-      case "manager":
-        // For admin/manager roles, keep current assignee or default to client manager
-        newAssigneeId = project.currentAssigneeId || project.clientManagerId;
-        break;
-      default:
-        newAssigneeId = project.currentAssigneeId || project.clientManagerId;
+      }
+    } else {
+      // Fallback to current assignee or client manager
+      newAssigneeId = project.currentAssigneeId || project.clientManagerId;
     }
 
     // Calculate time in previous stage
@@ -2528,7 +2529,8 @@ export class DatabaseStorage implements IStorage {
               const [newStage] = await tx.insert(kanbanStages).values({
                 name: "Not Completed in Time",
                 projectTypeId: projectType.id,
-                assignedRole: "admin",
+                assignedUserId: null, // Will use fallback logic
+                assignedWorkRoleId: null,
                 order: (maxOrder[0]?.maxOrder || 0) + 1,
                 color: "#ef4444", // Red color for overdue items
               }).returning();
@@ -3277,16 +3279,28 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
-      // If no role is assigned to this stage, no notifications to send
-      if (!newStage.assignedRole) {
-        console.log(`No role assigned to stage '${newStageName}', skipping notifications`);
-        return;
+      // Determine which users to notify based on the stage assignment
+      let usersToNotify: User[] = [];
+      
+      if (newStage.assignedUserId) {
+        // Direct user assignment - notify specific user
+        const assignedUser = await this.getUser(newStage.assignedUserId);
+        if (assignedUser) {
+          usersToNotify = [assignedUser];
+        }
+      } else if (newStage.assignedWorkRoleId) {
+        // Work role assignment - notify users assigned to this role for the client
+        const workRole = await this.getWorkRoleById(newStage.assignedWorkRoleId);
+        if (workRole) {
+          const roleAssignment = await this.resolveRoleAssigneeForClient(project.clientId, project.projectTypeId, workRole.name);
+          if (roleAssignment) {
+            usersToNotify = [roleAssignment];
+          }
+        }
       }
 
-      // Get users with the assigned role
-      const usersWithRole = await this.getUsersByRole(newStage.assignedRole);
-      if (usersWithRole.length === 0) {
-        console.log(`No users found with role '${newStage.assignedRole}' for stage '${newStageName}'`);
+      if (usersToNotify.length === 0) {
+        console.log(`No users to notify for stage '${newStageName}', skipping notifications`);
         return;
       }
 
@@ -3304,7 +3318,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       // PERFORMANCE FIX: Batch-load notification preferences for all users at once
-      const userIds = usersWithRole.map(user => user.id);
+      const userIds = usersToNotify.map(user => user.id);
       const allPreferences = await db
         .select()
         .from(userNotificationPreferences)
@@ -3317,7 +3331,7 @@ export class DatabaseStorage implements IStorage {
       });
 
       // Filter users who need notifications and validate their data
-      const usersToNotify = usersWithRole.filter(user => {
+      const finalUsersToNotify = usersToNotify.filter(user => {
         // Get preferences or use defaults
         const preferences = preferencesMap.get(user.id);
         const notifyStageChanges = preferences?.notifyStageChanges ?? true; // Default to true
@@ -4341,34 +4355,29 @@ export class DatabaseStorage implements IStorage {
     const defaultStage = await this.getDefaultStage();
     let currentAssignee = clientManager; // Default to client manager
 
-    if (defaultStage?.assignedRole) {
-      switch (defaultStage.assignedRole) {
-        case "bookkeeper":
-          currentAssignee = bookkeeper;
-          break;
-        case "client_manager":
+    if (defaultStage?.assignedUserId) {
+      // Direct user assignment
+      const assignedUser = await this.getUser(defaultStage.assignedUserId);
+      if (assignedUser) {
+        currentAssignee = assignedUser;
+      } else {
+        console.warn(`Assigned user ${defaultStage.assignedUserId} not found, using client manager`);
+        currentAssignee = clientManager;
+      }
+    } else if (defaultStage?.assignedWorkRoleId) {
+      // Work role assignment - resolve through client service role assignments
+      const workRole = await this.getWorkRoleById(defaultStage.assignedWorkRoleId);
+      if (workRole) {
+        const roleAssignment = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, workRole.name);
+        if (roleAssignment) {
+          currentAssignee = roleAssignment;
+        } else {
+          console.warn(`No ${workRole.name} assignment found for client ${clientId}, using client manager`);
           currentAssignee = clientManager;
-          break;
-        case "admin":
-        case "manager":
-          // Try to find admin/manager role assignment, fallback to client manager
-          const adminManager = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, defaultStage.assignedRole);
-          if (adminManager) {
-            currentAssignee = adminManager;
-          } else {
-            console.warn(`No ${defaultStage.assignedRole} assignment found for client ${clientId}, using client manager`);
-            currentAssignee = clientManager;
-          }
-          break;
-        default:
-          // For any other role, try to resolve it, fallback to client manager
-          const roleAssignee = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, defaultStage.assignedRole);
-          if (roleAssignee) {
-            currentAssignee = roleAssignee;
-          } else {
-            console.warn(`No ${defaultStage.assignedRole} assignment found for client ${clientId}, using client manager`);
-            currentAssignee = clientManager;
-          }
+        }
+      } else {
+        console.warn(`Work role ${defaultStage.assignedWorkRoleId} not found, using client manager`);
+        currentAssignee = clientManager;
       }
     }
 

@@ -28,8 +28,6 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User roles enum
-export const userRoleEnum = pgEnum("user_role", ["admin", "manager", "client_manager", "bookkeeper"]);
 
 // Project status enum
 export const projectStatusEnum = pgEnum("project_status", [
@@ -92,7 +90,8 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  role: userRoleEnum("role").notNull().default("bookkeeper"),
+  isAdmin: boolean("is_admin").default(false), // Simple admin flag
+  canSeeAdminMenu: boolean("can_see_admin_menu").default(false), // Can see admin menu flag
   passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
   isFallbackUser: boolean("is_fallback_user").default(false), // Only one user can be the fallback user
   createdAt: timestamp("created_at").defaultNow(),
@@ -324,7 +323,6 @@ export const kanbanStages = pgTable("kanban_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }), // owned by project type
   name: varchar("name").notNull(),
-  assignedRole: userRoleEnum("assigned_role"), // Legacy field for backward compatibility
   assignedWorkRoleId: varchar("assigned_work_role_id").references(() => workRoles.id, { onDelete: "set null" }), // For service-linked project types
   assignedUserId: varchar("assigned_user_id").references(() => users.id, { onDelete: "set null" }), // For non-service project types
   order: integer("order").notNull(),
@@ -794,7 +792,6 @@ export const insertKanbanStageSchema = baseKanbanStageSchema.refine((data) => {
   
   // Validate assignment fields - only one assignment method should be used
   const assignmentFields = [
-    data.assignedRole,
     data.assignedWorkRoleId,
     data.assignedUserId
   ].filter(field => field !== undefined && field !== null);
@@ -805,7 +802,7 @@ export const insertKanbanStageSchema = baseKanbanStageSchema.refine((data) => {
   
   return true;
 }, {
-  message: "Time limits must be positive numbers when specified, and only one assignment method (role, work role, or user) should be used",
+  message: "Time limits must be positive numbers when specified, and only one assignment method (work role or user) should be used",
 });
 
 export const updateKanbanStageSchema = baseKanbanStageSchema.partial().refine((data) => {
@@ -820,7 +817,6 @@ export const updateKanbanStageSchema = baseKanbanStageSchema.partial().refine((d
   
   // Validate assignment fields - only one assignment method should be used
   const assignmentFields = [
-    data.assignedRole,
     data.assignedWorkRoleId,
     data.assignedUserId
   ].filter(field => field !== undefined && field !== null);
@@ -831,7 +827,7 @@ export const updateKanbanStageSchema = baseKanbanStageSchema.partial().refine((d
   
   return true;
 }, {
-  message: "Time limits must be positive numbers when specified, and only one assignment method (role, work role, or user) should be used",
+  message: "Time limits must be positive numbers when specified, and only one assignment method (work role or user) should be used",
 });
 
 export const insertChangeReasonSchema = createInsertSchema(changeReasons).omit({
