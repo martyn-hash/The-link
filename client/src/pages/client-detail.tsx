@@ -2831,10 +2831,9 @@ export default function ClientDetail() {
           </div>
         </div>
       </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto p-6">
+        {/* Main Content */}
+        <div className="container mx-auto p-6">
         <Tabs 
           defaultValue="overview" 
           value={activeTab} 
@@ -3373,6 +3372,7 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
         </Tabs>
+        </div>
       </div>
     </div>
   );
