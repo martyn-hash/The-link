@@ -3764,6 +3764,7 @@ export class DatabaseStorage implements IStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      isActive: result.isActive,
       createdAt: result.createdAt,
       client: {
         id: result.clientId_data,
@@ -5255,7 +5256,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(clientServices)
       .innerJoin(services, eq(clientServices.serviceId, services.id))
-      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
       .where(eq(clientServices.isActive, true))
       .orderBy(clientServices.clientId, services.name);
 
@@ -5277,7 +5278,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(peopleServices)
       .innerJoin(services, eq(peopleServices.serviceId, services.id))
-      .leftJoin(projectTypes, eq(services.projectTypeId, projectTypes.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
       .where(eq(peopleServices.isActive, true))
       .orderBy(peopleServices.personId, services.name);
 
