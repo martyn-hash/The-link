@@ -365,7 +365,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
       const clientService = await clientServiceResponse.json();
       
       // Step 2: Create role assignments if any roles are assigned
-      if (selectedService?.roles && Object.keys(roleAssignments).length > 0) {
+      if (selectedService?.roles && roleAssignments && Object.keys(roleAssignments).length > 0) {
         try {
           const roleAssignmentPromises = Object.entries(roleAssignments).map(([roleId, userId]) => 
             apiRequest("POST", `/api/client-services/${clientService.id}/role-assignments`, {

@@ -3840,7 +3840,7 @@ export class DatabaseStorage implements IStorage {
         serviceOwnerFirstName: users.firstName,
         serviceOwnerLastName: users.lastName,
         serviceOwnerEmail: users.email,
-        serviceOwnerRole: users.role,
+        serviceOwnerIsAdmin: users.isAdmin,
         serviceOwnerCreatedAt: users.createdAt,
       })
       .from(clientServices)
@@ -3884,7 +3884,7 @@ export class DatabaseStorage implements IStorage {
             firstName: result.serviceOwnerFirstName!,
             lastName: result.serviceOwnerLastName!,
             email: result.serviceOwnerEmail!,
-            role: result.serviceOwnerRole!,
+            isAdmin: result.serviceOwnerIsAdmin!,
             createdAt: result.serviceOwnerCreatedAt!,
           } : undefined,
           roleAssignments,
