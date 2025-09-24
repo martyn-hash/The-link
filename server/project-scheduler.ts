@@ -329,6 +329,28 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     return duplicateProject;
   }
 
+  // ROBUST SERVICE-BASED SAFEGUARD: Check scheduling history for this service in this month
+  // This prevents multiple projects if multiple project types reference the same service
+  if (dueService.type === 'client') {
+    const schedulingHistory = await storage.getProjectSchedulingHistoryByServiceId(dueService.id, dueService.type);
+    const existingProjectInMonth = schedulingHistory.find(entry => {
+      if (!entry.projectId) return false;
+      const entryMonth = formatProjectMonth(entry.scheduledDate);
+      return entryMonth === projectMonth && (entry.action === 'created' || entry.action === 'created_no_reschedule');
+    });
+
+    if (existingProjectInMonth) {
+      console.log(`[Project Scheduler] Service-based duplicate prevention: Service ${dueService.id} (${dueService.service.name}) already has a project created in ${projectMonth}`);
+      console.log(`[Project Scheduler] Existing project ID: ${existingProjectInMonth.projectId} - This safeguards against multiple project types referencing the same service`);
+      
+      // Return the existing project to maintain consistency
+      const existingProject = allProjects.find(p => p.id === existingProjectInMonth.projectId);
+      if (existingProject) {
+        return existingProject;
+      }
+    }
+  }
+
   // Get the project type associated with this service
   let projectType: ProjectType;
   
@@ -546,7 +568,7 @@ export async function getOverdueServicesAnalysis(targetDate: Date = new Date()) 
         serviceName: projectType?.name || 'Unknown Service',
         clientName: client?.name || 'Unknown Client',
         clientId: cs.clientId,
-        projectTypeId: cs.service?.projectTypeId || null
+        projectTypeId: cs.service?.projectType?.id || null
       };
     })
   );
