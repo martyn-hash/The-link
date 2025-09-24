@@ -2696,7 +2696,7 @@ export default function ClientDetail() {
       <div className="flex-1">
         {/* Header */}
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-6 py-2">
+        <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-foreground" data-testid="text-client-name">
@@ -2734,8 +2734,8 @@ export default function ClientDetail() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 pt-0 pb-6">
-        <Tabs defaultValue="overview" className="flex flex-col -mt-4">
+      <div className="container mx-auto p-6">
+        <Tabs defaultValue="overview" className="flex flex-col">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
