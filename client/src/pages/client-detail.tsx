@@ -1,5 +1,5 @@
 import { useParams } from "wouter";
-import { useState } from "react";
+import { useState, useLayoutEffect, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2441,6 +2441,106 @@ export default function ClientDetail() {
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
+  
+  // DEBUG: Tab jumping investigation
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const debugMetricsRef = useRef<any[]>([]);
+
+  // DEBUG: Comprehensive tab interaction logging
+  useLayoutEffect(() => {
+    const logMetrics = (eventType: string, tabValue?: string) => {
+      const timestamp = Date.now();
+      const metrics = {
+        timestamp,
+        eventType,
+        tabValue,
+        scrollY: window.scrollY,
+        activeElement: document.activeElement?.tagName + (document.activeElement?.className ? `.${document.activeElement.className}` : ''),
+        hash: location.hash,
+        tabsList: document.querySelector('[role="tablist"]')?.getBoundingClientRect(),
+        activeTabPanel: document.querySelector('[role="tabpanel"][data-state="active"]')?.getBoundingClientRect(),
+        windowSize: { width: window.innerWidth, height: window.innerHeight },
+        documentSize: { clientHeight: document.documentElement.clientHeight },
+        bodyRect: document.body.getBoundingClientRect(),
+      };
+      
+      console.log(`🔍 TAB DEBUG [${eventType}]:`, JSON.stringify(metrics, null, 2));
+      debugMetricsRef.current.push(metrics);
+      // Keep only last 20 entries to prevent memory issues
+      if (debugMetricsRef.current.length > 20) {
+        debugMetricsRef.current = debugMetricsRef.current.slice(-20);
+      }
+    };
+
+    // Log on tab value change
+    if (activeTab) {
+      logMetrics('TAB_VALUE_CHANGE', activeTab);
+      
+      // Log again after DOM update
+      requestAnimationFrame(() => {
+        logMetrics('TAB_VALUE_CHANGE_AFTER_RAF', activeTab);
+        setTimeout(() => logMetrics('TAB_VALUE_CHANGE_AFTER_TIMEOUT', activeTab), 0);
+      });
+    }
+  }, [activeTab]);
+
+  // DEBUG: Layout shift observer and global event listeners
+  useEffect(() => {
+    // Add PerformanceObserver for layout shifts
+    let layoutShiftObserver: PerformanceObserver | null = null;
+    if ('PerformanceObserver' in window) {
+      layoutShiftObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (entry.entryType === 'layout-shift') {
+            console.log(`⚡ LAYOUT SHIFT: value=${(entry as any).value}, hadRecentInput=${(entry as any).hadRecentInput}, activeTab=${activeTab}, scrollY=${window.scrollY}`);
+          }
+        }
+      });
+      layoutShiftObserver.observe({ entryTypes: ['layout-shift'] });
+    }
+    let scrollTimer: NodeJS.Timeout;
+    const throttledScrollLog = () => {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        console.log(`📜 SCROLL EVENT: scrollY=${window.scrollY}, activeTab=${activeTab}`);
+      }, 50);
+    };
+
+    const focusHandler = (e: FocusEvent) => {
+      const target = e.target as Element;
+      console.log(`🎯 FOCUS EVENT: target=${target?.tagName}.${target?.className || ''}, relatedTarget=${(e.relatedTarget as Element)?.tagName || 'null'}, activeTab=${activeTab}, scrollY=${window.scrollY}`);
+    };
+
+    const hashChangeHandler = () => {
+      console.log(`🔗 HASH CHANGE: hash=${location.hash}, activeTab=${activeTab}, scrollY=${window.scrollY}`);
+    };
+
+    window.addEventListener('scroll', throttledScrollLog, { passive: true });
+    document.addEventListener('focusin', focusHandler);
+    window.addEventListener('hashchange', hashChangeHandler);
+
+    return () => {
+      clearTimeout(scrollTimer);
+      window.removeEventListener('scroll', throttledScrollLog);
+      document.removeEventListener('focusin', focusHandler);
+      window.removeEventListener('hashchange', hashChangeHandler);
+      layoutShiftObserver?.disconnect();
+    };
+  }, [activeTab]);
+
+  // DEBUG: Click event logging on tab triggers
+  useEffect(() => {
+    const handleTabClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[role="tab"]')) {
+        const tabValue = target.getAttribute('data-value') || target.textContent?.toLowerCase().replace(/\s+/g, '') || 'unknown';
+        console.log(`🖱️ TAB CLICK: tab=${tabValue}, scrollY=${window.scrollY}, timestamp=${Date.now()}`);
+      }
+    };
+
+    document.addEventListener('mousedown', handleTabClick);
+    return () => document.removeEventListener('mousedown', handleTabClick);
+  }, []);
 
   const { data: client, isLoading, error } = useQuery<Client>({
     queryKey: [`/api/clients/${id}`],
@@ -2735,7 +2835,12 @@ export default function ClientDetail() {
 
       {/* Main Content */}
       <div className="container mx-auto p-6">
-        <Tabs defaultValue="overview" className="flex flex-col">
+        <Tabs 
+          defaultValue="overview" 
+          value={activeTab} 
+          onValueChange={setActiveTab}
+          className="flex flex-col"
+        >
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
