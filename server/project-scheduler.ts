@@ -33,6 +33,7 @@ export interface SchedulingRunResult {
   peopleServicesSkipped: number;
   configurationErrorsEncountered: number;
   executionTimeMs: number;
+  dryRun: boolean; // True if this was a test run that didn't make changes
   errors: Array<{
     serviceId: string;
     serviceType: 'client' | 'people';
@@ -64,8 +65,9 @@ export async function runProjectScheduling(
 ): Promise<SchedulingRunResult> {
   const startTime = Date.now();
   const runDate = new Date();
+  const dryRun = runType === 'test'; // Test runs are dry runs that don't make changes
   
-  console.log(`[Project Scheduler] Starting ${runType} run for ${targetDate.toISOString()}`);
+  console.log(`[Project Scheduler] Starting ${runType} run ${dryRun ? '(DRY RUN - no changes will be made) ' : ''}for ${targetDate.toISOString()}`);
   
   const result: SchedulingRunResult = {
     status: 'success',
@@ -78,6 +80,7 @@ export async function runProjectScheduling(
     peopleServicesSkipped: 0,
     configurationErrorsEncountered: 0,
     executionTimeMs: 0,
+    dryRun,
     errors: [],
     summary: ''
   };
@@ -105,7 +108,7 @@ export async function runProjectScheduling(
     // Step 3: Process each due service
     for (const dueService of analysisResult.dueServices) {
       try {
-        await processService(dueService, result, targetDate);
+        await processService(dueService, result, targetDate, dryRun);
       } catch (error) {
         result.errorsEncountered++;
         result.errors.push({
@@ -235,34 +238,68 @@ async function findServicesDueToday(
 async function processService(
   dueService: DueService,
   result: SchedulingRunResult,
-  targetDate: Date
+  targetDate: Date,
+  dryRun: boolean = false
 ): Promise<void> {
-  console.log(`[Project Scheduler] Processing ${dueService.type} service: ${dueService.service.name}`);
+  if (dryRun) {
+    console.log(`[Project Scheduler] DRY RUN: Would process ${dueService.type} service: ${dueService.service.name}`);
+  } else {
+    console.log(`[Project Scheduler] Processing ${dueService.type} service: ${dueService.service.name}`);
+  }
 
   // Use database transaction to ensure atomicity
   // Note: This is a conceptual transaction - actual implementation would need db.transaction()
   try {
-    // Step 1: Create the project
-    const project = await createProjectFromService(dueService);
-    result.projectsCreated++;
-
-    console.log(`[Project Scheduler] Created project ${project.id} for service ${dueService.service.name}`);
-
-    // Step 2: Reschedule the service (skip for Companies House services)
-    if (dueService.isCompaniesHouseService) {
-      // Companies House services don't get rescheduled - their dates come from the API
-      console.log(`[Project Scheduler] Skipping rescheduling for Companies House service ${dueService.service.name} (dates managed by API)`);
-      result.chServicesProcessedWithoutRescheduling++;
+    let project: any = null;
+    
+    // Step 1: Create the project (skip in dry-run)
+    if (dryRun) {
+      console.log(`[Project Scheduler] DRY RUN: Would create project for service ${dueService.service.name}`);
+      // Create a mock project for dry-run logging
+      project = { id: `dry-run-project-${Date.now()}` };
     } else {
-      // Regular services get rescheduled to their next occurrence
-      await rescheduleService(dueService, targetDate);
-      result.servicesRescheduled++;
-      console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
+      project = await createProjectFromService(dueService);
+      console.log(`[Project Scheduler] Created project ${project.id} for service ${dueService.service.name}`);
+    }
+    // Only increment projectsCreated counter for real runs
+    if (!dryRun) {
+      result.projectsCreated++;
     }
 
-    // Step 3: Log the scheduling action
-    const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
-    await logSchedulingAction(dueService, project.id, action, targetDate);
+    // Step 2: Reschedule the service (skip for Companies House services and dry-runs)
+    if (dueService.isCompaniesHouseService) {
+      // Companies House services don't get rescheduled - their dates come from the API
+      if (dryRun) {
+        console.log(`[Project Scheduler] DRY RUN: Would skip rescheduling for Companies House service ${dueService.service.name} (dates managed by API)`);
+      } else {
+        console.log(`[Project Scheduler] Skipping rescheduling for Companies House service ${dueService.service.name} (dates managed by API)`);
+      }
+      // Only increment counter for real runs
+      if (!dryRun) {
+        result.chServicesProcessedWithoutRescheduling++;
+      }
+    } else {
+      // Regular services get rescheduled to their next occurrence
+      if (dryRun) {
+        console.log(`[Project Scheduler] DRY RUN: Would reschedule service ${dueService.id} for next period`);
+      } else {
+        await rescheduleService(dueService, targetDate);
+        console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
+      }
+      // Only increment counter for real runs
+      if (!dryRun) {
+        result.servicesRescheduled++;
+      }
+    }
+
+    // Step 3: Log the scheduling action (skip in dry-run)
+    if (dryRun) {
+      const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
+      console.log(`[Project Scheduler] DRY RUN: Would log scheduling action '${action}' for service ${dueService.id}`);
+    } else {
+      const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
+      await logSchedulingAction(dueService, project.id, action, targetDate);
+    }
     
     // TODO: When proper transaction support is added, commit here
   } catch (error) {
@@ -276,6 +313,22 @@ async function processService(
  * Create a project from a due service
  */
 async function createProjectFromService(dueService: DueService): Promise<any> {
+  // IDEMPOTENCY CHECK: Ensure we don't create duplicate projects
+  const projectMonth = formatProjectMonth(dueService.nextStartDate);
+  
+  // Check if a project already exists for this client, service type, and month
+  const allProjects = await storage.getAllProjects();
+  const duplicateProject = allProjects.find((project: any) => 
+    project.clientId === dueService.clientId &&
+    project.projectTypeId === dueService.service.projectType?.id &&
+    project.projectMonth === projectMonth
+  );
+  
+  if (duplicateProject) {
+    console.log(`[Project Scheduler] Skipping duplicate project creation - project ${duplicateProject.id} already exists for ${dueService.service.name} in ${projectMonth}`);
+    return duplicateProject;
+  }
+
   // Get the project type associated with this service
   let projectType: ProjectType;
   

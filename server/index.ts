@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { runChSync } from "./ch-sync-service";
+import { runProjectScheduling } from "./project-scheduler";
 
 const app = express();
 app.use(express.json());
@@ -70,8 +71,27 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     
+    // Setup nightly project scheduling
+    // Runs every day at 1:00 AM UTC (before CH sync to ensure projects are created first)
+    cron.schedule('0 1 * * *', async () => {
+      try {
+        log('[Project Scheduler] Starting scheduled nightly run...');
+        const result = await runProjectScheduling('scheduled');
+        log(`[Project Scheduler] Nightly run completed: ${result.status} - ${result.projectsCreated} projects created, ${result.servicesRescheduled} services rescheduled`);
+        if (result.errorsEncountered > 0) {
+          console.error(`[Project Scheduler] Nightly run had ${result.errorsEncountered} errors:`, result.errors);
+        }
+      } catch (error) {
+        console.error('[Project Scheduler] Fatal error in nightly run:', error);
+      }
+    }, {
+      timezone: "UTC"
+    });
+    
+    log('[Project Scheduler] Nightly scheduler initialized (runs daily at 1:00 AM UTC)');
+    
     // Setup nightly Companies House data synchronization
-    // Runs every day at 2:00 AM server time
+    // Runs every day at 2:00 AM UTC (after project scheduling)
     cron.schedule('0 2 * * *', async () => {
       try {
         log('[CH Sync] Starting scheduled nightly sync...');

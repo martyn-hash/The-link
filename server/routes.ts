@@ -8,6 +8,7 @@ import { sendTaskAssignmentEmail } from "./emailService";
 import fetch from 'node-fetch';
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
+import { runProjectScheduling, getOverdueServicesAnalysis, type SchedulingRunResult } from "./project-scheduler";
 import { z } from "zod";
 import {
   insertUserSchema,
@@ -4504,6 +4505,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error running CH sync:", error instanceof Error ? error.message : error);
       res.status(500).json({ 
         message: "Failed to run Companies House synchronization",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Project Scheduling API routes
+
+  // POST /api/project-scheduling/run - Trigger manual project scheduling (admin only)
+  app.post("/api/project-scheduling/run", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Manual project scheduling triggered by admin: ${req.user?.email}`);
+      
+      const result = await runProjectScheduling('manual');
+      
+      res.json({
+        message: "Project scheduling completed",
+        status: result.status,
+        projectsCreated: result.projectsCreated,
+        servicesRescheduled: result.servicesRescheduled,
+        errorsEncountered: result.errorsEncountered,
+        errors: result.errors,
+        summary: result.summary,
+        executionTimeMs: result.executionTimeMs,
+        timestamp: result.timestamp
+      });
+    } catch (error) {
+      console.error("Error running project scheduling:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to run project scheduling",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // GET /api/project-scheduling/analysis - Get overdue services analysis (admin only)
+  app.get("/api/project-scheduling/analysis", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const analysis = await getOverdueServicesAnalysis();
+      
+      res.json({
+        message: "Overdue services analysis completed",
+        ...analysis
+      });
+    } catch (error) {
+      console.error("Error getting overdue services analysis:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to get overdue services analysis",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/project-scheduling/test-dry-run - Test scheduling without creating projects (admin only)
+  app.post("/api/project-scheduling/test-dry-run", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Test dry-run project scheduling triggered by admin: ${req.user?.email}`);
+      
+      const result = await runProjectScheduling('test');
+      
+      res.json({
+        message: "Test dry-run project scheduling completed",
+        status: result.status,
+        projectsCreated: result.projectsCreated, // Should be 0 for test runs
+        servicesRescheduled: result.servicesRescheduled, // Should be 0 for test runs
+        errorsEncountered: result.errorsEncountered,
+        errors: result.errors,
+        summary: result.summary,
+        executionTimeMs: result.executionTimeMs,
+        timestamp: result.timestamp
+      });
+    } catch (error) {
+      console.error("Error running test project scheduling:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to run test project scheduling",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
