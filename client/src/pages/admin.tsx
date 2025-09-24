@@ -643,6 +643,99 @@ export default function Admin() {
               </Card>
             </div>
           )}
+
+          {/* Analysis Dashboard */}
+          {schedulingAnalysis && (schedulingAnalysis as any).totalServices !== undefined && (
+            <div className="mt-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart className="h-5 w-5" />
+                    Overdue Services Analysis
+                  </CardTitle>
+                  <CardDescription>
+                    Current analysis of services requiring attention
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Summary Statistics */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold">{(schedulingAnalysis as any).totalServices}</p>
+                        <p className="text-sm text-muted-foreground">Total Services</p>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold text-red-600">{(schedulingAnalysis as any).overdueServices}</p>
+                        <p className="text-sm text-muted-foreground">Overdue Services</p>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold text-orange-600">{(schedulingAnalysis as any).configurationErrors?.length || 0}</p>
+                        <p className="text-sm text-muted-foreground">Config Errors</p>
+                      </div>
+                    </div>
+
+                    {/* Overdue Services Details */}
+                    {(schedulingAnalysis as any).servicesDetails?.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3">Overdue Services</h4>
+                        <div className="space-y-2">
+                          {(schedulingAnalysis as any).servicesDetails.map((service: any) => (
+                            <div key={service.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`overdue-service-${service.id}`}>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{service.serviceName}</p>
+                                <p className="text-xs text-muted-foreground">{service.clientName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Due: {new Date(service.nextStartDate).toLocaleDateString()} • {service.frequency}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <Badge variant="destructive" className="text-xs">
+                                  {service.daysPastDue} day{service.daysPastDue !== 1 ? 's' : ''} overdue
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Configuration Errors */}
+                    {(schedulingAnalysis as any).configurationErrors?.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3">Configuration Issues</h4>
+                        <div className="space-y-2">
+                          {(schedulingAnalysis as any).configurationErrors.map((error: any, index: number) => (
+                            <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-orange-50 dark:bg-orange-900/20" data-testid={`config-error-${index}`}>
+                              <div className="flex items-center gap-3">
+                                <AlertCircle className="h-4 w-4 text-orange-500" />
+                                <div>
+                                  <p className="text-sm font-medium">{error.serviceName}</p>
+                                  <p className="text-xs text-muted-foreground">{error.clientName}</p>
+                                </div>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {error.error}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No Issues Found */}
+                    {(schedulingAnalysis as any).overdueServices === 0 && (schedulingAnalysis as any).configurationErrors?.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                        <p className="text-lg font-medium">All services are up to date</p>
+                        <p className="text-sm">No overdue services or configuration issues found.</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </main>
       </div>
 

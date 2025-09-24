@@ -533,17 +533,56 @@ export async function getOverdueServicesAnalysis(targetDate: Date = new Date()) 
     storage.getAllPeopleServicesWithDetails()
   ]);
 
+  // Get client service details for better display
+  const allClientServicesWithDetails = await Promise.all(
+    clientServices.map(async (cs) => {
+      const client = await storage.getClientById(cs.clientId);
+      const projectType = cs.service?.projectType;
+      return {
+        id: cs.id,
+        nextStartDate: cs.nextStartDate,
+        frequency: cs.frequency as ServiceFrequency,
+        type: 'client' as const,
+        serviceName: projectType?.name || 'Unknown Service',
+        clientName: client?.name || 'Unknown Client',
+        clientId: cs.clientId,
+        projectTypeId: cs.service?.projectTypeId || null
+      };
+    })
+  );
+
   const allServices = [
-    ...clientServices.map(cs => ({
-      id: cs.id,
-      nextStartDate: cs.nextStartDate,
-      frequency: cs.frequency as ServiceFrequency,
-      type: 'client' as const,
-      serviceName: 'Unknown', // Would need to join with service
-      clientName: 'Unknown'   // Would need to join with client
-    })),
+    ...allClientServicesWithDetails,
     // Add people services when supported
   ];
 
-  return getOverdueServices(allServices, targetDate);
+  const overdueServices = getOverdueServices(allServices, targetDate);
+  
+  // Calculate configuration errors
+  const configurationErrors = [];
+  for (const service of allClientServicesWithDetails) {
+    if (!service.projectTypeId) {
+      configurationErrors.push({
+        serviceId: service.id,
+        serviceName: service.serviceName,
+        clientName: service.clientName,
+        error: 'No project type configured',
+        timestamp: new Date()
+      });
+    }
+  }
+
+  return {
+    totalServices: allServices.length,
+    overdueServices: overdueServices.length,
+    servicesDetails: overdueServices.map(service => ({
+      id: service.id,
+      serviceName: (service as any).serviceName,
+      clientName: (service as any).clientName,
+      nextStartDate: service.nextStartDate,
+      frequency: service.frequency,
+      daysPastDue: service.daysPastDue
+    })),
+    configurationErrors
+  };
 }
