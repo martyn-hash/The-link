@@ -163,10 +163,7 @@ export default function TeamOverview() {
                         Managers: {teamStats.managerCount}
                       </Badge>
                       <Badge variant="secondary" className="text-sm">
-                        Client Managers: {teamStats.clientManagerCount}
-                      </Badge>
-                      <Badge variant="secondary" className="text-sm">
-                        Bookkeepers: {teamStats.bookkeeperCount}
+                        Users: {teamStats.regularUserCount}
                       </Badge>
                     </div>
                   </CardContent>
