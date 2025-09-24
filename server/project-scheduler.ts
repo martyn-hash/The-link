@@ -29,7 +29,7 @@ export interface SchedulingRunResult {
   projectsCreated: number;
   servicesRescheduled: number;
   errorsEncountered: number;
-  chServicesSkipped: number;
+  chServicesProcessedWithoutRescheduling: number; // CH services that got projects but no rescheduling
   peopleServicesSkipped: number;
   configurationErrorsEncountered: number;
   executionTimeMs: number;
@@ -52,6 +52,7 @@ interface DueService {
   frequency: ServiceFrequency;
   nextStartDate: Date;
   nextDueDate: Date;
+  isCompaniesHouseService: boolean; // Flag to indicate CH services
 }
 
 /**
@@ -73,7 +74,7 @@ export async function runProjectScheduling(
     projectsCreated: 0,
     servicesRescheduled: 0,
     errorsEncountered: 0,
-    chServicesSkipped: 0,
+    chServicesProcessedWithoutRescheduling: 0,
     peopleServicesSkipped: 0,
     configurationErrorsEncountered: 0,
     executionTimeMs: 0,
@@ -95,7 +96,6 @@ export async function runProjectScheduling(
     // Step 2: Find services that are due today
     const analysisResult = await findServicesDueToday(clientServices, peopleServices, targetDate);
     result.servicesFoundDue = analysisResult.dueServices.length;
-    result.chServicesSkipped = analysisResult.chServicesSkipped;
     result.peopleServicesSkipped = analysisResult.peopleServicesSkipped;
     result.configurationErrorsEncountered = analysisResult.configurationErrorsEncountered;
     result.errors.push(...analysisResult.configurationErrors);
@@ -152,7 +152,6 @@ export async function runProjectScheduling(
 
 interface ServiceAnalysisResult {
   dueServices: DueService[];
-  chServicesSkipped: number;
   peopleServicesSkipped: number;
   configurationErrorsEncountered: number;
   configurationErrors: Array<{
@@ -172,7 +171,6 @@ async function findServicesDueToday(
   targetDate: Date
 ): Promise<ServiceAnalysisResult> {
   const dueServices: DueService[] = [];
-  let chServicesSkipped = 0;
   let configurationErrorsEncountered = 0;
   const configurationErrors: Array<{
     serviceId: string;
@@ -184,14 +182,6 @@ async function findServicesDueToday(
   // Process client services - use already hydrated data to avoid refetch mismatches
   for (const clientServiceWithDetails of clientServicesWithDetails) {
     if (clientServiceWithDetails.nextStartDate && isServiceDueToday(clientServiceWithDetails.nextStartDate, targetDate)) {
-      // Check if this is a Companies House service
-      if (clientServiceWithDetails.service.isCompaniesHouseConnected) {
-        // Skip CH services - they get updated from API, not scheduled
-        console.log(`[Project Scheduler] Skipping Companies House service: ${clientServiceWithDetails.service.name}`);
-        chServicesSkipped++;
-        continue;
-      }
-
       // Validate configuration before proceeding
       if (!clientServiceWithDetails.service.projectType || clientServiceWithDetails.service.projectType.id === '') {
         console.error(`[Project Scheduler] Configuration error: Service '${clientServiceWithDetails.service.name}' has no project type configured`);
@@ -205,6 +195,12 @@ async function findServicesDueToday(
         continue; // Skip this service but continue processing others
       }
 
+      // Include Companies House services for project creation, but flag them for special handling
+      const isChService = !!clientServiceWithDetails.service.isCompaniesHouseConnected;
+      if (isChService) {
+        console.log(`[Project Scheduler] Processing Companies House service: ${clientServiceWithDetails.service.name} (project will be created, rescheduling will be skipped)`);
+      }
+
       dueServices.push({
         id: clientServiceWithDetails.id,
         type: 'client',
@@ -213,7 +209,8 @@ async function findServicesDueToday(
         serviceOwnerId: clientServiceWithDetails.serviceOwnerId,
         frequency: clientServiceWithDetails.frequency as ServiceFrequency,
         nextStartDate: clientServiceWithDetails.nextStartDate,
-        nextDueDate: clientServiceWithDetails.nextDueDate || clientServiceWithDetails.nextStartDate
+        nextDueDate: clientServiceWithDetails.nextDueDate || clientServiceWithDetails.nextStartDate,
+        isCompaniesHouseService: isChService
       });
     }
   }
@@ -226,7 +223,6 @@ async function findServicesDueToday(
 
   return {
     dueServices,
-    chServicesSkipped,
     peopleServicesSkipped,
     configurationErrorsEncountered,
     configurationErrors
@@ -252,14 +248,21 @@ async function processService(
 
     console.log(`[Project Scheduler] Created project ${project.id} for service ${dueService.service.name}`);
 
-    // Step 2: Reschedule the service
-    await rescheduleService(dueService, targetDate);
-    result.servicesRescheduled++;
-
-    console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
+    // Step 2: Reschedule the service (skip for Companies House services)
+    if (dueService.isCompaniesHouseService) {
+      // Companies House services don't get rescheduled - their dates come from the API
+      console.log(`[Project Scheduler] Skipping rescheduling for Companies House service ${dueService.service.name} (dates managed by API)`);
+      result.chServicesProcessedWithoutRescheduling++;
+    } else {
+      // Regular services get rescheduled to their next occurrence
+      await rescheduleService(dueService, targetDate);
+      result.servicesRescheduled++;
+      console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
+    }
 
     // Step 3: Log the scheduling action
-    await logSchedulingAction(dueService, project.id, 'created', targetDate);
+    const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
+    await logSchedulingAction(dueService, project.id, action, targetDate);
     
     // TODO: When proper transaction support is added, commit here
   } catch (error) {
@@ -311,16 +314,22 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
   const clientName = dueService.clientId ? (await storage.getClientById(dueService.clientId))?.name : 'Unknown Client';
   const description = `${dueService.service.name} - ${clientName}`;
 
+  // Ensure we have valid user IDs for required fields
+  const finalAssigneeId = currentAssigneeId || dueService.serviceOwnerId;
+  if (!finalAssigneeId) {
+    throw new Error(`No valid assignee found for service ${dueService.service.name}. Service owner is required.`);
+  }
+
   // Prepare project data
   const projectData: InsertProject = {
     clientId: dueService.clientId!,
     projectTypeId: projectType.id,
-    projectOwnerId: dueService.serviceOwnerId,
-    bookkeeperId: currentAssigneeId || dueService.serviceOwnerId, // Fallback to service owner
-    clientManagerId: currentAssigneeId || dueService.serviceOwnerId, // Fallback to service owner
+    projectOwnerId: finalAssigneeId, // Use final assignee as owner if service owner is null
+    bookkeeperId: finalAssigneeId,
+    clientManagerId: finalAssigneeId,
     description,
     currentStatus: firstStage.name,
-    currentAssigneeId,
+    currentAssigneeId: finalAssigneeId,
     priority: 'medium',
     dueDate: dueService.nextDueDate,
     projectMonth: formatProjectMonth(dueService.nextStartDate)
@@ -405,7 +414,7 @@ async function logSchedulingRun(
     projectsCreated: result.projectsCreated,
     servicesRescheduled: result.servicesRescheduled,
     errorsEncountered: result.errorsEncountered,
-    chServicesSkipped: result.chServicesSkipped,
+    chServicesSkipped: result.chServicesProcessedWithoutRescheduling, // Map to the renamed field
     executionTimeMs: result.executionTimeMs,
     errorDetails: result.errors.length > 0 ? result.errors : null,
     summary: result.summary
@@ -455,7 +464,11 @@ async function sendProjectCreatedNotifications(project: any, dueService: DueServ
  * Format date for project month field using existing schema function
  */
 function formatProjectMonth(date: Date): string {
-  return normalizeProjectMonth(date);
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const dateString = `${day}/${month}/${year}`;
+  return normalizeProjectMonth(dateString);
 }
 
 /**
