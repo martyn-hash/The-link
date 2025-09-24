@@ -2735,7 +2735,7 @@ export default function ClientDetail() {
 
       {/* Main Content */}
       <div className="container mx-auto p-6">
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs defaultValue="overview" className="flex flex-col">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
@@ -2746,7 +2746,7 @@ export default function ClientDetail() {
             <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="overview" className="space-y-6 mt-6">
             {/* Company Details */}
             <Card>
               <CardHeader>
@@ -3136,7 +3136,7 @@ export default function ClientDetail() {
             )}
           </TabsContent>
 
-          <TabsContent value="services" className="space-y-6">
+          <TabsContent value="services" className="space-y-6 mt-6">
             {/* Client Services Section - Show for company clients OR individual clients with company connections */}
             {(() => {
               // Handle legacy data where clientType might be null for companies
@@ -3255,7 +3255,7 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="projects" className="space-y-6">
+          <TabsContent value="projects" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle>Open Projects</CardTitle>
