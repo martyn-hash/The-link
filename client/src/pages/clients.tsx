@@ -201,7 +201,7 @@ export default function Clients() {
                   <p className="text-muted-foreground text-center max-w-md mb-4">
                     There are no clients in the system yet. Clients will appear here as they are added to the system.
                   </p>
-                  {user?.role === 'admin' && (
+                  {user?.isAdmin && (
                     <Button onClick={handleCreateClient} data-testid="button-create-first-client">
                       <Plus className="w-4 h-4 mr-2" />
                       Create Your First Client
@@ -213,7 +213,12 @@ export default function Clients() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredClients.map((client) => (
-                <Card key={client.id} className="hover:shadow-md transition-shadow group" data-testid={`card-client-${client.id}`}>
+                <Card 
+                  key={client.id} 
+                  className="hover:shadow-md transition-shadow group cursor-pointer" 
+                  data-testid={`card-client-${client.id}`}
+                  onClick={() => handleEditClient(client)}
+                >
                   <CardHeader>
                     <div className="flex items-center space-x-4">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
@@ -232,7 +237,7 @@ export default function Clients() {
                           </CardDescription>
                         )}
                       </div>
-                      {user?.role === 'admin' && (
+                      {user?.isAdmin && (
                         <Button
                           variant="ghost"
                           size="sm"
