@@ -298,7 +298,7 @@ async function processService(
       console.log(`[Project Scheduler] DRY RUN: Would log scheduling action '${action}' for service ${dueService.id}`);
     } else {
       const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
-      await logSchedulingAction(dueService, project.id, action, targetDate);
+      await logSchedulingAction(dueService, project.id, action, dueService.nextStartDate);
     }
     
     // TODO: When proper transaction support is added, commit here
@@ -313,38 +313,46 @@ async function processService(
  * Create a project from a due service
  */
 async function createProjectFromService(dueService: DueService): Promise<any> {
-  // IDEMPOTENCY CHECK: Ensure we don't create duplicate projects
-  const projectMonth = formatProjectMonth(dueService.nextStartDate);
+  // IDEMPOTENCY CHECK: Ensure we don't create duplicate projects for the same client, project type, and EXACT DATE
+  // This is date-specific to allow weekly services to create multiple projects per month
+  const scheduledDate = dueService.nextStartDate.toISOString().split('T')[0];
   
-  // Check if a project already exists for this client, service type, and month
+  // Check if a project already exists for this client, project type, and exact date
   const allProjects = await storage.getAllProjects();
-  const duplicateProject = allProjects.find((project: any) => 
-    project.clientId === dueService.clientId &&
-    project.projectTypeId === dueService.service.projectType?.id &&
-    project.projectMonth === projectMonth
-  );
+  const duplicateProject = allProjects.find((project: any) => {
+    if (project.clientId !== dueService.clientId || 
+        project.projectTypeId !== dueService.service.projectType?.id) {
+      return false;
+    }
+    // Compare exact dates to allow weekly services multiple projects per month
+    const projectDate = project.createdAt ? project.createdAt.toISOString().split('T')[0] : null;
+    return projectDate === scheduledDate;
+  });
   
   if (duplicateProject) {
-    console.log(`[Project Scheduler] Skipping duplicate project creation - project ${duplicateProject.id} already exists for ${dueService.service.name} in ${projectMonth}`);
+    console.log(`[Project Scheduler] Skipping duplicate project creation - project ${duplicateProject.id} already exists for ${dueService.service.name} on ${scheduledDate}`);
     return duplicateProject;
   }
 
-  // ROBUST SERVICE-BASED SAFEGUARD: Check scheduling history for this service in this month
-  // This prevents multiple projects if multiple project types reference the same service
+  // ROBUST SERVICE-BASED SAFEGUARD: Check scheduling history for this service on this specific date
+  // This prevents multiple projects if multiple project types reference the same service for the same scheduled date
+  // Critical: Uses exact date comparison, not month, to allow weekly services to create multiple projects per month
   if (dueService.type === 'client') {
     const schedulingHistory = await storage.getProjectSchedulingHistoryByServiceId(dueService.id, dueService.type);
-    const existingProjectInMonth = schedulingHistory.find(entry => {
+    const existingProjectOnDate = schedulingHistory.find(entry => {
       if (!entry.projectId) return false;
-      const entryMonth = formatProjectMonth(entry.scheduledDate);
-      return entryMonth === projectMonth && (entry.action === 'created' || entry.action === 'created_no_reschedule');
+      // Compare exact scheduled dates - critical for weekly services that run multiple times per month
+      const entryDate = entry.scheduledDate.toISOString().split('T')[0];
+      const targetDate = dueService.nextStartDate.toISOString().split('T')[0];
+      return entryDate === targetDate && (entry.action === 'created' || entry.action === 'created_no_reschedule');
     });
 
-    if (existingProjectInMonth) {
-      console.log(`[Project Scheduler] Service-based duplicate prevention: Service ${dueService.id} (${dueService.service.name}) already has a project created in ${projectMonth}`);
-      console.log(`[Project Scheduler] Existing project ID: ${existingProjectInMonth.projectId} - This safeguards against multiple project types referencing the same service`);
+    if (existingProjectOnDate) {
+      console.log(`[Project Scheduler] Service-based duplicate prevention: Service ${dueService.id} (${dueService.service.name}) already has a project created for ${dueService.nextStartDate.toISOString().split('T')[0]}`);
+      console.log(`[Project Scheduler] Existing project ID: ${existingProjectOnDate.projectId} - This safeguards against multiple project types referencing the same service for the same date`);
       
       // Return the existing project to maintain consistency
-      const existingProject = allProjects.find(p => p.id === existingProjectInMonth.projectId);
+      const existingProject = allProjects.find(p => p.id === existingProjectOnDate.projectId);
       if (existingProject) {
         return existingProject;
       }
