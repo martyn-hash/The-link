@@ -3397,11 +3397,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Services CRUD operations  
-  async getAllServices(): Promise<(Service & { roles: WorkRole[] })[]> {
-    // Services no longer have direct project type references
+  async getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+    // Get services with their optional project types
     const servicesData = await db
-      .select()
-      .from(services);
+      .select({
+        service: services,
+        projectType: projectTypes,
+      })
+      .from(services)
+      .leftJoin(projectTypes, eq(services.id, projectTypes.serviceId));
 
     // Get all service roles in one query
     const allServiceRoles = await db
@@ -3423,18 +3427,31 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles
-    return servicesData.map((service) => ({
-      ...service,
-      roles: rolesByServiceId[service.id] || [],
+    // Combine services with their roles and project types
+    return servicesData.map((row) => ({
+      ...row.service,
+      projectType: row.projectType || {
+        id: '',
+        name: '',
+        description: null,
+        serviceId: null,
+        active: true,
+        order: 0,
+        createdAt: null,
+      },
+      roles: rolesByServiceId[row.service.id] || [],
     }));
   }
 
-  async getActiveServices(): Promise<(Service & { roles: WorkRole[] })[]> {
-    // Services no longer have project type references - just return all services
+  async getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+    // Get services with their optional project types
     const servicesData = await db
-      .select()
-      .from(services);
+      .select({
+        service: services,
+        projectType: projectTypes,
+      })
+      .from(services)
+      .leftJoin(projectTypes, eq(services.id, projectTypes.serviceId));
 
     // Get all service roles in one query
     const allServiceRoles = await db
@@ -3456,18 +3473,31 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles
-    return servicesData.map((service) => ({
-      ...service,
-      roles: rolesByServiceId[service.id] || [],
+    // Combine services with their roles and project types
+    return servicesData.map((row) => ({
+      ...row.service,
+      projectType: row.projectType || {
+        id: '',
+        name: '',
+        description: null,
+        serviceId: null,
+        active: true,
+        order: 0,
+        createdAt: null,
+      },
+      roles: rolesByServiceId[row.service.id] || [],
     }));
   }
 
-  async getClientAssignableServices(): Promise<(Service & { roles: WorkRole[] })[]> {
+  async getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
     // Get services that are NOT personal services (for client assignment)
     const servicesData = await db
-      .select()
+      .select({
+        service: services,
+        projectType: projectTypes,
+      })
       .from(services)
+      .leftJoin(projectTypes, eq(services.id, projectTypes.serviceId))
       .where(or(eq(services.isPersonalService, false), isNull(services.isPersonalService)));
 
     // Get all service roles in one query
@@ -3490,10 +3520,19 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles
-    return servicesData.map((service) => ({
-      ...service,
-      roles: rolesByServiceId[service.id] || [],
+    // Combine services with their roles and project types
+    return servicesData.map((row) => ({
+      ...row.service,
+      projectType: row.projectType || {
+        id: '',
+        name: '',
+        description: null,
+        serviceId: null,
+        active: true,
+        order: 0,
+        createdAt: null,
+      },
+      roles: rolesByServiceId[row.service.id] || [],
     }));
   }
 

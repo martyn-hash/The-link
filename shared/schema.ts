@@ -525,6 +525,52 @@ export const serviceRoles = pgTable("service_roles", {
   unique("unique_service_role").on(table.serviceId, table.roleId),
 ]);
 
+// Project scheduling history table - tracks all scheduling actions for audit trail
+export const projectSchedulingHistory = pgTable("project_scheduling_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientServiceId: varchar("client_service_id").references(() => clientServices.id, { onDelete: "set null" }),
+  peopleServiceId: varchar("people_service_id").references(() => peopleServices.id, { onDelete: "set null" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }), // The project that was created
+  action: varchar("action").notNull(), // 'created', 'rescheduled', 'skipped', 'failed'
+  scheduledDate: timestamp("scheduled_date").notNull(), // The date this service was scheduled for
+  previousNextStartDate: timestamp("previous_next_start_date"), // Previous next start date before rescheduling
+  previousNextDueDate: timestamp("previous_next_due_date"), // Previous next due date before rescheduling
+  newNextStartDate: timestamp("new_next_start_date"), // New next start date after rescheduling
+  newNextDueDate: timestamp("new_next_due_date"), // New next due date after rescheduling
+  frequency: varchar("frequency"), // Frequency at time of scheduling
+  notes: text("notes"), // Additional notes or error messages
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_project_scheduling_history_client_service_id").on(table.clientServiceId),
+  index("idx_project_scheduling_history_people_service_id").on(table.peopleServiceId),
+  index("idx_project_scheduling_history_project_id").on(table.projectId),
+  index("idx_project_scheduling_history_action").on(table.action),
+  index("idx_project_scheduling_history_scheduled_date").on(table.scheduledDate),
+  index("idx_project_scheduling_history_created_at").on(table.createdAt),
+]);
+
+// Scheduling run logs table - tracks each nightly run for failure analysis and reporting
+export const schedulingRunLogs = pgTable("scheduling_run_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  runDate: timestamp("run_date").notNull(), // The date/time this run was executed
+  runType: varchar("run_type").notNull().default("scheduled"), // 'scheduled', 'manual', 'test'
+  status: varchar("status").notNull(), // 'success', 'partial_failure', 'failure'
+  totalServicesChecked: integer("total_services_checked").notNull().default(0),
+  servicesFoundDue: integer("services_found_due").notNull().default(0),
+  projectsCreated: integer("projects_created").notNull().default(0),
+  servicesRescheduled: integer("services_rescheduled").notNull().default(0),
+  errorsEncountered: integer("errors_encountered").notNull().default(0),
+  chServicesSkipped: integer("ch_services_skipped").notNull().default(0), // Companies House services awaiting API updates
+  executionTimeMs: integer("execution_time_ms"), // Time taken to complete the run
+  errorDetails: jsonb("error_details"), // Detailed error information
+  summary: text("summary"), // Human-readable summary of the run
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduling_run_logs_run_date").on(table.runDate),
+  index("idx_scheduling_run_logs_status").on(table.status),
+  index("idx_scheduling_run_logs_run_type").on(table.runType),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
   assignedProjects: many(projects, { relationName: "assignee" }),
@@ -1193,6 +1239,17 @@ export const csvProjectSchema = z.object({
   ),
 });
 
+// Project scheduling types and schemas
+export const insertProjectSchedulingHistorySchema = createInsertSchema(projectSchedulingHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSchedulingRunLogsSchema = createInsertSchema(schedulingRunLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -1205,6 +1262,10 @@ export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type ProjectChronology = typeof projectChronology.$inferSelect;
 export type InsertProjectChronology = z.infer<typeof insertProjectChronologySchema>;
+export type ProjectSchedulingHistory = typeof projectSchedulingHistory.$inferSelect;
+export type InsertProjectSchedulingHistory = z.infer<typeof insertProjectSchedulingHistorySchema>;
+export type SchedulingRunLogs = typeof schedulingRunLogs.$inferSelect;
+export type InsertSchedulingRunLogs = z.infer<typeof insertSchedulingRunLogsSchema>;
 export type KanbanStage = typeof kanbanStages.$inferSelect;
 export type InsertKanbanStage = z.infer<typeof insertKanbanStageSchema>;
 export type ChangeReason = typeof changeReasons.$inferSelect;
@@ -1227,6 +1288,21 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   peopleServices: many(peopleServices),
 }));
 
+export const projectSchedulingHistoryRelations = relations(projectSchedulingHistory, ({ one }) => ({
+  clientService: one(clientServices, {
+    fields: [projectSchedulingHistory.clientServiceId],
+    references: [clientServices.id],
+  }),
+  peopleService: one(peopleServices, {
+    fields: [projectSchedulingHistory.peopleServiceId],
+    references: [peopleServices.id],
+  }),
+  project: one(projects, {
+    fields: [projectSchedulingHistory.projectId],
+    references: [projects.id],
+  }),
+}));
+
 export const clientServicesRelations = relations(clientServices, ({ one, many }) => ({
   client: one(clients, {
     fields: [clientServices.clientId],
@@ -1242,9 +1318,10 @@ export const clientServicesRelations = relations(clientServices, ({ one, many })
     relationName: "clientServiceOwner",
   }),
   roleAssignments: many(clientServiceRoleAssignments),
+  schedulingHistory: many(projectSchedulingHistory, { relationName: "clientServiceHistory" }),
 }));
 
-export const peopleServicesRelations = relations(peopleServices, ({ one }) => ({
+export const peopleServicesRelations = relations(peopleServices, ({ one, many }) => ({
   person: one(people, {
     fields: [peopleServices.personId],
     references: [people.id],
@@ -1258,6 +1335,7 @@ export const peopleServicesRelations = relations(peopleServices, ({ one }) => ({
     references: [users.id],
     relationName: "peopleServiceOwner",
   }),
+  schedulingHistory: many(projectSchedulingHistory, { relationName: "peopleServiceHistory" }),
 }));
 
 export const workRolesRelations = relations(workRoles, ({ many }) => ({
