@@ -3813,86 +3813,96 @@ export class DatabaseStorage implements IStorage {
     serviceOwner?: User; 
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
   })[]> {
-    // First, get the basic client services with service owner details
-    const results = await db
-      .select({
-        id: clientServices.id,
-        clientId: clientServices.clientId,
-        serviceId: clientServices.serviceId,
-        serviceOwnerId: clientServices.serviceOwnerId,
-        frequency: clientServices.frequency,
-        nextStartDate: clientServices.nextStartDate,
-        nextDueDate: clientServices.nextDueDate,
-        createdAt: clientServices.createdAt,
-        serviceId_data: services.id,
-        serviceName: services.name,
-        serviceDescription: services.description,
-        serviceUdfDefinitions: services.udfDefinitions,
-        serviceCreatedAt: services.createdAt,
-        projectTypeId: projectTypes.id,
-        projectTypeName: projectTypes.name,
-        projectTypeDescription: projectTypes.description,
-        projectTypeActive: projectTypes.active,
-        projectTypeOrder: projectTypes.order,
-        projectTypeCreatedAt: projectTypes.createdAt,
-        // Service owner details
-        serviceOwnerId_data: users.id,
-        serviceOwnerFirstName: users.firstName,
-        serviceOwnerLastName: users.lastName,
-        serviceOwnerEmail: users.email,
-        serviceOwnerIsAdmin: users.isAdmin,
-        serviceOwnerCreatedAt: users.createdAt,
-      })
-      .from(clientServices)
-      .innerJoin(services, eq(clientServices.serviceId, services.id))
-      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
-      .leftJoin(users, eq(clientServices.serviceOwnerId, users.id))
-      .where(eq(clientServices.clientId, clientId));
-    
-    // For each client service, get its role assignments
-    const clientServicesWithRoles = await Promise.all(
-      results.map(async (result) => {
-        const roleAssignments = await this.getActiveClientServiceRoleAssignments(result.id);
-        
-        return {
-          id: result.id,
-          clientId: result.clientId,
-          serviceId: result.serviceId,
-          serviceOwnerId: result.serviceOwnerId,
-          frequency: result.frequency,
-          nextStartDate: result.nextStartDate,
-          nextDueDate: result.nextDueDate,
-          createdAt: result.createdAt,
-          service: {
-            id: result.serviceId_data,
-            name: result.serviceName,
-            description: result.serviceDescription,
-            projectTypeId: result.projectTypeId,
-            udfDefinitions: result.serviceUdfDefinitions,
-            createdAt: result.serviceCreatedAt,
-            projectType: result.projectTypeId ? {
-              id: result.projectTypeId,
-              name: result.projectTypeName || '',
-              description: result.projectTypeDescription || '',
-              active: result.projectTypeActive ?? false,
-              order: result.projectTypeOrder ?? 0,
-              createdAt: result.projectTypeCreatedAt || new Date(),
-            } : undefined,
-          },
-          serviceOwner: result.serviceOwnerId_data ? {
-            id: result.serviceOwnerId_data,
-            firstName: result.serviceOwnerFirstName || '',
-            lastName: result.serviceOwnerLastName || '',
-            email: result.serviceOwnerEmail || '',
-            isAdmin: result.serviceOwnerIsAdmin ?? false,
-            createdAt: result.serviceOwnerCreatedAt || new Date(),
-          } : undefined,
-          roleAssignments,
-        };
-      })
-    );
-    
-    return clientServicesWithRoles;
+    try {
+      console.log(`[DEBUG] Fetching client services for clientId: ${clientId}`);
+      
+      // Get basic client services first with simple query
+      const clientServicesList = await db
+        .select()
+        .from(clientServices)
+        .where(eq(clientServices.clientId, clientId));
+      
+      console.log(`[DEBUG] Found ${clientServicesList.length} client services for clientId: ${clientId}`);
+      
+      // For each client service, get the full data with separate simple queries
+      const clientServicesWithDetails = await Promise.all(
+        clientServicesList.map(async (cs) => {
+          console.log(`[DEBUG] Processing client service with ID: ${cs.id}, serviceId: ${cs.serviceId}`);
+          
+          // Get service details with simple query
+          const servicesList = await db
+            .select()
+            .from(services)
+            .where(eq(services.id, cs.serviceId));
+          
+          if (!servicesList.length) {
+            console.warn(`[WARNING] Service not found for serviceId: ${cs.serviceId}`);
+            return null;
+          }
+          
+          const service = servicesList[0];
+          console.log(`[DEBUG] Found service: ${service.name}`);
+          
+          // Get project type if exists
+          let projectType = undefined;
+          if (service.projectTypeId) {
+            const projectTypesList = await db
+              .select()
+              .from(projectTypes)
+              .where(eq(projectTypes.id, service.projectTypeId));
+            projectType = projectTypesList.length ? projectTypesList[0] : undefined;
+            console.log(`[DEBUG] Project type found: ${projectType?.name || 'None'}`);
+          }
+          
+          // Get service owner if exists
+          let serviceOwner = undefined;
+          if (cs.serviceOwnerId) {
+            const ownersList = await db
+              .select()
+              .from(users)
+              .where(eq(users.id, cs.serviceOwnerId));
+            serviceOwner = ownersList.length ? ownersList[0] : undefined;
+            console.log(`[DEBUG] Service owner found: ${serviceOwner?.email || 'None'}`);
+          }
+          
+          // Get role assignments
+          const roleAssignments = await this.getActiveClientServiceRoleAssignments(cs.id);
+          console.log(`[DEBUG] Found ${roleAssignments.length} role assignments`);
+          
+          return {
+            id: cs.id,
+            clientId: cs.clientId,
+            serviceId: cs.serviceId,
+            serviceOwnerId: cs.serviceOwnerId,
+            frequency: cs.frequency,
+            nextStartDate: cs.nextStartDate,
+            nextDueDate: cs.nextDueDate,
+            createdAt: cs.createdAt,
+            service: {
+              id: service.id,
+              name: service.name,
+              description: service.description,
+              projectTypeId: service.projectTypeId,
+              udfDefinitions: service.udfDefinitions,
+              createdAt: service.createdAt,
+              projectType,
+            },
+            serviceOwner,
+            roleAssignments,
+          };
+        })
+      );
+      
+      // Filter out any null results (from missing services)
+      const validClientServices = clientServicesWithDetails.filter(cs => cs !== null);
+      
+      console.log(`[DEBUG] Successfully processed ${validClientServices.length} valid client services`);
+      return validClientServices;
+    } catch (error) {
+      console.error(`[ERROR] Error in getClientServicesByClientId for clientId ${clientId}:`, error);
+      console.error(`[ERROR] Stack trace:`, error instanceof Error ? error.stack : 'No stack trace');
+      throw error;
+    }
   }
 
   async getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]> {
@@ -4075,40 +4085,57 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActiveClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]> {
-    return await db
-      .select({
-        id: clientServiceRoleAssignments.id,
-        clientServiceId: clientServiceRoleAssignments.clientServiceId,
-        workRoleId: clientServiceRoleAssignments.workRoleId,
-        userId: clientServiceRoleAssignments.userId,
-        isActive: clientServiceRoleAssignments.isActive,
-        createdAt: clientServiceRoleAssignments.createdAt,
-        workRole: {
-          id: workRoles.id,
-          name: workRoles.name,
-          description: workRoles.description,
-          createdAt: workRoles.createdAt,
-        },
-        user: {
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-          role: users.role,
-          passwordHash: users.passwordHash,
-          isFallbackUser: users.isFallbackUser,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        },
-      })
+    console.log(`[DEBUG] Getting role assignments for clientServiceId: ${clientServiceId}`);
+    
+    // Get basic role assignments first
+    const roleAssignmentsList = await db
+      .select()
       .from(clientServiceRoleAssignments)
-      .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
-      .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
       .where(and(
         eq(clientServiceRoleAssignments.clientServiceId, clientServiceId),
         eq(clientServiceRoleAssignments.isActive, true)
       ));
+    
+    console.log(`[DEBUG] Found ${roleAssignmentsList.length} active role assignments`);
+    
+    // For each assignment, get the work role and user details
+    const roleAssignmentsWithDetails = await Promise.all(
+      roleAssignmentsList.map(async (assignment) => {
+        // Get work role details
+        const workRolesList = await db
+          .select()
+          .from(workRoles)
+          .where(eq(workRoles.id, assignment.workRoleId));
+        
+        // Get user details
+        const usersList = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, assignment.userId));
+        
+        if (!workRolesList.length || !usersList.length) {
+          console.warn(`[WARNING] Missing workRole or user for assignment ${assignment.id}`);
+          return null;
+        }
+        
+        return {
+          id: assignment.id,
+          clientServiceId: assignment.clientServiceId,
+          workRoleId: assignment.workRoleId,
+          userId: assignment.userId,
+          isActive: assignment.isActive,
+          createdAt: assignment.createdAt,
+          workRole: workRolesList[0],
+          user: usersList[0],
+        };
+      })
+    );
+    
+    // Filter out any null results
+    const validRoleAssignments = roleAssignmentsWithDetails.filter(ra => ra !== null);
+    console.log(`[DEBUG] Successfully processed ${validRoleAssignments.length} valid role assignments`);
+    
+    return validRoleAssignments;
   }
 
   async createClientServiceRoleAssignment(assignmentData: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment> {
