@@ -25,26 +25,28 @@ export default function ImpersonationPanel() {
   // Fetch all users for impersonation selection (admin only)
   const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    enabled: user?.role === 'admin' && !isImpersonating,
+    enabled: Boolean(user?.isAdmin) && !isImpersonating,
   });
 
   // Only show to admin users
-  if (user?.role !== 'admin' && !isImpersonating) {
+  if (!user?.isAdmin && !isImpersonating) {
     return null;
   }
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      admin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      manager: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      client_manager: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      bookkeeper: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-    };
-    return colors[role as keyof typeof colors] || colors.bookkeeper;
+  const getRoleColor = (user: User) => {
+    if (user.isAdmin) {
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+    } else if (user.canSeeAdminMenu) {
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+    } else {
+      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+    }
   };
 
-  const getRoleLabel = (role: string) => {
-    return role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
+  const getRoleLabel = (user: User) => {
+    if (user.isAdmin) return "Admin";
+    if (user.canSeeAdminMenu) return "Manager";
+    return "User";
   };
 
   const handleStartImpersonation = () => {
@@ -79,8 +81,8 @@ export default function ImpersonationPanel() {
                   {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
                 </AvatarFallback>
               </Avatar>
-              <Badge className={getRoleColor(user?.role || "")} data-testid="impersonated-user-role">
-                {getRoleLabel(user?.role || "")}
+              <Badge className={user ? getRoleColor(user) : "bg-gray-100 text-gray-800"} data-testid="impersonated-user-role">
+                {user ? getRoleLabel(user) : "User"}
               </Badge>
             </div>
             <Button
@@ -121,12 +123,12 @@ export default function ImpersonationPanel() {
             <SelectValue placeholder={usersLoading ? "Loading users..." : "Select user to test as"} />
           </SelectTrigger>
           <SelectContent>
-            {allUsers?.filter(u => u.id !== user?.id).map((u) => (
+            {allUsers?.filter((u: User) => u.id !== user?.id).map((u: User) => (
               <SelectItem key={u.id} value={u.id} data-testid={`user-option-${u.id}`}>
                 <div className="flex items-center space-x-2">
                   <span className="font-medium">{u.firstName} {u.lastName}</span>
-                  <Badge className={getRoleColor(u.role)} data-testid={`user-role-${u.id}`}>
-                    {getRoleLabel(u.role)}
+                  <Badge className={getRoleColor(u)} data-testid={`user-role-${u.id}`}>
+                    {getRoleLabel(u)}
                   </Badge>
                 </div>
               </SelectItem>

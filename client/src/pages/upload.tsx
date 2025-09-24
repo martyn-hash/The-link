@@ -22,7 +22,7 @@ export default function UploadProjects() {
     );
   }
 
-  if (!isAuthenticated || user.role !== 'admin') {
+  if (!isAuthenticated || !user?.isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

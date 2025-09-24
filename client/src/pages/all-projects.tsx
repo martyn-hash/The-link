@@ -51,7 +51,7 @@ export default function AllProjects() {
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    enabled: isAuthenticated && !!user && (user.role === 'admin' || user.role === 'manager'),
+    enabled: isAuthenticated && !!user && (user.isAdmin || user.canSeeAdminMenu),
     retry: false,
   });
 
@@ -96,8 +96,8 @@ export default function AllProjects() {
     );
   }
 
-  // Role-based access control
-  const canViewAllProjects = user.role === 'admin' || user.role === 'manager';
+  // Access control - only admins and managers can view all projects
+  const canViewAllProjects = user.isAdmin || user.canSeeAdminMenu;
   
   if (!canViewAllProjects) {
     return (

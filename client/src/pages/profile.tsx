@@ -168,8 +168,10 @@ export default function Profile() {
   };
 
   const getRoleLabel = () => {
-    if (!user?.role) return "Loading...";
-    return user.role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
+    if (!user) return "Loading...";
+    if (user.isAdmin) return "Admin";
+    if (user.canSeeAdminMenu) return "Manager";
+    return "User";
   };
 
   // Update form defaults when user data changes

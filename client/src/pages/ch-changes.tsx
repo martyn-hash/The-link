@@ -55,7 +55,7 @@ export default function ChChanges() {
 
   // Redirect non-admin users
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !user.isAdmin) {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
@@ -69,14 +69,14 @@ export default function ChChanges() {
   // Fetch pending CH change requests
   const { data: changeRequests, isLoading: requestsLoading, error } = useQuery<ChChangeRequest[]>({
     queryKey: ["/api/ch-change-requests"],
-    enabled: isAuthenticated && user?.role === "admin",
+    enabled: isAuthenticated && Boolean(user?.isAdmin),
     retry: false,
   });
 
   // Fetch clients for displaying names
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
-    enabled: isAuthenticated && user?.role === "admin",
+    enabled: isAuthenticated && Boolean(user?.isAdmin),
     retry: false,
   });
 

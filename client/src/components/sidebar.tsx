@@ -101,7 +101,17 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   const canAccess = (roles: string[]) => {
-    return user?.role ? roles.includes(user.role) : false;
+    if (!user) return false;
+    // Convert role requirements to boolean flag checks
+    if (roles.includes('admin')) {
+      return user.isAdmin;
+    } else if (roles.includes('manager')) {
+      return user.isAdmin || user.canSeeAdminMenu;
+    } else if (roles.includes('client_manager') || roles.includes('bookkeeper')) {
+      // Regular users (non-admins) can access their project-related pages
+      return !user.isAdmin;
+    }
+    return true; // Default allow for other navigation items
   };
 
   const handleLogout = () => {
@@ -116,8 +126,10 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   const getRoleLabel = () => {
-    if (!user?.role) return "Loading...";
-    return user.role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
+    if (!user) return "Loading...";
+    if (user.isAdmin) return "Admin";
+    if (user.canSeeAdminMenu) return "Manager";
+    return "User";
   };
 
   return (

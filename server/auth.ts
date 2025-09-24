@@ -12,7 +12,8 @@ declare module "express-session" {
   interface SessionData {
     userId?: string;
     userEmail?: string | null;
-    userRole?: string;
+    isAdmin?: boolean;
+    canSeeAdminMenu?: boolean;
   }
 }
 
@@ -46,10 +47,11 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email: string | null;
-    role: string;
+    isAdmin: boolean;
+    canSeeAdminMenu: boolean;
     effectiveUser?: User;
     effectiveUserId?: string;
-    effectiveRole?: string;
+    effectiveIsAdmin?: boolean;
     isImpersonating?: boolean;
   };
   session: any;
@@ -95,7 +97,8 @@ export async function setupAuth(app: Express) {
       // Set user session
       req.session.userId = user.id;
       req.session.userEmail = user.email;
-      req.session.userRole = user.role;
+      req.session.isAdmin = user.isAdmin || false;
+      req.session.canSeeAdminMenu = user.canSeeAdminMenu || false;
 
       // Remove password hash from response
       const { passwordHash, ...userResponse } = user;
@@ -327,7 +330,8 @@ export async function setupAuth(app: Express) {
       // Set user session (same as login route)
       req.session.userId = user.id;
       req.session.userEmail = user.email;
-      req.session.userRole = user.role;
+      req.session.isAdmin = user.isAdmin || false;
+      req.session.canSeeAdminMenu = user.canSeeAdminMenu || false;
 
       // Remove password hash from response
       const { passwordHash, ...userResponse } = user;
@@ -360,7 +364,8 @@ export const isAuthenticated: AuthMiddleware = async (req, res, next) => {
     (req as AuthenticatedRequest).user = {
       id: user.id,
       email: user.email,
-      role: user.role as string, // Convert enum to string
+      isAdmin: user.isAdmin || false,
+      canSeeAdminMenu: user.canSeeAdminMenu || false,
     };
 
     next();

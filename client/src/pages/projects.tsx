@@ -81,15 +81,15 @@ export default function Projects() {
     );
   }
 
-  // Role-based access control
-  const canViewMyProjects = user.role === 'client_manager' || user.role === 'bookkeeper';
+  // Role-based access control - allow non-admin users to view their projects
+  const canViewMyProjects = !user.isAdmin; // Regular users (non-admins) can view their own projects
   
   if (!canViewMyProjects) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-muted-foreground mb-2">Access Denied</h1>
-          <p className="text-muted-foreground">This page is for bookkeepers and client managers only.</p>
+          <p className="text-muted-foreground">This page is for project team members only.</p>
         </div>
       </div>
     );

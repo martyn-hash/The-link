@@ -270,6 +270,9 @@ export default function Services() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  
+  // Compute admin status for consistent typing
+  const isAdmin = Boolean(user?.isAdmin);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -288,7 +291,7 @@ export default function Services() {
 
   // Redirect non-admin users
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !user.isAdmin) {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
@@ -347,13 +350,13 @@ export default function Services() {
       }
       return response.json();
     },
-    enabled: isAuthenticated && user?.role === "admin",
+    enabled: isAuthenticated && isAdmin,
     retry: false,
   });
 
   const { data: basicWorkRoles, isLoading: rolesLoading, error: rolesError } = useQuery<WorkRole[]>({
     queryKey: ["/api/work-roles"],
-    enabled: isAuthenticated && user?.role === "admin",
+    enabled: isAuthenticated && isAdmin,
     retry: false,
   });
 
@@ -372,7 +375,7 @@ export default function Services() {
 
   const { data: allWorkRoles } = useQuery<WorkRole[]>({
     queryKey: ["/api/work-roles"],
-    enabled: isAuthenticated && user?.role === "admin",
+    enabled: isAuthenticated && isAdmin,
     retry: false,
   });
 
@@ -648,7 +651,7 @@ export default function Services() {
     );
   }
 
-  if (user.role !== "admin") {
+  if (!user.isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

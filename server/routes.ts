@@ -207,7 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const requireManager = async (req: any, res: any, next: any) => {
     try {
       const effectiveUser = req.user!.effectiveUser;
-      if (!effectiveUser || !effectiveUser.isAdmin) {
+      if (!effectiveUser || (!effectiveUser.isAdmin && !effectiveUser.canSeeAdminMenu)) {
         return res.status(403).json({ message: "Manager access required" });
       }
       next();
