@@ -60,7 +60,7 @@ export function useAuth() {
   });
 
   const isImpersonating = !!user?._impersonationState?.isImpersonating;
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.isAdmin;
 
   return {
     user,

@@ -41,7 +41,7 @@ export default function Admin() {
 
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
-    enabled: isAuthenticated && !!user && user?.role === 'admin',
+    enabled: isAuthenticated && !!user && user?.isAdmin,
     retry: false,
   }) as { data: any[] | undefined, isLoading: boolean };
 
@@ -102,7 +102,7 @@ export default function Admin() {
 
   // Check admin access
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !user.isAdmin) {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
@@ -126,7 +126,7 @@ export default function Admin() {
     );
   }
 
-  if (user.role !== 'admin') {
+  if (!user.isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -152,7 +152,13 @@ export default function Admin() {
   }, {});
 
   const roleCounts = usersArray.reduce((acc: any, user: any) => {
-    acc[user.role] = (acc[user.role] || 0) + 1;
+    if (user.isAdmin) {
+      acc['Admin'] = (acc['Admin'] || 0) + 1;
+    } else if (user.canSeeAdminMenu) {
+      acc['Manager'] = (acc['Manager'] || 0) + 1;
+    } else {
+      acc['User'] = (acc['User'] || 0) + 1;
+    }
     return acc;
   }, {});
 
@@ -183,7 +189,7 @@ export default function Admin() {
                 Upload Projects
               </Button>
               
-              {user.role === 'admin' && (
+              {user.isAdmin && (
                 <Button 
                   onClick={() => setShowSettingsModal(true)}
                   variant="outline"
@@ -268,7 +274,7 @@ export default function Admin() {
                   <Upload className="w-3 h-3 mr-2" />
                   Upload CSV
                 </Button>
-                {user.role === 'admin' && (
+                {user.isAdmin && (
                   <>
                     <Button 
                       variant="outline" 
@@ -398,7 +404,7 @@ export default function Admin() {
         onClose={() => setShowUploadModal(false)} 
       />
       
-      {user.role === 'admin' && (
+      {user.isAdmin && (
         <>
           <UserManagementModal 
             isOpen={showUserModal} 

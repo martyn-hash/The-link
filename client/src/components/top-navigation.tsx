@@ -39,8 +39,11 @@ export default function TopNavigation({ user }: TopNavigationProps) {
     return location === href;
   };
 
-  const canAccess = (roles: string[]) => {
-    return user?.role ? roles.includes(user.role) : false;
+  const canAccess = (permissions: string[]) => {
+    // Updated to use new boolean flags instead of role strings
+    if (permissions.includes('admin') && user?.isAdmin) return true;
+    if (permissions.includes('manager') && user?.canSeeAdminMenu) return true;
+    return false;
   };
 
   const handleLogout = () => {
@@ -111,7 +114,7 @@ export default function TopNavigation({ user }: TopNavigationProps) {
             />
 
             {/* All Tasks */}
-            {canAccess(["admin", "manager"]) && (
+            {(user?.isAdmin || user?.canSeeAdminMenu) && (
               <Link href="/all-projects">
                 <Button
                   variant={isActive("/all-projects") ? "default" : "ghost"}

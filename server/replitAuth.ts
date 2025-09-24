@@ -120,11 +120,11 @@ async function upsertUser(
   let finalRole = newRole;
   try {
     const existingUser = await storage.getUser(claims["sub"]);
-    if (existingUser && existingUser.role === 'admin' && newRole !== 'admin') {
-      // Preserve existing admin role unless explicitly overridden by auth system
+    if (existingUser && existingUser.isAdmin && newRole !== 'admin') {
+      // Preserve existing admin status unless explicitly overridden by auth system
       finalRole = 'admin';
       if (process.env.NODE_ENV !== 'production') {
-        console.log("🔍 [DEBUG] Preserving existing admin role for user:", existingUser.email);
+        console.log("🔍 [DEBUG] Preserving existing admin status for user:", existingUser.email);
       }
     }
   } catch (error) {

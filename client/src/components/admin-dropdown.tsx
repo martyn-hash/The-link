@@ -17,7 +17,7 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
   const [location] = useLocation();
 
   // Only show to admin users
-  if (user?.role !== 'admin') {
+  if (!user?.isAdmin) {
     return null;
   }
 

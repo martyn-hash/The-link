@@ -59,7 +59,8 @@ const createUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["admin", "manager", "client_manager", "bookkeeper"]),
+  isAdmin: z.boolean().default(false),
+  canSeeAdminMenu: z.boolean().default(false),
   password: z.string().min(6, "Password must be at least 6 characters long"),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -71,7 +72,8 @@ const editUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["admin", "manager", "client_manager", "bookkeeper"]),
+  isAdmin: z.boolean().default(false),
+  canSeeAdminMenu: z.boolean().default(false),
   password: z.string().min(6, "Password must be at least 6 characters long").optional().or(z.literal("")),
   confirmPassword: z.string().optional(),
 }).refine((data) => {
@@ -110,7 +112,7 @@ export default function UserManagement() {
 
   // Redirect non-admin users
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !user.isAdmin) {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
@@ -141,7 +143,8 @@ export default function UserManagement() {
       email: "",
       firstName: "",
       lastName: "",
-      role: "bookkeeper",
+      isAdmin: false,
+      canSeeAdminMenu: false,
       password: "",
       confirmPassword: "",
     },
@@ -154,7 +157,8 @@ export default function UserManagement() {
         email: selectedUser.email || "",
         firstName: selectedUser.firstName || "",
         lastName: selectedUser.lastName || "",
-        role: selectedUser.role,
+        isAdmin: selectedUser.isAdmin || false,
+        canSeeAdminMenu: selectedUser.canSeeAdminMenu || false,
         password: "",
         confirmPassword: "",
       });
@@ -163,7 +167,8 @@ export default function UserManagement() {
         email: "",
         firstName: "",
         lastName: "",
-        role: "bookkeeper",
+        isAdmin: false,
+        canSeeAdminMenu: false,
         password: "",
         confirmPassword: "",
       });
@@ -285,7 +290,8 @@ export default function UserManagement() {
       email: "",
       firstName: "",
       lastName: "",
-      role: "bookkeeper",
+      isAdmin: false,
+      canSeeAdminMenu: false,
     });
   };
 
@@ -323,19 +329,26 @@ export default function UserManagement() {
     setFallbackUserMutation.mutate(selectedFallbackUserId);
   };
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      admin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      manager: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      client_manager: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      bookkeeper: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+  const getRoleDisplay = (user: any) => {
+    if (user.isAdmin) {
+      return {
+        label: "Admin",
+        color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+      };
+    }
+    if (user.canSeeAdminMenu) {
+      return {
+        label: "Manager", 
+        color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+      };
+    }
+    return {
+      label: "User",
+      color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
     };
-    return colors[role as keyof typeof colors] || colors.bookkeeper;
   };
 
-  const getRoleLabel = (role: string) => {
-    return role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
-  };
+  // Legacy function removed - use getRoleDisplay instead
 
   if (isLoading) {
     return (
@@ -348,7 +361,7 @@ export default function UserManagement() {
     );
   }
 
-  if (!isAuthenticated || !user || user.role !== 'admin') {
+  if (!isAuthenticated || !user || !user.isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -409,8 +422,8 @@ export default function UserManagement() {
                           {fallbackUser.email}
                         </div>
                       </div>
-                      <Badge className={getRoleColor(fallbackUser.role)}>
-                        {getRoleLabel(fallbackUser.role)}
+                      <Badge className={getRoleDisplay(fallbackUser).color}>
+                        {getRoleDisplay(fallbackUser).label}
                       </Badge>
                     </div>
                   ) : (
@@ -441,8 +454,8 @@ export default function UserManagement() {
                           <div className="flex items-center gap-2">
                             <span>{user.firstName} {user.lastName}</span>
                             <span className="text-sm text-muted-foreground">({user.email})</span>
-                            <Badge className={getRoleColor(user.role)} variant="outline">
-                              {getRoleLabel(user.role)}
+                            <Badge className={getRoleDisplay(user).color} variant="outline">
+                              {getRoleDisplay(user).label}
                             </Badge>
                           </div>
                         </SelectItem>
@@ -549,8 +562,8 @@ export default function UserManagement() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={getRoleColor(user.role)}>
-                              {getRoleLabel(user.role)}
+                            <Badge className={getRoleDisplay(user).color}>
+                              {getRoleDisplay(user).label}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -655,24 +668,48 @@ export default function UserManagement() {
 
                       <FormField
                         control={form.control}
-                        name="role"
+                        name="isAdmin"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Role</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid="select-user-role">
-                                  <SelectValue placeholder="Select a role" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="manager">Manager</SelectItem>
-                                <SelectItem value="client_manager">Client Manager</SelectItem>
-                                <SelectItem value="bookkeeper">Bookkeeper</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Admin User</FormLabel>
+                              <p className="text-sm text-muted-foreground">
+                                Full administrative access to all system features
+                              </p>
+                            </div>
+                            <FormControl>
+                              <input
+                                type="checkbox"
+                                checked={field.value}
+                                onChange={field.onChange}
+                                data-testid="checkbox-is-admin"
+                                className="h-4 w-4"
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="canSeeAdminMenu"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Can See Admin Menu</FormLabel>
+                              <p className="text-sm text-muted-foreground">
+                                Can access admin menu and management features
+                              </p>
+                            </div>
+                            <FormControl>
+                              <input
+                                type="checkbox"
+                                checked={field.value}
+                                onChange={field.onChange}
+                                data-testid="checkbox-can-see-admin-menu"
+                                className="h-4 w-4"
+                              />
+                            </FormControl>
                           </FormItem>
                         )}
                       />
