@@ -508,6 +508,31 @@ export default function Profile() {
                       />
                     </div>
 
+                    <Separator />
+
+                    {/* Scheduling Summary Notification */}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label 
+                          htmlFor="notify-scheduling-summary" 
+                          className="text-base font-medium"
+                          data-testid="label-notify-scheduling-summary"
+                        >
+                          Nightly Scheduling Summary
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Receive daily email summaries of automated project scheduling results
+                        </p>
+                      </div>
+                      <Switch
+                        id="notify-scheduling-summary"
+                        data-testid="switch-notify-scheduling-summary"
+                        checked={notificationPreferences?.notifySchedulingSummary ?? false}
+                        onCheckedChange={(checked) => handleNotificationToggle('notifySchedulingSummary', checked)}
+                        disabled={updateNotificationsMutation.isPending}
+                      />
+                    </div>
+
                     {updateNotificationsMutation.isPending && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
