@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, Link as WouterLink } from "wouter";
 import { useState, useLayoutEffect, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -3047,6 +3047,18 @@ export default function ClientDetail() {
                                         Main Contact
                                       </Badge>
                                     )}
+                                    
+                                    <WouterLink href={`/people/${clientPerson.person.id}`}>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        data-testid={`button-view-person-${clientPerson.person.id}`}
+                                        onClick={(e) => e.stopPropagation()} // Prevent accordion toggle
+                                      >
+                                        <UserIcon className="h-3 w-3 mr-1" />
+                                        View Details
+                                      </Button>
+                                    </WouterLink>
                                   </div>
                                 </div>
 
