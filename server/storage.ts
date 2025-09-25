@@ -146,6 +146,7 @@ export interface IStorage {
   updatePerson(id: string, person: Partial<InsertPerson>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
   upsertPersonFromCH(personData: Partial<InsertPerson>): Promise<Person>;
+  findPeopleByNameAndBirthDate(firstName: string, lastName: string, year: number, month: number): Promise<Person[]>;
   
   // Client-People relationship operations
   createClientPerson(relationship: InsertClientPerson): Promise<ClientPerson>;
@@ -1002,6 +1003,26 @@ export class DatabaseStorage implements IStorage {
     if (result.length === 0) {
       throw new Error(`Person with ID '${id}' not found`);
     }
+  }
+
+  // Find people by name and birth date for duplicate detection
+  async findPeopleByNameAndBirthDate(firstName: string, lastName: string, year: number, month: number): Promise<Person[]> {
+    // Create the birth date pattern YYYY-MM to match against
+    const birthKey = `${year}-${month.toString().padStart(2, '0')}`;
+    
+    const matchingPeople = await db
+      .select()
+      .from(people)
+      .where(
+        and(
+          ilike(people.firstName, firstName.trim()),
+          ilike(people.lastName, lastName.trim()),
+          ilike(people.dateOfBirth, `${birthKey}%`)
+        )
+      )
+      .limit(10); // Limit results to prevent performance issues
+    
+    return matchingPeople;
   }
 
   // Client-People relationship operations

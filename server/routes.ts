@@ -105,6 +105,56 @@ const validateParams = <T>(schema: z.ZodSchema<T>, params: any): { success: true
     : { success: false, errors: result.error.issues };
 };
 
+// Name parsing utilities for duplicate detection
+interface ParsedName {
+  firstName: string;
+  lastName: string;
+  fullName: string;
+}
+
+const parseFullName = (fullName: string): ParsedName => {
+  const normalizedName = fullName.trim().replace(/\s+/g, ' ');
+  
+  // Remove common honorifics
+  const cleanName = normalizedName
+    .replace(/^(Mr|Mrs|Ms|Miss|Dr|Prof|Sir|Dame|Lord|Lady)\.?\s+/i, '');
+  
+  // Handle "LASTNAME, Firstname Middlename" format (common from Companies House)
+  if (cleanName.includes(',')) {
+    const parts = cleanName.split(',', 2);
+    const lastName = parts[0].trim();
+    const remainingNames = parts[1].trim();
+    const firstName = remainingNames.split(' ')[0]; // Take first token as first name
+    
+    return {
+      firstName: firstName,
+      lastName: lastName,
+      fullName: normalizedName
+    };
+  }
+  
+  // Handle "Firstname Middlename LASTNAME" format
+  const nameParts = cleanName.split(' ');
+  if (nameParts.length === 1) {
+    // Single name - treat as first name
+    return {
+      firstName: nameParts[0],
+      lastName: '',
+      fullName: normalizedName
+    };
+  }
+  
+  // Multiple parts - last is surname, first is given name
+  const lastName = nameParts[nameParts.length - 1];
+  const firstName = nameParts[0];
+  
+  return {
+    firstName: firstName,
+    lastName: lastName,
+    fullName: normalizedName
+  };
+};
+
 // Configure multer for file uploads
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -1206,6 +1256,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating person:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to update person" });
+    }
+  });
+
+  // POST /api/people/match - Find potential duplicate people by name and birth date
+  app.post("/api/people/match", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Define the schema for officer matching request
+      const officerMatchSchema = z.object({
+        officers: z.array(z.object({
+          fullName: z.string().min(1, "Full name is required"),
+          dateOfBirth: z.object({
+            year: z.number().min(1900).max(new Date().getFullYear()),
+            month: z.number().min(1).max(12)
+          })
+        }))
+      });
+      
+      const validationResult = officerMatchSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid officer matching data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const { officers } = validationResult.data;
+      
+      // Process each officer and find potential matches
+      const matches = await Promise.all(
+        officers.map(async (officer, index) => {
+          const parsedName = parseFullName(officer.fullName);
+          
+          // Only search if we have both first and last names
+          if (!parsedName.firstName || !parsedName.lastName) {
+            return {
+              index,
+              officer,
+              matches: []
+            };
+          }
+          
+          const matchingPeople = await storage.findPeopleByNameAndBirthDate(
+            parsedName.firstName,
+            parsedName.lastName,
+            officer.dateOfBirth.year,
+            officer.dateOfBirth.month
+          );
+          
+          return {
+            index,
+            officer: {
+              ...officer,
+              parsedFirstName: parsedName.firstName,
+              parsedLastName: parsedName.lastName
+            },
+            matches: matchingPeople
+          };
+        })
+      );
+      
+      res.status(200).json({ matches });
+      
+    } catch (error) {
+      console.error("Error finding people matches:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to find people matches" });
     }
   });
 
