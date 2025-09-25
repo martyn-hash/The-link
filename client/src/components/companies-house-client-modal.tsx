@@ -394,12 +394,13 @@ export function CompaniesHouseClientModal({
 
   // Create client from Companies House data
   const createClientFromCHMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (options?: { officerDecisions?: { [key: number]: { action: 'create' | 'link', personId?: string } } }) => {
       if (!selectedCompany) throw new Error("No company selected");
       
       const response = await apiRequest("POST", "/api/clients/from-companies-house", {
         companyNumber: selectedCompany.company_number,
         selectedOfficers,
+        ...(options?.officerDecisions && { officerDecisions: options.officerDecisions })
       });
       
       return await response.json() as { client: Client & { people: any[] }, message: string };
@@ -1093,7 +1094,7 @@ export function CompaniesHouseClientModal({
             Back to Review
           </Button>
           <Button 
-            onClick={() => createClientFromCHMutation.mutate()}
+            onClick={() => createClientFromCHMutation.mutate({ officerDecisions })}
             disabled={!canProceed || createClientFromCHMutation.isPending}
             data-testid="button-proceed-create-client"
           >

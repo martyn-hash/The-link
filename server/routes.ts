@@ -905,7 +905,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request body
       const bodySchema = z.object({
         companyNumber: z.string().min(1, "Company number is required").regex(/^[A-Z0-9]{6,8}$/, "Invalid UK company number format"),
-        selectedOfficers: z.array(z.number().int().min(0)).optional().default([])
+        selectedOfficers: z.array(z.number().int().min(0)).optional().default([]),
+        officerDecisions: z.record(z.object({
+          action: z.enum(['create', 'link']),
+          personId: z.string().optional()
+        })).optional()
       });
       
       const bodyValidation = bodySchema.safeParse(req.body);
@@ -916,7 +920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const { companyNumber, selectedOfficers } = bodyValidation.data;
+      const { companyNumber, selectedOfficers, officerDecisions } = bodyValidation.data;
       
       // Fetch company data from Companies House
       const companyData = await companiesHouseService.getCompanyProfile(companyNumber);
@@ -939,30 +943,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create or update client with CH data
       const client = await storage.upsertClientFromCH(clientData);
       
-      // Create people from all directors and link them to client
+      // Process officers based on user decisions or fallback to selected officers
       const createdPeople = [];
-      for (const officer of directors) {
-        try {
-          const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
+      
+      if (officerDecisions && Object.keys(officerDecisions).length > 0) {
+        // User made decisions - process each decision
+        for (const [indexStr, decision] of Object.entries(officerDecisions)) {
+          const index = parseInt(indexStr);
+          const officer = directors[index];
           
-          // Create or update person
-          const person = await storage.upsertPersonFromCH(personData);
+          if (!officer) {
+            console.warn(`Officer at index ${index} not found`);
+            continue;
+          }
           
-          // Link person to client with officer role
-          await storage.linkPersonToClient(
-            client.id, 
-            person.id, 
-            officer.officer_role,
-            false // Not primary contact by default
-          );
-          
-          createdPeople.push({
-            ...person,
-            officerRole: officer.officer_role
-          });
-        } catch (personError) {
-          console.warn(`Failed to create person for officer ${officer.name}:`, personError);
-          // Continue with other officers
+          try {
+            let person;
+            
+            if (decision.action === 'link' && decision.personId) {
+              // Link to existing person
+              const existingPerson = await storage.getPersonById(decision.personId);
+              if (!existingPerson) {
+                console.warn(`Person ${decision.personId} not found, creating new person instead`);
+                const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
+                person = await storage.createPerson(personData);
+              } else {
+                person = existingPerson;
+              }
+            } else {
+              // Create new person
+              const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
+              person = await storage.createPerson(personData);
+            }
+            
+            // Link person to client with officer role
+            await storage.linkPersonToClient(
+              client.id, 
+              person.id, 
+              officer.officer_role,
+              false // Not primary contact by default
+            );
+            
+            createdPeople.push({
+              ...person,
+              officerRole: officer.officer_role
+            });
+          } catch (personError) {
+            console.warn(`Failed to process officer ${officer.name}:`, personError);
+            // Continue with other officers
+          }
+        }
+      } else {
+        // Fallback: automatic processing for backward compatibility
+        for (const officer of directors) {
+          try {
+            const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
+            
+            // Create or update person using automatic upsert
+            const person = await storage.upsertPersonFromCH(personData);
+            
+            // Link person to client with officer role
+            await storage.linkPersonToClient(
+              client.id, 
+              person.id, 
+              officer.officer_role,
+              false // Not primary contact by default
+            );
+            
+            createdPeople.push({
+              ...person,
+              officerRole: officer.officer_role
+            });
+          } catch (personError) {
+            console.warn(`Failed to create person for officer ${officer.name}:`, personError);
+            // Continue with other officers
+          }
         }
       }
       
