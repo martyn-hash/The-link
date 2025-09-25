@@ -8,7 +8,7 @@ import { sendTaskAssignmentEmail } from "./emailService";
 import fetch from 'node-fetch';
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
-import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, type SchedulingRunResult } from "./project-scheduler";
+import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, type SchedulingRunResult } from "./project-scheduler";
 import { z } from "zod";
 import {
   insertUserSchema,
@@ -4685,6 +4685,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error running test project scheduling:", error instanceof Error ? error.message : error);
       res.status(500).json({ 
         message: "Failed to run test project scheduling",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/project-scheduling/seed-test-data - Seed test data with today's dates (admin only)
+  app.post("/api/project-scheduling/seed-test-data", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Test data seeding triggered by admin: ${req.user?.email}`);
+      
+      // Extract enhanced options from request body
+      const { 
+        clientIds, 
+        serviceIds, 
+        dryRun 
+      } = req.body || {};
+      
+      const result = await seedTestServices({
+        clientIds,
+        serviceIds,
+        dryRun: dryRun || false
+      });
+      
+      res.json({
+        message: "Test data seeding completed",
+        status: result.status,
+        clientServicesUpdated: result.clientServicesUpdated,
+        errors: result.errors,
+        summary: result.summary,
+        dryRun: result.dryRun || false,
+        options: { clientIds, serviceIds, dryRun }
+      });
+    } catch (error) {
+      console.error("Error seeding test data:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to seed test data",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/project-scheduling/reset-test-data - Reset test data (admin only)
+  app.post("/api/project-scheduling/reset-test-data", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Test data reset triggered by admin: ${req.user?.email}`);
+      
+      const result = await resetTestData();
+      
+      res.json({
+        message: "Test data reset completed",
+        status: result.status,
+        info: result.message
+      });
+    } catch (error) {
+      console.error("Error resetting test data:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to reset test data",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

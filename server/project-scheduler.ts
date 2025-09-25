@@ -65,6 +65,215 @@ interface SchedulingFilters {
 }
 
 /**
+ * Test data seeding interface
+ */
+interface TestServiceSeed {
+  serviceName: string;
+  description: string;
+  frequency: ServiceFrequency;
+  projectTypeRequired: boolean;
+  isCompaniesHouseService?: boolean;
+}
+
+/**
+ * Predefined test services for seeding
+ */
+const TEST_SERVICE_SEEDS: TestServiceSeed[] = [
+  {
+    serviceName: "Weekly Payroll Processing",
+    description: "Process weekly payroll for employees",
+    frequency: 'weekly',
+    projectTypeRequired: true,
+    isCompaniesHouseService: false
+  },
+  {
+    serviceName: "Monthly Bookkeeping",
+    description: "Monthly bookkeeping and reconciliation",
+    frequency: 'monthly',
+    projectTypeRequired: true,
+    isCompaniesHouseService: false
+  },
+  {
+    serviceName: "Quarterly VAT Return",
+    description: "Quarterly VAT return preparation and submission",
+    frequency: 'quarterly',
+    projectTypeRequired: true,
+    isCompaniesHouseService: false
+  },
+  {
+    serviceName: "Annual Company Accounts",
+    description: "Annual company accounts preparation",
+    frequency: 'annually',
+    projectTypeRequired: true,
+    isCompaniesHouseService: false
+  },
+  {
+    serviceName: "Companies House Confirmation Statement",
+    description: "Annual confirmation statement filing",
+    frequency: 'annually',
+    projectTypeRequired: true,
+    isCompaniesHouseService: true
+  },
+  {
+    serviceName: "Daily Cash Flow Review",
+    description: "Daily cash flow monitoring and reporting",
+    frequency: 'daily',
+    projectTypeRequired: true,
+    isCompaniesHouseService: false
+  }
+];
+
+/**
+ * Simplified test data seeding using existing client services
+ * Updates existing client services to have today's dates for immediate testing
+ */
+export async function seedTestServices(options: {
+  clientIds?: string[];
+  serviceIds?: string[];
+  dryRun?: boolean;
+} = {}): Promise<{
+  status: 'success' | 'partial_failure' | 'failure';
+  clientServicesUpdated: number;
+  errors: string[];
+  summary: string;
+  dryRun?: boolean;
+}> {
+  console.log('[Test Seeding] Starting simplified test data seeding...');
+  
+  // Production safety guard
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Test data seeding is disabled in production environment');
+  }
+  
+  const result = {
+    status: 'success' as 'success' | 'partial_failure' | 'failure',
+    clientServicesUpdated: 0,
+    errors: [] as string[],
+    summary: '',
+    dryRun: options.dryRun || false
+  };
+
+  try {
+    // Get all existing client services
+    let allClientServices = await storage.getAllClientServicesWithDetails();
+    
+    // Apply filters if specified
+    if (options.clientIds?.length) {
+      allClientServices = allClientServices.filter(cs => options.clientIds!.includes(cs.clientId));
+      console.log(`[Test Seeding] Filtered to ${options.clientIds.length} specific clients`);
+    }
+    
+    if (options.serviceIds?.length) {
+      allClientServices = allClientServices.filter(cs => options.serviceIds!.includes(cs.serviceId));
+      console.log(`[Test Seeding] Filtered to ${options.serviceIds.length} specific services`);
+    }
+    
+    if (allClientServices.length === 0) {
+      result.errors.push('No existing client services found - please create some client service assignments first');
+      result.status = 'failure';
+      result.summary = 'Failed: No client services available for seeding';
+      return result;
+    }
+
+    console.log(`[Test Seeding] Found ${allClientServices.length} existing client services to update with today's dates${options.dryRun ? ' (DRY RUN)' : ''}`);
+
+    // Create today's date for immediate testing (avoid UTC conversion issues)
+    const today = new Date();
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    // Update existing client services to have today's date
+    for (const clientService of allClientServices) {
+      try {
+        // Calculate next due date based on frequency
+        const nextDueDate = new Date(today);
+        switch (clientService.frequency) {
+          case 'weekly':
+            nextDueDate.setDate(today.getDate() + 7);
+            break;
+          case 'monthly':
+            nextDueDate.setMonth(today.getMonth() + 1);
+            break;
+          case 'quarterly':
+            nextDueDate.setMonth(today.getMonth() + 3);
+            break;
+          case 'annually':
+            nextDueDate.setFullYear(today.getFullYear() + 1);
+            break;
+          case 'daily':
+            nextDueDate.setDate(today.getDate() + 1);
+            break;
+          case 'fortnightly':
+            nextDueDate.setDate(today.getDate() + 14);
+            break;
+        }
+
+        const nextDueDateString = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth() + 1).padStart(2, '0')}-${String(nextDueDate.getDate()).padStart(2, '0')}`;
+
+        if (options.dryRun) {
+          console.log(`[Test Seeding] DRY RUN: Would update ${clientService.service.name} for client (${clientService.frequency}) - start: ${todayString}, due: ${nextDueDateString}`);
+          result.clientServicesUpdated++; // Count would-be updates in dry run
+        } else {
+          // Update client service with today's dates
+          await storage.updateClientService(clientService.id, {
+            nextStartDate: todayString,
+            nextDueDate: nextDueDateString
+          });
+          console.log(`[Test Seeding] Updated ${clientService.service.name} for client (${clientService.frequency}) - start: ${todayString}, due: ${nextDueDateString}`);
+          result.clientServicesUpdated++; // Count actual updates
+        }
+
+      } catch (error) {
+        const errorMsg = `Failed to update client service ${clientService.id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        result.errors.push(errorMsg);
+        console.error(`[Test Seeding] ${errorMsg}`);
+      }
+    }
+
+    // Generate summary with improved status logic
+    if (result.errors.length > 0 && result.clientServicesUpdated > 0) {
+      result.status = 'partial_failure';
+      result.summary = `Seeding completed with partial success: updated ${result.clientServicesUpdated} client services, encountered ${result.errors.length} errors.${options.dryRun ? ' (DRY RUN)' : ''}`;
+    } else if (result.errors.length > 0) {
+      result.status = 'failure';
+      result.summary = `Seeding failed: ${result.errors.length} errors, no services updated.${options.dryRun ? ' (DRY RUN)' : ''}`;
+    } else {
+      result.summary = `Successfully ${options.dryRun ? 'previewed' : 'updated'} ${result.clientServicesUpdated} existing client services with today's dates for immediate testing.`;
+    }
+
+    console.log(`[Test Seeding] ${result.summary}`);
+    return result;
+
+  } catch (error) {
+    result.status = 'failure';
+    result.errors.push(error instanceof Error ? error.message : 'Unknown error');
+    result.summary = `Test seeding failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error('[Test Seeding] Fatal error:', error);
+    return result;
+  }
+}
+
+/**
+ * Reset client service dates back to their original schedule
+ * This is a placeholder - in practice, we'd need to store original dates
+ */
+export async function resetTestData(): Promise<{
+  status: 'success' | 'failure';
+  message: string;
+}> {
+  console.log('[Test Reset] Test data reset not implemented - this would restore original service dates');
+  
+  // Production safety guard
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Test data reset is disabled in production environment');
+  }
+  
+  return {
+    status: 'failure',
+    message: 'Reset functionality not yet implemented - manual database restore required for rollback'
+  };
+}
+
+/**
  * Enhanced function to run project scheduling with filtering capabilities
  */
 export async function runProjectSchedulingEnhanced(
@@ -190,7 +399,7 @@ export async function runProjectSchedulingEnhanced(
         chServicesSkipped: result.chServicesProcessedWithoutRescheduling,
         executionTimeMs: result.executionTimeMs,
         summary: result.summary,
-        errors: result.errors.length > 0 ? JSON.stringify(result.errors) : null
+        errorDetails: result.errors.length > 0 ? result.errors : null
       });
     } catch (error) {
       console.error('[Project Scheduler] Failed to log enhanced scheduling run:', error);
