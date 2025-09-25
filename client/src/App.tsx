@@ -23,7 +23,6 @@ import Services from "@/pages/services";
 import ChChanges from "@/pages/ch-changes";
 import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
-import PersonDetail from "@/pages/person-detail";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -54,7 +53,6 @@ function Router() {
       <Route path="/all-projects" component={AllProjects} />
       <Route path="/clients" component={Clients} />
       <Route path="/clients/:id" component={ClientDetail} />
-      <Route path="/people/:id" component={PersonDetail} />
       <Route path="/profile" component={Profile} />
       <Route path="/settings" component={Settings} />
       <Route path="/project-types" component={ProjectTypes} />

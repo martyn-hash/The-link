@@ -1,5 +1,5 @@
-import { useParams, Link as WouterLink } from "wouter";
-import { useState, useLayoutEffect, useEffect, useRef } from "react";
+import { useParams } from "wouter";
+import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,6 +105,7 @@ function formatBirthDate(dateOfBirth: string | Date | null): string {
 }
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
+type ClientPersonWithClient = ClientPerson & { client: Client };
 type ClientServiceWithService = ClientService & { 
   service: Service & { 
     projectType: { id: string; name: string; description: string | null; serviceId: string | null; active: boolean | null; order: number; createdAt: Date | null } 
@@ -1299,6 +1300,584 @@ function AddPersonModal({
 }
 
 // PersonCard component removed - using Accordion pattern
+
+// Form schema for linking person to a new company
+const linkPersonToCompanySchema = z.object({
+  clientId: z.string().min(1, "Company is required"),
+  officerRole: z.string().optional(),
+  isPrimaryContact: z.boolean().optional()
+});
+
+type LinkPersonToCompanyData = z.infer<typeof linkPersonToCompanySchema>;
+
+// Tabbed view component for person details
+function PersonTabbedView({ 
+  clientPerson, 
+  editingPersonId, 
+  setEditingPersonId, 
+  updatePersonMutation, 
+  revealedIdentifiers, 
+  setRevealedIdentifiers, 
+  peopleServices,
+  clientId
+}: {
+  clientPerson: ClientPersonWithPerson;
+  editingPersonId: string | null;
+  setEditingPersonId: (id: string | null) => void;
+  updatePersonMutation: any;
+  revealedIdentifiers: Set<string>;
+  setRevealedIdentifiers: (fn: (prev: Set<string>) => Set<string>) => void;
+  peopleServices?: (PeopleService & { person: Person; service: Service; serviceOwner?: User })[];
+  clientId: string;
+}) {
+  const [activeTab, setActiveTab] = useState("basic-info");
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const { toast } = useToast();
+
+  // Form for linking to new company
+  const linkForm = useForm<LinkPersonToCompanyData>({
+    resolver: zodResolver(linkPersonToCompanySchema),
+    defaultValues: {
+      officerRole: "",
+      isPrimaryContact: false,
+    },
+  });
+
+  // Fetch all companies this person is connected to
+  const { data: personCompanies, isLoading: companiesLoading } = useQuery<ClientPersonWithClient[]>({
+    queryKey: [`/api/people/${clientPerson.person.id}/companies`],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
+  // Fetch all clients for filtering
+  const { data: allClients, isLoading: availableCompaniesLoading } = useQuery<Client[]>({
+    queryKey: ['/api/clients'],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: isLinkModalOpen,
+  });
+
+  // Compute available companies based on current data
+  const availableCompanies = useMemo(() => {
+    if (!allClients || !personCompanies) return [];
+    return allClients.filter(client => 
+      client.clientType === 'company' && 
+      client.id !== clientId && // Exclude current client
+      !personCompanies.some(pc => pc.client.id === client.id)
+    );
+  }, [allClients, personCompanies, clientId]);
+
+  // Link person to company mutation
+  const linkToCompanyMutation = useMutation({
+    mutationFn: async (data: LinkPersonToCompanyData) => {
+      const response = await apiRequest("POST", `/api/people/${clientPerson.person.id}/companies`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Connection Added",
+        description: "Person has been successfully connected to the company.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/people/${clientPerson.person.id}/companies`] });
+      linkForm.reset();
+      setIsLinkModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to connect person to company. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Unlink person from company mutation
+  const unlinkFromCompanyMutation = useMutation({
+    mutationFn: async (companyClientId: string) => {
+      await apiRequest("DELETE", `/api/people/${clientPerson.person.id}/companies/${companyClientId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Connection Removed",
+        description: "Person has been disconnected from the company.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/people/${clientPerson.person.id}/companies`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to remove connection. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLinkCompany = (data: LinkPersonToCompanyData) => {
+    linkToCompanyMutation.mutate(data);
+  };
+
+  const handleUnlinkCompany = (companyClientId: string, companyName: string) => {
+    if (confirm(`Are you sure you want to remove the connection between ${formatPersonName(clientPerson.person.fullName)} and ${companyName}?`)) {
+      unlinkFromCompanyMutation.mutate(companyClientId);
+    }
+  };
+
+  return (
+    <div className="pt-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="basic-info" data-testid="tab-basic-info">Basic Info</TabsTrigger>
+          <TabsTrigger value="contact-info" data-testid="tab-contact-info">Contact Info</TabsTrigger>
+          <TabsTrigger value="personal-services" data-testid="tab-personal-services">Personal Services</TabsTrigger>
+          <TabsTrigger value="related-companies" data-testid="tab-related-companies">Related Companies</TabsTrigger>
+        </TabsList>
+
+        {/* Basic Info Tab */}
+        <TabsContent value="basic-info" className="mt-4">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h5 className="font-medium text-sm flex items-center">
+                <UserIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                Basic Information
+              </h5>
+              <Button 
+                variant="outline" 
+                size="sm"
+                data-testid={`button-edit-basic-info-${clientPerson.id}`}
+                onClick={() => setEditingPersonId(clientPerson.person.id)}
+              >
+                Edit
+              </Button>
+            </div>
+
+            {editingPersonId === clientPerson.person.id ? (
+              <PersonEditForm 
+                clientPerson={clientPerson}
+                onSave={(data) => updatePersonMutation.mutate({ personId: clientPerson.person.id, data })}
+                onCancel={() => setEditingPersonId(null)}
+                isSaving={updatePersonMutation.isPending}
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Full Name</label>
+                    <p className="text-sm mt-1" data-testid={`view-fullName-${clientPerson.id}`}>
+                      {formatPersonName(clientPerson.person.fullName) || 'Not provided'}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Title</label>
+                    <p className="text-sm mt-1" data-testid={`view-title-${clientPerson.id}`}>
+                      {clientPerson.person.title || 'Not provided'}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
+                    <p className="text-sm mt-1" data-testid={`view-dateOfBirth-${clientPerson.id}`}>
+                      {formatBirthDate(clientPerson.person.dateOfBirth)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Nationality</label>
+                    <p className="text-sm mt-1" data-testid={`view-nationality-${clientPerson.id}`}>
+                      {clientPerson.person.nationality ? clientPerson.person.nationality.charAt(0).toUpperCase() + clientPerson.person.nationality.slice(1) : 'Not provided'}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Occupation</label>
+                    <p className="text-sm mt-1" data-testid={`view-occupation-${clientPerson.id}`}>
+                      {clientPerson.person.occupation || 'Not provided'}
+                    </p>
+                  </div>
+
+                  {/* Address Information */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground flex items-center">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      Address
+                    </label>
+                    <div className="text-sm mt-1" data-testid={`view-address-${clientPerson.id}`}>
+                      {(() => {
+                        const person = clientPerson.person;
+                        const addressParts = [
+                          person.addressLine1,
+                          person.addressLine2,
+                          person.locality,
+                          person.region,
+                          person.postalCode,
+                          person.country
+                        ].filter(Boolean);
+                        
+                        return addressParts.length > 0 ? addressParts.join(', ') : 'Not provided';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Contact Info Tab */}
+        <TabsContent value="contact-info" className="mt-4">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h5 className="font-medium text-sm flex items-center">
+                <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+                Contact Information
+              </h5>
+              <Button 
+                variant="outline" 
+                size="sm"
+                data-testid={`button-edit-contact-info-${clientPerson.id}`}
+                onClick={() => setEditingPersonId(clientPerson.person.id)}
+              >
+                Edit
+              </Button>
+            </div>
+
+            {editingPersonId === clientPerson.person.id ? (
+              <PersonEditForm 
+                clientPerson={clientPerson}
+                onSave={(data) => updatePersonMutation.mutate({ personId: clientPerson.person.id, data })}
+                onCancel={() => setEditingPersonId(null)}
+                isSaving={updatePersonMutation.isPending}
+              />
+            ) : (
+              <div className="space-y-4">
+                {/* Primary Contact Details */}
+                <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                  <h6 className="text-sm font-medium text-muted-foreground">Primary Contact Details</h6>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Phone:</span> {clientPerson.person.telephone || "Not provided"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secondary Contact Details */}
+                {(clientPerson.person.email2 || clientPerson.person.telephone2) && (
+                  <div className="space-y-3">
+                    <h6 className="text-sm font-medium">Additional Contact Details</h6>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Secondary Email</label>
+                        <p className="text-sm mt-1">
+                          {clientPerson.person.email2 || 'Not provided'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Secondary Phone</label>
+                        <p className="text-sm mt-1">
+                          {clientPerson.person.telephone2 || 'Not provided'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Social Media Profiles */}
+                <div className="space-y-3">
+                  <h6 className="text-sm font-medium">Social Media & Professional Profiles</h6>
+                  <div className="grid grid-cols-1 gap-3">
+                    {clientPerson.person.linkedinUrl && (
+                      <div className="flex items-center space-x-3 p-3 rounded-lg border bg-background">
+                        <span className="text-sm text-muted-foreground">LinkedIn:</span>
+                        <a href={clientPerson.person.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+                          {clientPerson.person.linkedinUrl}
+                        </a>
+                      </div>
+                    )}
+                    {!clientPerson.person.linkedinUrl && !clientPerson.person.twitterUrl && 
+                     !clientPerson.person.facebookUrl && !clientPerson.person.instagramUrl && 
+                     !clientPerson.person.tiktokUrl && (
+                      <p className="text-sm text-muted-foreground italic p-4 border rounded-lg bg-muted/30">
+                        No social media profiles provided
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Personal Services Tab */}
+        <TabsContent value="personal-services" className="mt-4">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h5 className="font-medium text-sm flex items-center">
+                <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
+                Personal Services
+              </h5>
+              <Button 
+                variant="outline" 
+                size="sm"
+                data-testid={`button-edit-personal-services-${clientPerson.id}`}
+                onClick={() => setEditingPersonId(clientPerson.person.id)}
+              >
+                Edit
+              </Button>
+            </div>
+
+            {(() => {
+              const personServices = peopleServices?.filter(ps => ps.personId === clientPerson.person.id) || [];
+              
+              if (personServices.length === 0) {
+                return (
+                  <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center">
+                    <p className="text-sm text-muted-foreground italic">
+                      No personal services assigned to this person
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {personServices.map((peopleService) => (
+                    <div 
+                      key={peopleService.id}
+                      className="p-4 rounded-lg border bg-background"
+                      data-testid={`personal-service-${peopleService.id}`}
+                    >
+                      <h5 className="font-medium text-sm mb-2">{peopleService.service.name}</h5>
+                      {peopleService.service.description && (
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {peopleService.service.description}
+                        </p>
+                      )}
+                      
+                      <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                        {peopleService.serviceOwner && (
+                          <div className="flex items-center space-x-1">
+                            <UserIcon className="h-3 w-3" />
+                            <span>Owner: {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-3 w-3" />
+                          <span>Assigned: {formatDate(peopleService.createdAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </TabsContent>
+
+        {/* Related Companies Tab */}
+        <TabsContent value="related-companies" className="mt-4">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h5 className="font-medium text-sm flex items-center">
+                <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                Related Companies
+              </h5>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsLinkModalOpen(true)}
+                data-testid={`button-add-company-connection-${clientPerson.id}`}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Connection
+              </Button>
+            </div>
+
+            <div data-testid={`related-companies-${clientPerson.id}`}>
+              {companiesLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+                </div>
+              ) : !personCompanies || personCompanies.length === 0 ? (
+                <div className="text-center py-8">
+                  <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Company Connections</h3>
+                  <p className="text-gray-500 mb-4">
+                    This person is not connected to any companies yet.
+                  </p>
+                  <Button onClick={() => setIsLinkModalOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Connect to Company
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {personCompanies.map((connection) => (
+                    <div key={connection.id} className="border rounded-lg p-4 bg-white" data-testid={`company-connection-${connection.client.id}`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <Building2 className="h-5 w-5 text-blue-600" />
+                            <h4 className="font-medium text-gray-900">
+                              {connection.client.name}
+                            </h4>
+                            {connection.officerRole && (
+                              <Badge variant="outline">{connection.officerRole}</Badge>
+                            )}
+                            {connection.isPrimaryContact && (
+                              <Badge className="bg-green-100 text-green-800">Primary Contact</Badge>
+                            )}
+                          </div>
+                          
+                          <div className="text-sm text-gray-600 space-y-1">
+                            {connection.client.companyNumber && (
+                              <p><span className="font-medium">Company Number:</span> {connection.client.companyNumber}</p>
+                            )}
+                            {connection.client.companyStatus && (
+                              <p><span className="font-medium">Status:</span> {connection.client.companyStatus}</p>
+                            )}
+                            {connection.createdAt && (
+                              <p><span className="font-medium">Connected:</span> {new Date(connection.createdAt).toLocaleDateString()}</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUnlinkCompany(connection.client.id, connection.client.name)}
+                          disabled={unlinkFromCompanyMutation.isPending}
+                          data-testid={`button-remove-connection-${connection.client.id}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Link to Company Modal */}
+      <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Connect to Company</DialogTitle>
+          </DialogHeader>
+          
+          <Form {...linkForm}>
+            <form onSubmit={linkForm.handleSubmit(handleLinkCompany)} className="space-y-4">
+              <FormField
+                control={linkForm.control}
+                name="clientId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-company">
+                          <SelectValue placeholder="Select a company" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {availableCompaniesLoading ? (
+                          <div className="p-2 text-sm text-gray-500">Loading companies...</div>
+                        ) : availableCompanies && availableCompanies.length > 0 ? (
+                          availableCompanies.map((company) => (
+                            <SelectItem key={company.id} value={company.id}>
+                              {company.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-sm text-gray-500">No available companies</div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={linkForm.control}
+                name="officerRole"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="e.g., Director, Secretary" 
+                        data-testid="input-officer-role"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={linkForm.control}
+                name="isPrimaryContact"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-primary-contact"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Primary Contact</FormLabel>
+                      <p className="text-sm text-gray-600">
+                        Mark this person as the primary contact for the company
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsLinkModalOpen(false)}
+                  data-testid="button-cancel-link"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={linkToCompanyMutation.isPending}
+                  data-testid="button-confirm-link"
+                >
+                  {linkToCompanyMutation.isPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Link className="h-4 w-4 mr-2" />
+                      Connect
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 // Component for viewing person details (read-only mode) - shows all fields like edit form
 function PersonViewMode({ 
@@ -3048,17 +3627,6 @@ export default function ClientDetail() {
                                       </Badge>
                                     )}
                                     
-                                    <WouterLink href={`/people/${clientPerson.person.id}`}>
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        data-testid={`button-view-person-${clientPerson.person.id}`}
-                                        onClick={(e) => e.stopPropagation()} // Prevent accordion toggle
-                                      >
-                                        <UserIcon className="h-3 w-3 mr-1" />
-                                        View Details
-                                      </Button>
-                                    </WouterLink>
                                   </div>
                                 </div>
 
@@ -3106,22 +3674,16 @@ export default function ClientDetail() {
                           </AccordionTrigger>
                           
                           <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-person-details-${clientPerson.id}`}>
-                            {editingPersonId === clientPerson.person.id ? (
-                              <PersonEditForm 
-                                clientPerson={clientPerson}
-                                onSave={(data) => updatePersonMutation.mutate({ personId: clientPerson.person.id, data })}
-                                onCancel={() => setEditingPersonId(null)}
-                                isSaving={updatePersonMutation.isPending}
-                              />
-                            ) : (
-                              <PersonViewMode 
-                                clientPerson={clientPerson}
-                                revealedIdentifiers={revealedIdentifiers}
-                                setRevealedIdentifiers={setRevealedIdentifiers}
-                                onEdit={() => setEditingPersonId(clientPerson.person.id)}
-                                peopleServices={peopleServices}
-                              />
-                            )}
+                            <PersonTabbedView
+                              clientPerson={clientPerson}
+                              editingPersonId={editingPersonId}
+                              setEditingPersonId={setEditingPersonId}
+                              updatePersonMutation={updatePersonMutation}
+                              revealedIdentifiers={revealedIdentifiers}
+                              setRevealedIdentifiers={setRevealedIdentifiers}
+                              peopleServices={peopleServices}
+                              clientId={id!}
+                            />
                           </AccordionContent>
                         </AccordionItem>
                       ))}
