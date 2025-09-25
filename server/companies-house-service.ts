@@ -235,12 +235,13 @@ class CompaniesHouseService {
   // Transform Companies House officer to our person schema
   transformOfficerToPerson(officer: CompaniesHouseOfficer, companyNumber: string) {
     const address = officer.address;
+    const parsedName = this.parseCompaniesHouseName(officer.name);
     
     return {
       fullName: officer.name,
-      // Parse name components if needed (simple approach)
-      firstName: this.extractFirstName(officer.name),
-      lastName: this.extractLastName(officer.name),
+      // Use proper name parsing for Companies House format
+      firstName: parsedName.firstName,
+      lastName: parsedName.lastName,
       nationality: officer.nationality,
       countryOfResidence: officer.country_of_residence,
       occupation: officer.occupation,
@@ -282,14 +283,45 @@ class CompaniesHouseService {
     };
   }
 
-  private extractFirstName(fullName: string): string | undefined {
-    const parts = fullName.trim().split(/\s+/);
-    return parts.length > 1 ? parts[0] : undefined;
-  }
-
-  private extractLastName(fullName: string): string | undefined {
-    const parts = fullName.trim().split(/\s+/);
-    return parts.length > 1 ? parts.slice(-1)[0] : undefined;
+  // Parse Companies House names properly (handles "LASTNAME, Firstname" format)
+  private parseCompaniesHouseName(fullName: string): { firstName?: string; lastName?: string } {
+    const normalizedName = fullName.trim().replace(/\s+/g, ' ');
+    
+    // Remove common honorifics
+    const cleanName = normalizedName
+      .replace(/^(Mr|Mrs|Ms|Miss|Dr|Prof|Sir|Dame|Lord|Lady)\.?\s+/i, '');
+    
+    // Handle "LASTNAME, Firstname Middlename" format (common from Companies House)
+    if (cleanName.includes(',')) {
+      const parts = cleanName.split(',', 2);
+      const lastName = parts[0].trim();
+      const remainingNames = parts[1].trim();
+      const firstName = remainingNames.split(' ')[0]; // Take first token as first name
+      
+      return {
+        firstName: firstName || undefined,
+        lastName: lastName || undefined
+      };
+    }
+    
+    // Handle "Firstname Middlename LASTNAME" format
+    const nameParts = cleanName.split(' ');
+    if (nameParts.length === 1) {
+      // Single name - treat as first name
+      return {
+        firstName: nameParts[0],
+        lastName: undefined
+      };
+    }
+    
+    // Multiple parts - last is surname, first is given name
+    const lastName = nameParts[nameParts.length - 1];
+    const firstName = nameParts[0];
+    
+    return {
+      firstName: firstName || undefined,
+      lastName: lastName || undefined
+    };
   }
 
   private extractPersonNumberFromLink(appointmentsLink?: string): string | undefined {
