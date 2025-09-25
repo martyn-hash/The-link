@@ -1334,6 +1334,119 @@ function PersonTabbedView({
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const { toast } = useToast();
 
+  // Shared form state for all tabs
+  const editForm = useForm<UpdatePersonData>({
+    resolver: zodResolver(updatePersonSchema),
+    shouldUnregister: false, // Keep form values when fields unmount
+    defaultValues: {
+      fullName: clientPerson.person.fullName || "",
+      title: clientPerson.person.title || "",
+      dateOfBirth: clientPerson.person.dateOfBirth || "",
+      nationality: clientPerson.person.nationality || undefined,
+      occupation: clientPerson.person.occupation || "",
+      telephone: clientPerson.person.telephone || "",
+      email: clientPerson.person.email || "",
+      addressLine1: clientPerson.person.addressLine1 || "",
+      addressLine2: clientPerson.person.addressLine2 || "",
+      locality: clientPerson.person.locality || "",
+      region: clientPerson.person.region || "",
+      postalCode: clientPerson.person.postalCode || "",
+      country: clientPerson.person.country || "",
+      isMainContact: Boolean(clientPerson.person.isMainContact),
+      niNumber: clientPerson.person.niNumber || "",
+      personalUtrNumber: clientPerson.person.personalUtrNumber || "",
+      photoIdVerified: Boolean(clientPerson.person.photoIdVerified),
+      addressVerified: Boolean(clientPerson.person.addressVerified),
+      telephone2: clientPerson.person.telephone2 || "",
+      email2: clientPerson.person.email2 || "",
+      linkedinUrl: clientPerson.person.linkedinUrl || "",
+      instagramUrl: clientPerson.person.instagramUrl || "",
+      twitterUrl: clientPerson.person.twitterUrl || "",
+      facebookUrl: clientPerson.person.facebookUrl || "",
+      tiktokUrl: clientPerson.person.tiktokUrl || "",
+    },
+  });
+
+  // Derive edit state from existing editingPersonId
+  const isEditing = editingPersonId === clientPerson.person.id;
+
+  const getCurrentFormValues = (): UpdatePersonData => ({
+    fullName: clientPerson.person.fullName || "",
+    title: clientPerson.person.title || "",
+    dateOfBirth: clientPerson.person.dateOfBirth || "",
+    nationality: clientPerson.person.nationality || undefined,
+    occupation: clientPerson.person.occupation || "",
+    telephone: clientPerson.person.telephone || "",
+    email: clientPerson.person.email || "",
+    addressLine1: clientPerson.person.addressLine1 || "",
+    addressLine2: clientPerson.person.addressLine2 || "",
+    locality: clientPerson.person.locality || "",
+    region: clientPerson.person.region || "",
+    postalCode: clientPerson.person.postalCode || "",
+    country: clientPerson.person.country || "",
+    isMainContact: Boolean(clientPerson.person.isMainContact),
+    niNumber: clientPerson.person.niNumber || "",
+    personalUtrNumber: clientPerson.person.personalUtrNumber || "",
+    photoIdVerified: Boolean(clientPerson.person.photoIdVerified),
+    addressVerified: Boolean(clientPerson.person.addressVerified),
+    telephone2: clientPerson.person.telephone2 || "",
+    email2: clientPerson.person.email2 || "",
+    linkedinUrl: clientPerson.person.linkedinUrl || "",
+    instagramUrl: clientPerson.person.instagramUrl || "",
+    twitterUrl: clientPerson.person.twitterUrl || "",
+    facebookUrl: clientPerson.person.facebookUrl || "",
+    tiktokUrl: clientPerson.person.tiktokUrl || "",
+  });
+
+  const startEditing = () => {
+    setEditingPersonId(clientPerson.person.id);
+    // Reset form with latest server data
+    editForm.reset(getCurrentFormValues());
+  };
+
+  const cancelEditing = () => {
+    setEditingPersonId(null);
+    // Reset to current server values
+    editForm.reset(getCurrentFormValues());
+  };
+
+  const saveChanges = async (data: UpdatePersonData) => {
+    updatePersonMutation.mutate({ 
+      personId: clientPerson.person.id, 
+      data 
+    }, {
+      onSuccess: () => {
+        setEditingPersonId(null);
+        // Invalidate relevant queries to refresh data
+        queryClient.invalidateQueries({ queryKey: [`/api/clients/${clientId}/people`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/clients/${clientId}`] });
+      },
+      onError: (error: any) => {
+        // Handle validation errors by finding the first error and switching to its tab
+        const formErrors = editForm.formState.errors;
+        if (Object.keys(formErrors).length > 0) {
+          const firstErrorField = Object.keys(formErrors)[0];
+          
+          // Determine which tab contains the error
+          const basicInfoFields = ['fullName', 'title', 'dateOfBirth', 'nationality', 'occupation', 'isMainContact'];
+          const contactInfoFields = ['addressLine1', 'addressLine2', 'locality', 'region', 'postalCode', 'country', 'email2', 'telephone2', 'linkedinUrl', 'twitterUrl', 'facebookUrl', 'instagramUrl', 'tiktokUrl'];
+          
+          if (basicInfoFields.includes(firstErrorField)) {
+            setActiveTab('basic-info');
+          } else if (contactInfoFields.includes(firstErrorField)) {
+            setActiveTab('contact-info');
+          }
+          
+          toast({
+            title: "Validation Error",
+            description: "Please check the form fields for errors.",
+            variant: "destructive",
+          });
+        }
+      }
+    });
+  };
+
   // Form for linking to new company
   const linkForm = useForm<LinkPersonToCompanyData>({
     resolver: zodResolver(linkPersonToCompanySchema),
@@ -1439,23 +1552,153 @@ function PersonTabbedView({
                 <UserIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                 Basic Information
               </h5>
-              <Button 
-                variant="outline" 
-                size="sm"
-                data-testid={`button-edit-basic-info-${clientPerson.id}`}
-                onClick={() => setEditingPersonId(clientPerson.person.id)}
-              >
-                Edit
-              </Button>
+              {!isEditing ? (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  data-testid={`button-edit-basic-info-${clientPerson.id}`}
+                  onClick={startEditing}
+                >
+                  Edit
+                </Button>
+              ) : (
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={cancelEditing}
+                    disabled={updatePersonMutation.isPending}
+                    data-testid={`button-cancel-basic-info-${clientPerson.id}`}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={editForm.handleSubmit(saveChanges)}
+                    disabled={updatePersonMutation.isPending}
+                    data-testid={`button-save-basic-info-${clientPerson.id}`}
+                  >
+                    {updatePersonMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              )}
             </div>
 
-            {editingPersonId === clientPerson.person.id ? (
-              <PersonEditForm 
-                clientPerson={clientPerson}
-                onSave={(data) => updatePersonMutation.mutate({ personId: clientPerson.person.id, data })}
-                onCancel={() => setEditingPersonId(null)}
-                isSaving={updatePersonMutation.isPending}
-              />
+            {isEditing ? (
+              <Form {...editForm}>
+                <div className="space-y-4">
+                  {/* Basic Info Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="fullName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Full Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid={`input-fullName-${clientPerson.id}`} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value || ""} data-testid={`input-title-${clientPerson.id}`} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date of Birth</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value || ""} type="date" data-testid={`input-dateOfBirth-${clientPerson.id}`} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="nationality"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nationality</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid={`select-nationality-${clientPerson.id}`}>
+                                <SelectValue placeholder="Select nationality" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="british">British</SelectItem>
+                              <SelectItem value="american">American</SelectItem>
+                              <SelectItem value="canadian">Canadian</SelectItem>
+                              <SelectItem value="australian">Australian</SelectItem>
+                              <SelectItem value="german">German</SelectItem>
+                              <SelectItem value="french">French</SelectItem>
+                              <SelectItem value="spanish">Spanish</SelectItem>
+                              <SelectItem value="italian">Italian</SelectItem>
+                              <SelectItem value="dutch">Dutch</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="occupation"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Occupation</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value || ""} data-testid={`input-occupation-${clientPerson.id}`} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="isMainContact"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Main Contact</FormLabel>
+                            <div className="text-sm text-muted-foreground">
+                              This person is the primary contact
+                            </div>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value || false}
+                              onCheckedChange={field.onChange}
+                              data-testid={`switch-isMainContact-${clientPerson.id}`}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </Form>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
@@ -1496,27 +1739,16 @@ function PersonTabbedView({
                     </p>
                   </div>
 
-                  {/* Address Information */}
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center">
-                      <MapPin className="h-3 w-3 mr-1" />
-                      Address
-                    </label>
-                    <div className="text-sm mt-1" data-testid={`view-address-${clientPerson.id}`}>
-                      {(() => {
-                        const person = clientPerson.person;
-                        const addressParts = [
-                          person.addressLine1,
-                          person.addressLine2,
-                          person.locality,
-                          person.region,
-                          person.postalCode,
-                          person.country
-                        ].filter(Boolean);
-                        
-                        return addressParts.length > 0 ? addressParts.join(', ') : 'Not provided';
-                      })()}
-                    </div>
+                    <label className="text-sm font-medium text-muted-foreground">Main Contact</label>
+                    <p className="text-sm mt-1" data-testid={`view-isMainContact-${clientPerson.id}`}>
+                      {clientPerson.person.isMainContact ? (
+                        <Badge variant="default" className="text-xs">
+                          <Check className="h-3 w-3 mr-1" />
+                          Primary Contact
+                        </Badge>
+                      ) : 'Not primary contact'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1532,23 +1764,220 @@ function PersonTabbedView({
                 <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
                 Contact Information
               </h5>
-              <Button 
-                variant="outline" 
-                size="sm"
-                data-testid={`button-edit-contact-info-${clientPerson.id}`}
-                onClick={() => setEditingPersonId(clientPerson.person.id)}
-              >
-                Edit
-              </Button>
+              {!isEditing ? (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  data-testid={`button-edit-contact-info-${clientPerson.id}`}
+                  onClick={startEditing}
+                >
+                  Edit
+                </Button>
+              ) : (
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={cancelEditing}
+                    disabled={updatePersonMutation.isPending}
+                    data-testid={`button-cancel-contact-info-${clientPerson.id}`}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={editForm.handleSubmit(saveChanges)}
+                    disabled={updatePersonMutation.isPending}
+                    data-testid={`button-save-contact-info-${clientPerson.id}`}
+                  >
+                    {updatePersonMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              )}
             </div>
 
-            {editingPersonId === clientPerson.person.id ? (
-              <PersonEditForm 
-                clientPerson={clientPerson}
-                onSave={(data) => updatePersonMutation.mutate({ personId: clientPerson.person.id, data })}
-                onCancel={() => setEditingPersonId(null)}
-                isSaving={updatePersonMutation.isPending}
-              />
+            {isEditing ? (
+              <Form {...editForm}>
+                <div className="space-y-6">
+                  {/* Address Fields */}
+                  <div className="space-y-4">
+                    <h6 className="font-medium text-sm flex items-center">
+                      <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                      Address Information
+                    </h6>
+                    
+                    <div className="space-y-3">
+                      <AddressLookup
+                        onAddressSelect={(address) => {
+                          editForm.setValue("addressLine1", address.addressLine1);
+                          editForm.setValue("addressLine2", address.addressLine2 || "");
+                          editForm.setValue("locality", address.locality);
+                          editForm.setValue("region", address.region);
+                          editForm.setValue("postalCode", address.postalCode);
+                          editForm.setValue("country", address.country);
+                        }}
+                        value={
+                          clientPerson.person.addressLine1 ? {
+                            addressLine1: clientPerson.person.addressLine1,
+                            addressLine2: clientPerson.person.addressLine2 || "",
+                            locality: clientPerson.person.locality || "",
+                            region: clientPerson.person.region || "",
+                            postalCode: clientPerson.person.postalCode || "",
+                            country: clientPerson.person.country || ""
+                          } : undefined
+                        }
+                        data-testid={`input-address-lookup-${clientPerson.id}`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Additional Contact Fields */}
+                  <div className="space-y-4">
+                    <h6 className="font-medium text-sm">Additional Contact Details</h6>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={editForm.control}
+                        name="email2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Secondary Email</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="email" 
+                                placeholder="secondary@example.com"
+                                data-testid={`input-email2-${clientPerson.id}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={editForm.control}
+                        name="telephone2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Secondary Phone</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="tel" 
+                                placeholder="+44 1234 567890"
+                                data-testid={`input-telephone2-${clientPerson.id}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Social Media Fields */}
+                  <div className="space-y-4">
+                    <h6 className="font-medium text-sm">Social Media & Professional Profiles</h6>
+                    
+                    <div className="space-y-3">
+                      <FormField
+                        control={editForm.control}
+                        name="linkedinUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>LinkedIn Profile</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                placeholder="https://linkedin.com/in/username"
+                                data-testid={`input-linkedinUrl-${clientPerson.id}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={editForm.control}
+                          name="twitterUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Twitter/X Profile</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="https://x.com/username"
+                                  data-testid={`input-twitterUrl-${clientPerson.id}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={editForm.control}
+                          name="facebookUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Facebook Profile</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="https://facebook.com/username"
+                                  data-testid={`input-facebookUrl-${clientPerson.id}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={editForm.control}
+                          name="instagramUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Instagram Profile</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="https://instagram.com/username"
+                                  data-testid={`input-instagramUrl-${clientPerson.id}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={editForm.control}
+                          name="tiktokUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>TikTok Profile</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="https://tiktok.com/@username"
+                                  data-testid={`input-tiktokUrl-${clientPerson.id}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Form>
             ) : (
               <div className="space-y-4">
                 {/* Primary Contact Details */}
@@ -1619,14 +2048,27 @@ function PersonTabbedView({
                 <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
                 Personal Services
               </h5>
-              <Button 
-                variant="outline" 
-                size="sm"
-                data-testid={`button-edit-personal-services-${clientPerson.id}`}
-                onClick={() => setEditingPersonId(clientPerson.person.id)}
-              >
-                Edit
-              </Button>
+              {isEditing && (
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={cancelEditing}
+                    disabled={updatePersonMutation.isPending}
+                    data-testid={`button-cancel-personal-services-${clientPerson.id}`}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={editForm.handleSubmit(saveChanges)}
+                    disabled={updatePersonMutation.isPending}
+                    data-testid={`button-save-personal-services-${clientPerson.id}`}
+                  >
+                    {updatePersonMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {(() => {
