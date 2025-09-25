@@ -117,9 +117,33 @@ This document tracks the implementation of the automated project scheduling syst
 **Status:** Ready to Begin  
 **Goal:** Extend testing capabilities and development workflows
 
+#### 4.1 Manual Trigger Tools
+- [ ] Enhanced admin endpoint to trigger scheduling for specific date ranges
+- [ ] Service-specific testing tools (test individual services)
+- [ ] Date override capabilities for testing different scenarios
+- [x] Basic admin endpoint to trigger scheduling process on demand (already implemented)
+
+#### 4.2 Test Data Management  
+- [ ] Seed services with today's dates for testing
+- [ ] Mock time progression for development (simulate future dates)
+- [ ] Isolated test environments and data reset capabilities
+- [ ] Test scenario generators for various service frequencies
+
 ### Phase 5: Data Population & Configuration
 **Status:** Pending  
 **Goal:** Set up base data and configuration interfaces
+
+#### 5.1 Base Data Setup
+- [ ] Create essential services (payroll, accounts, VAT returns, etc.)
+- [ ] Set up project types linked to services  
+- [ ] Configure kanban stages and role assignments
+- [ ] Establish baseline service frequency templates
+
+#### 5.2 Client Service Configuration
+- [ ] Tools for bulk service assignment to clients
+- [ ] Frequency and date configuration interfaces
+- [ ] Service owner assignment workflows
+- [ ] Client service import/export capabilities
 
 ## Implementation Notes
 - Building on existing cron job infrastructure (currently used for Companies House sync)
