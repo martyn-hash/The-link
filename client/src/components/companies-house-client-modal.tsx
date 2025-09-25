@@ -183,9 +183,17 @@ export function CompaniesHouseClientModal({
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [clientType, setClientType] = useState<'company' | 'individual'>('company');
-  const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'individual-details'>('ch-search');
+  const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'officer-matching' | 'individual-details'>('ch-search');
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
   const [selectedOfficers, setSelectedOfficers] = useState<number[]>([]);
+  const [officerMatches, setOfficerMatches] = useState<{
+    index: number;
+    officer: CompanyOfficer & { parsedFirstName?: string; parsedLastName?: string };
+    matches: any[];
+  }[]>([]);
+  const [officerDecisions, setOfficerDecisions] = useState<{
+    [key: number]: { action: 'create' | 'link', personId?: string }
+  }>({});
 
   const isEditing = !!client;
 
@@ -222,6 +230,8 @@ export function CompaniesHouseClientModal({
       setStep('ch-search'); // Start on CH search for creation
       setSelectedCompany(null);
       setSelectedOfficers([]);
+      setOfficerMatches([]);
+      setOfficerDecisions({});
       searchForm.reset();
       individualForm.reset();
     }
@@ -414,6 +424,39 @@ export function CompaniesHouseClientModal({
         description: error.message || "Failed to create client from Companies House data",
         variant: "destructive",
       });
+    },
+  });
+
+  // Officer matching mutation
+  const findOfficerMatchesMutation = useMutation({
+    mutationFn: async (officers: CompanyOfficer[]) => {
+      const response = await apiRequest("POST", "/api/people/match", {
+        officers: officers.map(officer => ({
+          fullName: officer.name,
+          dateOfBirth: officer.date_of_birth || { year: 1900, month: 1 } // Fallback if no DOB
+        }))
+      });
+      return await response.json() as { matches: any[] };
+    },
+    onSuccess: (data) => {
+      setOfficerMatches(data.matches);
+      // Initialize decisions - default to 'create' for all officers
+      const initialDecisions: { [key: number]: { action: 'create' | 'link', personId?: string } } = {};
+      data.matches.forEach((match, index) => {
+        initialDecisions[index] = { action: 'create' };
+      });
+      setOfficerDecisions(initialDecisions);
+      setStep('officer-matching');
+    },
+    onError: (error: any) => {
+      console.error("Error finding officer matches:", error);
+      toast({
+        title: "Error",
+        description: "Failed to find officer matches. Proceeding with creating new people.",
+        variant: "destructive",
+      });
+      // Skip to direct client creation if matching fails
+      createClientFromCHMutation.mutate();
     },
   });
 
@@ -640,16 +683,26 @@ export function CompaniesHouseClientModal({
             Back to Search
           </Button>
           <Button 
-            onClick={() => createClientFromCHMutation.mutate()}
-            disabled={createClientFromCHMutation.isPending}
+            onClick={() => {
+              // Get selected officers to check for matches
+              const officersToCheck = selectedOfficers.map(index => companyOfficers[index]);
+              if (officersToCheck.length > 0) {
+                // Find matches for selected officers first
+                findOfficerMatchesMutation.mutate(officersToCheck);
+              } else {
+                // No officers selected, proceed directly
+                createClientFromCHMutation.mutate();
+              }
+            }}
+            disabled={createClientFromCHMutation.isPending || findOfficerMatchesMutation.isPending}
             data-testid="button-create-client"
           >
-            {createClientFromCHMutation.isPending ? (
+            {(createClientFromCHMutation.isPending || findOfficerMatchesMutation.isPending) ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <CheckCircle className="h-4 w-4 mr-2" />
+              <ArrowRight className="h-4 w-4 mr-2" />
             )}
-            Create Client
+            Continue
           </Button>
         </div>
       </div>
@@ -898,8 +951,163 @@ export function CompaniesHouseClientModal({
     </div>
   );
 
+  // Officer matching step
+  const renderOfficerMatchingStep = () => {
+    if (!selectedCompany || officerMatches.length === 0) return null;
 
+    const handleOfficerDecision = (officerIndex: number, action: 'create' | 'link', personId?: string) => {
+      setOfficerDecisions(prev => ({
+        ...prev,
+        [officerIndex]: { action, personId }
+      }));
+    };
 
+    const canProceed = Object.keys(officerDecisions).length === officerMatches.length &&
+                       Object.values(officerDecisions).every(decision => 
+                         decision.action === 'create' || (decision.action === 'link' && decision.personId)
+                       );
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-5 w-5 text-blue-600" />
+          <h3 className="text-lg font-semibold">Resolve Officer Matches</h3>
+        </div>
+        <p className="text-sm text-gray-600">
+          We found potential matches for some officers in your system. Please review and decide whether to link to existing people or create new ones.
+        </p>
+
+        <div className="space-y-4">
+          {officerMatches.map((match, index) => (
+            <Card key={index} className="p-4">
+              <div className="space-y-4">
+                {/* Officer Details */}
+                <div className="border-b pb-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium">{match.officer.name}</h4>
+                    <Badge variant="outline">{match.officer.officer_role}</Badge>
+                  </div>
+                  {match.officer.parsedFirstName && match.officer.parsedLastName && (
+                    <p className="text-sm text-gray-600">
+                      Parsed as: {match.officer.parsedFirstName} {match.officer.parsedLastName}
+                    </p>
+                  )}
+                  {match.officer.date_of_birth && (
+                    <p className="text-sm text-gray-600">
+                      Birth: {match.officer.date_of_birth.month}/{match.officer.date_of_birth.year}
+                    </p>
+                  )}
+                </div>
+
+                {/* Matches Section */}
+                <div className="space-y-3">
+                  {match.matches.length > 0 ? (
+                    <>
+                      <h5 className="font-medium text-amber-700">
+                        Found {match.matches.length} potential match{match.matches.length !== 1 ? 'es' : ''}:
+                      </h5>
+                      <div className="space-y-2">
+                        {match.matches.map((person, personIndex) => (
+                          <div key={personIndex} className="border rounded-lg p-3 bg-amber-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-medium">{person.fullName}</p>
+                                {person.dateOfBirth && (
+                                  <p className="text-sm text-gray-600">
+                                    Born: {person.dateOfBirth}
+                                  </p>
+                                )}
+                                {person.email && (
+                                  <p className="text-sm text-gray-600">Email: {person.email}</p>
+                                )}
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Person ID: {person.id}
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOfficerDecision(index, 'link', person.id)}
+                                className={
+                                  officerDecisions[index]?.action === 'link' && 
+                                  officerDecisions[index]?.personId === person.id
+                                    ? 'bg-blue-100 border-blue-300'
+                                    : ''
+                                }
+                                data-testid={`button-link-person-${index}-${personIndex}`}
+                              >
+                                {officerDecisions[index]?.action === 'link' && 
+                                 officerDecisions[index]?.personId === person.id ? (
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                ) : (
+                                  <UserCheck className="h-4 w-4 mr-1" />
+                                )}
+                                Link to This Person
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <UserX className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600">No potential matches found</p>
+                    </div>
+                  )}
+                  
+                  {/* Create New Person Option */}
+                  <div className="border-t pt-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleOfficerDecision(index, 'create')}
+                      className={
+                        officerDecisions[index]?.action === 'create'
+                          ? 'bg-green-100 border-green-300 w-full'
+                          : 'w-full'
+                      }
+                      data-testid={`button-create-person-${index}`}
+                    >
+                      {officerDecisions[index]?.action === 'create' ? (
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Plus className="h-4 w-4 mr-2" />
+                      )}
+                      Create New Person
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-between">
+          <Button 
+            variant="outline" 
+            onClick={() => setStep('ch-confirm')}
+            data-testid="button-back-to-confirm"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Review
+          </Button>
+          <Button 
+            onClick={() => createClientFromCHMutation.mutate()}
+            disabled={!canProceed || createClientFromCHMutation.isPending}
+            data-testid="button-proceed-create-client"
+          >
+            {createClientFromCHMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle className="h-4 w-4 mr-2" />
+            )}
+            Create Client & {Object.values(officerDecisions).filter(d => d.action === 'link').length > 0 ? 'Link People' : 'Add People'}
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -915,7 +1123,9 @@ export function CompaniesHouseClientModal({
                 ? "Search for a company using Companies House data"
                 : step === 'ch-confirm'
                   ? "Confirm company details and select officers"
-                  : "Enter individual client details"
+                  : step === 'officer-matching'
+                    ? "Resolve potential duplicate officers and decide linking options"
+                    : "Enter individual client details"
             }
           </DialogDescription>
         </DialogHeader>
@@ -949,6 +1159,7 @@ export function CompaniesHouseClientModal({
             <TabsContent value="company" className="mt-6">
               {step === 'ch-search' && renderCompanySearchStep()}
               {step === 'ch-confirm' && renderCompanyConfirmStep()}
+              {step === 'officer-matching' && renderOfficerMatchingStep()}
             </TabsContent>
             
             <TabsContent value="individual" className="mt-6">
