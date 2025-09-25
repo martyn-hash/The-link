@@ -8,7 +8,7 @@ import { sendTaskAssignmentEmail } from "./emailService";
 import fetch from 'node-fetch';
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
-import { runProjectScheduling, getOverdueServicesAnalysis, type SchedulingRunResult } from "./project-scheduler";
+import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, type SchedulingRunResult } from "./project-scheduler";
 import { z } from "zod";
 import {
   insertUserSchema,
@@ -4512,23 +4512,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Project Scheduling API routes
 
-  // POST /api/project-scheduling/run - Trigger manual project scheduling (admin only)
+  // POST /api/project-scheduling/run - Enhanced manual project scheduling with advanced testing options (admin only)
   app.post("/api/project-scheduling/run", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      console.log(`[API] Manual project scheduling triggered by admin: ${req.user?.email}`);
+      console.log(`[API] Enhanced project scheduling triggered by admin: ${req.user?.email}`);
       
-      const result = await runProjectScheduling('manual');
+      // Enhanced parameters for testing
+      const { 
+        targetDate, 
+        serviceIds, 
+        clientIds, 
+        startDate, 
+        endDate 
+      } = req.body || {};
       
-      res.json({
-        message: "Project scheduling completed",
-        status: result.status,
-        projectsCreated: result.projectsCreated,
-        servicesRescheduled: result.servicesRescheduled,
-        errorsEncountered: result.errorsEncountered,
-        errors: result.errors,
-        summary: result.summary,
-        executionTimeMs: result.executionTimeMs
-      });
+      // Parse target date if provided
+      let schedulingDate = new Date();
+      if (targetDate) {
+        schedulingDate = new Date(targetDate);
+        console.log(`[API] Using custom target date: ${schedulingDate.toISOString()}`);
+      }
+      
+      // Handle date range scheduling
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        console.log(`[API] Running scheduling for date range: ${start.toISOString()} to ${end.toISOString()}`);
+        
+        const results = [];
+        const currentDate = new Date(start);
+        
+        while (currentDate <= end) {
+          console.log(`[API] Processing date: ${currentDate.toISOString().split('T')[0]}`);
+          const result = await runProjectSchedulingEnhanced('manual', new Date(currentDate), { serviceIds, clientIds });
+          results.push({
+            date: currentDate.toISOString().split('T')[0],
+            ...result
+          });
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        const totalProjectsCreated = results.reduce((sum, r) => sum + r.projectsCreated, 0);
+        const totalServicesRescheduled = results.reduce((sum, r) => sum + r.servicesRescheduled, 0);
+        const totalErrors = results.reduce((sum, r) => sum + r.errorsEncountered, 0);
+        
+        res.json({
+          message: "Date range project scheduling completed",
+          status: totalErrors > 0 ? "partial_failure" : "success",
+          dateRange: { startDate, endDate },
+          totalProjectsCreated,
+          totalServicesRescheduled,
+          totalErrorsEncountered: totalErrors,
+          dailyResults: results,
+          summary: `Processed ${results.length} days from ${startDate} to ${endDate}`
+        });
+      } else {
+        // Single date scheduling (enhanced)
+        const result = await runProjectSchedulingEnhanced('manual', schedulingDate, { serviceIds, clientIds });
+        
+        res.json({
+          message: "Project scheduling completed",
+          status: result.status,
+          projectsCreated: result.projectsCreated,
+          servicesRescheduled: result.servicesRescheduled,
+          errorsEncountered: result.errorsEncountered,
+          errors: result.errors,
+          summary: result.summary,
+          executionTimeMs: result.executionTimeMs,
+          filters: { serviceIds, clientIds, targetDate: targetDate || 'current' }
+        });
+      }
     } catch (error) {
       console.error("Error running project scheduling:", error instanceof Error ? error.message : error);
       res.status(500).json({ 
@@ -4595,12 +4648,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/project-scheduling/test-dry-run - Test scheduling without creating projects (admin only)
+  // POST /api/project-scheduling/test-dry-run - Enhanced test scheduling without creating projects (admin only)
   app.post("/api/project-scheduling/test-dry-run", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      console.log(`[API] Test dry-run project scheduling triggered by admin: ${req.user?.email}`);
+      console.log(`[API] Enhanced test dry-run project scheduling triggered by admin: ${req.user?.email}`);
       
-      const result = await runProjectScheduling('test');
+      // Enhanced parameters for testing
+      const { 
+        targetDate, 
+        serviceIds, 
+        clientIds 
+      } = req.body || {};
+      
+      // Parse target date if provided
+      let schedulingDate = new Date();
+      if (targetDate) {
+        schedulingDate = new Date(targetDate);
+        console.log(`[API] Using custom target date for dry-run: ${schedulingDate.toISOString()}`);
+      }
+      
+      const result = await runProjectSchedulingEnhanced('test', schedulingDate, { serviceIds, clientIds });
       
       res.json({
         message: "Test dry-run project scheduling completed",
@@ -4610,7 +4677,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         errorsEncountered: result.errorsEncountered,
         errors: result.errors,
         summary: result.summary,
-        executionTimeMs: result.executionTimeMs
+        executionTimeMs: result.executionTimeMs,
+        filters: { serviceIds, clientIds, targetDate: targetDate || 'current' },
+        dryRun: true
       });
     } catch (error) {
       console.error("Error running test project scheduling:", error instanceof Error ? error.message : error);

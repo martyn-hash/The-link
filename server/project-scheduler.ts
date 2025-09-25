@@ -57,6 +57,150 @@ interface DueService {
 }
 
 /**
+ * Enhanced filtering options for scheduling
+ */
+interface SchedulingFilters {
+  serviceIds?: string[];
+  clientIds?: string[];
+}
+
+/**
+ * Enhanced function to run project scheduling with filtering capabilities
+ */
+export async function runProjectSchedulingEnhanced(
+  runType: 'scheduled' | 'manual' | 'test' = 'scheduled',
+  targetDate: Date = new Date(),
+  filters: SchedulingFilters = {}
+): Promise<SchedulingRunResult> {
+  const startTime = Date.now();
+  const runDate = new Date();
+  const dryRun = runType === 'test'; // Test runs are dry runs that don't make changes
+  
+  const filterDescription = [];
+  if (filters.serviceIds?.length) filterDescription.push(`${filters.serviceIds.length} specific services`);
+  if (filters.clientIds?.length) filterDescription.push(`${filters.clientIds.length} specific clients`);
+  const filterText = filterDescription.length > 0 ? ` (filtered: ${filterDescription.join(', ')})` : '';
+  
+  console.log(`[Project Scheduler] Starting enhanced ${runType} run ${dryRun ? '(DRY RUN - no changes will be made) ' : ''}for ${targetDate.toISOString()}${filterText}`);
+  
+  const result: SchedulingRunResult = {
+    status: 'success',
+    totalServicesChecked: 0,
+    servicesFoundDue: 0,
+    projectsCreated: 0,
+    servicesRescheduled: 0,
+    errorsEncountered: 0,
+    chServicesProcessedWithoutRescheduling: 0,
+    peopleServicesSkipped: 0,
+    configurationErrorsEncountered: 0,
+    executionTimeMs: 0,
+    dryRun,
+    errors: [],
+    summary: ''
+  };
+
+  try {
+    // Step 1: Get all client services and people services
+    let [clientServices, peopleServices] = await Promise.all([
+      storage.getAllClientServicesWithDetails(),
+      storage.getAllPeopleServicesWithDetails()
+    ]);
+
+    // Apply filters if specified
+    if (filters.serviceIds?.length) {
+      clientServices = clientServices.filter(cs => filters.serviceIds!.includes(cs.serviceId));
+      peopleServices = peopleServices.filter(ps => filters.serviceIds!.includes(ps.serviceId));
+      console.log(`[Project Scheduler] Filtered to ${filters.serviceIds.length} specific services`);
+    }
+    
+    if (filters.clientIds?.length) {
+      clientServices = clientServices.filter(cs => filters.clientIds!.includes(cs.clientId));
+      // Note: peopleServices don't have clientId, they have personId
+      console.log(`[Project Scheduler] Filtered to ${filters.clientIds.length} specific clients`);
+    }
+
+    console.log(`[Project Scheduler] Found ${clientServices.length} client services and ${peopleServices.length} people services${filterText}`);
+    
+    result.totalServicesChecked = clientServices.length + peopleServices.length;
+
+    // Step 2: Find services that are due today
+    const analysisResult = await findServicesDueToday(clientServices, peopleServices, targetDate);
+    result.servicesFoundDue = analysisResult.dueServices.length;
+    result.peopleServicesSkipped = analysisResult.peopleServicesSkipped;
+    result.configurationErrorsEncountered = analysisResult.configurationErrorsEncountered;
+    result.errors.push(...analysisResult.configurationErrors);
+
+    console.log(`[Project Scheduler] Found ${analysisResult.dueServices.length} services due today${filterText}`);
+
+    // Step 3: Process each due service
+    for (const dueService of analysisResult.dueServices) {
+      try {
+        await processService(dueService, result, targetDate, dryRun);
+      } catch (error) {
+        result.errorsEncountered++;
+        result.errors.push({
+          serviceId: dueService.id,
+          serviceType: dueService.type,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date()
+        });
+        console.error(`[Project Scheduler] Error processing service ${dueService.id}:`, error);
+      }
+    }
+
+    // Step 4: Generate summary
+    result.executionTimeMs = Date.now() - startTime;
+    
+    const statusIndicators = [];
+    if (result.errorsEncountered > 0) statusIndicators.push(`${result.errorsEncountered} errors`);
+    if (result.configurationErrorsEncountered > 0) statusIndicators.push(`${result.configurationErrorsEncountered} config errors`);
+    
+    result.status = result.errorsEncountered > 0 ? (result.projectsCreated > 0 ? 'partial_failure' : 'failure') : 'success';
+    
+    result.summary = dryRun 
+      ? `DRY RUN: Would have processed ${result.servicesFoundDue} services${filterText}, creating ${result.projectsCreated} projects and rescheduling ${result.servicesRescheduled} services. ${statusIndicators.join(', ')}`
+      : `Processed ${result.servicesFoundDue} services${filterText}, created ${result.projectsCreated} projects and rescheduled ${result.servicesRescheduled} services. ${statusIndicators.join(', ')}`;
+
+    console.log(`[Project Scheduler] Enhanced run completed in ${result.executionTimeMs}ms: ${result.summary}`);
+  } catch (error) {
+    result.errorsEncountered++;
+    result.status = 'failure';
+    result.executionTimeMs = Date.now() - startTime;
+    result.summary = `Failed to run enhanced project scheduling: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    result.errors.push({
+      serviceId: 'system',
+      serviceType: 'client',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date()
+    });
+    console.error('[Project Scheduler] Enhanced run failed:', error);
+  }
+
+  // Log the run result (skip in test mode to avoid cluttering logs)
+  if (!dryRun) {
+    try {
+      await storage.createSchedulingRunLog({
+        runType,
+        status: result.status,
+        totalServicesChecked: result.totalServicesChecked,
+        servicesFoundDue: result.servicesFoundDue,
+        projectsCreated: result.projectsCreated,
+        servicesRescheduled: result.servicesRescheduled,
+        errorsEncountered: result.errorsEncountered,
+        chServicesSkipped: result.chServicesProcessedWithoutRescheduling,
+        executionTimeMs: result.executionTimeMs,
+        summary: result.summary,
+        errors: result.errors.length > 0 ? JSON.stringify(result.errors) : null
+      });
+    } catch (error) {
+      console.error('[Project Scheduler] Failed to log enhanced scheduling run:', error);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Main function to run the project scheduling process
  */
 export async function runProjectScheduling(
