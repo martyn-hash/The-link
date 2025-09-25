@@ -274,6 +274,242 @@ export async function resetTestData(): Promise<{
 }
 
 /**
+ * Mock time progression tools for testing scheduling workflows over time
+ * Simulates multiple days/weeks of scheduling runs to test comprehensive workflows
+ */
+export async function runMockTimeProgression(options: {
+  startDate: Date;
+  endDate: Date;
+  filters?: SchedulingFilters;
+  dryRun?: boolean;
+  stepSize?: 'daily' | 'weekly';
+}): Promise<{
+  status: 'success' | 'partial_failure' | 'failure';
+  totalDaysSimulated: number;
+  schedulingRuns: Array<{
+    date: string;
+    result: SchedulingRunResult;
+  }>;
+  summary: string;
+  errors: string[];
+}> {
+  console.log('[Mock Time] Starting time progression simulation...');
+  
+  // Production safety guard
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Mock time progression is disabled in production environment');
+  }
+  
+  const result = {
+    status: 'success' as 'success' | 'partial_failure' | 'failure',
+    totalDaysSimulated: 0,
+    schedulingRuns: [] as Array<{
+      date: string;
+      result: SchedulingRunResult;
+    }>,
+    summary: '',
+    errors: [] as string[]
+  };
+
+  try {
+    const startDate = new Date(options.startDate);
+    const endDate = new Date(options.endDate);
+    const stepDays = options.stepSize === 'weekly' ? 7 : 1;
+    
+    console.log(`[Mock Time] Simulating from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} (${options.stepSize || 'daily'} steps)${options.dryRun ? ' - DRY RUN' : ''}`);
+    
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      try {
+        const dateString = currentDate.toISOString().split('T')[0];
+        console.log(`[Mock Time] Simulating scheduling run for ${dateString}...`);
+        
+        // Run enhanced scheduling for this date
+        const schedulingResult = await runProjectSchedulingEnhanced(
+          options.dryRun ? 'test' : 'manual',
+          new Date(currentDate),
+          options.filters || {}
+        );
+        
+        result.schedulingRuns.push({
+          date: dateString,
+          result: schedulingResult
+        });
+        
+        result.totalDaysSimulated++;
+        
+        // Track errors from individual runs
+        if (schedulingResult.status === 'failure') {
+          result.errors.push(`Scheduling failed on ${dateString}: ${schedulingResult.summary}`);
+        }
+        
+        console.log(`[Mock Time] ${dateString}: ${schedulingResult.servicesFoundDue} services due, ${schedulingResult.projectsCreated} projects created${schedulingResult.errorsEncountered > 0 ? `, ${schedulingResult.errorsEncountered} errors` : ''}`);
+        
+      } catch (error) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        const errorMsg = `Failed to run scheduling for ${dateString}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        result.errors.push(errorMsg);
+        console.error(`[Mock Time] ${errorMsg}`);
+      }
+      
+      // Advance to next date
+      currentDate.setDate(currentDate.getDate() + stepDays);
+    }
+    
+    // Generate summary
+    const totalServicesDue = result.schedulingRuns.reduce((sum, run) => sum + run.result.servicesFoundDue, 0);
+    const totalProjectsCreated = result.schedulingRuns.reduce((sum, run) => sum + run.result.projectsCreated, 0);
+    const totalErrors = result.errors.length;
+    
+    if (totalErrors > 0 && result.schedulingRuns.length > 0) {
+      result.status = 'partial_failure';
+      result.summary = `Time progression completed with partial success: ${result.totalDaysSimulated} days simulated, ${totalServicesDue} services found due, ${totalProjectsCreated} projects created, ${totalErrors} errors encountered.${options.dryRun ? ' (DRY RUN)' : ''}`;
+    } else if (totalErrors > 0) {
+      result.status = 'failure';
+      result.summary = `Time progression failed: ${totalErrors} errors, no successful runs.${options.dryRun ? ' (DRY RUN)' : ''}`;
+    } else {
+      result.summary = `Successfully ${options.dryRun ? 'simulated' : 'executed'} ${result.totalDaysSimulated} days of scheduling: ${totalServicesDue} services found due, ${totalProjectsCreated} projects created.`;
+    }
+    
+    console.log(`[Mock Time] ${result.summary}`);
+    return result;
+
+  } catch (error) {
+    result.status = 'failure';
+    result.errors.push(error instanceof Error ? error.message : 'Unknown error');
+    result.summary = `Mock time progression failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error('[Mock Time] Fatal error:', error);
+    return result;
+  }
+}
+
+/**
+ * Test scenario generators for common scheduling edge cases
+ * Creates specific scenarios to validate scheduling logic
+ */
+export async function generateTestScenario(scenario: {
+  name: string;
+  type: 'weekly_payroll' | 'monthly_books' | 'quarterly_vat' | 'annual_accounts' | 'mixed_frequencies' | 'edge_cases';
+  dryRun?: boolean;
+}): Promise<{
+  status: 'success' | 'failure';
+  scenarioName: string;
+  description: string;
+  servicesAffected: number;
+  recommendedTests: string[];
+  summary: string;
+}> {
+  console.log(`[Test Scenario] Generating test scenario: ${scenario.name}`);
+  
+  // Production safety guard
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Test scenario generation is disabled in production environment');
+  }
+  
+  const result = {
+    status: 'success' as 'success' | 'failure',
+    scenarioName: scenario.name,
+    description: '',
+    servicesAffected: 0,
+    recommendedTests: [] as string[],
+    summary: ''
+  };
+
+  try {
+    // Get existing client services to work with
+    const allClientServices = await storage.getAllClientServicesWithDetails();
+    
+    switch (scenario.type) {
+      case 'weekly_payroll':
+        result.description = 'Weekly payroll services that should create multiple projects per month without being blocked by duplicate prevention';
+        result.recommendedTests = [
+          'Seed weekly payroll services with today\'s date',
+          'Run scheduling daily for 4 weeks',
+          'Verify 4 separate projects are created',
+          'Confirm no duplicate prevention issues'
+        ];
+        // Filter to weekly services
+        const weeklyServices = allClientServices.filter(cs => cs.frequency === 'weekly');
+        result.servicesAffected = weeklyServices.length;
+        break;
+        
+      case 'monthly_books':
+        result.description = 'Monthly bookkeeping services with month-end timing and due date calculations';
+        result.recommendedTests = [
+          'Seed monthly services for month-end',
+          'Test scheduling across month boundaries',
+          'Verify correct next due date calculations',
+          'Check weekend/holiday handling'
+        ];
+        const monthlyServices = allClientServices.filter(cs => cs.frequency === 'monthly');
+        result.servicesAffected = monthlyServices.length;
+        break;
+        
+      case 'quarterly_vat':
+        result.description = 'Quarterly VAT services that must align with calendar quarters';
+        result.recommendedTests = [
+          'Seed quarterly services for quarter-end',
+          'Test progression through multiple quarters',
+          'Verify quarter alignment (Mar/Jun/Sep/Dec)',
+          'Check long-term scheduling accuracy'
+        ];
+        const quarterlyServices = allClientServices.filter(cs => cs.frequency === 'quarterly');
+        result.servicesAffected = quarterlyServices.length;
+        break;
+        
+      case 'annual_accounts':
+        result.description = 'Annual accounting services with year-end timing and long scheduling cycles';
+        result.recommendedTests = [
+          'Seed annual services for year-end',
+          'Test multi-year progression',
+          'Verify leap year handling',
+          'Check long-term date accuracy'
+        ];
+        const annualServices = allClientServices.filter(cs => cs.frequency === 'annually');
+        result.servicesAffected = annualServices.length;
+        break;
+        
+      case 'mixed_frequencies':
+        result.description = 'Mixed service frequencies to test complex scheduling interactions';
+        result.recommendedTests = [
+          'Seed all service types with overlapping dates',
+          'Run time progression over 6 months',
+          'Verify no interference between frequencies',
+          'Check resource allocation and prioritization'
+        ];
+        result.servicesAffected = allClientServices.length;
+        break;
+        
+      case 'edge_cases':
+        result.description = 'Edge cases including leap years, weekends, holidays, and boundary conditions';
+        result.recommendedTests = [
+          'Test February 29th handling in leap years',
+          'Test weekend due date adjustments',
+          'Test month-end edge cases (Jan 31 -> Feb 28/29)',
+          'Test Companies House service integration'
+        ];
+        result.servicesAffected = allClientServices.length;
+        break;
+        
+      default:
+        throw new Error(`Unknown scenario type: ${scenario.type}`);
+    }
+    
+    result.summary = `Generated "${scenario.name}" scenario affecting ${result.servicesAffected} services with ${result.recommendedTests.length} recommended tests.`;
+    console.log(`[Test Scenario] ${result.summary}`);
+    
+    return result;
+
+  } catch (error) {
+    result.status = 'failure';
+    result.summary = `Failed to generate test scenario: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error('[Test Scenario] Error:', error);
+    return result;
+  }
+}
+
+/**
  * Enhanced function to run project scheduling with filtering capabilities
  */
 export async function runProjectSchedulingEnhanced(

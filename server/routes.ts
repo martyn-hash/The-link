@@ -4747,6 +4747,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/project-scheduling/mock-time-progression - Run mock time progression (admin only)
+  app.post("/api/project-scheduling/mock-time-progression", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Mock time progression triggered by admin: ${req.user?.email}`);
+      
+      const { 
+        startDate, 
+        endDate, 
+        stepSize, 
+        dryRun,
+        serviceIds,
+        clientIds 
+      } = req.body || {};
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ 
+          message: "startDate and endDate are required" 
+        });
+      }
+      
+      const result = await runMockTimeProgression({
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        stepSize: stepSize || 'daily',
+        dryRun: dryRun || false,
+        filters: {
+          serviceIds,
+          clientIds
+        }
+      });
+      
+      res.json({
+        message: "Mock time progression completed",
+        status: result.status,
+        totalDaysSimulated: result.totalDaysSimulated,
+        schedulingRuns: result.schedulingRuns,
+        summary: result.summary,
+        errors: result.errors,
+        options: { startDate, endDate, stepSize, dryRun, serviceIds, clientIds }
+      });
+    } catch (error) {
+      console.error("Error running mock time progression:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to run mock time progression",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/project-scheduling/generate-test-scenario - Generate test scenario (admin only)
+  app.post("/api/project-scheduling/generate-test-scenario", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Test scenario generation triggered by admin: ${req.user?.email}`);
+      
+      const { name, type, dryRun } = req.body || {};
+      
+      if (!name || !type) {
+        return res.status(400).json({ 
+          message: "name and type are required" 
+        });
+      }
+      
+      const result = await generateTestScenario({
+        name,
+        type,
+        dryRun: dryRun || false
+      });
+      
+      res.json({
+        message: "Test scenario generated",
+        status: result.status,
+        scenarioName: result.scenarioName,
+        description: result.description,
+        servicesAffected: result.servicesAffected,
+        recommendedTests: result.recommendedTests,
+        summary: result.summary
+      });
+    } catch (error) {
+      console.error("Error generating test scenario:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to generate test scenario",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Address lookup endpoint using getaddress.io autocomplete API
   app.get('/api/address-lookup/:term', isAuthenticated, async (req: any, res) => {
     try {
