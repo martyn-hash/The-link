@@ -646,6 +646,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(userNotificationPreferences.notifySchedulingSummary, true),
+          eq(users.isAdmin, true), // SECURITY: Only allow admin users to receive scheduling summaries
           isNull(users.email).not() // Ensure users have valid email addresses
         )
       );

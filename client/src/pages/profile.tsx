@@ -510,28 +510,30 @@ export default function Profile() {
 
                     <Separator />
 
-                    {/* Scheduling Summary Notification */}
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <Label 
-                          htmlFor="notify-scheduling-summary" 
-                          className="text-base font-medium"
-                          data-testid="label-notify-scheduling-summary"
-                        >
-                          Nightly Scheduling Summary
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Receive daily email summaries of automated project scheduling results
-                        </p>
+                    {/* Scheduling Summary Notification - Admin Only */}
+                    {user?.isAdmin && (
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <Label 
+                            htmlFor="notify-scheduling-summary" 
+                            className="text-base font-medium"
+                            data-testid="label-notify-scheduling-summary"
+                          >
+                            Nightly Scheduling Summary (Admin Only)
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Receive daily email summaries of automated project scheduling results with operational details
+                          </p>
+                        </div>
+                        <Switch
+                          id="notify-scheduling-summary"
+                          data-testid="switch-notify-scheduling-summary"
+                          checked={notificationPreferences?.notifySchedulingSummary ?? false}
+                          onCheckedChange={(checked) => handleNotificationToggle('notifySchedulingSummary', checked)}
+                          disabled={updateNotificationsMutation.isPending}
+                        />
                       </div>
-                      <Switch
-                        id="notify-scheduling-summary"
-                        data-testid="switch-notify-scheduling-summary"
-                        checked={notificationPreferences?.notifySchedulingSummary ?? false}
-                        onCheckedChange={(checked) => handleNotificationToggle('notifySchedulingSummary', checked)}
-                        disabled={updateNotificationsMutation.isPending}
-                      />
-                    </div>
+                    )}
 
                     {updateNotificationsMutation.isPending && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
