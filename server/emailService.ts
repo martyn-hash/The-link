@@ -280,6 +280,141 @@ The Link Team
   });
 }
 
+export async function sendSchedulingSummaryEmail(
+  recipientEmail: string,
+  recipientName: string,
+  summaryData: {
+    status: 'success' | 'partial_failure' | 'failure';
+    servicesFoundDue: number;
+    projectsCreated: number;
+    servicesRescheduled: number;
+    errorsEncountered: number;
+    executionTimeMs: number;
+    summary: string;
+    errors?: any[];
+  }
+): Promise<boolean> {
+  const isFailure = summaryData.status === 'failure';
+  const hasErrors = summaryData.errorsEncountered > 0;
+  
+  const subject = `${isFailure ? '❌ ' : hasErrors ? '⚠️ ' : '✅ '}Nightly Project Scheduling Summary - ${new Date().toLocaleDateString()}`;
+  
+  const statusIcon = isFailure ? '❌' : hasErrors ? '⚠️' : '✅';
+  const statusColor = isFailure ? '#dc2626' : hasErrors ? '#f59e0b' : '#10b981';
+  const statusBg = isFailure ? '#fef2f2' : hasErrors ? '#fefbf2' : '#f0fdf4';
+  const statusText = summaryData.status.replace('_', ' ').toUpperCase();
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: ${statusColor};">${statusIcon} Nightly Project Scheduling Summary</h2>
+      <p>Hello ${recipientName},</p>
+      <p>Your automated project scheduling system ran at ${new Date().toLocaleString()} with the following results:</p>
+      
+      <div style="background-color: ${statusBg}; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid ${statusColor}30;">
+        <h3 style="margin-top: 0; color: ${statusColor}; font-size: 18px;">${statusIcon} Overall Status: ${statusText}</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+          <div style="background-color: white; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb;">
+            <div style="font-size: 32px; font-weight: bold; color: #4f46e5;">${summaryData.servicesFoundDue}</div>
+            <div style="font-size: 14px; color: #6b7280; font-weight: 600;">SERVICES DUE</div>
+          </div>
+          <div style="background-color: white; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb;">
+            <div style="font-size: 32px; font-weight: bold; color: #10b981;">${summaryData.projectsCreated}</div>
+            <div style="font-size: 14px; color: #6b7280; font-weight: 600;">PROJECTS CREATED</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+          <div style="background-color: white; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb;">
+            <div style="font-size: 32px; font-weight: bold; color: #0369a1;">${summaryData.servicesRescheduled}</div>
+            <div style="font-size: 14px; color: #6b7280; font-weight: 600;">SERVICES RESCHEDULED</div>
+          </div>
+          <div style="background-color: white; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb;">
+            <div style="font-size: 32px; font-weight: bold; color: ${hasErrors ? '#dc2626' : '#6b7280'};">${summaryData.errorsEncountered}</div>
+            <div style="font-size: 14px; color: #6b7280; font-weight: 600;">ERRORS</div>
+          </div>
+        </div>
+        <p style="margin-bottom: 0; color: #374151; font-size: 14px; text-align: center;">
+          <strong>Execution Time:</strong> ${summaryData.executionTimeMs}ms
+        </p>
+      </div>
+      
+      ${hasErrors ? `
+      <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #dc2626;">
+        <h3 style="margin-top: 0; color: #dc2626; font-size: 16px;">⚠️ Errors Encountered</h3>
+        <p style="color: #374151; margin-bottom: 15px;">The following errors occurred during scheduling:</p>
+        <div style="background-color: white; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 12px; color: #374151; max-height: 200px; overflow-y: auto; border: 1px solid #fecaca;">
+          ${summaryData.errors?.map(error => 
+            `<div style="margin-bottom: 10px; padding: 8px; background-color: #fef2f2; border-radius: 4px;">
+              <strong>Service ${error.serviceId || 'Unknown'}:</strong> ${error.error || 'Unknown error'}
+            </div>`
+          ).join('') || 'Error details not available'}
+        </div>
+      </div>
+      ` : ''}
+      
+      <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e2e8f0;">
+        <h3 style="margin-top: 0; color: #475569; font-size: 16px;">📋 Summary</h3>
+        <p style="margin-bottom: 0; color: #374151; line-height: 1.6; font-style: italic;">
+          "${summaryData.summary}"
+        </p>
+      </div>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/admin" 
+           style="display: inline-block; background-color: #4f46e5; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);">
+          🚀 View Admin Dashboard
+        </a>
+      </div>
+      
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+        This is an automated summary of your nightly project scheduling run. The next scheduling run will occur at 1:00 AM UTC tomorrow.
+      </p>
+      
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        The Link Automated Scheduling System
+      </p>
+    </div>
+  `;
+
+  const text = `
+NIGHTLY PROJECT SCHEDULING SUMMARY - ${new Date().toLocaleDateString()}
+
+Hello ${recipientName},
+
+Your automated project scheduling system ran at ${new Date().toLocaleString()} with the following results:
+
+OVERALL STATUS: ${statusText}
+
+RESULTS:
+- Services Found Due: ${summaryData.servicesFoundDue}
+- Projects Created: ${summaryData.projectsCreated}
+- Services Rescheduled: ${summaryData.servicesRescheduled}
+- Errors Encountered: ${summaryData.errorsEncountered}
+- Execution Time: ${summaryData.executionTimeMs}ms
+
+SUMMARY:
+${summaryData.summary}
+
+${hasErrors ? `
+ERRORS:
+${summaryData.errors?.map(error => `- Service ${error.serviceId || 'Unknown'}: ${error.error || 'Unknown error'}`).join('\n') || 'Error details not available'}
+` : ''}
+
+This is an automated summary of your nightly project scheduling run. The next scheduling run will occur at 1:00 AM UTC tomorrow.
+
+Best regards,
+The Link Automated Scheduling System
+  `;
+
+  return await sendEmail({
+    to: recipientEmail,
+    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
+    subject,
+    text,
+    html,
+  });
+}
+
 export async function sendBulkProjectAssignmentSummaryEmail(
   recipientEmail: string,
   recipientName: string,
