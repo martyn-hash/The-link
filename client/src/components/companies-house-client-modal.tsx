@@ -448,14 +448,24 @@ export function CompaniesHouseClientModal({
       return await response.json() as { matches: any[] };
     },
     onSuccess: (data) => {
-      setOfficerMatches(data.matches);
-      // Initialize decisions - default to 'create' for all officers
-      const initialDecisions: { [key: number]: { action: 'create' | 'link', personId?: string } } = {};
-      data.matches.forEach((match, index) => {
-        initialDecisions[index] = { action: 'create' };
-      });
-      setOfficerDecisions(initialDecisions);
-      setStep('officer-matching');
+      // Check if any officers actually have potential duplicates
+      const officersWithMatches = data.matches.filter(match => match.matches && match.matches.length > 0);
+      
+      if (officersWithMatches.length > 0) {
+        // Some officers have potential duplicates - show matching step
+        setOfficerMatches(data.matches);
+        // Initialize decisions - default to 'create' for officers with matches only
+        const initialDecisions: { [key: number]: { action: 'create' | 'link', personId?: string } } = {};
+        officersWithMatches.forEach((match) => {
+          initialDecisions[match.index] = { action: 'create' };
+        });
+        setOfficerDecisions(initialDecisions);
+        setStep('officer-matching');
+      } else {
+        // No officers have duplicates - proceed directly to client creation
+        console.log("✨ No duplicate officers found - proceeding directly to client creation");
+        createClientFromCHMutation.mutate();
+      }
     },
     onError: (error: any) => {
       console.error("❌ Error finding officer matches:", error);
@@ -971,7 +981,9 @@ export function CompaniesHouseClientModal({
       }));
     };
 
-    const canProceed = Object.keys(officerDecisions).length === officerMatches.length &&
+    // Only consider officers with matches for the proceed check
+    const officersWithMatches = officerMatches.filter(match => match.matches && match.matches.length > 0);
+    const canProceed = Object.keys(officerDecisions).length === officersWithMatches.length &&
                        Object.values(officerDecisions).every(decision => 
                          decision.action === 'create' || (decision.action === 'link' && decision.personId)
                        );
@@ -987,8 +999,8 @@ export function CompaniesHouseClientModal({
         </p>
 
         <div className="space-y-4">
-          {officerMatches.map((match, index) => (
-            <Card key={index} className="p-4">
+          {officerMatches.filter(match => match.matches && match.matches.length > 0).map((match) => (
+            <Card key={match.index} className="p-4">
               <div className="space-y-4">
                 {/* Officer Details */}
                 <div className="border-b pb-3">
@@ -1036,14 +1048,14 @@ export function CompaniesHouseClientModal({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleOfficerDecision(index, 'link', person.id)}
+                                onClick={() => handleOfficerDecision(match.index, 'link', person.id)}
                                 className={
-                                  officerDecisions[index]?.action === 'link' && 
-                                  officerDecisions[index]?.personId === person.id
+                                  officerDecisions[match.index]?.action === 'link' && 
+                                  officerDecisions[match.index]?.personId === person.id
                                     ? 'bg-blue-100 border-blue-300'
                                     : ''
                                 }
-                                data-testid={`button-link-person-${index}-${personIndex}`}
+                                data-testid={`button-link-person-${match.index}-${personIndex}`}
                               >
                                 {officerDecisions[index]?.action === 'link' && 
                                  officerDecisions[index]?.personId === person.id ? (
@@ -1069,15 +1081,15 @@ export function CompaniesHouseClientModal({
                   <div className="border-t pt-3">
                     <Button
                       variant="outline"
-                      onClick={() => handleOfficerDecision(index, 'create')}
+                      onClick={() => handleOfficerDecision(match.index, 'create')}
                       className={
-                        officerDecisions[index]?.action === 'create'
+                        officerDecisions[match.index]?.action === 'create'
                           ? 'bg-green-100 border-green-300 w-full'
                           : 'w-full'
                       }
-                      data-testid={`button-create-person-${index}`}
+                      data-testid={`button-create-person-${match.index}`}
                     >
-                      {officerDecisions[index]?.action === 'create' ? (
+                      {officerDecisions[match.index]?.action === 'create' ? (
                         <CheckCircle className="h-4 w-4 mr-2" />
                       ) : (
                         <Plus className="h-4 w-4 mr-2" />
