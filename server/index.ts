@@ -4,6 +4,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling } from "./project-scheduler";
+import { sendSchedulingSummaryEmail } from "./emailService";
+import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -80,6 +82,41 @@ app.use((req, res, next) => {
         log(`[Project Scheduler] Nightly run completed: ${result.status} - ${result.projectsCreated} projects created, ${result.servicesRescheduled} services rescheduled`);
         if (result.errorsEncountered > 0) {
           console.error(`[Project Scheduler] Nightly run had ${result.errorsEncountered} errors:`, result.errors);
+        }
+        
+        // Send email notifications to users who have enabled scheduling summaries
+        try {
+          log('[Project Scheduler] Sending notification emails...');
+          const usersWithNotifications = await storage.getUsersWithSchedulingNotifications();
+          
+          if (usersWithNotifications.length > 0) {
+            const emailPromises = usersWithNotifications.map(async (user) => {
+              const userDisplayName = user.firstName && user.lastName 
+                ? `${user.firstName} ${user.lastName}` 
+                : user.firstName || user.email || 'User';
+              
+              return sendSchedulingSummaryEmail(user.email!, userDisplayName, {
+                status: result.status,
+                servicesFoundDue: result.servicesFoundDue,
+                projectsCreated: result.projectsCreated,
+                servicesRescheduled: result.servicesRescheduled,
+                errorsEncountered: result.errorsEncountered,
+                executionTimeMs: result.executionTimeMs,
+                summary: result.summary,
+                errors: result.errors
+              });
+            });
+            
+            const emailResults = await Promise.allSettled(emailPromises);
+            const successfulEmails = emailResults.filter(result => result.status === 'fulfilled' && result.value).length;
+            const failedEmails = emailResults.filter(result => result.status === 'rejected' || !result.value).length;
+            
+            log(`[Project Scheduler] Email notifications sent: ${successfulEmails} successful, ${failedEmails} failed`);
+          } else {
+            log('[Project Scheduler] No users have enabled scheduling summary notifications');
+          }
+        } catch (emailError) {
+          console.error('[Project Scheduler] Error sending notification emails:', emailError);
         }
       } catch (error) {
         console.error('[Project Scheduler] Fatal error in nightly run:', error);

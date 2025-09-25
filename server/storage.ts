@@ -296,6 +296,7 @@ export interface IStorage {
   createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences>;
   updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences>;
   getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences>;
+  getUsersWithSchedulingNotifications(): Promise<User[]>;
   
   // Bulk project notification handling
   sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void>;
@@ -623,6 +624,33 @@ export class DatabaseStorage implements IStorage {
     };
 
     return await this.createUserNotificationPreferences(defaultPreferences);
+  }
+
+  async getUsersWithSchedulingNotifications(): Promise<User[]> {
+    const usersWithNotifications = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profileImageUrl: users.profileImageUrl,
+        isAdmin: users.isAdmin,
+        canSeeAdminMenu: users.canSeeAdminMenu,
+        passwordHash: users.passwordHash,
+        isFallbackUser: users.isFallbackUser,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .innerJoin(userNotificationPreferences, eq(users.id, userNotificationPreferences.userId))
+      .where(
+        and(
+          eq(userNotificationPreferences.notifySchedulingSummary, true),
+          isNull(users.email).not() // Ensure users have valid email addresses
+        )
+      );
+    
+    return usersWithNotifications as User[];
   }
 
   async sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void> {
