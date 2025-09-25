@@ -242,7 +242,7 @@ class CompaniesHouseService {
       // Use proper name parsing for Companies House format
       firstName: parsedName.firstName,
       lastName: parsedName.lastName,
-      nationality: officer.nationality,
+      nationality: this.normalizeNationality(officer.nationality),
       countryOfResidence: officer.country_of_residence,
       occupation: officer.occupation,
       dateOfBirth: officer.date_of_birth ? `${officer.date_of_birth.year}-${officer.date_of_birth.month.toString().padStart(2, '0')}-01` : undefined,
@@ -269,7 +269,7 @@ class CompaniesHouseService {
       title: psc.name_elements?.title,
       firstName: psc.name_elements?.forename,
       lastName: psc.name_elements?.surname,
-      nationality: psc.nationality,
+      nationality: this.normalizeNationality(psc.nationality),
       countryOfResidence: psc.country_of_residence,
       dateOfBirth: psc.date_of_birth ? `${psc.date_of_birth.year}-${psc.date_of_birth.month.toString().padStart(2, '0')}-01` : undefined,
       // Address mapping
@@ -322,6 +322,59 @@ class CompaniesHouseService {
       firstName: firstName || undefined,
       lastName: lastName || undefined
     };
+  }
+
+  // Normalize nationality from Companies House to our enum values
+  private normalizeNationality(nationality?: string): string | undefined {
+    if (!nationality) return undefined;
+    
+    // Convert to lowercase and normalize common variations
+    const normalized = nationality.toLowerCase().trim();
+    
+    // Common mappings from Companies House to our enum
+    const nationalityMap: { [key: string]: string } = {
+      'british': 'british',
+      'english': 'british',
+      'scottish': 'scottish', 
+      'welsh': 'welsh',
+      'northern irish': 'northern_irish',
+      'irish': 'irish',
+      'american': 'american',
+      'usa': 'american',
+      'united states': 'american',
+      'canadian': 'canadian',
+      'australian': 'australian',
+      'german': 'german',
+      'french': 'french',
+      'spanish': 'spanish',
+      'italian': 'italian',
+      'dutch': 'dutch',
+      'belgian': 'belgian',
+      'swiss': 'swiss',
+      'austrian': 'austrian',
+      'portuguese': 'portuguese',
+      'polish': 'polish',
+      'danish': 'danish',
+      'norwegian': 'norwegian',
+      'swedish': 'swedish',
+      'finnish': 'finnish',
+      'russian': 'russian',
+      'chinese': 'chinese',
+      'japanese': 'japanese',
+      'indian': 'indian',
+      'brazilian': 'brazilian',
+      'south african': 'south_african',
+      'new zealander': 'new_zealander'
+    };
+    
+    // Check if we have a direct mapping
+    if (nationalityMap[normalized]) {
+      return nationalityMap[normalized];
+    }
+    
+    // If no mapping found, return undefined (making it optional)
+    console.warn(`Unknown nationality from Companies House: "${nationality}". Setting as null.`);
+    return undefined;
   }
 
   private extractPersonNumberFromLink(appointmentsLink?: string): string | undefined {
