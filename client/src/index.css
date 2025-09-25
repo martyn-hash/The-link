@@ -35,8 +35,8 @@
   --sidebar-accent-foreground: hsl(222.2, 84%, 4.9%);
   --sidebar-border: hsl(214.3, 31.8%, 91.4%);
   --sidebar-ring: hsl(202deg 91% 37%);
-  --font-sans: Inter;
-  --font-serif: Source Code Pro;
+  --font-sans: Poppins;
+  --font-serif: Roboto Mono;
   --font-mono: IBM Plex Mono;
   --radius: 0.75rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00);

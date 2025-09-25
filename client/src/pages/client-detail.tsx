@@ -4041,39 +4041,22 @@ export default function ClientDetail() {
                             className="text-left hover:no-underline p-4"
                             data-testid={`person-row-${clientPerson.person.id}`}
                           >
-                            <div className="flex items-start justify-between w-full mr-4">
-                              <div className="flex-1 space-y-3">
-                                {/* Header with name and role */}
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <h4 className="font-medium text-lg" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                                      {formatPersonName(clientPerson.person.fullName)}
-                                    </h4>
-                                    {clientPerson.officerRole && (
-                                      <p className="text-sm text-muted-foreground mt-1">
-                                        {clientPerson.officerRole}
-                                      </p>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex items-center space-x-2">
-                                    {clientPerson.isPrimaryContact && (
-                                      <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
-                                        Primary Contact
-                                      </Badge>
-                                    )}
-                                    
-                                    {clientPerson.person.isMainContact && (
-                                      <Badge variant="outline" data-testid={`badge-main-contact-${clientPerson.person.id}`}>
-                                        Main Contact
-                                      </Badge>
-                                    )}
-                                    
-                                  </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mr-4">
+                              {/* Column 1: Name, Role, and Contact Information */}
+                              <div className="space-y-2">
+                                <div>
+                                  <h4 className="font-medium text-lg" data-testid={`text-person-name-${clientPerson.person.id}`}>
+                                    {formatPersonName(clientPerson.person.fullName)}
+                                  </h4>
+                                  {clientPerson.officerRole && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {clientPerson.officerRole}
+                                    </p>
+                                  )}
                                 </div>
-
-                                {/* Contact Information - Prominently displayed */}
-                                <div className="flex items-center space-x-6">
+                                
+                                {/* Contact Information */}
+                                <div className="space-y-2">
                                   {clientPerson.person.email && (
                                     <div className="flex items-center space-x-2">
                                       <Mail className="h-4 w-4 text-muted-foreground" />
@@ -4100,9 +4083,9 @@ export default function ClientDetail() {
                                   )}
                                   
                                   {clientPerson.person.dateOfBirth && (
-                                    <div className="flex items-center space-x-2 text-muted-foreground ml-auto">
+                                    <div className="flex items-center space-x-2 text-muted-foreground">
                                       <Calendar className="h-4 w-4" />
-                                      <div className="text-right">
+                                      <div>
                                         <div className="text-xs">Date of Birth</div>
                                         <div className="text-sm font-medium" data-testid={`text-dob-${clientPerson.person.id}`}>
                                           {formatBirthDate(clientPerson.person.dateOfBirth)}
@@ -4111,6 +4094,79 @@ export default function ClientDetail() {
                                     </div>
                                   )}
                                 </div>
+                              </div>
+
+                              {/* Column 2: Address Information */}
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm font-medium text-muted-foreground">Address</span>
+                                </div>
+                                {(() => {
+                                  const addressParts = [
+                                    clientPerson.person.addressLine1,
+                                    clientPerson.person.addressLine2,
+                                    clientPerson.person.locality,
+                                    clientPerson.person.region,
+                                    clientPerson.person.postalCode,
+                                    clientPerson.person.country
+                                  ].filter(Boolean);
+                                  
+                                  return addressParts.length > 0 ? (
+                                    <div className="space-y-1 text-sm" data-testid={`text-person-address-${clientPerson.person.id}`}>
+                                      {clientPerson.person.addressLine1 && <p className="font-medium">{clientPerson.person.addressLine1}</p>}
+                                      {clientPerson.person.addressLine2 && <p>{clientPerson.person.addressLine2}</p>}
+                                      {clientPerson.person.locality && <p>{clientPerson.person.locality}</p>}
+                                      {clientPerson.person.region && <p>{clientPerson.person.region}</p>}
+                                      {clientPerson.person.postalCode && <p className="font-medium">{clientPerson.person.postalCode}</p>}
+                                      {clientPerson.person.country && <p className="text-muted-foreground">{clientPerson.person.country}</p>}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground italic">No address available</p>
+                                  );
+                                })()}
+                              </div>
+
+                              {/* Column 3: Nationality, Occupation, and Contact Status */}
+                              <div className="space-y-2">
+                                {/* Main Contact and Primary Contact Status */}
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                  {clientPerson.isPrimaryContact && (
+                                    <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
+                                      Primary Contact
+                                    </Badge>
+                                  )}
+                                  
+                                  {clientPerson.person.isMainContact && (
+                                    <Badge variant="outline" data-testid={`badge-main-contact-${clientPerson.person.id}`}>
+                                      Main Contact
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                {/* Nationality */}
+                                {clientPerson.person.nationality && (
+                                  <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Nationality</div>
+                                    <div className="text-sm font-medium capitalize" data-testid={`text-nationality-${clientPerson.person.id}`}>
+                                      {clientPerson.person.nationality.replace(/_/g, ' ')}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Occupation */}
+                                {clientPerson.person.occupation && (
+                                  <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Occupation</div>
+                                    <div className="text-sm font-medium" data-testid={`text-occupation-${clientPerson.person.id}`}>
+                                      {clientPerson.person.occupation}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {!clientPerson.person.nationality && !clientPerson.person.occupation && !clientPerson.isPrimaryContact && !clientPerson.person.isMainContact && (
+                                  <p className="text-sm text-muted-foreground italic">No additional info available</p>
+                                )}
                               </div>
                             </div>
                           </AccordionTrigger>
