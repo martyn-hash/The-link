@@ -104,6 +104,7 @@ export const userNotificationPreferences = pgTable("user_notification_preference
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   notifyStageChanges: boolean("notify_stage_changes").notNull().default(true),
   notifyNewProjects: boolean("notify_new_projects").notNull().default(true),
+  notifySchedulingSummary: boolean("notify_scheduling_summary").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
