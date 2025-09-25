@@ -962,7 +962,15 @@ export class DatabaseStorage implements IStorage {
 
   // People operations
   async createPerson(personData: InsertPerson): Promise<Person> {
-    const [person] = await db.insert(people).values(personData).returning();
+    // Generate ID if not provided (for database compatibility)
+    const personWithId = personData.id 
+      ? personData 
+      : { 
+          ...personData, 
+          id: `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
+        };
+    
+    const [person] = await db.insert(people).values(personWithId).returning();
     return person;
   }
 

@@ -377,6 +377,10 @@ export function CompaniesHouseClientModal({
       const officersResponse = await apiRequest("GET", `/api/companies-house/company/${companyNumber}/officers`);
       const officersData = await officersResponse.json() as CompanyOfficersResponse;
       
+      console.log("📋 Officers API response:", officersData);
+      console.log("📋 Officers array length:", officersData.officers?.length || 0);
+      console.log("📋 Raw officers data:", officersData);
+      
       setSelectedCompany(companyProfile);
       setCompanyOfficers(officersData.officers || []);
       setStep('ch-confirm');
@@ -431,12 +435,16 @@ export function CompaniesHouseClientModal({
   // Officer matching mutation
   const findOfficerMatchesMutation = useMutation({
     mutationFn: async (officers: CompanyOfficer[]) => {
-      const response = await apiRequest("POST", "/api/people/match", {
+      console.log("🔍 Finding officer matches for:", officers.length, "officers");
+      const requestData = {
         officers: officers.map(officer => ({
           fullName: officer.name,
           dateOfBirth: officer.date_of_birth || { year: 1900, month: 1 } // Fallback if no DOB
         }))
-      });
+      };
+      console.log("📤 Officer match request data:", requestData);
+      
+      const response = await apiRequest("POST", "/api/people/match", requestData);
       return await response.json() as { matches: any[] };
     },
     onSuccess: (data) => {
@@ -450,7 +458,8 @@ export function CompaniesHouseClientModal({
       setStep('officer-matching');
     },
     onError: (error: any) => {
-      console.error("Error finding officer matches:", error);
+      console.error("❌ Error finding officer matches:", error);
+      console.error("❌ Error details:", JSON.stringify(error, null, 2));
       toast({
         title: "Error",
         description: "Failed to find officer matches. Proceeding with creating new people.",
@@ -685,13 +694,12 @@ export function CompaniesHouseClientModal({
           </Button>
           <Button 
             onClick={() => {
-              // Get selected officers to check for matches
-              const officersToCheck = selectedOfficers.map(index => companyOfficers[index]);
-              if (officersToCheck.length > 0) {
-                // Find matches for selected officers first
-                findOfficerMatchesMutation.mutate(officersToCheck);
+              // Always check for officer matches if company has officers
+              if (companyOfficers.length > 0) {
+                // Find matches for all officers (user can select during matching)
+                findOfficerMatchesMutation.mutate(companyOfficers);
               } else {
-                // No officers selected, proceed directly
+                // No officers exist, proceed directly to creation
                 createClientFromCHMutation.mutate();
               }
             }}

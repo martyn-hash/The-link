@@ -881,8 +881,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { companyNumber } = paramValidation.data;
-      const officersData = await companiesHouseService.getCompanyOfficers(companyNumber);
-      res.json(officersData);
+      const allOfficersData = await companiesHouseService.getCompanyOfficers(companyNumber);
+      
+      // Filter for directors only (not resigned officers) - same logic as client creation
+      const activeDirectors = (allOfficersData || []).filter((officer: any) => 
+        officer.officer_role && 
+        officer.officer_role.toLowerCase().includes('director') &&
+        !officer.resigned_on // Only active directors
+      );
+      
+      // Return in expected format { officers: [...] }
+      res.json({ officers: activeDirectors });
     } catch (error) {
       console.error("Error fetching company officers:", error instanceof Error ? error.message : error);
       
