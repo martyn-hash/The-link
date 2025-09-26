@@ -4836,17 +4836,24 @@ export default function ClientDetail() {
             )}
 
             {/* Personal Services Section */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className={client.clientType === 'individual' ? '' : 'text-red-500'}>
-                    {client.clientType === 'individual' ? 'Services' : 'Personal Services'}
-                  </CardTitle>
-                  {client.clientType === 'individual' && (
-                    <AddServiceModal clientId={client.id} clientType={client.clientType} onSuccess={() => { refetchServices(); refetchPeopleServices(); }} />
-                  )}
-                </div>
-              </CardHeader>
+            <div className="space-y-4">
+              {/* Add Personal Service Button - positioned above the Personal Services card */}
+              <div className="flex justify-end">
+                <AddServiceModal 
+                  clientId={client.id} 
+                  clientType="individual" 
+                  onSuccess={() => { refetchServices(); refetchPeopleServices(); }} 
+                />
+              </div>
+              
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className={client.clientType === 'individual' ? '' : 'text-red-500'}>
+                      {client.clientType === 'individual' ? 'Services' : 'Personal Services'}
+                    </CardTitle>
+                  </div>
+                </CardHeader>
               <CardContent>
                 <div data-testid="section-personal-services">
                   {peopleServicesLoading ? (
@@ -5006,6 +5013,7 @@ export default function ClientDetail() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="projects" className="space-y-6 mt-6">
