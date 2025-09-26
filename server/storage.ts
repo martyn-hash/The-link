@@ -1507,7 +1507,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]> {
+  async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [eq(projects.clientId, clientId)];
     
     if (filters?.month) {
@@ -1520,6 +1520,24 @@ export class DatabaseStorage implements IStorage {
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+
+    // Filter by service if provided - need to join with projectTypes
+    if (filters?.serviceId) {
+      // Use a subquery to find project types linked to the service
+      const serviceProjectTypes = await db
+        .select({ id: projectTypes.id })
+        .from(projectTypes)
+        .where(eq(projectTypes.serviceId, filters.serviceId));
+      
+      const projectTypeIds = serviceProjectTypes.map(pt => pt.id);
+      
+      if (projectTypeIds.length > 0) {
+        whereConditions.push(inArray(projects.projectTypeId, projectTypeIds));
+      } else {
+        // No project types found for this service, return empty result
+        return [];
+      }
     }
     
     const whereClause = and(...whereConditions);
