@@ -3752,11 +3752,8 @@ function ServiceProjectsList({ serviceId }: { serviceId: string }) {
   const { id } = useParams();
 
   const { data: projects, isLoading } = useQuery<ProjectWithRelations[]>({
-    queryKey: [`/api/clients/${id}/projects`, 'service', serviceId],
-    queryFn: getQueryFn({ 
-      on401: "throw",
-      url: `/api/clients/${id}/projects?serviceId=${serviceId}`
-    }),
+    queryKey: [`/api/clients/${id}/projects?serviceId=${serviceId}`],
+    queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!serviceId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

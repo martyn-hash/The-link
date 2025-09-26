@@ -7,7 +7,7 @@
   --foreground: hsl(222.2, 84%, 4.9%);
   --card: hsl(0deg 0% 96.08%);
   --card-foreground: hsl(0deg 0% 0%);
-  --popover: hsl(0, 0%, 100%);
+  --popover: hsl(0deg 0% 100%);
   --popover-foreground: hsl(222.22deg 47.37% 11.18%);
   --primary: hsl(202deg 91% 37%);
   --primary-foreground: hsl(0deg 0% 100%);
@@ -19,7 +19,7 @@
   --accent-foreground: hsl(0deg 0% 100%);
   --destructive: hsl(0deg 72.22% 50.59%);
   --destructive-foreground: hsl(0deg 0% 100%);
-  --border: hsl(212.73deg 26.83% 83.92%);
+  --border: hsl(0deg 50% 0.78%);
   --input: hsl(214.3, 31.8%, 91.4%);
   --ring: hsl(202deg 91% 37%);
   --chart-1: hsl(202deg 91% 37%);
@@ -37,7 +37,7 @@
   --sidebar-ring: hsl(202deg 91% 37%);
   --font-sans: Poppins;
   --font-serif: Roboto Mono;
-  --font-mono: IBM Plex Mono;
+  --font-mono: Open Sans;
   --radius: 1.25rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00);
