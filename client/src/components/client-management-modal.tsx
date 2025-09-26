@@ -225,8 +225,7 @@ export function ClientManagementModal({
           await Promise.all(clientServicePromises);
           
           // Get the created client services to get their IDs
-          const clientServicesResponse = await apiRequest("GET", `/api/client-services/client/${newClient.id}`);
-          const clientServices = await clientServicesResponse.json() as (ClientService & { service: ServiceWithDetails })[];
+          const clientServices = await apiRequest("GET", `/api/client-services/client/${newClient.id}`) as (ClientService & { service: ServiceWithDetails })[];
           
           // Create all role assignments in parallel
           const roleAssignmentPromises: Promise<any>[] = [];
@@ -255,8 +254,7 @@ export function ClientManagementModal({
           await Promise.all(roleAssignmentPromises);
           
           // Final validation to ensure everything was created correctly
-          const validationResponse = await apiRequest("GET", `/api/clients/${newClient.id}/service-role-completeness`);
-          const completeness = await validationResponse.json() as ServiceRoleCompletenessResponse;
+          const completeness = await apiRequest("GET", `/api/clients/${newClient.id}/service-role-completeness`) as ServiceRoleCompletenessResponse;
           
           const incompleteServices = completeness.services.filter(s => !s.isComplete);
           if (incompleteServices.length > 0) {
@@ -302,8 +300,7 @@ export function ClientManagementModal({
       if (!client?.id) throw new Error("Client ID is required");
       
       // CRITICAL FIX: Validate role completeness BEFORE saving
-      const validationResponse = await apiRequest("GET", `/api/clients/${client.id}/service-role-completeness`);
-      const completeness = await validationResponse.json() as ServiceRoleCompletenessResponse;
+      const completeness = await apiRequest("GET", `/api/clients/${client.id}/service-role-completeness`) as ServiceRoleCompletenessResponse;
       
       const incompleteServices = completeness.services.filter(s => !s.isComplete);
       if (incompleteServices.length > 0) {
@@ -311,8 +308,7 @@ export function ClientManagementModal({
       }
       
       // Only update the client AFTER validation passes
-      const response = await apiRequest("PUT", `/api/clients/${client.id}`, data);
-      const updatedClient = await response.json() as Client;
+      const updatedClient = await apiRequest("PUT", `/api/clients/${client.id}`, data) as Client;
       
       return updatedClient;
     },
