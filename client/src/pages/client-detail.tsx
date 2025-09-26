@@ -3746,6 +3746,24 @@ function CompanyCreationForm({ onSubmit, onCancel, isSubmitting }: {
   );
 }
 
+// Component to display service-specific projects
+function ServiceProjectsList({ serviceId }: { serviceId: string }) {
+  const [, setLocation] = useLocation();
+  const { id } = useParams();
+
+  const { data: projects, isLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: [`/api/clients/${id}/projects`, 'service', serviceId],
+    queryFn: getQueryFn({ 
+      on401: "throw",
+      url: `/api/clients/${id}/projects?serviceId=${serviceId}`
+    }),
+    enabled: !!id && !!serviceId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  return <ProjectsList projects={projects} isLoading={isLoading} />;
+}
+
 // Component to display a list of projects with hyperlinks
 function ProjectsList({ projects, isLoading }: { projects?: ProjectWithRelations[]; isLoading: boolean }) {
   const [, setLocation] = useLocation();
@@ -3989,6 +4007,7 @@ export default function ClientDetail() {
     enabled: !!id && !!client,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
 
   // Mutation for updating person data
   const updatePersonMutation = useMutation({
@@ -4916,9 +4935,8 @@ export default function ClientDetail() {
                                               Related Projects
                                             </h5>
                                             
-                                            <ProjectsList 
-                                              projects={clientProjects} 
-                                              isLoading={projectsLoading} 
+                                            <ServiceProjectsList 
+                                              serviceId={clientService.serviceId} 
                                             />
                                           </div>
                                         </TabsContent>
@@ -5156,9 +5174,8 @@ export default function ClientDetail() {
                                         Related Projects
                                       </h5>
                                       
-                                      <ProjectsList 
-                                        projects={clientProjects} 
-                                        isLoading={projectsLoading} 
+                                      <ServiceProjectsList 
+                                        serviceId={peopleService.serviceId} 
                                       />
                                     </div>
                                   </TabsContent>
