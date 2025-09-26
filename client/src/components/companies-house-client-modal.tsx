@@ -346,8 +346,7 @@ export function CompaniesHouseClientModal({
     
     setIsSearching(true);
     try {
-      const response = await apiRequest("GET", `/api/companies-house/search?q=${encodeURIComponent(query)}&itemsPerPage=10`);
-      const data = await response.json() as CompanySearchResponse;
+      const data = await apiRequest("GET", `/api/companies-house/search?q=${encodeURIComponent(query)}&itemsPerPage=10`) as CompanySearchResponse;
       setCompanySearchResults(data.items || []);
     } catch (error) {
       console.error("Error searching companies:", error);
@@ -370,12 +369,10 @@ export function CompaniesHouseClientModal({
     setIsLoadingCompany(true);
     try {
       // Fetch company profile
-      const profileResponse = await apiRequest("GET", `/api/companies-house/company/${companyNumber}`);
-      const companyProfile = await profileResponse.json() as CompanyProfile;
+      const companyProfile = await apiRequest("GET", `/api/companies-house/company/${companyNumber}`) as CompanyProfile;
       
       // Fetch company officers
-      const officersResponse = await apiRequest("GET", `/api/companies-house/company/${companyNumber}/officers`);
-      const officersData = await officersResponse.json() as CompanyOfficersResponse;
+      const officersData = await apiRequest("GET", `/api/companies-house/company/${companyNumber}/officers`) as CompanyOfficersResponse;
       
       console.log("📋 Officers API response:", officersData);
       console.log("📋 Officers array length:", officersData.officers?.length || 0);
