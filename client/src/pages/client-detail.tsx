@@ -183,6 +183,7 @@ const editServiceSchema = z.object({
   nextStartDate: z.string().optional(),
   nextDueDate: z.string().optional(),
   serviceOwnerId: z.string().optional(),
+  frequency: z.string().optional(),
   roleAssignments: z.array(z.object({
     workRoleId: z.string(),
     userId: z.string(),
@@ -1325,6 +1326,7 @@ function EditServiceModal({
       nextStartDate: service.nextStartDate ? new Date(service.nextStartDate).toISOString().split('T')[0] : '',
       nextDueDate: service.nextDueDate ? new Date(service.nextDueDate).toISOString().split('T')[0] : '',
       serviceOwnerId: service.serviceOwnerId || 'none',
+      frequency: service.frequency || '',
     },
   });
 
@@ -1341,11 +1343,12 @@ function EditServiceModal({
   // Use the mutation for updating service
   const updateServiceMutation = useMutation({
     mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}> }) => {
-      // First update the service itself (dates, owner, etc.)
+      // First update the service itself (dates, owner, frequency, etc.)
       const serviceUpdateData = {
         nextStartDate: data.nextStartDate,
         nextDueDate: data.nextDueDate,
         serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
+        frequency: data.frequency,
       };
       
       await apiRequest("PUT", `/api/client-services/${data.serviceId}`, serviceUpdateData);
@@ -1431,6 +1434,32 @@ function EditServiceModal({
               )}
             />
 
+            {/* Frequency field - show for all services but disable for Companies House if needed */}
+            <FormField
+              control={form.control}
+              name="frequency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Frequency</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-frequency">
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="annually">Annually</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Date fields - only show for non-Companies House services */}
             {!isCompaniesHouseService && (
               <>
@@ -1477,7 +1506,9 @@ function EditServiceModal({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <FormLabel>Role Assignments</FormLabel>
-                <p className="text-xs text-muted-foreground">Update who is assigned to each role</p>
+                <p className="text-xs text-muted-foreground">
+                  Roles are defined in Admin. You can only change who fills each role here.
+                </p>
               </div>
 
               {service.roleAssignments && service.roleAssignments.length > 0 ? (
