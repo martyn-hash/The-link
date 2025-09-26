@@ -1326,7 +1326,7 @@ function EditServiceModal({
       nextStartDate: service.nextStartDate ? new Date(service.nextStartDate).toISOString().split('T')[0] : '',
       nextDueDate: service.nextDueDate ? new Date(service.nextDueDate).toISOString().split('T')[0] : '',
       serviceOwnerId: service.serviceOwnerId || 'none',
-      frequency: service.frequency || '',
+      frequency: (service.frequency as "daily" | "weekly" | "monthly" | "quarterly" | "annually") || 'monthly',
     },
   });
 
@@ -1345,15 +1345,17 @@ function EditServiceModal({
     mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}> }) => {
       // First update the service itself (dates, owner, frequency, etc.)
       const serviceUpdateData = {
-        nextStartDate: data.nextStartDate ? 
+        nextStartDate: data.nextStartDate && data.nextStartDate.trim() !== '' ? 
           (data.nextStartDate.includes('T') ? data.nextStartDate : data.nextStartDate + 'T00:00:00.000Z') : 
-          null,
-        nextDueDate: data.nextDueDate ? 
+          undefined,
+        nextDueDate: data.nextDueDate && data.nextDueDate.trim() !== '' ? 
           (data.nextDueDate.includes('T') ? data.nextDueDate : data.nextDueDate + 'T00:00:00.000Z') : 
-          null,
+          undefined,
         serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
         frequency: isCompaniesHouseService ? "annually" : data.frequency,
       };
+      
+      console.log('Service update data:', serviceUpdateData);
       
       await apiRequest("PUT", `/api/client-services/${data.serviceId}`, serviceUpdateData);
       
