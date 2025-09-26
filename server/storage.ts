@@ -4192,37 +4192,78 @@ export class DatabaseStorage implements IStorage {
 
   // Client Service Role Assignments CRUD operations
   async getClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]> {
-    return await db
-      .select({
-        id: clientServiceRoleAssignments.id,
-        clientServiceId: clientServiceRoleAssignments.clientServiceId,
-        workRoleId: clientServiceRoleAssignments.workRoleId,
-        userId: clientServiceRoleAssignments.userId,
-        isActive: clientServiceRoleAssignments.isActive,
-        createdAt: clientServiceRoleAssignments.createdAt,
-        workRole: {
-          id: workRoles.id,
-          name: workRoles.name,
-          description: workRoles.description,
-          createdAt: workRoles.createdAt,
-        },
-        user: {
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-          role: users.role,
-          passwordHash: users.passwordHash,
-          isFallbackUser: users.isFallbackUser,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        },
-      })
-      .from(clientServiceRoleAssignments)
-      .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
-      .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
-      .where(eq(clientServiceRoleAssignments.clientServiceId, clientServiceId));
+    // Validate clientServiceId to prevent undefined/null being passed to query builder
+    if (!clientServiceId || clientServiceId.trim() === '') {
+      console.warn(`[Storage] getClientServiceRoleAssignments called with invalid clientServiceId: "${clientServiceId}"`);
+      return [];
+    }
+    
+    try {
+      // Use a simpler approach to avoid complex join issues that could cause TypeError
+      // First get basic role assignments
+      console.log(`[Storage] Getting basic role assignments for clientServiceId: ${clientServiceId}`);
+      const assignments = await db
+        .select()
+        .from(clientServiceRoleAssignments)
+        .where(eq(clientServiceRoleAssignments.clientServiceId, clientServiceId));
+      
+      console.log(`[Storage] Found ${assignments.length} role assignments`);
+      
+      // For each assignment, get the work role and user details separately
+      const assignmentsWithDetails = await Promise.all(
+        assignments.map(async (assignment) => {
+          try {
+            // Validate assignment has required IDs
+            if (!assignment.workRoleId || !assignment.userId) {
+              console.warn(`[Storage] Assignment ${assignment.id} has invalid workRoleId (${assignment.workRoleId}) or userId (${assignment.userId})`);
+              return null;
+            }
+            
+            console.log(`[Storage] Getting details for assignment ${assignment.id} - workRoleId: ${assignment.workRoleId}, userId: ${assignment.userId}`);
+            
+            // Get work role details
+            const [workRole] = await db
+              .select()
+              .from(workRoles)
+              .where(eq(workRoles.id, assignment.workRoleId));
+            
+            // Get user details
+            const [user] = await db
+              .select()
+              .from(users)
+              .where(eq(users.id, assignment.userId));
+            
+            if (!workRole || !user) {
+              console.warn(`[Storage] Missing workRole (${!!workRole}) or user (${!!user}) for assignment ${assignment.id}`);
+              return null;
+            }
+            
+            return {
+              id: assignment.id,
+              clientServiceId: assignment.clientServiceId,
+              workRoleId: assignment.workRoleId,
+              userId: assignment.userId,
+              isActive: assignment.isActive,
+              createdAt: assignment.createdAt,
+              workRole,
+              user,
+            };
+          } catch (error) {
+            console.error(`[Storage] Error processing assignment ${assignment.id}:`, error);
+            return null;
+          }
+        })
+      );
+      
+      // Filter out null results
+      const validAssignments = assignmentsWithDetails.filter(assignment => assignment !== null);
+      console.log(`[Storage] Returning ${validAssignments.length} valid assignments with details`);
+      
+      return validAssignments;
+    } catch (error) {
+      console.error(`[Storage] Error in getClientServiceRoleAssignments for clientServiceId ${clientServiceId}:`, error);
+      return [];
+    }
   }
 
   async getActiveClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]> {

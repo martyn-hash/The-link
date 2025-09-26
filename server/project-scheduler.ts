@@ -1071,12 +1071,28 @@ async function processService(
  * Create a project from a due service
  */
 async function createProjectFromService(dueService: DueService): Promise<any> {
+  console.log(`[Project Scheduler] createProjectFromService ENTRY - Service: ${dueService.service.name} (${dueService.id})`);
+  console.log(`[Project Scheduler] - DueService data:`, {
+    serviceId: dueService.id,
+    serviceName: dueService.service.name,
+    clientId: dueService.clientId,
+    projectTypeId: dueService.service.projectType?.id,
+    serviceOwnerId: dueService.serviceOwnerId,
+    frequency: dueService.frequency,
+    nextStartDate: dueService.nextStartDate,
+    nextDueDate: dueService.nextDueDate
+  });
+  
   // IDEMPOTENCY CHECK: Ensure we don't create duplicate projects for the same client, project type, and EXACT DATE
   // This is date-specific to allow weekly services to create multiple projects per month
   const scheduledDate = dueService.nextStartDate.toISOString().split('T')[0];
+  console.log(`[Project Scheduler] Scheduled date: ${scheduledDate}`);
   
   // Check if a project already exists for this client, project type, and exact date
+  console.log(`[Project Scheduler] About to call storage.getAllProjects()...`);
   const allProjects = await storage.getAllProjects();
+  console.log(`[Project Scheduler] getAllProjects() returned ${allProjects.length} projects`);
+  
   const duplicateProject = allProjects.find((project: any) => {
     if (project.clientId !== dueService.clientId || 
         project.projectTypeId !== dueService.service.projectType?.id) {
@@ -1096,7 +1112,10 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
   // This prevents multiple projects if multiple project types reference the same service for the same scheduled date
   // Critical: Uses exact date comparison, not month, to allow weekly services to create multiple projects per month
   if (dueService.type === 'client') {
+    console.log(`[Project Scheduler] About to call storage.getProjectSchedulingHistoryByServiceId(${dueService.id}, ${dueService.type})...`);
     const schedulingHistory = await storage.getProjectSchedulingHistoryByServiceId(dueService.id, dueService.type);
+    console.log(`[Project Scheduler] getProjectSchedulingHistoryByServiceId() returned ${schedulingHistory.length} entries`);
+    
     const existingProjectOnDate = schedulingHistory.find(entry => {
       if (!entry.projectId) return false;
       // Compare exact scheduled dates - critical for weekly services that run multiple times per month
@@ -1136,34 +1155,46 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
   console.log(`[Project Scheduler] DEBUG: Getting stages for projectType.id="${projectType.id}", projectType.name="${projectType.name}"`);
   console.log(`[Project Scheduler] DEBUG: projectType object:`, JSON.stringify(projectType, null, 2));
   
+  console.log(`[Project Scheduler] About to call storage.getKanbanStagesByProjectTypeId("${projectType.id}")...`);
   const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
-  console.log(`[Project Scheduler] DEBUG: Found ${stages.length} stages for project type ${projectType.name}`);
+  console.log(`[Project Scheduler] getKanbanStagesByProjectTypeId() returned ${stages.length} stages for project type ${projectType.name}`);
   
   if (stages.length === 0) {
     throw new Error(`No kanban stages configured for project type: ${projectType.name}`);
   }
 
   const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+  console.log(`[Project Scheduler] First stage: ${firstStage.name} (order: ${firstStage.order})`);
 
   // Determine assignees based on stage configuration
   let currentAssigneeId = dueService.serviceOwnerId;
+  console.log(`[Project Scheduler] Initial assignee from service owner: ${currentAssigneeId}`);
   
   if (firstStage.assignedUserId) {
     currentAssigneeId = firstStage.assignedUserId;
+    console.log(`[Project Scheduler] Assignee updated from stage assigned user: ${currentAssigneeId}`);
   } else if (firstStage.assignedWorkRoleId) {
     // Get user assigned to this role for this service
     if (dueService.type === 'client' && dueService.clientId) {
+      console.log(`[Project Scheduler] About to call storage.getClientServiceRoleAssignments("${dueService.id}")...`);
       const roleAssignments = await storage.getClientServiceRoleAssignments(dueService.id);
+      console.log(`[Project Scheduler] getClientServiceRoleAssignments() returned ${roleAssignments.length} role assignments`);
+      
       const roleAssignment = roleAssignments.find(ra => ra.workRoleId === firstStage.assignedWorkRoleId && ra.isActive);
       if (roleAssignment) {
         currentAssigneeId = roleAssignment.userId;
+        console.log(`[Project Scheduler] Assignee updated from role assignment: ${currentAssigneeId}`);
       }
     }
   }
 
   // Create project description
+  console.log(`[Project Scheduler] About to call storage.getClientById("${dueService.clientId}")...`);
   const clientName = dueService.clientId ? (await storage.getClientById(dueService.clientId))?.name : 'Unknown Client';
+  console.log(`[Project Scheduler] getClientById() returned client name: ${clientName}`);
+  
   const description = `${dueService.service.name} - ${clientName}`;
+  console.log(`[Project Scheduler] Project description: ${description}`);
 
   // Ensure we have valid user IDs for required fields
   const finalAssigneeId = currentAssigneeId || dueService.serviceOwnerId;
