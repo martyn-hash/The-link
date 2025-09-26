@@ -90,6 +90,7 @@ type CreateWorkRoleFormData = z.infer<typeof createWorkRoleFormSchema>;
 
 interface ServiceWithDetails extends Service {
   roles: WorkRole[];
+  projectType?: { name: string; id: string; description?: string; active: boolean; };
 }
 
 interface WorkRoleWithUsage extends WorkRole {
@@ -739,6 +740,7 @@ export default function Services() {
                             <TableHead>Name</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Project Type</TableHead>
                             <TableHead>Mapped Roles</TableHead>
                             <TableHead className="w-20">Actions</TableHead>
                           </TableRow>
@@ -767,6 +769,9 @@ export default function Services() {
                                     </Badge>
                                   )}
                                 </div>
+                              </TableCell>
+                              <TableCell data-testid={`project-type-${service.id}`}>
+                                {service.projectType?.name || "—"}
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
