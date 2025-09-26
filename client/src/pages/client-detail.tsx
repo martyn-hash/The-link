@@ -318,14 +318,12 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
   // Create people service mutation for personal services
   const createPeopleServiceMutation = useMutation({
     mutationFn: async (data: AddServiceData) => {
-      const peopleServiceResponse = await apiRequest("POST", "/api/people-services", {
+      return await apiRequest("POST", "/api/people-services", {
         personId: selectedPersonId,
         serviceId: data.serviceId,
         serviceOwnerId: data.serviceOwnerId || null,
         notes: null,
       });
-      
-      return await peopleServiceResponse.json();
     },
     onSuccess: () => {
       toast({
@@ -354,7 +352,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
   const createClientServiceMutation = useMutation({
     mutationFn: async (data: AddServiceData) => {
       // Step 1: Create the client service
-      const clientServiceResponse = await apiRequest("POST", "/api/client-services", {
+      const clientService = await apiRequest("POST", "/api/client-services", {
         clientId,
         serviceId: data.serviceId,
         frequency: data.frequency,
@@ -362,8 +360,6 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
         nextDueDate: data.nextDueDate && data.nextDueDate.trim() ? new Date(data.nextDueDate).toISOString() : null,
         serviceOwnerId: data.serviceOwnerId,
       });
-      
-      const clientService = await clientServiceResponse.json();
       
       // Step 2: Create role assignments if any roles are assigned
       if (selectedService?.roles && roleAssignments && Object.keys(roleAssignments).length > 0) {
@@ -1482,8 +1478,7 @@ function PersonTabbedView({
   // Link person to company mutation
   const linkToCompanyMutation = useMutation({
     mutationFn: async (data: LinkPersonToCompanyData) => {
-      const response = await apiRequest("POST", `/api/people/${clientPerson.person.id}/companies`, data);
-      return response.json();
+      return await apiRequest("POST", `/api/people/${clientPerson.person.id}/companies`, data);
     },
     onSuccess: () => {
       toast({

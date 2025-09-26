@@ -201,8 +201,7 @@ export function ClientManagementModal({
   const createClientMutation = useMutation({
     mutationFn: async (data: ClientFormData) => {
       // Step 1: Create the client
-      const clientResponse = await apiRequest("POST", "/api/clients", data);
-      const newClient = await clientResponse.json() as Client;
+      const newClient = await apiRequest("POST", "/api/clients", data) as Client;
       
       // Step 2: If services are selected, create all services and role assignments atomically
       if (selectedServices.length > 0) {

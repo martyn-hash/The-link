@@ -384,8 +384,7 @@ export default function Services() {
   const createServiceMutation = useMutation({
     mutationFn: async (data: CreateServiceFormData) => {
       const { roleIds, ...serviceData } = data;
-      const response = await apiRequest("POST", "/api/services", serviceData);
-      const service = await response.json() as Service;
+      const service = await apiRequest("POST", "/api/services", serviceData) as Service;
       
       // Add roles to service
       if (roleIds.length > 0) {
@@ -422,12 +421,10 @@ export default function Services() {
       const validRoleIds = roleIds.filter(roleId => roleId && roleId.trim() !== "");
       
       // Update service
-      const serviceResponse = await apiRequest("PATCH", `/api/services/${id}`, serviceData);
-      const service = await serviceResponse.json() as Service;
+      const service = await apiRequest("PATCH", `/api/services/${id}`, serviceData) as Service;
       
       // Get current roles
-      const rolesResponse = await apiRequest("GET", `/api/services/${id}/roles`);
-      const currentRoles = await rolesResponse.json() as WorkRole[];
+      const currentRoles = await apiRequest("GET", `/api/services/${id}/roles`) as WorkRole[];
       const currentRoleIds = currentRoles.map(role => role.id);
       
       // Remove roles not in new list
@@ -486,8 +483,7 @@ export default function Services() {
 
   const createRoleMutation = useMutation({
     mutationFn: async (data: CreateWorkRoleFormData) => {
-      const response = await apiRequest("POST", "/api/work-roles", data);
-      return await response.json() as WorkRole;
+      return await apiRequest("POST", "/api/work-roles", data) as WorkRole;
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Work role created successfully" });
@@ -508,8 +504,7 @@ export default function Services() {
   const updateRoleMutation = useMutation({
     mutationFn: async (data: CreateWorkRoleFormData & { id: string }) => {
       const { id, ...roleData } = data;
-      const response = await apiRequest("PATCH", `/api/work-roles/${id}`, roleData);
-      return await response.json() as WorkRole;
+      return await apiRequest("PATCH", `/api/work-roles/${id}`, roleData) as WorkRole;
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Work role updated successfully" });
