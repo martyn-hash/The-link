@@ -3748,6 +3748,7 @@ export default function ClientDetail() {
   const [expandedClientServiceId, setExpandedClientServiceId] = useState<string | null>(null);
   const [expandedPersonalServiceId, setExpandedPersonalServiceId] = useState<string | null>(null);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editingPersonalServiceId, setEditingPersonalServiceId] = useState<string | null>(null);
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
@@ -4947,55 +4948,55 @@ export default function ClientDetail() {
                             
                             <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-personal-service-details-${peopleService.id}`}>
                               <div className="pt-4">
-                                <Tabs defaultValue="details" className="w-full">
+                                <div className="flex items-center justify-between mb-4">
+                                  <div></div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditingPersonalServiceId(peopleService.id)}
+                                    data-testid={`button-edit-personal-service-${peopleService.id}`}
+                                    className="h-8 px-3 text-xs"
+                                  >
+                                    <Pencil className="h-3 w-3 mr-1" />
+                                    Edit Service
+                                  </Button>
+                                </div>
+                                <Tabs defaultValue="roles" className="w-full">
                                   <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="details" data-testid={`tab-details-${peopleService.id}`}>Service Details</TabsTrigger>
-                                    <TabsTrigger value="notes" data-testid={`tab-notes-${peopleService.id}`}>Notes & History</TabsTrigger>
+                                    <TabsTrigger value="roles" data-testid={`tab-roles-${peopleService.id}`}>Roles & Assignments</TabsTrigger>
+                                    <TabsTrigger value="projects" data-testid={`tab-projects-${peopleService.id}`}>Related Projects</TabsTrigger>
                                   </TabsList>
 
-                                  <TabsContent value="details" className="mt-4">
+                                  <TabsContent value="roles" className="mt-4">
                                     <div className="space-y-4">
                                       <h5 className="font-medium text-sm flex items-center">
-                                        <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
-                                        Service Configuration
+                                        <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                                        Role Assignments
                                       </h5>
                                       
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="p-3 border rounded-lg">
-                                          <div className="text-xs text-muted-foreground mb-1">Service Type</div>
-                                          <div className="text-sm font-medium">Personal Service</div>
-                                        </div>
-                                        <div className="p-3 border rounded-lg">
-                                          <div className="text-xs text-muted-foreground mb-1">Status</div>
-                                          <div className="text-sm font-medium">
-                                            {peopleService.isActive ? (
-                                              <span className="text-green-600">Active</span>
-                                            ) : (
-                                              <span className="text-red-600">Inactive</span>
-                                            )}
-                                          </div>
-                                        </div>
+                                      <div className="text-center py-8">
+                                        <p className="text-muted-foreground">Personal services use a simplified assignment model.</p>
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                          This service is assigned to {formatPersonName(peopleService.person.fullName)}
+                                          {peopleService.serviceOwner && ` and managed by ${peopleService.serviceOwner.firstName} ${peopleService.serviceOwner.lastName}`}.
+                                        </p>
                                       </div>
                                     </div>
                                   </TabsContent>
 
-                                  <TabsContent value="notes" className="mt-4">
+                                  <TabsContent value="projects" className="mt-4">
                                     <div className="space-y-4">
                                       <h5 className="font-medium text-sm flex items-center">
-                                        <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                                        Notes & History
+                                        <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
+                                        Related Projects
                                       </h5>
                                       
-                                      {peopleService.notes ? (
-                                        <div className="p-3 border rounded-lg">
-                                          <div className="text-xs text-muted-foreground mb-2">Notes</div>
-                                          <div className="text-sm">{peopleService.notes}</div>
-                                        </div>
-                                      ) : (
-                                        <div className="text-center py-8">
-                                          <p className="text-muted-foreground">No notes or history available for this personal service.</p>
-                                        </div>
-                                      )}
+                                      <div className="text-center py-8">
+                                        <p className="text-muted-foreground">Project integration coming soon.</p>
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                          This will show open and completed projects related to this personal service.
+                                        </p>
+                                      </div>
                                     </div>
                                   </TabsContent>
                                 </Tabs>
@@ -5068,6 +5069,21 @@ export default function ClientDetail() {
               service={currentService as EnhancedClientService}
               isOpen={!!editingServiceId}
               onClose={() => setEditingServiceId(null)}
+            />
+          );
+        }
+        return null;
+      })()}
+
+      {/* Edit Personal Service Modal */}
+      {editingPersonalServiceId && (() => {
+        const currentPersonalService = peopleServices?.find(ps => ps.id === editingPersonalServiceId);
+        if (currentPersonalService) {
+          return (
+            <EditServiceModal
+              service={currentPersonalService as any}
+              isOpen={!!editingPersonalServiceId}
+              onClose={() => setEditingPersonalServiceId(null)}
             />
           );
         }
