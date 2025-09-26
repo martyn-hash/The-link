@@ -140,8 +140,7 @@ export default function ProjectTypes() {
         ? data 
         : { ...data, serviceId: undefined };
       
-      const response = await apiRequest("POST", "/api/config/project-types", projectTypeData);
-      const projectType = await response.json();
+      const projectType = await apiRequest("POST", "/api/config/project-types", projectTypeData);
       
       // Service linking is now handled by serviceId in project type - no service update needed
       
