@@ -1802,6 +1802,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getKanbanStagesByProjectTypeId(projectTypeId: string): Promise<KanbanStage[]> {
+    // Validate projectTypeId to prevent undefined/null being passed to query builder
+    if (!projectTypeId || projectTypeId.trim() === '') {
+      console.warn(`[Storage] getKanbanStagesByProjectTypeId called with invalid projectTypeId: "${projectTypeId}"`);
+      return [];
+    }
+    
     return await db
       .select()
       .from(kanbanStages)
@@ -3641,6 +3647,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServiceByProjectTypeId(projectTypeId: string): Promise<Service | undefined> {
+    // Validate projectTypeId to prevent undefined/null being passed to query builder
+    if (!projectTypeId || projectTypeId.trim() === '') {
+      console.warn(`[Storage] getServiceByProjectTypeId called with invalid projectTypeId: "${projectTypeId}"`);
+      return undefined;
+    }
+    
     // With inverted relationship: get project type first, then its associated service
     const [projectType] = await db
       .select()
@@ -4121,9 +4133,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientServiceByClientAndProjectType(clientId: string, projectTypeId: string): Promise<ClientService | undefined> {
+    // Validate input parameters to prevent undefined/null being passed to query builder
+    if (!clientId || clientId.trim() === '') {
+      console.warn(`[Storage] getClientServiceByClientAndProjectType called with invalid clientId: "${clientId}"`);
+      return undefined;
+    }
+    if (!projectTypeId || projectTypeId.trim() === '') {
+      console.warn(`[Storage] getClientServiceByClientAndProjectType called with invalid projectTypeId: "${projectTypeId}"`);
+      return undefined;
+    }
+    
     // Find the service for this project type
     const service = await this.getServiceByProjectTypeId(projectTypeId);
     if (!service) {
+      return undefined;
+    }
+    
+    // Validate service.id to prevent undefined/null being passed to query builder
+    if (!service.id || service.id.trim() === '') {
+      console.warn(`[Storage] getClientServiceByClientAndProjectType: service has invalid id: "${service.id}" for projectTypeId: "${projectTypeId}"`);
       return undefined;
     }
 

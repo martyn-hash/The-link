@@ -50,6 +50,7 @@ interface DueService {
   clientId?: string;
   personId?: string;
   serviceOwnerId: string | null;
+  frequency: ServiceFrequency;
   nextStartDate: Date;
   nextDueDate: Date;
   isCompaniesHouseService: boolean; // Flag to indicate CH services
@@ -1121,13 +1122,23 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
   
   if (dueService.service.projectType && dueService.service.projectType.id) {
     projectType = dueService.service.projectType;
+    
+    // Double-check that the project type ID is valid
+    if (!projectType.id || projectType.id.trim() === '') {
+      throw new Error(`Invalid project type ID for service: ${dueService.service.name}`);
+    }
   } else {
     // If no project type is linked to the service, we need to create or find a default one
     throw new Error(`No project type configured for service: ${dueService.service.name}`);
   }
 
   // Get the first kanban stage for this project type
+  console.log(`[Project Scheduler] DEBUG: Getting stages for projectType.id="${projectType.id}", projectType.name="${projectType.name}"`);
+  console.log(`[Project Scheduler] DEBUG: projectType object:`, JSON.stringify(projectType, null, 2));
+  
   const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
+  console.log(`[Project Scheduler] DEBUG: Found ${stages.length} stages for project type ${projectType.name}`);
+  
   if (stages.length === 0) {
     throw new Error(`No kanban stages configured for project type: ${projectType.name}`);
   }
