@@ -160,6 +160,7 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   getAllProjects(): Promise<ProjectWithRelations[]>;
   getProjectsByUser(userId: string, role: string): Promise<ProjectWithRelations[]>;
+  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
@@ -1458,6 +1459,56 @@ export class DatabaseStorage implements IStorage {
 
     // Build combined where conditions
     let whereConditions = [userWhereCondition];
+    
+    if (filters?.month) {
+      whereConditions.push(eq(projects.projectMonth, filters.month));
+    }
+    
+    if (filters?.archived !== undefined) {
+      whereConditions.push(eq(projects.archived, filters.archived));
+    }
+    
+    if (filters?.inactive !== undefined) {
+      whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+    
+    const whereClause = and(...whereConditions);
+
+    const results = await db.query.projects.findMany({
+      where: whereClause,
+      with: {
+        client: true,
+        bookkeeper: true,
+        clientManager: true,
+        currentAssignee: true,
+        chronology: {
+          with: {
+            assignee: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
+          },
+          orderBy: desc(projectChronology.timestamp),
+        },
+      },
+    });
+    
+    // Convert null relations to undefined to match TypeScript expectations
+    return results.map(project => ({
+      ...project,
+      currentAssignee: project.currentAssignee || undefined,
+      chronology: project.chronology.map(c => ({
+        ...c,
+        assignee: c.assignee || undefined,
+        fieldResponses: c.fieldResponses || [],
+      })),
+    }));
+  }
+
+  async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]> {
+    let whereConditions = [eq(projects.clientId, clientId)];
     
     if (filters?.month) {
       whereConditions.push(eq(projects.projectMonth, filters.month));

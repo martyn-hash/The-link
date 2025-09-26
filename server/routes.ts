@@ -1982,6 +1982,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/clients/:clientId/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+      
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const clientId = req.params.clientId;
+
+      // Extract query parameters for filtering
+      const filters = {
+        month: req.query.month as string | undefined,
+        archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
+        inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
+      };
+
+      const projects = await storage.getProjectsByClient(clientId, filters);
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching client projects:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      res.status(500).json({ message: "Failed to fetch client projects" });
+    }
+  });
+
   app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
