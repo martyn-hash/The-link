@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, User, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -3881,6 +3881,13 @@ export default function ClientDetail() {
     enabled: !!id && !!client,
   });
 
+  // Fetch all services with roles to get role information for personal services
+  const { data: servicesWithRoles } = useQuery<(Service & { roles: WorkRole[] })[]>({
+    queryKey: ['/api/services'],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!id && !!client,
+  });
+
   // Mutation for updating person data
   const updatePersonMutation = useMutation({
     mutationFn: async ({ personId, data }: { personId: string; data: UpdatePersonData }) => {
@@ -4882,7 +4889,7 @@ export default function ClientDetail() {
                               className="text-left hover:no-underline p-4"
                               data-testid={`personal-service-row-${peopleService.id}`}
                             >
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mr-4">
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full mr-4">
                                 {/* Column 1: Service Name and Description */}
                                 <div className="space-y-2">
                                   <div>
@@ -4896,11 +4903,41 @@ export default function ClientDetail() {
                                     )}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
-                                    Personal Service
+                                    Frequency: {peopleService.frequency || 'Not scheduled'}
                                   </div>
                                 </div>
 
-                                {/* Column 2: Person Details */}
+                                {/* Column 2: Next Start Date */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-muted-foreground">Next Start Date</span>
+                                  </div>
+                                  {peopleService.nextStartDate ? (
+                                    <div className="text-sm font-medium" data-testid={`text-next-start-date-${peopleService.id}`}>
+                                      {formatDate(peopleService.nextStartDate)}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                  )}
+                                </div>
+
+                                {/* Column 3: Next Due Date */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-muted-foreground">Next Due Date</span>
+                                  </div>
+                                  {peopleService.nextDueDate ? (
+                                    <div className="text-sm font-medium" data-testid={`text-next-due-date-${peopleService.id}`}>
+                                      {formatDate(peopleService.nextDueDate)}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                  )}
+                                </div>
+
+                                {/* Column 4: Person */}
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2 mb-2">
                                     <UserIcon className="h-4 w-4 text-muted-foreground" />
@@ -4919,28 +4956,6 @@ export default function ClientDetail() {
                                     </div>
                                   ) : (
                                     <p className="text-sm text-muted-foreground italic">No person assigned</p>
-                                  )}
-                                </div>
-
-                                {/* Column 3: Service Owner */}
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Settings className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm font-medium text-muted-foreground">Service Owner</span>
-                                  </div>
-                                  {peopleService.serviceOwner ? (
-                                    <div className="space-y-1">
-                                      <div className="text-sm font-medium" data-testid={`text-personal-service-owner-${peopleService.id}`}>
-                                        {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}
-                                      </div>
-                                      {peopleService.serviceOwner.email && (
-                                        <div className="text-xs text-muted-foreground">
-                                          {peopleService.serviceOwner.email}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground italic">No owner assigned</p>
                                   )}
                                 </div>
                               </div>
@@ -4974,13 +4989,63 @@ export default function ClientDetail() {
                                         Role Assignments
                                       </h5>
                                       
-                                      <div className="text-center py-8">
-                                        <p className="text-muted-foreground">Personal services use a simplified assignment model.</p>
-                                        <p className="text-xs text-muted-foreground mt-2">
-                                          This service is assigned to {formatPersonName(peopleService.person.fullName)}
-                                          {peopleService.serviceOwner && ` and managed by ${peopleService.serviceOwner.firstName} ${peopleService.serviceOwner.lastName}`}.
-                                        </p>
-                                      </div>
+                                      {(() => {
+                                        // Find roles for this service
+                                        const serviceWithRoles = servicesWithRoles?.find(s => s.id === peopleService.service.id);
+                                        const roles = serviceWithRoles?.roles || [];
+
+                                        if (roles.length === 0) {
+                                          return (
+                                            <div className="text-center py-8">
+                                              <p className="text-muted-foreground">No roles defined for this service.</p>
+                                            </div>
+                                          );
+                                        }
+
+                                        return (
+                                          <div className="space-y-3">
+                                            {roles.map((role) => (
+                                              <div key={role.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                                                <div className="flex items-center space-x-3">
+                                                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                                    <User className="h-4 w-4 text-primary" />
+                                                  </div>
+                                                  <div>
+                                                    <div className="font-medium text-sm" data-testid={`role-name-${role.id}`}>
+                                                      {role.name}
+                                                    </div>
+                                                    {role.description && (
+                                                      <div className="text-xs text-muted-foreground" data-testid={`role-description-${role.id}`}>
+                                                        {role.description}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                  {peopleService.serviceOwner ? (
+                                                    <span className="text-emerald-600 dark:text-emerald-400" data-testid={`role-owner-${role.id}`}>
+                                                      {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-amber-600 dark:text-amber-400" data-testid={`role-unassigned-${role.id}`}>
+                                                      Unassigned
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                            <div className="text-xs text-muted-foreground mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                              <p className="font-medium mb-1">Personal Service Assignment</p>
+                                              <p>
+                                                This service is assigned to <span className="font-medium">{formatPersonName(peopleService.person.fullName)}</span>
+                                                {peopleService.serviceOwner ? 
+                                                  ` and managed by ${peopleService.serviceOwner.firstName} ${peopleService.serviceOwner.lastName}.` :
+                                                  '. No service owner is currently assigned.'}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   </TabsContent>
 
