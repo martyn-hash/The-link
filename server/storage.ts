@@ -4119,9 +4119,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Convert ISO string dates to Date objects for timestamp fields
+    const processedData = { ...clientServiceData };
+    if (processedData.nextStartDate && typeof processedData.nextStartDate === 'string') {
+      processedData.nextStartDate = new Date(processedData.nextStartDate);
+    }
+    if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
+      processedData.nextDueDate = new Date(processedData.nextDueDate);
+    }
+
     const [updatedClientService] = await db
       .update(clientServices)
-      .set(clientServiceData)
+      .set(processedData)
       .where(eq(clientServices.id, id))
       .returning();
     

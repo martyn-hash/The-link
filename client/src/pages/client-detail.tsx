@@ -1355,8 +1355,6 @@ function EditServiceModal({
         frequency: isCompaniesHouseService ? "annually" : data.frequency,
       };
       
-      console.log('Service update data:', serviceUpdateData);
-      
       await apiRequest("PUT", `/api/client-services/${data.serviceId}`, serviceUpdateData);
       
       // For now, we'll just update the service fields
