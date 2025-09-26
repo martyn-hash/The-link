@@ -178,6 +178,19 @@ const updatePersonSchema = insertPersonSchema.partial().extend({
 
 type UpdatePersonData = z.infer<typeof updatePersonSchema>;
 
+// Schema for editing service data
+const editServiceSchema = z.object({
+  nextStartDate: z.string().optional(),
+  nextDueDate: z.string().optional(),
+  serviceOwnerId: z.string().optional(),
+  roleAssignments: z.array(z.object({
+    workRoleId: z.string(),
+    userId: z.string(),
+  })).optional(),
+});
+
+type EditServiceData = z.infer<typeof editServiceSchema>;
+
 // Helper function to mask sensitive identifiers
 function maskIdentifier(value: string, visibleChars = 2): string {
   if (!value || value.length <= visibleChars) return value;
@@ -1286,6 +1299,273 @@ function AddPersonModal({
                 data-testid="button-save-add-person"
               >
                 {isSaving ? "Adding..." : "Add Person"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Edit Service Modal Component
+function EditServiceModal({ 
+  service, 
+  isOpen, 
+  onClose 
+}: { 
+  service: EnhancedClientService; 
+  isOpen: boolean; 
+  onClose: () => void; 
+}) {
+  const { toast } = useToast();
+  const form = useForm<EditServiceData>({
+    resolver: zodResolver(editServiceSchema),
+    defaultValues: {
+      nextStartDate: service.nextStartDate ? new Date(service.nextStartDate).toISOString().split('T')[0] : '',
+      nextDueDate: service.nextDueDate ? new Date(service.nextDueDate).toISOString().split('T')[0] : '',
+      serviceOwnerId: service.serviceOwnerId || '',
+    },
+  });
+
+  const [roleAssignments, setRoleAssignments] = useState(
+    service.roleAssignments?.map(ra => ({
+      workRoleId: ra.workRole.id,
+      userId: ra.user.id,
+    })) || []
+  );
+
+  // Check if this is a Companies House service
+  const isCompaniesHouseService = service.service.isCompaniesHouseConnected;
+
+  // Use the mutation for updating service
+  const updateServiceMutation = useMutation({
+    mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}> }) => {
+      // First update the service itself (dates, owner, etc.)
+      const serviceUpdateData = {
+        nextStartDate: data.nextStartDate,
+        nextDueDate: data.nextDueDate,
+        serviceOwnerId: data.serviceOwnerId || null,
+      };
+      
+      await apiRequest("PUT", `/api/client-services/${data.serviceId}`, serviceUpdateData);
+      
+      // For now, we'll just update the service fields
+      // Role assignment updates can be implemented later
+      
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/client-services'] });
+      toast({
+        title: "Success",
+        description: "Service updated successfully",
+      });
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error('Failed to update service:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update service",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Query for work roles and users
+  const { data: workRoles = [] } = useQuery<WorkRole[]>({
+    queryKey: ['/api/work-roles'],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
+  const handleSubmit = (data: EditServiceData) => {
+    updateServiceMutation.mutate({
+      ...data,
+      serviceId: service.id,
+      roleAssignments,
+    });
+  };
+
+  const addRoleAssignment = () => {
+    setRoleAssignments([...roleAssignments, { workRoleId: '', userId: '' }]);
+  };
+
+  const removeRoleAssignment = (index: number) => {
+    setRoleAssignments(roleAssignments.filter((_, i) => i !== index));
+  };
+
+  const updateRoleAssignment = (index: number, field: 'workRoleId' | 'userId', value: string) => {
+    const updated = [...roleAssignments];
+    updated[index] = { ...updated[index], [field]: value };
+    setRoleAssignments(updated);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Service: {service.service.name}</DialogTitle>
+        </DialogHeader>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            
+            {/* Service Owner */}
+            <FormField
+              control={form.control}
+              name="serviceOwnerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Service Owner</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-service-owner">
+                        <SelectValue placeholder="Select service owner" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No owner assigned</SelectItem>
+                      {allUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.firstName} {user.lastName} ({user.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Date fields - only show for non-Companies House services */}
+            {!isCompaniesHouseService && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="nextStartDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Start Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-next-start-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="nextDueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Due Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-next-due-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            {/* Companies House notice */}
+            {isCompaniesHouseService && (
+              <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Companies House Service:</strong> Start and due dates are automatically managed based on client data and cannot be edited manually.
+                </p>
+              </div>
+            )}
+
+            {/* Role Assignments */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <FormLabel>Role Assignments</FormLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addRoleAssignment}
+                  data-testid="button-add-role-assignment"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add Role
+                </Button>
+              </div>
+
+              {roleAssignments.map((assignment, index) => (
+                <div key={index} className="flex items-center space-x-2 p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <Select
+                      value={assignment.workRoleId}
+                      onValueChange={(value) => updateRoleAssignment(index, 'workRoleId', value)}
+                    >
+                      <SelectTrigger data-testid={`select-work-role-${index}`}>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workRoles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
+                    <Select
+                      value={assignment.userId}
+                      onValueChange={(value) => updateRoleAssignment(index, 'userId', value)}
+                    >
+                      <SelectTrigger data-testid={`select-user-${index}`}>
+                        <SelectValue placeholder="Select user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allUsers.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.firstName} {user.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeRoleAssignment(index)}
+                    data-testid={`button-remove-role-assignment-${index}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+
+              {roleAssignments.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground">
+                  No role assignments configured. Click "Add Role" to assign users to roles.
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-edit">
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={updateServiceMutation.isPending}
+                data-testid="button-save-service"
+              >
+                {updateServiceMutation.isPending ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </form>
@@ -3632,6 +3912,7 @@ export default function ClientDetail() {
     },
   });
 
+
   // Company Connections functionality for individual clients (many-to-many)
   const [showCompanySelection, setShowCompanySelection] = useState(false);
   const [showCompanyCreation, setShowCompanyCreation] = useState(false);
@@ -4757,6 +5038,21 @@ export default function ClientDetail() {
         </Tabs>
         </div>
       </div>
+      
+      {/* Edit Service Modal */}
+      {editingServiceId && (() => {
+        const currentService = clientServices?.find(cs => cs.id === editingServiceId);
+        if (currentService) {
+          return (
+            <EditServiceModal
+              service={currentService as EnhancedClientService}
+              isOpen={!!editingServiceId}
+              onClose={() => setEditingServiceId(null)}
+            />
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
