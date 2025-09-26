@@ -1324,7 +1324,7 @@ function EditServiceModal({
     defaultValues: {
       nextStartDate: service.nextStartDate ? new Date(service.nextStartDate).toISOString().split('T')[0] : '',
       nextDueDate: service.nextDueDate ? new Date(service.nextDueDate).toISOString().split('T')[0] : '',
-      serviceOwnerId: service.serviceOwnerId || '',
+      serviceOwnerId: service.serviceOwnerId || 'none',
     },
   });
 
@@ -1345,7 +1345,7 @@ function EditServiceModal({
       const serviceUpdateData = {
         nextStartDate: data.nextStartDate,
         nextDueDate: data.nextDueDate,
-        serviceOwnerId: data.serviceOwnerId || null,
+        serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
       };
       
       await apiRequest("PUT", `/api/client-services/${data.serviceId}`, serviceUpdateData);
@@ -1392,19 +1392,7 @@ function EditServiceModal({
     });
   };
 
-  const addRoleAssignment = () => {
-    setRoleAssignments([...roleAssignments, { workRoleId: '', userId: '' }]);
-  };
 
-  const removeRoleAssignment = (index: number) => {
-    setRoleAssignments(roleAssignments.filter((_, i) => i !== index));
-  };
-
-  const updateRoleAssignment = (index: number, field: 'workRoleId' | 'userId', value: string) => {
-    const updated = [...roleAssignments];
-    updated[index] = { ...updated[index], [field]: value };
-    setRoleAssignments(updated);
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1430,7 +1418,7 @@ function EditServiceModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No owner assigned</SelectItem>
+                      <SelectItem value="none">No owner assigned</SelectItem>
                       {allUsers.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.firstName} {user.lastName} ({user.email})
@@ -1489,69 +1477,49 @@ function EditServiceModal({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <FormLabel>Role Assignments</FormLabel>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addRoleAssignment}
-                  data-testid="button-add-role-assignment"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add Role
-                </Button>
+                <p className="text-xs text-muted-foreground">Update who is assigned to each role</p>
               </div>
 
-              {roleAssignments.map((assignment, index) => (
-                <div key={index} className="flex items-center space-x-2 p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <Select
-                      value={assignment.workRoleId}
-                      onValueChange={(value) => updateRoleAssignment(index, 'workRoleId', value)}
-                    >
-                      <SelectTrigger data-testid={`select-work-role-${index}`}>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workRoles.map((role) => (
-                          <SelectItem key={role.id} value={role.id}>
-                            {role.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              {service.roleAssignments && service.roleAssignments.length > 0 ? (
+                service.roleAssignments.map((assignment) => (
+                  <div key={assignment.workRole.id} className="flex items-center space-x-2 p-3 border rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{assignment.workRole.name}</div>
+                      {assignment.workRole.description && (
+                        <div className="text-xs text-muted-foreground">{assignment.workRole.description}</div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <Select
+                        value={roleAssignments.find(ra => ra.workRoleId === assignment.workRole.id)?.userId || assignment.user.id}
+                        onValueChange={(value) => {
+                          const newAssignments = [...roleAssignments];
+                          const existingIndex = newAssignments.findIndex(ra => ra.workRoleId === assignment.workRole.id);
+                          if (existingIndex >= 0) {
+                            newAssignments[existingIndex].userId = value;
+                          } else {
+                            newAssignments.push({ workRoleId: assignment.workRole.id, userId: value });
+                          }
+                          setRoleAssignments(newAssignments);
+                        }}
+                      >
+                        <SelectTrigger data-testid={`select-user-${assignment.workRole.id}`}>
+                          <SelectValue placeholder="Select assignee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allUsers.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <Select
-                      value={assignment.userId}
-                      onValueChange={(value) => updateRoleAssignment(index, 'userId', value)}
-                    >
-                      <SelectTrigger data-testid={`select-user-${index}`}>
-                        <SelectValue placeholder="Select user" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allUsers.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.firstName} {user.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeRoleAssignment(index)}
-                    data-testid={`button-remove-role-assignment-${index}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-
-              {roleAssignments.length === 0 && (
+                ))
+              ) : (
                 <div className="text-center py-4 text-muted-foreground">
-                  No role assignments configured. Click "Add Role" to assign users to roles.
+                  No role assignments found for this service. Roles can be configured in the admin area.
                 </div>
               )}
             </div>
