@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, User, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -5008,7 +5008,7 @@ export default function ClientDetail() {
                                               <div key={role.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
                                                 <div className="flex items-center space-x-3">
                                                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                                    <User className="h-4 w-4 text-primary" />
+                                                    <UserIcon className="h-4 w-4 text-primary" />
                                                   </div>
                                                   <div>
                                                     <div className="font-medium text-sm" data-testid={`role-name-${role.id}`}>
