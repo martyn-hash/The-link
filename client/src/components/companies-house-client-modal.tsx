@@ -404,7 +404,7 @@ export function CompaniesHouseClientModal({
         ...(options?.officerDecisions && { officerDecisions: options.officerDecisions })
       });
       
-      return await response.json() as { client: Client & { people: any[] }, message: string };
+      return response as { client: Client & { people: any[] }, message: string };
     },
     onSuccess: (data) => {
       toast({
@@ -442,7 +442,7 @@ export function CompaniesHouseClientModal({
       console.log("📤 Officer match request data:", requestData);
       
       const response = await apiRequest("POST", "/api/people/match", requestData);
-      return await response.json() as { matches: any[] };
+      return response as { matches: any[] };
     },
     onSuccess: (data) => {
       // Check if any officers actually have potential duplicates
