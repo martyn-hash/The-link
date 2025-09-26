@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
+import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar } from "lucide-react";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -33,6 +33,9 @@ export default function Admin() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [showSchedulingActions, setShowSchedulingActions] = useState(false);
+  const [showSchedulingPreview, setShowSchedulingPreview] = useState(false);
+  const [previewTargetDate, setPreviewTargetDate] = useState(new Date().toISOString().split('T')[0]);
+  const [previewData, setPreviewData] = useState<any>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/projects"],
@@ -119,6 +122,32 @@ export default function Admin() {
       toast({
         title: "Dry Run Failed",
         description: error.message || "Failed to run scheduling test. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const runPreviewMutation = useMutation({
+    mutationFn: async (targetDate: string) => {
+      return await apiRequest("POST", "/api/project-scheduling/preview", { targetDate });
+    },
+    onSuccess: (data: any) => {
+      console.log('Preview data received:', data);
+      console.log('Preview data keys:', Object.keys(data));
+      console.log('Services found due:', data.servicesFoundDue);
+      console.log('Total services checked:', data.totalServicesChecked);
+      setPreviewData(data);
+      setShowSchedulingPreview(true);
+      toast({
+        title: "Preview Generated",
+        description: `Found ${data.servicesFoundDue || 0} services due on ${data.targetDate ? new Date(data.targetDate).toLocaleDateString() : 'selected date'}.`,
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Preview Failed",
+        description: error.message || "Failed to generate scheduling preview. Please try again.",
         variant: "destructive",
       });
     },
@@ -408,6 +437,28 @@ export default function Admin() {
                           Monitoring
                           {isLoadingMonitoring && <div className="ml-2 h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />}
                         </Button>
+                        <div className="space-y-2 pt-2 border-t border-border">
+                          <div className="flex gap-2">
+                            <input
+                              type="date"
+                              value={previewTargetDate}
+                              onChange={(e) => setPreviewTargetDate(e.target.value)}
+                              className="flex-1 text-xs p-1 border rounded"
+                              data-testid="input-preview-date"
+                            />
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs"
+                              onClick={() => runPreviewMutation.mutate(previewTargetDate)}
+                              disabled={runPreviewMutation.isPending}
+                              data-testid="button-scheduling-preview"
+                            >
+                              <Eye className="w-3 h-3 mr-1" />
+                              {runPreviewMutation.isPending ? "Loading..." : "Preview"}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     )}
                     <Button 
@@ -731,6 +782,206 @@ export default function Admin() {
                         <p className="text-sm">No overdue services or configuration issues found.</p>
                       </div>
                     )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Scheduling Preview Dashboard */}
+          {showSchedulingPreview && previewData && (
+            <div className="mt-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Eye className="h-5 w-5" />
+                    Scheduling Preview - {(() => {
+                      if (!previewData.targetDate) return 'No Date';
+                      const date = new Date(previewData.targetDate);
+                      if (isNaN(date.getTime())) return 'Invalid Date';
+                      return date.toLocaleDateString();
+                    })()}
+                  </CardTitle>
+                  <CardDescription>
+                    Detailed preview of what would happen during scheduling without making actual changes
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Summary Statistics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold">{previewData?.totalServicesChecked || 0}</p>
+                        <p className="text-sm text-muted-foreground">Total Services</p>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold text-blue-600">{previewData?.servicesFoundDue || 0}</p>
+                        <p className="text-sm text-muted-foreground">Services Due</p>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold text-green-600">{(previewData?.previewItems || []).filter((item: any) => item.willCreateProject).length}</p>
+                        <p className="text-sm text-muted-foreground">Projects to Create</p>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <p className="text-2xl font-bold text-purple-600">{(previewData?.previewItems || []).filter((item: any) => item.willReschedule).length}</p>
+                        <p className="text-sm text-muted-foreground">Services to Reschedule</p>
+                      </div>
+                    </div>
+
+                    {/* Configuration Errors */}
+                    {previewData.configurationErrors?.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3 text-orange-600">Configuration Errors</h4>
+                        <div className="space-y-2">
+                          {previewData.configurationErrors.map((error: any, index: number) => (
+                            <div key={index} className="flex items-center gap-3 p-3 border rounded-lg bg-orange-50 dark:bg-orange-900/20" data-testid={`preview-config-error-${index}`}>
+                              <AlertCircle className="h-4 w-4 text-orange-500" />
+                              <div>
+                                <p className="text-sm font-medium">{error.error}</p>
+                                <p className="text-xs text-muted-foreground">Service Type: {error.serviceType}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preview Items Table */}
+                    {previewData.previewItems?.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-medium">Services Details</h4>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              const csvContent = [
+                                ['Client/Person', 'Service', 'Frequency', 'Current Next Start', 'Current Next Due', 'Project Start', 'Project Due', 'New Next Start', 'New Next Due', 'Will Create Project', 'Will Reschedule', 'Companies House', 'Project Type', 'Error'].join(','),
+                                ...previewData.previewItems.map((item: any) => [
+                                  item.clientName || item.personName || '',
+                                  item.serviceName,
+                                  item.frequency,
+                                  new Date(item.currentNextStartDate).toLocaleDateString(),
+                                  new Date(item.currentNextDueDate).toLocaleDateString(),
+                                  new Date(item.projectPlannedStart).toLocaleDateString(),
+                                  new Date(item.projectPlannedDue).toLocaleDateString(),
+                                  new Date(item.newNextStartDate).toLocaleDateString(),
+                                  new Date(item.newNextDueDate).toLocaleDateString(),
+                                  item.willCreateProject ? 'Yes' : 'No',
+                                  item.willReschedule ? 'Yes' : 'No',
+                                  item.isCompaniesHouseService ? 'Yes' : 'No',
+                                  item.projectTypeName,
+                                  item.configurationError || ''
+                                ].join(','))
+                              ].join('\n');
+                              
+                              const blob = new Blob([csvContent], { type: 'text/csv' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `scheduling-preview-${new Date(previewData.targetDate).toISOString().split('T')[0]}.csv`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            data-testid="button-export-preview-csv"
+                          >
+                            <FileText className="w-3 h-3 mr-2" />
+                            Export CSV
+                          </Button>
+                        </div>
+                        
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="max-h-96 overflow-y-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-muted/50 sticky top-0">
+                                <tr>
+                                  <th className="p-3 text-left font-medium">Client/Person</th>
+                                  <th className="p-3 text-left font-medium">Service</th>
+                                  <th className="p-3 text-left font-medium">Current Dates</th>
+                                  <th className="p-3 text-left font-medium">Project Dates</th>
+                                  <th className="p-3 text-left font-medium">New Dates</th>
+                                  <th className="p-3 text-center font-medium">Actions</th>
+                                  <th className="p-3 text-center font-medium">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {previewData.previewItems.map((item: any, index: number) => (
+                                  <tr key={index} className="border-t hover:bg-muted/30" data-testid={`preview-item-${index}`}>
+                                    <td className="p-3">
+                                      <div>
+                                        <p className="font-medium">{item.clientName || item.personName}</p>
+                                        <p className="text-xs text-muted-foreground">{item.serviceType}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <div>
+                                        <p className="font-medium">{item.serviceName}</p>
+                                        <p className="text-xs text-muted-foreground">{item.frequency} • {item.projectTypeName}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="text-xs">
+                                        <p>Start: {new Date(item.currentNextStartDate).toLocaleDateString()}</p>
+                                        <p>Due: {new Date(item.currentNextDueDate).toLocaleDateString()}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="text-xs">
+                                        <p>Start: {new Date(item.projectPlannedStart).toLocaleDateString()}</p>
+                                        <p>Due: {new Date(item.projectPlannedDue).toLocaleDateString()}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="text-xs">
+                                        <p>Start: {new Date(item.newNextStartDate).toLocaleDateString()}</p>
+                                        <p>Due: {new Date(item.newNextDueDate).toLocaleDateString()}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <div className="space-y-1">
+                                        <Badge variant={item.willCreateProject ? "default" : "secondary"} className="text-xs">
+                                          {item.willCreateProject ? "Create Project" : "No Project"}
+                                        </Badge>
+                                        <Badge variant={item.willReschedule ? "default" : "secondary"} className="text-xs">
+                                          {item.willReschedule ? "Reschedule" : "No Reschedule"}
+                                        </Badge>
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <div className="space-y-1">
+                                        {item.isCompaniesHouseService && (
+                                          <Badge variant="outline" className="text-xs">CH Service</Badge>
+                                        )}
+                                        {item.configurationError && (
+                                          <Badge variant="destructive" className="text-xs">Error</Badge>
+                                        )}
+                                        {!item.configurationError && (
+                                          <Badge variant="default" className="text-xs">Ready</Badge>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No Services Found */}
+                    {previewData.servicesFoundDue === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Calendar className="h-12 w-12 mx-auto mb-4 text-blue-500" />
+                        <p className="text-lg font-medium">No services due on this date</p>
+                        <p className="text-sm">Try selecting a different date or check your service schedules.</p>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    <div className="p-4 bg-muted/50 rounded-lg">
+                      <p className="text-sm">{previewData.summary}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

@@ -8,7 +8,7 @@ import { sendTaskAssignmentEmail } from "./emailService";
 import fetch from 'node-fetch';
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
-import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, type SchedulingRunResult } from "./project-scheduler";
+import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, buildSchedulingPreview, type SchedulingRunResult } from "./project-scheduler";
 import { z } from "zod";
 import {
   insertUserSchema,
@@ -4766,6 +4766,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error running project scheduling:", error instanceof Error ? error.message : error);
       res.status(500).json({ 
         message: "Failed to run project scheduling",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/project-scheduling/preview - Get detailed scheduling preview without making changes (admin only)
+  app.post("/api/project-scheduling/preview", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      console.log(`[API] Scheduling preview triggered by admin: ${req.user?.email}`);
+      
+      const { 
+        targetDate, 
+        serviceIds, 
+        clientIds 
+      } = req.body || {};
+      
+      // Parse target date if provided
+      let schedulingDate = new Date();
+      if (targetDate) {
+        schedulingDate = new Date(targetDate);
+        console.log(`[API] Using custom target date for preview: ${schedulingDate.toISOString()}`);
+      }
+      
+      const result = await buildSchedulingPreview(schedulingDate, { serviceIds, clientIds });
+      
+      res.json({
+        message: "Scheduling preview completed",
+        status: result.status,
+        targetDate: result.targetDate,
+        totalServicesChecked: result.totalServicesChecked,
+        servicesFoundDue: result.servicesFoundDue,
+        previewItems: result.previewItems,
+        configurationErrors: result.configurationErrors,
+        summary: result.summary,
+        filters: { serviceIds, clientIds, targetDate: targetDate || 'current' }
+      });
+    } catch (error) {
+      console.error("Error building scheduling preview:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to build scheduling preview",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

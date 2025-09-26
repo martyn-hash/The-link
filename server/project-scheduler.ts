@@ -50,7 +50,6 @@ interface DueService {
   clientId?: string;
   personId?: string;
   serviceOwnerId: string | null;
-  frequency: ServiceFrequency;
   nextStartDate: Date;
   nextDueDate: Date;
   isCompaniesHouseService: boolean; // Flag to indicate CH services
@@ -510,6 +509,174 @@ export async function generateTestScenario(scenario: {
 }
 
 /**
+ * Preview interface for detailed scheduling information
+ */
+export interface SchedulingPreviewItem {
+  serviceId: string;
+  serviceType: 'client' | 'people';
+  clientName?: string;
+  personName?: string;
+  serviceName: string;
+  frequency: ServiceFrequency;
+  currentNextStartDate: Date;
+  currentNextDueDate: Date;
+  projectPlannedStart: Date;
+  projectPlannedDue: Date;
+  newNextStartDate: Date;
+  newNextDueDate: Date;
+  isCompaniesHouseService: boolean;
+  projectTypeName: string;
+  willCreateProject: boolean;
+  willReschedule: boolean;
+  configurationError?: string;
+}
+
+export interface SchedulingPreviewResult {
+  status: 'success' | 'failure';
+  targetDate: Date;
+  totalServicesChecked: number;
+  servicesFoundDue: number;
+  previewItems: SchedulingPreviewItem[];
+  configurationErrors: Array<{
+    serviceId: string;
+    serviceType: 'client' | 'people';
+    error: string;
+  }>;
+  summary: string;
+}
+
+/**
+ * Build a detailed preview of what would happen during scheduling without making changes
+ */
+export async function buildSchedulingPreview(
+  targetDate: Date = new Date(),
+  filters: SchedulingFilters = {}
+): Promise<SchedulingPreviewResult> {
+  console.log(`[Scheduling Preview] Building preview for ${targetDate.toISOString()}`);
+  
+  const result: SchedulingPreviewResult = {
+    status: 'success',
+    targetDate,
+    totalServicesChecked: 0,
+    servicesFoundDue: 0,
+    previewItems: [],
+    configurationErrors: [],
+    summary: ''
+  };
+
+  try {
+    // Step 1: Get all client services and people services
+    let [clientServices, peopleServices] = await Promise.all([
+      storage.getAllClientServicesWithDetails(),
+      storage.getAllPeopleServicesWithDetails()
+    ]);
+
+    // Apply filters if specified
+    if (filters.serviceIds?.length) {
+      clientServices = clientServices.filter(cs => filters.serviceIds!.includes(cs.serviceId));
+      peopleServices = peopleServices.filter(ps => filters.serviceIds!.includes(ps.serviceId));
+    }
+    
+    if (filters.clientIds?.length) {
+      clientServices = clientServices.filter(cs => filters.clientIds!.includes(cs.clientId));
+    }
+
+    result.totalServicesChecked = clientServices.length + peopleServices.length;
+
+    // Step 2: Process client services that are due
+    for (const clientService of clientServices) {
+      if (clientService.nextStartDate && isServiceDueToday(clientService.nextStartDate, targetDate)) {
+        result.servicesFoundDue++;
+
+        // Check for configuration errors
+        if (!clientService.service.projectType || clientService.service.projectType.id === '') {
+          result.configurationErrors.push({
+            serviceId: clientService.id,
+            serviceType: 'client',
+            error: `Service '${clientService.service.name}' has no project type configured`
+          });
+          continue;
+        }
+
+        // Get client name
+        const client = await storage.getClientById(clientService.clientId);
+        const clientName = client?.name || 'Unknown Client';
+
+        const isChService = !!clientService.service.isCompaniesHouseConnected;
+        
+        // Calculate next dates using the same logic as the actual scheduler
+        const { nextStartDate, nextDueDate } = calculateNextServiceDates(
+          clientService.nextStartDate,
+          clientService.nextDueDate || clientService.nextStartDate,
+          clientService.frequency as ServiceFrequency
+        );
+
+        result.previewItems.push({
+          serviceId: clientService.id,
+          serviceType: 'client',
+          clientName,
+          serviceName: clientService.service.name,
+          frequency: clientService.frequency as ServiceFrequency,
+          currentNextStartDate: clientService.nextStartDate,
+          currentNextDueDate: clientService.nextDueDate || clientService.nextStartDate,
+          projectPlannedStart: clientService.nextStartDate,
+          projectPlannedDue: clientService.nextDueDate || clientService.nextStartDate,
+          newNextStartDate: nextStartDate,
+          newNextDueDate: nextDueDate,
+          isCompaniesHouseService: isChService,
+          projectTypeName: clientService.service.projectType.name,
+          willCreateProject: true,
+          willReschedule: !isChService, // CH services don't get rescheduled
+        });
+      }
+    }
+
+    // Step 3: Process people services (currently not implemented in scheduling, just show they exist)
+    // Note: People services don't have scheduling fields (frequency, nextStartDate, nextDueDate) yet
+    if (peopleServices.length > 0) {
+      console.log(`[Scheduling Preview] Found ${peopleServices.length} people services (scheduling not yet implemented)`);
+      
+      for (const peopleService of peopleServices) {
+        // Get person name
+        const person = await storage.getPersonById(peopleService.personId);
+        const personName = person ? `${person.firstName} ${person.lastName}`.trim() : 'Unknown Person';
+
+        // Add as preview item showing they're not scheduled yet
+        result.previewItems.push({
+          serviceId: peopleService.id,
+          serviceType: 'people',
+          personName,
+          serviceName: peopleService.service.name,
+          frequency: 'monthly' as ServiceFrequency, // Default placeholder
+          currentNextStartDate: new Date(), // Placeholder
+          currentNextDueDate: new Date(), // Placeholder
+          projectPlannedStart: new Date(), // Placeholder
+          projectPlannedDue: new Date(), // Placeholder
+          newNextStartDate: new Date(), // Placeholder
+          newNextDueDate: new Date(), // Placeholder
+          isCompaniesHouseService: false,
+          projectTypeName: peopleService.service.projectType?.name || 'No Project Type',
+          willCreateProject: false, // People services not implemented yet
+          willReschedule: false,
+          configurationError: 'People services scheduling is not yet implemented'
+        });
+      }
+    }
+
+    result.summary = `Preview for ${targetDate.toISOString().split('T')[0]}: Found ${result.servicesFoundDue} due services out of ${result.totalServicesChecked} total. ${result.previewItems.filter(i => i.willCreateProject).length} projects would be created, ${result.previewItems.filter(i => i.willReschedule).length} services would be rescheduled.`;
+    
+    console.log(`[Scheduling Preview] ${result.summary}`);
+    
+  } catch (error) {
+    result.status = 'failure';
+    result.summary = `Failed to build scheduling preview: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error('[Scheduling Preview] Error:', error);
+  }
+
+  return result;
+}
+
+/**
  * Enhanced function to run project scheduling with filtering capabilities
  */
 export async function runProjectSchedulingEnhanced(
@@ -625,6 +792,7 @@ export async function runProjectSchedulingEnhanced(
   if (!dryRun) {
     try {
       await storage.createSchedulingRunLog({
+        runDate,
         runType,
         status: result.status,
         totalServicesChecked: result.totalServicesChecked,
@@ -992,9 +1160,22 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     throw new Error(`No valid assignee found for service ${dueService.service.name}. Service owner is required.`);
   }
 
+  // Validate required data before creating project
+  if (!dueService.clientId) {
+    throw new Error(`Client ID is required for service ${dueService.service.name}`);
+  }
+  
+  if (!projectType.id) {
+    throw new Error(`Project type ID is required for service ${dueService.service.name}`);
+  }
+  
+  if (!firstStage.name) {
+    throw new Error(`First stage name is required for project type ${projectType.name}`);
+  }
+
   // Prepare project data
   const projectData: InsertProject = {
-    clientId: dueService.clientId!,
+    clientId: dueService.clientId,
     projectTypeId: projectType.id,
     projectOwnerId: finalAssigneeId, // Use final assignee as owner if service owner is null
     bookkeeperId: finalAssigneeId,
@@ -1024,7 +1205,7 @@ async function rescheduleService(dueService: DueService, targetDate: Date): Prom
   const { nextStartDate, nextDueDate } = calculateNextServiceDates(
     dueService.nextStartDate,
     dueService.nextDueDate,
-    dueService.frequency
+    dueService.service.frequency
   );
 
   // Update the service
@@ -1056,7 +1237,7 @@ async function logSchedulingAction(
     scheduledDate,
     previousNextStartDate: dueService.nextStartDate,
     previousNextDueDate: dueService.nextDueDate,
-    frequency: dueService.frequency,
+    frequency: dueService.service.frequency,
     notes: `Project created for ${dueService.service.name}`
   };
 
@@ -1199,7 +1380,7 @@ export async function getOverdueServicesAnalysis(targetDate: Date = new Date()) 
       serviceName: (service as any).serviceName,
       clientName: (service as any).clientName,
       nextStartDate: service.nextStartDate,
-      frequency: service.frequency,
+      frequency: service.service.frequency,
       daysPastDue: service.daysPastDue
     })),
     configurationErrors

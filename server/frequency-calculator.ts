@@ -118,29 +118,28 @@ function isLeapYear(year: number): boolean {
 }
 
 /**
+ * Compare two dates by calendar date only (YYYY-MM-DD) regardless of timezone
+ */
+function compareDateOnly(date1: Date, date2: Date): boolean {
+  const date1Str = date1.toISOString().slice(0, 10);
+  const date2Str = date2.toISOString().slice(0, 10);
+  return date1Str === date2Str;
+}
+
+/**
  * Check if a service is due today
  */
 export function isServiceDueToday(nextStartDate: Date, targetDate: Date = new Date()): boolean {
-  const startOfToday = new Date(targetDate);
-  startOfToday.setUTCHours(0, 0, 0, 0);
-  
-  const startOfServiceDate = new Date(nextStartDate);
-  startOfServiceDate.setUTCHours(0, 0, 0, 0);
-  
-  return startOfServiceDate.getTime() === startOfToday.getTime();
+  return compareDateOnly(nextStartDate, targetDate);
 }
 
 /**
  * Check if a service is overdue (start date is in the past)
  */
 export function isServiceOverdue(nextStartDate: Date, targetDate: Date = new Date()): boolean {
-  const startOfToday = new Date(targetDate);
-  startOfToday.setUTCHours(0, 0, 0, 0);
-  
-  const startOfServiceDate = new Date(nextStartDate);
-  startOfServiceDate.setUTCHours(0, 0, 0, 0);
-  
-  return startOfServiceDate.getTime() < startOfToday.getTime();
+  const serviceDateStr = nextStartDate.toISOString().slice(0, 10);
+  const targetDateStr = targetDate.toISOString().slice(0, 10);
+  return serviceDateStr < targetDateStr;
 }
 
 /**
