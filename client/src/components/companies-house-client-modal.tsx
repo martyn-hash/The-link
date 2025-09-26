@@ -1054,8 +1054,8 @@ export function CompaniesHouseClientModal({
                                 }
                                 data-testid={`button-link-person-${match.index}-${personIndex}`}
                               >
-                                {officerDecisions[index]?.action === 'link' && 
-                                 officerDecisions[index]?.personId === person.id ? (
+                                {officerDecisions[match.index]?.action === 'link' && 
+                                 officerDecisions[match.index]?.personId === person.id ? (
                                   <CheckCircle className="h-4 w-4 mr-1" />
                                 ) : (
                                   <UserCheck className="h-4 w-4 mr-1" />
