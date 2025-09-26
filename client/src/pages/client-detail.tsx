@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -3455,6 +3455,7 @@ export default function ClientDetail() {
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
   const [expandedClientServiceId, setExpandedClientServiceId] = useState<string | null>(null);
   const [expandedPersonalServiceId, setExpandedPersonalServiceId] = useState<string | null>(null);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
@@ -4450,6 +4451,19 @@ export default function ClientDetail() {
                                   
                                   <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-service-details-${clientService.id}`}>
                                     <div className="pt-4">
+                                      <div className="flex items-center justify-between mb-4">
+                                        <div></div>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setEditingServiceId(clientService.id)}
+                                          data-testid={`button-edit-service-${clientService.id}`}
+                                          className="h-8 px-3 text-xs"
+                                        >
+                                          <Pencil className="h-3 w-3 mr-1" />
+                                          Edit Service
+                                        </Button>
+                                      </div>
                                       <Tabs defaultValue="roles" className="w-full">
                                         <TabsList className="grid w-full grid-cols-2">
                                           <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
