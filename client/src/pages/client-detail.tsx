@@ -3453,7 +3453,8 @@ export default function ClientDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
-  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+  const [expandedClientServiceId, setExpandedClientServiceId] = useState<string | null>(null);
+  const [expandedPersonalServiceId, setExpandedPersonalServiceId] = useState<string | null>(null);
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
@@ -3859,7 +3860,7 @@ export default function ClientDetail() {
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
-            <TabsTrigger value="projects" data-testid="tab-projects">Open Projects</TabsTrigger>
+            <TabsTrigger value="projects" data-testid="tab-projects">Project / Tasks</TabsTrigger>
             <TabsTrigger value="communications" data-testid="tab-communications">Communications</TabsTrigger>
             <TabsTrigger value="chronology" data-testid="tab-chronology">Chronology</TabsTrigger>
             <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
@@ -4361,13 +4362,157 @@ export default function ClientDetail() {
                       
                       if (displayServices && displayServices.length > 0) {
                         return (
-                          <div className="space-y-3">
-                            {displayServices.map((clientService) => (
-                              <div key={clientService.id} className="p-4 border rounded-lg">
-                                <h4 className="font-medium">{clientService.service?.name || 'Service'}</h4>
-                                <p className="text-sm text-muted-foreground">{clientService.service?.description || 'No description'}</p>
-                              </div>
-                            ))}
+                          <div className="bg-background space-y-4">
+                            <Accordion
+                              type="single"
+                              collapsible
+                              value={expandedClientServiceId ?? undefined}
+                              onValueChange={(value) => setExpandedClientServiceId(value ?? null)}
+                              className="space-y-4"
+                            >
+                              {displayServices.map((clientService: EnhancedClientService) => (
+                                <AccordionItem key={clientService.id} value={clientService.id} className="border rounded-lg bg-card">
+                                  <AccordionTrigger 
+                                    className="text-left hover:no-underline p-4"
+                                    data-testid={`service-row-${clientService.id}`}
+                                  >
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full mr-4">
+                                      {/* Column 1: Service Name and Description */}
+                                      <div className="space-y-2">
+                                        <div>
+                                          <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
+                                            {clientService.service?.name || 'Service'}
+                                          </h4>
+                                          {clientService.service?.description && (
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                              {clientService.service.description}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Frequency: {clientService.frequency}
+                                        </div>
+                                      </div>
+
+                                      {/* Column 2: Next Start Date */}
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <Clock className="h-4 w-4 text-muted-foreground" />
+                                          <span className="text-sm font-medium text-muted-foreground">Next Start Date</span>
+                                        </div>
+                                        {clientService.nextStartDate ? (
+                                          <div className="text-sm font-medium" data-testid={`text-next-start-date-${clientService.id}`}>
+                                            {formatDate(clientService.nextStartDate)}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                        )}
+                                      </div>
+
+                                      {/* Column 3: Next Due Date */}
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                                          <span className="text-sm font-medium text-muted-foreground">Next Due Date</span>
+                                        </div>
+                                        {clientService.nextDueDate ? (
+                                          <div className="text-sm font-medium" data-testid={`text-next-due-date-${clientService.id}`}>
+                                            {formatDate(clientService.nextDueDate)}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                        )}
+                                      </div>
+
+                                      {/* Column 4: Service Owner */}
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                          <span className="text-sm font-medium text-muted-foreground">Service Owner</span>
+                                        </div>
+                                        {clientService.serviceOwner ? (
+                                          <div className="space-y-1">
+                                            <div className="text-sm font-medium" data-testid={`text-service-owner-${clientService.id}`}>
+                                              {clientService.serviceOwner.firstName} {clientService.serviceOwner.lastName}
+                                            </div>
+                                            {clientService.serviceOwner.email && (
+                                              <div className="text-xs text-muted-foreground">
+                                                {clientService.serviceOwner.email}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground italic">No owner assigned</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </AccordionTrigger>
+                                  
+                                  <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-service-details-${clientService.id}`}>
+                                    <div className="pt-4">
+                                      <Tabs defaultValue="roles" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-2">
+                                          <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
+                                          <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
+                                        </TabsList>
+
+                                        <TabsContent value="roles" className="mt-4">
+                                          <div className="space-y-4">
+                                            <h5 className="font-medium text-sm flex items-center">
+                                              <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                                              Role Assignments
+                                            </h5>
+                                            
+                                            {clientService.roleAssignments && clientService.roleAssignments.length > 0 ? (
+                                              <div className="space-y-3">
+                                                {clientService.roleAssignments.map((assignment) => (
+                                                  <div key={assignment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                                    <div>
+                                                      <div className="font-medium text-sm">{assignment.workRole.name}</div>
+                                                      {assignment.workRole.description && (
+                                                        <div className="text-xs text-muted-foreground">{assignment.workRole.description}</div>
+                                                      )}
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <div className="text-sm font-medium">
+                                                        {assignment.user.firstName} {assignment.user.lastName}
+                                                      </div>
+                                                      {assignment.user.email && (
+                                                        <div className="text-xs text-muted-foreground">{assignment.user.email}</div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <div className="text-center py-8">
+                                                <p className="text-muted-foreground">No role assignments configured for this service.</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TabsContent>
+
+                                        <TabsContent value="projects" className="mt-4">
+                                          <div className="space-y-4">
+                                            <h5 className="font-medium text-sm flex items-center">
+                                              <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
+                                              Related Projects
+                                            </h5>
+                                            
+                                            <div className="text-center py-8">
+                                              <p className="text-muted-foreground">Project integration coming soon.</p>
+                                              <p className="text-xs text-muted-foreground mt-2">
+                                                This will show open and completed projects related to this service.
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </TabsContent>
+                                      </Tabs>
+                                    </div>
+                                  </AccordionContent>
+                                </AccordionItem>
+                              ))}
+                            </Accordion>
                           </div>
                         );
                       }
@@ -4408,13 +4553,143 @@ export default function ClientDetail() {
                       <p className="text-muted-foreground text-sm">Please try refreshing the page or contact support if the issue persists.</p>
                     </div>
                   ) : peopleServices && peopleServices.length > 0 ? (
-                    <div className="space-y-3">
-                      {peopleServices.map((peopleService) => (
-                        <div key={peopleService.id} className="p-4 border rounded-lg">
-                          <h4 className="font-medium">{peopleService.service?.name || 'Service'}</h4>
-                          <p className="text-sm text-muted-foreground">{peopleService.service?.description || 'No description'}</p>
-                        </div>
-                      ))}
+                    <div className="bg-background space-y-4">
+                      <Accordion
+                        type="single"
+                        collapsible
+                        value={expandedPersonalServiceId ?? undefined}
+                        onValueChange={(value) => setExpandedPersonalServiceId(value ?? null)}
+                        className="space-y-4"
+                      >
+                        {peopleServices.map((peopleService: PeopleService & { person: Person; service: Service; serviceOwner?: User }) => (
+                          <AccordionItem key={peopleService.id} value={peopleService.id} className="border rounded-lg bg-card">
+                            <AccordionTrigger 
+                              className="text-left hover:no-underline p-4"
+                              data-testid={`personal-service-row-${peopleService.id}`}
+                            >
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mr-4">
+                                {/* Column 1: Service Name and Description */}
+                                <div className="space-y-2">
+                                  <div>
+                                    <h4 className="font-medium text-lg" data-testid={`text-personal-service-name-${peopleService.id}`}>
+                                      {peopleService.service?.name || 'Service'}
+                                    </h4>
+                                    {peopleService.service?.description && (
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        {peopleService.service.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Personal Service
+                                  </div>
+                                </div>
+
+                                {/* Column 2: Person Details */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <UserIcon className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-muted-foreground">Person</span>
+                                  </div>
+                                  {peopleService.person ? (
+                                    <div className="space-y-1">
+                                      <div className="text-sm font-medium" data-testid={`text-person-name-${peopleService.id}`}>
+                                        {formatPersonName(peopleService.person.fullName)}
+                                      </div>
+                                      {peopleService.person.email && (
+                                        <div className="text-xs text-muted-foreground">
+                                          {peopleService.person.email}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground italic">No person assigned</p>
+                                  )}
+                                </div>
+
+                                {/* Column 3: Service Owner */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Settings className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-muted-foreground">Service Owner</span>
+                                  </div>
+                                  {peopleService.serviceOwner ? (
+                                    <div className="space-y-1">
+                                      <div className="text-sm font-medium" data-testid={`text-personal-service-owner-${peopleService.id}`}>
+                                        {peopleService.serviceOwner.firstName} {peopleService.serviceOwner.lastName}
+                                      </div>
+                                      {peopleService.serviceOwner.email && (
+                                        <div className="text-xs text-muted-foreground">
+                                          {peopleService.serviceOwner.email}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground italic">No owner assigned</p>
+                                  )}
+                                </div>
+                              </div>
+                            </AccordionTrigger>
+                            
+                            <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-personal-service-details-${peopleService.id}`}>
+                              <div className="pt-4">
+                                <Tabs defaultValue="details" className="w-full">
+                                  <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="details" data-testid={`tab-details-${peopleService.id}`}>Service Details</TabsTrigger>
+                                    <TabsTrigger value="notes" data-testid={`tab-notes-${peopleService.id}`}>Notes & History</TabsTrigger>
+                                  </TabsList>
+
+                                  <TabsContent value="details" className="mt-4">
+                                    <div className="space-y-4">
+                                      <h5 className="font-medium text-sm flex items-center">
+                                        <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
+                                        Service Configuration
+                                      </h5>
+                                      
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="p-3 border rounded-lg">
+                                          <div className="text-xs text-muted-foreground mb-1">Service Type</div>
+                                          <div className="text-sm font-medium">Personal Service</div>
+                                        </div>
+                                        <div className="p-3 border rounded-lg">
+                                          <div className="text-xs text-muted-foreground mb-1">Status</div>
+                                          <div className="text-sm font-medium">
+                                            {peopleService.isActive ? (
+                                              <span className="text-green-600">Active</span>
+                                            ) : (
+                                              <span className="text-red-600">Inactive</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TabsContent>
+
+                                  <TabsContent value="notes" className="mt-4">
+                                    <div className="space-y-4">
+                                      <h5 className="font-medium text-sm flex items-center">
+                                        <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                                        Notes & History
+                                      </h5>
+                                      
+                                      {peopleService.notes ? (
+                                        <div className="p-3 border rounded-lg">
+                                          <div className="text-xs text-muted-foreground mb-2">Notes</div>
+                                          <div className="text-sm">{peopleService.notes}</div>
+                                        </div>
+                                      ) : (
+                                        <div className="text-center py-8">
+                                          <p className="text-muted-foreground">No notes or history available for this personal service.</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TabsContent>
+                                </Tabs>
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
                     </div>
                   ) : (
                     <div className="text-center py-8">
@@ -4427,13 +4702,40 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="projects" className="space-y-6 mt-6">
+            {/* Open Projects Section */}
             <Card>
               <CardHeader>
-                <CardTitle>Open Projects</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="w-5 h-5" />
+                  Open Projects
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground">Projects management coming soon.</p>
+                  <Briefcase className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-2">No open projects found for this client.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Projects will appear here when they are created through the scheduling system.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Completed Projects Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Check className="w-5 h-5" />
+                  Completed Projects
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Check className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-2">No completed projects found for this client.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Historical projects and their completion details will be shown here.
+                  </p>
                 </div>
               </CardContent>
             </Card>
