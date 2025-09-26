@@ -42,8 +42,7 @@ export default function MagicLinkVerify() {
   // Token verification mutation
   const tokenVerifyMutation = useMutation({
     mutationFn: async (token: string) => {
-      const response = await apiRequest("POST", "/api/magic-link/verify", { token });
-      return response.json();
+      return await apiRequest("POST", "/api/magic-link/verify", { token });
     },
     onSuccess: async (data) => {
       toast({
@@ -75,11 +74,10 @@ export default function MagicLinkVerify() {
   // Manual code verification mutation
   const manualVerifyMutation = useMutation({
     mutationFn: async (data: ManualVerifyFormData) => {
-      const response = await apiRequest("POST", "/api/magic-link/verify", {
+      return await apiRequest("POST", "/api/magic-link/verify", {
         code: data.code,
         email: data.email,
       });
-      return response.json();
     },
     onSuccess: async (data) => {
       toast({

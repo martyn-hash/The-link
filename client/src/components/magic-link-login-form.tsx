@@ -53,8 +53,7 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
 
   const magicLinkMutation = useMutation({
     mutationFn: async (data: MagicLinkFormData) => {
-      const response = await apiRequest("POST", "/api/magic-link/request", data);
-      return response.json();
+      return await apiRequest("POST", "/api/magic-link/request", data);
     },
     onSuccess: (data, variables) => {
       setFormState("code_entry");
@@ -76,11 +75,10 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
 
   const codeVerifyMutation = useMutation({
     mutationFn: async (data: CodeVerifyFormData) => {
-      const response = await apiRequest("POST", "/api/magic-link/verify", {
+      return await apiRequest("POST", "/api/magic-link/verify", {
         code: data.code,
         email: sentEmail,
       });
-      return response.json();
     },
     onSuccess: async (data) => {
       toast({
