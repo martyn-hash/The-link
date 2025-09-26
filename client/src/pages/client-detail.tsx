@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, Link as RouterLink } from "wouter";
 import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -2451,7 +2451,13 @@ function PersonTabbedView({
                           <div className="flex items-center gap-3 mb-2">
                             <Building2 className="h-5 w-5 text-blue-600" />
                             <h4 className="font-medium text-gray-900">
-                              {connection.client.name}
+                              <RouterLink
+                                href={`/clients/${connection.client.id}`}
+                                className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                data-testid={`link-company-${connection.client.id}`}
+                              >
+                                {connection.client.name}
+                              </RouterLink>
                             </h4>
                             {connection.officerRole && (
                               <Badge variant="outline">{connection.officerRole}</Badge>
