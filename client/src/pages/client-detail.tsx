@@ -1,11 +1,11 @@
-import { useParams, Link as RouterLink } from "wouter";
+import { useParams, Link as RouterLink, useLocation } from "wouter";
 import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -25,7 +25,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations } from "@shared/schema";
 import { insertPersonSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
@@ -3746,6 +3746,94 @@ function CompanyCreationForm({ onSubmit, onCancel, isSubmitting }: {
   );
 }
 
+// Component to display a list of projects with hyperlinks
+function ProjectsList({ projects, isLoading }: { projects?: ProjectWithRelations[]; isLoading: boolean }) {
+  const [, setLocation] = useLocation();
+
+  const getStatusColor = (status: string) => {
+    const colors = {
+      no_latest_action: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+      bookkeeping_work_required: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      in_review: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      needs_client_input: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    };
+    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  };
+
+  const formatStatus = (status: string) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const navigateToProject = (projectId: string) => {
+    setLocation(`/projects/${projectId}`);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="flex justify-between items-center p-3 border rounded-lg">
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+            <Skeleton className="h-8 w-16" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!projects || projects.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Briefcase className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+        <p className="text-muted-foreground mb-2">No projects found</p>
+        <p className="text-sm text-muted-foreground">
+          Projects will appear here when they are created for this client.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {projects.map((project) => (
+        <div key={project.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium text-sm" data-testid={`text-project-title-${project.id}`}>
+                {project.description}
+              </h4>
+              <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+                {formatStatus(project.currentStatus)}
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {project.dueDate && (
+                <span>Due: {new Date(project.dueDate).toLocaleDateString()}</span>
+              )}
+              {project.projectMonth && (
+                <span className="ml-3">Month: {project.projectMonth}</span>
+              )}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateToProject(project.id)}
+            data-testid={`button-view-project-${project.id}`}
+          >
+            <Eye className="w-4 h-4 mr-1" />
+            View
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -3892,6 +3980,14 @@ export default function ClientDetail() {
     queryKey: ['/api/services'],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
+  });
+
+  // Fetch projects for this client
+  const { data: clientProjects, isLoading: projectsLoading, error: projectsError } = useQuery<ProjectWithRelations[]>({
+    queryKey: [`/api/clients/${id}/projects`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!id && !!client,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Mutation for updating person data
@@ -4820,12 +4916,10 @@ export default function ClientDetail() {
                                               Related Projects
                                             </h5>
                                             
-                                            <div className="text-center py-8">
-                                              <p className="text-muted-foreground">Project integration coming soon.</p>
-                                              <p className="text-xs text-muted-foreground mt-2">
-                                                This will show open and completed projects related to this service.
-                                              </p>
-                                            </div>
+                                            <ProjectsList 
+                                              projects={clientProjects} 
+                                              isLoading={projectsLoading} 
+                                            />
                                           </div>
                                         </TabsContent>
                                       </Tabs>
@@ -5062,12 +5156,10 @@ export default function ClientDetail() {
                                         Related Projects
                                       </h5>
                                       
-                                      <div className="text-center py-8">
-                                        <p className="text-muted-foreground">Project integration coming soon.</p>
-                                        <p className="text-xs text-muted-foreground mt-2">
-                                          This will show open and completed projects related to this personal service.
-                                        </p>
-                                      </div>
+                                      <ProjectsList 
+                                        projects={clientProjects} 
+                                        isLoading={projectsLoading} 
+                                      />
                                     </div>
                                   </TabsContent>
                                 </Tabs>
@@ -5098,13 +5190,10 @@ export default function ClientDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Briefcase className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground mb-2">No open projects found for this client.</p>
-                  <p className="text-sm text-muted-foreground">
-                    Projects will appear here when they are created through the scheduling system.
-                  </p>
-                </div>
+                <ProjectsList 
+                  projects={clientProjects?.filter(p => p.currentStatus !== 'completed')} 
+                  isLoading={projectsLoading} 
+                />
               </CardContent>
             </Card>
 
@@ -5117,13 +5206,10 @@ export default function ClientDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Check className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground mb-2">No completed projects found for this client.</p>
-                  <p className="text-sm text-muted-foreground">
-                    Historical projects and their completion details will be shown here.
-                  </p>
-                </div>
+                <ProjectsList 
+                  projects={clientProjects?.filter(p => p.currentStatus === 'completed')} 
+                  isLoading={projectsLoading} 
+                />
               </CardContent>
             </Card>
           </TabsContent>
