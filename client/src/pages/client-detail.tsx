@@ -13,7 +13,7 @@ import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -183,7 +183,7 @@ const editServiceSchema = z.object({
   nextStartDate: z.string().optional(),
   nextDueDate: z.string().optional(),
   serviceOwnerId: z.string().optional(),
-  frequency: z.string().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(),
   roleAssignments: z.array(z.object({
     workRoleId: z.string(),
     userId: z.string(),
@@ -1345,10 +1345,14 @@ function EditServiceModal({
     mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}> }) => {
       // First update the service itself (dates, owner, frequency, etc.)
       const serviceUpdateData = {
-        nextStartDate: data.nextStartDate,
-        nextDueDate: data.nextDueDate,
+        nextStartDate: data.nextStartDate ? 
+          (data.nextStartDate.includes('T') ? data.nextStartDate : data.nextStartDate + 'T00:00:00.000Z') : 
+          null,
+        nextDueDate: data.nextDueDate ? 
+          (data.nextDueDate.includes('T') ? data.nextDueDate : data.nextDueDate + 'T00:00:00.000Z') : 
+          null,
         serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
-        frequency: data.frequency,
+        frequency: isCompaniesHouseService ? "annually" : data.frequency,
       };
       
       await apiRequest("PUT", `/api/client-services/${data.serviceId}`, serviceUpdateData);
@@ -1359,7 +1363,7 @@ function EditServiceModal({
       return { success: true };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/client-services'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${service.clientId}`] });
       toast({
         title: "Success",
         description: "Service updated successfully",
@@ -1434,14 +1438,18 @@ function EditServiceModal({
               )}
             />
 
-            {/* Frequency field - show for all services but disable for Companies House if needed */}
+            {/* Frequency field - disabled for Companies House services */}
             <FormField
               control={form.control}
               name="frequency"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Frequency</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    defaultValue={isCompaniesHouseService ? "annually" : field.value}
+                    disabled={isCompaniesHouseService}
+                  >
                     <FormControl>
                       <SelectTrigger data-testid="select-frequency">
                         <SelectValue placeholder="Select frequency" />
@@ -1455,6 +1463,11 @@ function EditServiceModal({
                       <SelectItem value="annually">Annually</SelectItem>
                     </SelectContent>
                   </Select>
+                  {isCompaniesHouseService && (
+                    <FormDescription className="text-blue-600 dark:text-blue-400">
+                      Companies House services are automatically set to annual frequency.
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
