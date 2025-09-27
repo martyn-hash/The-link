@@ -461,6 +461,9 @@ export const peopleServices = pgTable("people_services", {
   personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
   serviceOwnerId: varchar("service_owner_id").references(() => users.id, { onDelete: "set null" }), // Service owner assigned for this person-service mapping
+  frequency: varchar("frequency").notNull().default("monthly"), // monthly, quarterly, annually, etc.
+  nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
+  nextDueDate: timestamp("next_due_date"), // Next due date for the service
   notes: text("notes"), // Specific notes for this person's service
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
   createdAt: timestamp("created_at").defaultNow(),
@@ -468,6 +471,7 @@ export const peopleServices = pgTable("people_services", {
   index("idx_people_services_person_id").on(table.personId),
   index("idx_people_services_service_id").on(table.serviceId),
   index("idx_people_services_service_owner_id").on(table.serviceOwnerId),
+  index("idx_people_services_next_due_date").on(table.nextDueDate), // Index for scheduling queries
   unique("unique_person_service").on(table.personId, table.serviceId),
 ]);
 
