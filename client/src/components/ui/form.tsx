@@ -86,19 +86,60 @@ const FormItem = React.forwardRef<
 })
 FormItem.displayName = "FormItem"
 
+export interface FormLabelProps extends React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> {
+  required?: boolean
+  fieldState?: 'required-empty' | 'required-filled' | 'optional' | 'error'
+}
+
 const FormLabel = React.forwardRef<
   React.ElementRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>
->(({ className, ...props }, ref) => {
+  FormLabelProps
+>(({ className, required, fieldState, children, ...props }, ref) => {
   const { error, formItemId } = useFormField()
+
+  const getLabelStateClasses = () => {
+    if (error) return "text-destructive"
+    
+    switch (fieldState) {
+      case 'required-empty':
+        return "text-required-empty font-medium"
+      case 'required-filled':
+        return "text-required-filled font-medium"
+      case 'optional':
+        return "text-optional font-normal"
+      case 'error':
+        return "text-destructive"
+      default:
+        return ""
+    }
+  }
 
   return (
     <Label
       ref={ref}
-      className={cn(error && "text-destructive", className)}
+      className={cn(
+        "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+        getLabelStateClasses(),
+        className
+      )}
       htmlFor={formItemId}
       {...props}
-    />
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {(required || fieldState?.startsWith('required')) && (
+          <span className={cn(
+            "text-xs",
+            fieldState === 'required-filled' ? "text-required-filled" : "text-required-empty"
+          )}>
+            *
+          </span>
+        )}
+        {fieldState === 'required-filled' && (
+          <span className="text-required-filled text-xs">✓</span>
+        )}
+      </div>
+    </Label>
   )
 })
 FormLabel.displayName = "FormLabel"

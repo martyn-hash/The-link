@@ -12,24 +12,46 @@ const SelectGroup = SelectPrimitive.Group
 
 const SelectValue = SelectPrimitive.Value
 
+export interface SelectTriggerProps extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  fieldState?: 'required-empty' | 'required-filled' | 'optional' | 'error'
+}
+
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
-  <SelectPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-      className
-    )}
-    {...props}
-  >
-    {children}
-    <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
-    </SelectPrimitive.Icon>
-  </SelectPrimitive.Trigger>
-))
+  SelectTriggerProps
+>(({ className, children, fieldState, ...props }, ref) => {
+  const getFieldStateClasses = () => {
+    switch (fieldState) {
+      case 'required-empty':
+        return "border-2 border-required-empty bg-required-empty/5 focus:ring-required-empty focus:border-required-empty data-[placeholder]:text-required-empty/70"
+      case 'required-filled':
+        return "border-2 border-required-filled bg-required-filled/5 focus:ring-required-filled focus:border-required-filled"
+      case 'optional':
+        return "border border-optional bg-optional/10 focus:ring-optional focus:border-optional data-[placeholder]:text-optional/70"
+      case 'error':
+        return "border-2 border-destructive bg-destructive/5 focus:ring-destructive focus:border-destructive data-[placeholder]:text-destructive/70"
+      default:
+        return "border border-input bg-background focus:ring-ring data-[placeholder]:text-muted-foreground"
+    }
+  }
+  
+  return (
+    <SelectPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        "flex h-10 w-full items-center justify-between rounded-md px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 transition-all duration-200",
+        getFieldStateClasses(),
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <SelectPrimitive.Icon asChild>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </SelectPrimitive.Icon>
+    </SelectPrimitive.Trigger>
+  )
+})
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
 
 const SelectScrollUpButton = React.forwardRef<

@@ -214,6 +214,32 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
   const [selectedPersonId, setSelectedPersonId] = useState<string>("");
   const { toast } = useToast();
   
+  // Helper function to determine field state for visual indicators
+  const getFieldState = (fieldName: keyof AddServiceData, isRequired: boolean = false): 'required-empty' | 'required-filled' | 'optional' | 'error' => {
+    const formErrors = form.formState.errors;
+    const fieldValue = form.getValues(fieldName);
+    const hasError = !!formErrors[fieldName];
+    
+    if (hasError) return 'error';
+    
+    if (isRequired) {
+      return fieldValue ? 'required-filled' : 'required-empty';
+    }
+    
+    return 'optional';
+  };
+  
+  // Helper for role assignment field states
+  const getRoleFieldState = (roleId: string): 'required-empty' | 'required-filled' | 'error' => {
+    const hasAssignment = !!roleAssignments[roleId];
+    return hasAssignment ? 'required-filled' : 'required-empty';
+  };
+  
+  // Helper for person selection field state
+  const getPersonFieldState = (): 'required-empty' | 'required-filled' | 'error' => {
+    return selectedPersonId ? 'required-filled' : 'required-empty';
+  };
+  
   const form = useForm<AddServiceData>({
     resolver: zodResolver(addServiceSchema),
     defaultValues: {
@@ -518,10 +544,18 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   name="serviceId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Service</FormLabel>
+                      <FormLabel 
+                        required={true} 
+                        fieldState={getFieldState('serviceId', true)}
+                      >
+                        Service
+                      </FormLabel>
                       <Select onValueChange={(value) => { field.onChange(value); handleServiceChange(value); }} value={field.value}>
                         <FormControl>
-                          <SelectTrigger data-testid="select-service">
+                          <SelectTrigger 
+                            data-testid="select-service"
+                            fieldState={getFieldState('serviceId', true)}
+                          >
                             <SelectValue placeholder="Select a service" />
                           </SelectTrigger>
                         </FormControl>
@@ -553,7 +587,11 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   name="frequency"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Frequency</FormLabel>
+                      <FormLabel 
+                        fieldState={isPersonalService ? 'optional' : getFieldState('frequency', !isPersonalService)}
+                      >
+                        Frequency
+                      </FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value}
@@ -562,6 +600,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                         <FormControl>
                           <SelectTrigger 
                             data-testid="select-frequency"
+                            fieldState={isFieldDisabled('frequency') ? undefined : (isPersonalService ? 'optional' : getFieldState('frequency', !isPersonalService))}
                             className={isFieldDisabled('frequency') ? 'bg-muted text-muted-foreground' : ''}
                           >
                             <SelectValue />
@@ -590,12 +629,17 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   name="nextStartDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Next Start Date</FormLabel>
+                      <FormLabel 
+                        fieldState={isPersonalService ? 'optional' : getFieldState('nextStartDate', !isPersonalService)}
+                      >
+                        Next Start Date
+                      </FormLabel>
                       <FormControl>
                         <Input 
                           type="date" 
                           {...field} 
                           data-testid="input-next-start-date"
+                          fieldState={isFieldDisabled('nextStartDate') ? undefined : (isPersonalService ? 'optional' : getFieldState('nextStartDate', !isPersonalService))}
                           disabled={isFieldDisabled('nextStartDate')}
                           className={isFieldDisabled('nextStartDate') ? 'bg-muted text-muted-foreground' : ''}
                         />
@@ -615,12 +659,17 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   name="nextDueDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Next Due Date</FormLabel>
+                      <FormLabel 
+                        fieldState={isPersonalService ? 'optional' : getFieldState('nextDueDate', !isPersonalService)}
+                      >
+                        Next Due Date
+                      </FormLabel>
                       <FormControl>
                         <Input 
                           type="date" 
                           {...field} 
                           data-testid="input-next-due-date"
+                          fieldState={isFieldDisabled('nextDueDate') ? undefined : (isPersonalService ? 'optional' : getFieldState('nextDueDate', !isPersonalService))}
                           disabled={isFieldDisabled('nextDueDate')}
                           className={isFieldDisabled('nextDueDate') ? 'bg-muted text-muted-foreground' : ''}
                         />
@@ -645,10 +694,18 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   name="serviceOwnerId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Service Owner *</FormLabel>
+                      <FormLabel 
+                        required={!isPersonalService} 
+                        fieldState={isPersonalService ? 'optional' : getFieldState('serviceOwnerId', !isPersonalService)}
+                      >
+                        Service Owner
+                      </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger data-testid="select-service-owner">
+                          <SelectTrigger 
+                            data-testid="select-service-owner"
+                            fieldState={isPersonalService ? 'optional' : getFieldState('serviceOwnerId', !isPersonalService)}
+                          >
                             <SelectValue placeholder="Select service owner" />
                           </SelectTrigger>
                         </FormControl>
@@ -690,7 +747,11 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                             Select Person <span className="text-red-500">*</span>
                           </label>
                           <Select onValueChange={handlePersonChange} value={selectedPersonId}>
-                            <SelectTrigger data-testid="select-person" className="bg-white dark:bg-gray-800">
+                            <SelectTrigger 
+                              data-testid="select-person" 
+                              fieldState={getPersonFieldState()}
+                              className="bg-white dark:bg-gray-800"
+                            >
                               <SelectValue placeholder="Choose a person to assign this service to" />
                             </SelectTrigger>
                             <SelectContent>
@@ -738,7 +799,11 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                               value={roleAssignments[role.id] || ""} 
                               onValueChange={(userId) => handleRoleAssignmentChange(role.id, userId)}
                             >
-                              <SelectTrigger className="w-full" data-testid={`select-role-${role.id}`}>
+                              <SelectTrigger 
+                                className="w-full" 
+                                data-testid={`select-role-${role.id}`}
+                                fieldState={getRoleFieldState(role.id)}
+                              >
                                 <SelectValue placeholder="Select user" />
                               </SelectTrigger>
                               <SelectContent>

@@ -39,6 +39,12 @@
   --font-serif: Roboto Mono;
   --font-mono: Open Sans;
   --radius: 0.5rem;
+  --required-empty: hsl(25, 95%, 53%);
+  --required-empty-foreground: hsl(0, 0%, 100%);
+  --required-filled: hsl(120, 60%, 50%);
+  --required-filled-foreground: hsl(0, 0%, 100%);
+  --optional: hsl(210, 16%, 82%);
+  --optional-foreground: hsl(222.2, 84%, 4.9%);
   --shadow-2xs: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00), 0px 1px 2px -1px hsl(221.2, 83.2%, 53.3% / 0.00);
@@ -88,6 +94,12 @@
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: 0.75rem;
+  --required-empty: hsl(25, 95%, 53%);
+  --required-empty-foreground: hsl(0, 0%, 100%);
+  --required-filled: hsl(120, 60%, 50%);
+  --required-filled-foreground: hsl(0, 0%, 100%);
+  --optional: hsl(210, 16%, 82%);
+  --optional-foreground: hsl(210, 40%, 98%);
 }
 
 @layer base {
