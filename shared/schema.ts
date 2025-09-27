@@ -1128,6 +1128,10 @@ export const updateClientServiceSchema = insertClientServiceSchema.partial();
 export const insertPeopleServiceSchema = createInsertSchema(peopleServices).omit({
   id: true,
   createdAt: true,
+}).extend({
+  frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).default("monthly"),
+  nextStartDate: z.string().datetime().optional(),
+  nextDueDate: z.string().datetime().optional(),
 });
 
 export const updatePeopleServiceSchema = insertPeopleServiceSchema.partial();
