@@ -362,6 +362,9 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
         personId: selectedPersonId,
         serviceId: data.serviceId,
         serviceOwnerId: data.serviceOwnerId || null,
+        frequency: data.frequency,
+        nextStartDate: data.nextStartDate || null,
+        nextDueDate: data.nextDueDate || null,
         notes: null,
       });
     },
