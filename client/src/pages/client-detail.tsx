@@ -3758,11 +3758,11 @@ function ServiceProjectsList({ serviceId }: { serviceId: string }) {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  return <ProjectsList projects={projects} isLoading={isLoading} />;
+  return <ProjectsList projects={projects} isLoading={isLoading} clientId={id} />;
 }
 
 // Component to display a list of projects with hyperlinks
-function ProjectsList({ projects, isLoading }: { projects?: ProjectWithRelations[]; isLoading: boolean }) {
+function ProjectsList({ projects, isLoading, clientId }: { projects?: ProjectWithRelations[]; isLoading: boolean; clientId?: string }) {
   const [, setLocation] = useLocation();
 
   const getStatusColor = (status: string) => {
@@ -3781,7 +3781,9 @@ function ProjectsList({ projects, isLoading }: { projects?: ProjectWithRelations
   };
 
   const navigateToProject = (projectId: string) => {
-    setLocation(`/projects/${projectId}`);
+    // Include client ID as query parameter when navigating from client detail page
+    const url = clientId ? `/projects/${projectId}?from=client&clientId=${clientId}` : `/projects/${projectId}`;
+    setLocation(url);
   };
 
   if (isLoading) {
@@ -5206,7 +5208,8 @@ export default function ClientDetail() {
               <CardContent>
                 <ProjectsList 
                   projects={clientProjects?.filter(p => p.currentStatus !== 'completed')} 
-                  isLoading={projectsLoading} 
+                  isLoading={projectsLoading}
+                  clientId={id}
                 />
               </CardContent>
             </Card>
@@ -5222,7 +5225,8 @@ export default function ClientDetail() {
               <CardContent>
                 <ProjectsList 
                   projects={clientProjects?.filter(p => p.currentStatus === 'completed')} 
-                  isLoading={projectsLoading} 
+                  isLoading={projectsLoading}
+                  clientId={id}
                 />
               </CardContent>
             </Card>

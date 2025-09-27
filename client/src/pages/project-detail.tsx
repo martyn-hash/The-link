@@ -61,11 +61,21 @@ export default function ProjectDetail() {
   }, [projectError, toast]);
 
   const handleBack = () => {
-    // Navigate back to the appropriate projects page based on user permissions
-    if (user?.isAdmin || user?.canSeeAdminMenu) {
-      setLocation("/all-projects");
+    // Check if we came from a client detail page
+    const urlParams = new URLSearchParams(window.location.search);
+    const from = urlParams.get('from');
+    const clientId = urlParams.get('clientId');
+    
+    if (from === 'client' && clientId) {
+      // Navigate back to the client detail page
+      setLocation(`/clients/${clientId}`);
     } else {
-      setLocation("/projects");
+      // Navigate back to the appropriate projects page based on user permissions
+      if (user?.isAdmin || user?.canSeeAdminMenu) {
+        setLocation("/all-projects");
+      } else {
+        setLocation("/projects");
+      }
     }
   };
 
