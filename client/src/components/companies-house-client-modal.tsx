@@ -1038,9 +1038,32 @@ export function CompaniesHouseClientModal({
                                 {person.email && (
                                   <p className="text-sm text-gray-600">Email: {person.email}</p>
                                 )}
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Person ID: {person.id}
-                                </p>
+                                {person.companies && person.companies.length > 0 ? (
+                                  <div className="mt-1">
+                                    <p className="text-xs text-gray-600 font-medium">Connected to:</p>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {person.companies.map((company, companyIndex) => (
+                                        <span 
+                                          key={company.id || company.number || companyIndex}
+                                          data-testid={`badge-company-${company.id || company.number || companyIndex}`}
+                                          className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 border border-blue-200 text-xs text-blue-700"
+                                          title={`${company.role} at ${company.name}${company.number ? ` (${company.number})` : ''}`}
+                                        >
+                                          <span className="font-medium">{company.name}</span>
+                                          {company.role && (
+                                            <span className="ml-1 text-blue-600">
+                                              ({company.role})
+                                            </span>
+                                          )}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    No company connections found
+                                  </p>
+                                )}
                               </div>
                               <Button
                                 variant="outline"
