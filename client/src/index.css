@@ -20,8 +20,8 @@
   --destructive: hsl(0deg 72.22% 50.59%);
   --destructive-foreground: hsl(0deg 0% 100%);
   --border: hsl(0deg 50% 0.78%);
-  --input: hsl(214.3, 31.8%, 91.4%);
-  --ring: hsl(202deg 91% 37%);
+  --input: hsl(0deg 0% 100%);
+  --ring: hsl(201.43deg 100% 38.43%);
   --chart-1: hsl(202deg 91% 37%);
   --chart-2: hsl(85deg 84% 40%);
   --chart-3: hsl(42.0290, 92.8251%, 56.2745%);
