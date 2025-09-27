@@ -1369,6 +1369,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             officer.dateOfBirth.month
           );
           
+          // For each matched person, get their company connections
+          const matchesWithCompanies = await Promise.all(
+            matchingPeople.map(async (person) => {
+              const clientConnections = await storage.getClientPeopleByPersonId(person.id);
+              // Filter to company clients only and include useful identifiers for UI
+              const companyConnections = clientConnections.filter(c => c.client.clientType === 'company');
+              const companies = companyConnections.map(connection => ({
+                id: connection.client.id,
+                name: connection.client.name,
+                number: connection.client.companyNumber,
+                role: connection.officerRole
+              }));
+              
+              return {
+                ...person,
+                companies
+              };
+            })
+          );
+          
           return {
             index,
             officer: {
@@ -1376,7 +1396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               parsedFirstName: parsedName.firstName,
               parsedLastName: parsedName.lastName
             },
-            matches: matchingPeople
+            matches: matchesWithCompanies
           };
         })
       );
