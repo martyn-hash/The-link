@@ -51,6 +51,15 @@ import {
   type User,
 } from "@shared/schema";
 
+// Email sending schema
+const sendEmailSchema = z.object({
+  to: z.string().email("Invalid email address"),
+  subject: z.string().min(1, "Subject is required"),
+  body: z.string().min(1, "Email body is required"),
+  cc: z.string().email().optional(),
+  bcc: z.string().email().optional(),
+});
+
 // Resource-specific parameter validation schemas for consistent error responses
 // Users: Allow flexible ID format (Replit Auth generates short string IDs like "uOBWFr")
 const paramUserIdSchema = z.object({ 
@@ -469,6 +478,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error disconnecting Outlook account:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to disconnect account" });
+    }
+  });
+
+  // Send email using user's Outlook account
+  app.post('/api/oauth/outlook/send-email', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      
+      // Validate request body
+      const validationResult = sendEmailSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          message: "Invalid email data",
+          errors: validationResult.error.issues
+        });
+      }
+
+      const { to, subject, body, cc, bcc } = validationResult.data;
+
+      // Check if user has Outlook connected
+      const outlookClient = await getUserOutlookClient(userId);
+      if (!outlookClient) {
+        return res.status(400).json({
+          message: "No Outlook account connected. Please connect your account first."
+        });
+      }
+
+      // Prepare email message
+      const message = {
+        subject,
+        body: {
+          contentType: 'HTML',
+          content: body
+        },
+        toRecipients: [
+          {
+            emailAddress: {
+              address: to
+            }
+          }
+        ],
+        ...(cc && {
+          ccRecipients: [
+            {
+              emailAddress: {
+                address: cc
+              }
+            }
+          ]
+        }),
+        ...(bcc && {
+          bccRecipients: [
+            {
+              emailAddress: {
+                address: bcc
+              }
+            }
+          ]
+        })
+      };
+
+      // Send email through Microsoft Graph API
+      await outlookClient.api('/me/sendMail').post({
+        message
+      });
+
+      res.json({ 
+        message: "Email sent successfully",
+        sentTo: to,
+        subject 
+      });
+    } catch (error) {
+      console.error("Error sending email via Outlook:", error instanceof Error ? error.message : error);
+      
+      // Handle specific Graph API errors
+      if (error instanceof Error) {
+        if (error.message.includes('InvalidAuthenticationToken') || error.message.includes('Unauthorized')) {
+          return res.status(401).json({
+            message: "Your Outlook connection has expired. Please reconnect your account."
+          });
+        }
+        if (error.message.includes('Forbidden')) {
+          return res.status(403).json({
+            message: "Insufficient permissions to send email. Please reconnect your account."
+          });
+        }
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to send email. Please try again or reconnect your account."
+      });
     }
   });
 
