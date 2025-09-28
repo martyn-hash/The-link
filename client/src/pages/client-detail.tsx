@@ -836,6 +836,9 @@ const updatePersonSchema = insertPersonSchema.partial().extend({
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
   email2: z.string().email("Invalid email format").optional().or(z.literal("")),
   telephone2: z.string().optional().or(z.literal("")),
+  // Primary contact fields
+  primaryPhone: z.string().optional().or(z.literal("")),
+  primaryEmail: z.string().email("Invalid email format").optional().or(z.literal("")),
   linkedinUrl: z.union([z.string().url("Invalid LinkedIn URL"), z.literal("")]).optional(),
   instagramUrl: z.union([z.string().url("Invalid Instagram URL"), z.literal("")]).optional(),
   twitterUrl: z.union([z.string().url("Invalid Twitter/X URL"), z.literal("")]).optional(),
@@ -4012,6 +4015,9 @@ function PersonEditForm({
       // Extended contact information
       telephone2: clientPerson.person.telephone2 || "",
       email2: clientPerson.person.email2 || "",
+      // Primary communication fields
+      primaryPhone: clientPerson.person.primaryPhone || "",
+      primaryEmail: clientPerson.person.primaryEmail || "",
       // Social media URLs
       linkedinUrl: clientPerson.person.linkedinUrl || "",
       instagramUrl: clientPerson.person.instagramUrl || "",
@@ -4022,6 +4028,18 @@ function PersonEditForm({
   });
 
   const handleSubmit = (data: UpdatePersonData) => {
+    // Convert UK mobile format to international format for primaryPhone
+    if (data.primaryPhone && data.primaryPhone.trim()) {
+      let cleanPhone = data.primaryPhone.replace(/[^\d]/g, '');
+      
+      if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
+        data.primaryPhone = `+447${cleanPhone.slice(2)}`;
+      } else if (cleanPhone.startsWith('447') && cleanPhone.length === 12) {
+        data.primaryPhone = `+${cleanPhone}`;
+      }
+      // Keep other formats as-is for international compatibility
+    }
+    
     onSave(data);
   };
 
@@ -4276,9 +4294,60 @@ function PersonEditForm({
           </h5>
           
           <div className="grid grid-cols-1 gap-4">
-            {/* Primary contact info - read only display for reference */}
+            {/* Primary contact info - editable fields */}
+            <div className="space-y-4">
+              <h6 className="text-sm font-medium">Primary Contact Details (for SMS & Email)</h6>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="primaryPhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Primary Mobile Phone</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="tel" 
+                          placeholder="07123456789"
+                          data-testid={`input-primaryPhone-${clientPerson.id}`}
+                        />
+                      </FormControl>
+                      <div className="text-xs text-muted-foreground">
+                        UK mobile format (07xxxxxxxxx)
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="primaryEmail"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Primary Email Address</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="email" 
+                          placeholder="user@example.com"
+                          data-testid={`input-primaryEmail-${clientPerson.id}`}
+                        />
+                      </FormControl>
+                      <div className="text-xs text-muted-foreground">
+                        Used for email communications
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Legacy contact info - read only display for reference */}
             <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-              <h6 className="text-sm font-medium text-muted-foreground">Primary Contact Details</h6>
+              <h6 className="text-sm font-medium text-muted-foreground">Legacy Contact Details</h6>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
