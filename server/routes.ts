@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
 import fetch from 'node-fetch';
+import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "./utils/userOutlookClient";
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, buildSchedulingPreview, type SchedulingRunResult } from "./project-scheduler";
@@ -391,6 +392,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error resetting password:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  // OAuth routes for user-level Outlook integration
+  app.get('/api/oauth/outlook/auth-url', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const authUrl = await generateUserOutlookAuthUrl(userId);
+      res.json({ authUrl });
+    } catch (error) {
+      console.error("Error generating Outlook auth URL:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to generate auth URL" });
+    }
+  });
+
+  app.get('/api/oauth/outlook/callback', async (req: any, res: any) => {
+    try {
+      const { code, state } = req.query;
+      
+      if (!code || !state) {
+        return res.status(400).json({ message: "Missing authorization code or state" });
+      }
+
+      const result = await exchangeCodeForTokens(code as string, state as string);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error });
+      }
+
+      // Redirect to profile page with success message
+      res.redirect('/profile?tab=integrations&outlook=connected');
+    } catch (error) {
+      console.error("Error handling Outlook OAuth callback:", error instanceof Error ? error.message : error);
+      res.redirect('/profile?tab=integrations&outlook=error');
+    }
+  });
+
+  app.get('/api/oauth/outlook/status', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const account = await storage.getUserOauthAccount(userId, 'outlook');
+      
+      if (!account) {
+        return res.json({ connected: false });
+      }
+
+      // Check if tokens are valid by trying to get user info
+      try {
+        const client = await getUserOutlookClient(userId);
+        if (!client) {
+          return res.json({ connected: false });
+        }
+        
+        const userInfo = await client.api('/me').get();
+        res.json({ 
+          connected: true,
+          email: userInfo.mail || userInfo.userPrincipalName,
+          displayName: userInfo.displayName
+        });
+      } catch (tokenError) {
+        // Tokens might be expired or invalid
+        res.json({ connected: false, needsReauth: true });
+      }
+    } catch (error) {
+      console.error("Error checking Outlook status:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to check connection status" });
+    }
+  });
+
+  app.delete('/api/oauth/outlook/disconnect', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      await storage.deleteUserOauthAccount(userId, 'outlook');
+      res.json({ message: "Outlook account disconnected successfully" });
+    } catch (error) {
+      console.error("Error disconnecting Outlook account:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to disconnect account" });
     }
   });
 
