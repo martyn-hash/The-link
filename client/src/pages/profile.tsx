@@ -704,18 +704,7 @@ export default function Profile() {
                   </div>
                 </div>
 
-                {/* Info about email integrations */}
-                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                    About Email Integrations
-                  </h4>
-                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                    <li>• Connect your personal email account to send communications directly from your mailbox</li>
-                    <li>• Emails will appear to come from your personal account, not the system</li>
-                    <li>• Your email credentials are encrypted and stored securely</li>
-                    <li>• You can disconnect at any time to revoke access</li>
-                  </ul>
-                </div>
+                
               </CardContent>
             </Card>
           </TabsContent>
