@@ -45,6 +45,8 @@ import {
   insertClientTagAssignmentSchema,
   insertPeopleTagAssignmentSchema,
   insertPeopleServiceSchema,
+  insertCommunicationSchema,
+  insertUserIntegrationSchema,
   type User,
 } from "@shared/schema";
 
@@ -5454,6 +5456,333 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to delete test data",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  // Communications parameter validation schemas
+  const paramCommunicationIdSchema = z.object({ 
+    communicationId: z.string().min(1, "Communication ID is required").uuid("Invalid communication ID format") 
+  });
+
+  const paramUserIntegrationIdSchema = z.object({ 
+    userIntegrationId: z.string().min(1, "User integration ID is required").uuid("Invalid user integration ID format") 
+  });
+
+  // Communications API Routes
+  
+  // GET /api/communications - Get all communications (admin only)
+  app.get("/api/communications", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const communications = await storage.getAllCommunications();
+      res.json(communications);
+    } catch (error) {
+      console.error("Error fetching communications:", error);
+      res.status(500).json({ message: "Failed to fetch communications" });
+    }
+  });
+
+  // GET /api/communications/client/:clientId - Get communications for a specific client
+  app.get("/api/communications/client/:clientId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const { clientId } = paramsValidation.data;
+      const communications = await storage.getCommunicationsByClientId(clientId);
+      res.json(communications);
+    } catch (error) {
+      console.error("Error fetching client communications:", error);
+      res.status(500).json({ message: "Failed to fetch client communications" });
+    }
+  });
+
+  // GET /api/communications/person/:personId - Get communications for a specific person
+  app.get("/api/communications/person/:personId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramPersonIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid person ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const { personId } = paramsValidation.data;
+      const communications = await storage.getCommunicationsByPersonId(personId);
+      res.json(communications);
+    } catch (error) {
+      console.error("Error fetching person communications:", error);
+      res.status(500).json({ message: "Failed to fetch person communications" });
+    }
+  });
+
+  // GET /api/communications/:communicationId - Get a specific communication
+  app.get("/api/communications/:communicationId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramCommunicationIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid communication ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const { communicationId } = paramsValidation.data;
+      const communication = await storage.getCommunicationById(communicationId);
+      
+      if (!communication) {
+        return res.status(404).json({ message: "Communication not found" });
+      }
+      
+      res.json(communication);
+    } catch (error) {
+      console.error("Error fetching communication:", error);
+      res.status(500).json({ message: "Failed to fetch communication" });
+    }
+  });
+
+  // POST /api/communications - Create a new communication
+  app.post("/api/communications", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const bodyValidation = insertCommunicationSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid communication data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const communicationData = bodyValidation.data;
+      
+      // Set the user ID from the authenticated user
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const communication = await storage.createCommunication({
+        ...communicationData,
+        userId: effectiveUserId,
+      });
+      
+      // Fetch the full communication with relations
+      const fullCommunication = await storage.getCommunicationById(communication.id);
+      res.json(fullCommunication);
+    } catch (error) {
+      console.error("Error creating communication:", error);
+      res.status(500).json({ message: "Failed to create communication" });
+    }
+  });
+
+  // PUT /api/communications/:communicationId - Update a communication
+  app.put("/api/communications/:communicationId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramCommunicationIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid communication ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const partialSchema = insertCommunicationSchema.partial();
+      const bodyValidation = partialSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid communication data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const { communicationId } = paramsValidation.data;
+      const updateData = bodyValidation.data;
+      
+      // Ensure the communication exists and user has permission
+      const existingCommunication = await storage.getCommunicationById(communicationId);
+      if (!existingCommunication) {
+        return res.status(404).json({ message: "Communication not found" });
+      }
+      
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      if (existingCommunication.userId !== effectiveUserId && !req.user.isAdmin) {
+        return res.status(403).json({ message: "Not authorized to update this communication" });
+      }
+      
+      const communication = await storage.updateCommunication(communicationId, updateData);
+      
+      // Fetch the full communication with relations
+      const fullCommunication = await storage.getCommunicationById(communication.id);
+      res.json(fullCommunication);
+    } catch (error) {
+      console.error("Error updating communication:", error);
+      res.status(500).json({ message: "Failed to update communication" });
+    }
+  });
+
+  // DELETE /api/communications/:communicationId - Delete a communication
+  app.delete("/api/communications/:communicationId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramCommunicationIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid communication ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const { communicationId } = paramsValidation.data;
+      
+      // Ensure the communication exists and user has permission
+      const existingCommunication = await storage.getCommunicationById(communicationId);
+      if (!existingCommunication) {
+        return res.status(404).json({ message: "Communication not found" });
+      }
+      
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      if (existingCommunication.userId !== effectiveUserId && !req.user.isAdmin) {
+        return res.status(403).json({ message: "Not authorized to delete this communication" });
+      }
+      
+      await storage.deleteCommunication(communicationId);
+      res.json({ message: "Communication deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting communication:", error);
+      res.status(500).json({ message: "Failed to delete communication" });
+    }
+  });
+
+  // User Integrations API Routes
+  
+  // GET /api/user-integrations - Get current user's integrations
+  app.get("/api/user-integrations", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const integrations = await storage.getUserIntegrations(effectiveUserId);
+      
+      // Remove sensitive tokens from response
+      const safeIntegrations = integrations.map(integration => ({
+        ...integration,
+        accessToken: integration.accessToken ? "***" : null,
+        refreshToken: integration.refreshToken ? "***" : null,
+      }));
+      
+      res.json(safeIntegrations);
+    } catch (error) {
+      console.error("Error fetching user integrations:", error);
+      res.status(500).json({ message: "Failed to fetch user integrations" });
+    }
+  });
+
+  // POST /api/user-integrations - Create a new user integration
+  app.post("/api/user-integrations", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const bodyValidation = insertUserIntegrationSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid integration data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const integrationData = bodyValidation.data;
+      
+      // Set the user ID from the authenticated user
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const integration = await storage.createUserIntegration({
+        ...integrationData,
+        userId: effectiveUserId,
+      });
+      
+      // Remove sensitive tokens from response
+      const safeIntegration = {
+        ...integration,
+        accessToken: integration.accessToken ? "***" : null,
+        refreshToken: integration.refreshToken ? "***" : null,
+      };
+      
+      res.json(safeIntegration);
+    } catch (error) {
+      console.error("Error creating user integration:", error);
+      res.status(500).json({ message: "Failed to create user integration" });
+    }
+  });
+
+  // PUT /api/user-integrations/:userIntegrationId - Update a user integration
+  app.put("/api/user-integrations/:userIntegrationId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramUserIntegrationIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid user integration ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const partialSchema = insertUserIntegrationSchema.partial();
+      const bodyValidation = partialSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid integration data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const { userIntegrationId } = paramsValidation.data;
+      const updateData = bodyValidation.data;
+      
+      // Ensure the user can only update their own integrations
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const existingIntegrations = await storage.getUserIntegrations(effectiveUserId);
+      const hasAccess = existingIntegrations.some(integration => integration.id === userIntegrationId);
+      
+      if (!hasAccess && !req.user.isAdmin) {
+        return res.status(403).json({ message: "Not authorized to update this integration" });
+      }
+      
+      const integration = await storage.updateUserIntegration(userIntegrationId, updateData);
+      
+      // Remove sensitive tokens from response
+      const safeIntegration = {
+        ...integration,
+        accessToken: integration.accessToken ? "***" : null,
+        refreshToken: integration.refreshToken ? "***" : null,
+      };
+      
+      res.json(safeIntegration);
+    } catch (error) {
+      console.error("Error updating user integration:", error);
+      res.status(500).json({ message: "Failed to update user integration" });
+    }
+  });
+
+  // DELETE /api/user-integrations/:userIntegrationId - Delete a user integration
+  app.delete("/api/user-integrations/:userIntegrationId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramUserIntegrationIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid user integration ID", 
+          errors: paramsValidation.errors 
+        });
+      }
+
+      const { userIntegrationId } = paramsValidation.data;
+      
+      // Ensure the user can only delete their own integrations
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const existingIntegrations = await storage.getUserIntegrations(effectiveUserId);
+      const hasAccess = existingIntegrations.some(integration => integration.id === userIntegrationId);
+      
+      if (!hasAccess && !req.user.isAdmin) {
+        return res.status(403).json({ message: "Not authorized to delete this integration" });
+      }
+      
+      await storage.deleteUserIntegration(userIntegrationId);
+      res.json({ message: "User integration deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user integration:", error);
+      res.status(500).json({ message: "Failed to delete user integration" });
     }
   });
 
