@@ -233,7 +233,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
         to: smsPhoneNumber,
         message: values.content,
         clientId: values.clientId,
-        personId: values.personId,
+        personId: values.personId === 'none' ? null : values.personId,
       });
     } else if (values.type === 'email_sent') {
       // Handle email sending separately
@@ -251,11 +251,15 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
         subject: values.subject || 'Message from CRM',
         content: values.content,
         clientId: values.clientId,
-        personId: values.personId,
+        personId: values.personId === 'none' ? null : values.personId,
       });
     } else {
       // Handle regular communication logging
-      addCommunicationMutation.mutate(values);
+      const formData = {
+        ...values,
+        personId: values.personId === 'none' ? null : values.personId
+      };
+      addCommunicationMutation.mutate(formData);
     }
   };
 
@@ -457,14 +461,14 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contact Person (Optional)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                      <Select onValueChange={field.onChange} value={field.value || 'none'}>
                         <FormControl>
                           <SelectTrigger data-testid="select-person">
                             <SelectValue placeholder="Select person" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">No specific person</SelectItem>
+                          <SelectItem value="none">No specific person</SelectItem>
                           {clientPeople?.map((cp: any) => (
                             <SelectItem key={cp.person.id} value={cp.person.id}>
                               {formatPersonName(cp.person.fullName)}
