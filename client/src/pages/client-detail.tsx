@@ -178,7 +178,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   // SMS sending mutation
   const sendSmsMutation = useMutation({
     mutationFn: (data: { to: string; message: string; clientId: string; personId?: string }) => 
-      apiRequest('/api/sms/send', 'POST', data),
+      apiRequest('POST', '/api/sms/send', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
       setIsSendingSMS(false);
@@ -199,7 +199,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   // Email sending mutation
   const sendEmailMutation = useMutation({
     mutationFn: (data: { to: string; subject: string; content: string; clientId: string; personId?: string; isHtml?: boolean }) => 
-      apiRequest('/api/email/send', 'POST', data),
+      apiRequest('POST', '/api/email/send', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
       setIsSendingEmail(false);
