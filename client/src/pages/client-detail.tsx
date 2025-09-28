@@ -679,61 +679,58 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
               Send Email
             </DialogTitle>
             <DialogDescription>
-              Send an email message and log it in the communications timeline. All fields marked with * are required.
+              Send an email using the selected person's Primary Email. Fields marked with * are required.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
-            const emailAddress = formData.get('emailAddress') as string;
             const subject = formData.get('subject') as string;
             const content = formData.get('content') as string;
             
-            if (!emailAddress.trim() || !content.trim()) {
-              toast({
-                title: "Missing information",
-                description: "Please enter both email address and message content.",
-                variant: "destructive"
-              });
+            if (!emailPersonId) {
+              toast({ title: 'Contact person required', description: 'Please select a person to send the email to.', variant: 'destructive' });
+              return;
+            }
+            const selected = (clientPeople || []).find((cp: any) => cp.person.id === emailPersonId);
+            const to = selected?.person?.primaryEmail;
+
+            if (!to) {
+              toast({ title: 'No email address', description: 'The selected person has no Primary Email saved.', variant: 'destructive' });
+              return;
+            }
+            if (!content?.trim()) {
+              toast({ title: 'Message required', description: 'Please enter a message.', variant: 'destructive' });
               return;
             }
             
             sendEmailMutation.mutate({
-              to: emailAddress,
+              to,
               subject: subject || 'Message from CRM',
               content: content,
               clientId: clientId,
               personId: emailPersonId,
             });
           }} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Email Address <span className="text-destructive">*</span></label>
-                <Input
-                  name="emailAddress"
-                  type="email"
-                  placeholder="client@example.com"
-                  data-testid="input-email-address-dialog"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Contact Person (Optional)</label>
-                <Select onValueChange={(value) => setEmailPersonId(value === 'none' ? undefined : value)} defaultValue="none">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No specific person</SelectItem>
-                    {(clientPeople || []).map((cp: any) => (
-                      <SelectItem key={cp.person.id} value={cp.person.id}>
-                        {formatPersonName(cp.person.fullName)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contact Person <span className="text-destructive">*</span></label>
+              <Select value={emailPersonId} onValueChange={(value) => setEmailPersonId(value)}>
+                <SelectTrigger data-testid="select-email-person">
+                  <SelectValue placeholder="Select person" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(clientPeople || []).map((cp: any) => (
+                    <SelectItem key={cp.person.id} value={cp.person.id}>
+                      {formatPersonName(cp.person.fullName)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {emailPersonId && (
+                <p className="text-xs text-muted-foreground">
+                  Email: {(clientPeople || []).find((cp: any) => cp.person.id === emailPersonId)?.person?.primaryEmail || '—'}
+                </p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -754,6 +751,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 data-testid="input-email-content-dialog"
                 required
               />
+              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
             </div>
             
             <div className="flex justify-end gap-2">
