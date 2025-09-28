@@ -121,6 +121,27 @@ export const magicLinkTokens = pgTable("magic_link_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// User OAuth accounts table - for storing individual user's OAuth tokens (Microsoft, etc.)
+export const userOauthAccounts = pgTable("user_oauth_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: varchar("provider").notNull(), // 'microsoft', 'google', etc.
+  providerAccountId: varchar("provider_account_id").notNull(), // The user's ID in the provider's system
+  email: varchar("email").notNull(), // The email associated with this OAuth account
+  accessTokenEncrypted: text("access_token_encrypted").notNull(), // Encrypted access token
+  refreshTokenEncrypted: text("refresh_token_encrypted"), // Encrypted refresh token (optional for some flows)
+  expiresAt: timestamp("expires_at").notNull(), // When the access token expires
+  scope: varchar("scope"), // OAuth scopes granted
+  tokenType: varchar("token_type").default("Bearer"), // Token type (usually Bearer)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_user_oauth_accounts_user_id").on(table.userId),
+  index("idx_user_oauth_accounts_provider").on(table.provider),
+  // Unique constraint to prevent multiple accounts of same provider per user
+  unique("unique_user_provider").on(table.userId, table.provider),
+]);
+
 // Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -798,6 +819,12 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export const insertMagicLinkTokenSchema = createInsertSchema(magicLinkTokens).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertUserOauthAccountSchema = createInsertSchema(userOauthAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const upsertUserSchema = createInsertSchema(users).omit({
