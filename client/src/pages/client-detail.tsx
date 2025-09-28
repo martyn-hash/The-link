@@ -16,6 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import AddressLookup from "@/components/address-lookup";
@@ -27,7 +28,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication } from "@shared/schema";
-import { insertPersonSchema } from "@shared/schema";
+import { insertPersonSchema, insertCommunicationSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
 function formatPersonName(fullName: string): string {
@@ -115,10 +116,17 @@ type CommunicationWithRelations = Communication & {
 // Communications Timeline Component
 function CommunicationsTimeline({ clientId }: { clientId: string }) {
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
+  const { toast } = useToast();
 
   // Fetch communications for this client
   const { data: communications, isLoading } = useQuery({
     queryKey: ['/api/communications/client', clientId],
+    enabled: !!clientId,
+  });
+
+  // Fetch client people for person selection
+  const { data: clientPeople } = useQuery({
+    queryKey: ['/api/clients', clientId, 'people'],
     enabled: !!clientId,
   });
 
@@ -130,8 +138,39 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
       setIsAddingCommunication(false);
+      toast({
+        title: "Communication added",
+        description: "The communication has been logged successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to add communication. Please try again.",
+        variant: "destructive",
+      });
     },
   });
+
+  // Form schema for adding communications
+  const addCommunicationSchema = insertCommunicationSchema.extend({
+    type: z.enum(['phone_call', 'note', 'sms_sent', 'sms_received', 'email_sent', 'email_received']),
+  }).omit({ userId: true });
+
+  const addCommunicationForm = useForm({
+    resolver: zodResolver(addCommunicationSchema),
+    defaultValues: {
+      clientId,
+      type: 'note' as const,
+      subject: '',
+      content: '',
+      personId: undefined,
+    },
+  });
+
+  const onSubmitCommunication = (values: any) => {
+    addCommunicationMutation.mutate(values);
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -288,6 +327,130 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
           </div>
         )}
       </CardContent>
+
+      {/* Add Communication Modal */}
+      <Dialog open={isAddingCommunication} onOpenChange={setIsAddingCommunication}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Communication</DialogTitle>
+          </DialogHeader>
+          <Form {...addCommunicationForm}>
+            <form onSubmit={addCommunicationForm.handleSubmit(onSubmitCommunication)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={addCommunicationForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Communication Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-communication-type">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="phone_call">Phone Call</SelectItem>
+                          <SelectItem value="note">Note</SelectItem>
+                          <SelectItem value="sms_sent">SMS Sent</SelectItem>
+                          <SelectItem value="sms_received">SMS Received</SelectItem>
+                          <SelectItem value="email_sent">Email Sent</SelectItem>
+                          <SelectItem value="email_received">Email Received</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={addCommunicationForm.control}
+                  name="personId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contact Person (Optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-person">
+                            <SelectValue placeholder="Select person" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">No specific person</SelectItem>
+                          {clientPeople?.map((cp: any) => (
+                            <SelectItem key={cp.person.id} value={cp.person.id}>
+                              {formatPersonName(cp.person.fullName)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={addCommunicationForm.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subject (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Brief description or call purpose"
+                        data-testid="input-subject"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={addCommunicationForm.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Content</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Enter communication details, call notes, or message content..."
+                        className="min-h-32"
+                        data-testid="textarea-content"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Record detailed notes about the communication
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddingCommunication(false)}
+                  data-testid="button-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={addCommunicationMutation.isPending}
+                  data-testid="button-save-communication"
+                >
+                  {addCommunicationMutation.isPending ? 'Saving...' : 'Save Communication'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
