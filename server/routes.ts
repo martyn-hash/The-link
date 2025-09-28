@@ -5706,18 +5706,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Email Integration Routes
+  
+  // Email sending validation schema
+  const sendEmailSchema = z.object({
+    to: z.string().email("Invalid email address format"),
+    subject: z.string().min(1, "Subject is required"),
+    content: z.string().min(1, "Email content is required"),
+    clientId: z.string().min(1, "Client ID is required"),
+    personId: z.string().optional(),
+    isHtml: z.boolean().optional(),
+  });
+
+  // POST /api/email/send - Send email via Microsoft Graph (Outlook)
+  app.post("/api/email/send", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const bodyValidation = sendEmailSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid email data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+
+      const { to, subject, content, clientId, personId, isHtml } = bodyValidation.data;
+      
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if user has access to this client
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to send emails for this client." });
+      }
+      
+      // Import the Outlook client functions
+      const { sendEmail } = await import('./utils/outlookClient');
+      
+      // Send email via Microsoft Graph API
+      const emailResult = await sendEmail(to, subject, content, isHtml || false);
+      
+      // Log the email as a communication record
+      const communication = await storage.createCommunication({
+        clientId,
+        personId: personId || null,
+        type: 'email_sent',
+        subject: subject,
+        content: content,
+        actualContactTime: new Date(),
+        userId: effectiveUserId,
+        externalReference: `outlook_${Date.now()}`
+      });
+      
+      res.json({
+        success: true,
+        message: "Email sent successfully",
+        emailResult,
+        communication: await storage.getCommunicationById(communication.id)
+      });
+      
+    } catch (error) {
+      console.error("Error sending email:", error);
+      
+      // Map common errors to user-friendly messages
+      let statusCode = 500;
+      let message = "Failed to send email";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Outlook not connected')) {
+          statusCode = 503;
+          message = "Email service not configured. Please contact administrator.";
+        } else if (error.message.includes('X_REPLIT_TOKEN')) {
+          statusCode = 503;
+          message = "Email service authentication error. Please try again later.";
+        } else if (error.message.includes('access_token')) {
+          statusCode = 401;
+          message = "Email service authorization expired. Please reconnect your email account.";
+        } else {
+          message = `Email sending failed: ${error.message}`;
+        }
+      }
+      
+      res.status(statusCode).json({ message });
+    }
+  });
+
   // SMS Integration Routes
   
+  // SMS sending validation schema
+  const sendSmsSchema = z.object({
+    to: z.string().min(1, "Phone number is required"),
+    message: z.string().min(1, "SMS message is required"),
+    clientId: z.string().min(1, "Client ID is required"),
+    personId: z.string().optional(),
+  });
+
   // POST /api/sms/send - Send SMS via VoodooSMS
   app.post("/api/sms/send", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const { to, message, clientId, personId } = req.body;
-      
-      if (!to || !message || !clientId) {
+      const bodyValidation = sendSmsSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
         return res.status(400).json({ 
-          message: "Missing required fields: to, message, clientId" 
+          message: "Invalid SMS data", 
+          errors: bodyValidation.error.issues 
         });
       }
+
+      const { to, message, clientId, personId } = bodyValidation.data;
       
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       

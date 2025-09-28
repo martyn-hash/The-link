@@ -166,9 +166,10 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
     },
   });
 
-  // Watch the communication type to show/hide SMS fields
+  // Watch the communication type to show/hide SMS/email fields
   const communicationType = addCommunicationForm.watch("type");
   const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
+  const [emailAddress, setEmailAddress] = useState("");
 
   // SMS sending mutation
   const sendSmsMutation = useMutation({
@@ -193,6 +194,29 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
     },
   });
 
+  // Email sending mutation
+  const sendEmailMutation = useMutation({
+    mutationFn: (data: { to: string; subject: string; content: string; clientId: string; personId?: string; isHtml?: boolean }) => 
+      apiRequest('/api/email/send', 'POST', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+      setIsAddingCommunication(false);
+      addCommunicationForm.reset();
+      setEmailAddress("");
+      toast({
+        title: "Email sent successfully",
+        description: "The email has been sent and logged.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error sending email",
+        description: error?.message || "Failed to send email. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmitCommunication = (values: any) => {
     // Handle SMS sending separately
     if (values.type === 'sms_sent') {
@@ -208,6 +232,24 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
       sendSmsMutation.mutate({
         to: smsPhoneNumber,
         message: values.content,
+        clientId: values.clientId,
+        personId: values.personId,
+      });
+    } else if (values.type === 'email_sent') {
+      // Handle email sending separately
+      if (!emailAddress.trim()) {
+        toast({
+          title: "Email address required",
+          description: "Please enter an email address to send email.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      sendEmailMutation.mutate({
+        to: emailAddress,
+        subject: values.subject || 'Message from CRM',
+        content: values.content,
         clientId: values.clientId,
         personId: values.personId,
       });
@@ -475,6 +517,27 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 </div>
               )}
 
+              {/* Email Address Field - only show when Email is selected */}
+              {communicationType === 'email_sent' && (
+                <div className="space-y-2">
+                  <label htmlFor="email-address" className="text-sm font-medium">
+                    Email Address <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    id="email-address"
+                    type="email"
+                    placeholder="e.g., client@example.com"
+                    value={emailAddress}
+                    onChange={(e) => setEmailAddress(e.target.value)}
+                    data-testid="input-email-address"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the recipient's email address.
+                  </p>
+                </div>
+              )}
+
               <FormField
                 control={addCommunicationForm.control}
                 name="content"
@@ -508,12 +571,14 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={addCommunicationMutation.isPending || sendSmsMutation.isPending}
+                  disabled={addCommunicationMutation.isPending || sendSmsMutation.isPending || sendEmailMutation.isPending}
                   data-testid="button-save-communication"
                 >
                   {sendSmsMutation.isPending ? 'Sending SMS...' : 
+                   sendEmailMutation.isPending ? 'Sending Email...' :
                    addCommunicationMutation.isPending ? 'Saving...' : 
-                   communicationType === 'sms_sent' ? 'Send SMS' : 'Save Communication'}
+                   communicationType === 'sms_sent' ? 'Send SMS' :
+                   communicationType === 'email_sent' ? 'Send Email' : 'Save Communication'}
                 </Button>
               </div>
             </form>
