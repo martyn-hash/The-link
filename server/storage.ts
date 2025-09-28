@@ -33,6 +33,7 @@ import {
   normalizeProjectMonth,
   communications,
   userIntegrations,
+  userOauthAccounts,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -105,7 +106,12 @@ import {
   type InsertCommunication,
   type UserIntegration,
   type InsertUserIntegration,
+  insertUserOauthAccountSchema,
 } from "@shared/schema";
+
+// Add the OAuth account types
+type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
+type InsertUserOauthAccount = typeof userOauthAccounts.$inferInsert;
 
 // Type for scheduled services view that combines client and people services
 export interface ScheduledServiceView {
@@ -475,6 +481,12 @@ export interface IStorage {
   createUserIntegration(integration: InsertUserIntegration): Promise<UserIntegration>;
   updateUserIntegration(id: string, integration: Partial<InsertUserIntegration>): Promise<UserIntegration>;
   deleteUserIntegration(id: string): Promise<void>;
+  
+  // OAuth account operations
+  getUserOauthAccount(userId: string, provider: string): Promise<UserOauthAccount | undefined>;
+  createUserOauthAccount(account: InsertUserOauthAccount): Promise<UserOauthAccount>;
+  updateUserOauthAccount(id: string, account: Partial<InsertUserOauthAccount>): Promise<UserOauthAccount>;
+  deleteUserOauthAccount(userId: string, provider: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5960,6 +5972,46 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUserIntegration(id: string): Promise<void> {
     await db.delete(userIntegrations).where(eq(userIntegrations.id, id));
+  }
+
+  // OAuth account operations
+  async getUserOauthAccount(userId: string, provider: string): Promise<UserOauthAccount | undefined> {
+    const [account] = await db
+      .select()
+      .from(userOauthAccounts)
+      .where(and(
+        eq(userOauthAccounts.userId, userId),
+        eq(userOauthAccounts.provider, provider)
+      ))
+      .limit(1);
+    return account;
+  }
+
+  async createUserOauthAccount(account: InsertUserOauthAccount): Promise<UserOauthAccount> {
+    const [newAccount] = await db
+      .insert(userOauthAccounts)
+      .values(account)
+      .returning();
+    return newAccount;
+  }
+
+  async updateUserOauthAccount(id: string, account: Partial<InsertUserOauthAccount>): Promise<UserOauthAccount> {
+    const [updated] = await db
+      .update(userOauthAccounts)
+      .set({
+        ...account,
+        updatedAt: new Date(),
+      })
+      .where(eq(userOauthAccounts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUserOauthAccount(userId: string, provider: string): Promise<void> {
+    await db.delete(userOauthAccounts).where(and(
+      eq(userOauthAccounts.userId, userId),
+      eq(userOauthAccounts.provider, provider)
+    ));
   }
 }
 
