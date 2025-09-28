@@ -1537,6 +1537,81 @@ export type InsertClientTagAssignment = z.infer<typeof insertClientTagAssignment
 export type PeopleTagAssignment = typeof peopleTagAssignments.$inferSelect;
 export type InsertPeopleTagAssignment = z.infer<typeof insertPeopleTagAssignmentSchema>;
 
+// Communication type enum
+export const communicationTypeEnum = pgEnum("communication_type", [
+  "phone_call",
+  "note",
+  "sms_sent", 
+  "sms_received",
+  "email_sent",
+  "email_received"
+]);
+
+// Integration type enum
+export const integrationTypeEnum = pgEnum("integration_type", [
+  "office365",
+  "voodoo_sms"
+]);
+
+// Communications table - central log of all communications
+export const communications = pgTable("communications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  personId: varchar("person_id").references(() => people.id, { onDelete: "set null" }), // Optional - for person-specific comms
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Who logged/sent this
+  type: communicationTypeEnum("type").notNull(),
+  subject: varchar("subject"), // For emails primarily
+  content: text("content").notNull(), // Message content or notes
+  actualContactTime: timestamp("actual_contact_time").notNull(), // When the contact actually happened
+  loggedAt: timestamp("logged_at").defaultNow(), // When it was logged in system
+  metadata: jsonb("metadata"), // Store integration-specific data (SMS IDs, email IDs, etc.)
+  isRead: boolean("is_read").default(true), // For tracking inbound messages
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for efficient client communication lookups
+  clientIdLoggedAtIdx: index("communications_client_id_logged_at_idx").on(table.clientId, table.loggedAt),
+  // Index for efficient person communication lookups  
+  personIdLoggedAtIdx: index("communications_person_id_logged_at_idx").on(table.personId, table.loggedAt),
+}));
+
+// User integrations table for storing integration credentials
+export const userIntegrations = pgTable("user_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  integrationType: integrationTypeEnum("integration_type").notNull(),
+  accessToken: text("access_token"), // Encrypted token
+  refreshToken: text("refresh_token"), // Encrypted refresh token
+  tokenExpiry: timestamp("token_expiry"),
+  isActive: boolean("is_active").default(true),
+  metadata: jsonb("metadata"), // Store integration-specific config
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint to prevent multiple integrations of same type per user
+  uniqueUserIntegrationType: unique("unique_user_integration_type").on(table.userId, table.integrationType),
+}));
+
+// Zod schemas for communications
+export const insertCommunicationSchema = createInsertSchema(communications).omit({
+  id: true,
+  loggedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Type exports
+export type Communication = typeof communications.$inferSelect;
+export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
+export type UserIntegration = typeof userIntegrations.$inferSelect;
+export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
+
 // Extended types with relations
 export type ProjectWithRelations = Project & {
   client: Client;
