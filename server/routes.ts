@@ -5481,6 +5481,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to check if user has access to client
+  const userHasClientAccess = async (userId: string, clientId: string, isAdmin: boolean = false): Promise<boolean> => {
+    // Admins have access to all clients
+    if (isAdmin) {
+      return true;
+    }
+    
+    // Check if client exists
+    const client = await storage.getClientById(clientId);
+    if (!client) {
+      return false;
+    }
+    
+    // For now, implement basic access control - could be enhanced based on business rules
+    // This is a placeholder for actual client-user relationship checks
+    // In a real application, you might check:
+    // - User is assigned to client account
+    // - User has role permissions for this client
+    // - Client belongs to user's organization/team
+    
+    // As a basic implementation, only admins can access all clients
+    // Non-admin users need explicit permission (to be implemented)
+    return false; // Restrict access for non-admins until proper permissions are implemented
+  };
+
   // GET /api/communications/client/:clientId - Get communications for a specific client
   app.get("/api/communications/client/:clientId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -5493,6 +5518,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { clientId } = paramsValidation.data;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Enforce per-client authorization
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to view communications for this client." });
+      }
+      
       const communications = await storage.getCommunicationsByClientId(clientId);
       res.json(communications);
     } catch (error) {
@@ -5549,7 +5582,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/communications - Create a new communication
   app.post("/api/communications", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const bodyValidation = insertCommunicationSchema.safeParse(req.body);
+      // Validate request body but ignore userId (will be set from auth context)
+      const bodyValidation = insertCommunicationSchema.omit({ userId: true }).safeParse(req.body);
       if (!bodyValidation.success) {
         return res.status(400).json({ 
           message: "Invalid communication data", 
@@ -5558,9 +5592,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const communicationData = bodyValidation.data;
-      
-      // Set the user ID from the authenticated user
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Enforce per-client authorization - user must have access to create communications for this client
+      const hasAccess = await userHasClientAccess(effectiveUserId, communicationData.clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to create communications for this client." });
+      }
+      
+      // Force userId from authenticated context (prevent spoofing)
       const communication = await storage.createCommunication({
         ...communicationData,
         userId: effectiveUserId,
@@ -5605,6 +5645,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check both communication ownership AND client access
+      const hasClientAccess = await userHasClientAccess(effectiveUserId, existingCommunication.clientId, req.user.isAdmin);
+      if (!hasClientAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to access this client's communications." });
+      }
+      
       if (existingCommunication.userId !== effectiveUserId && !req.user.isAdmin) {
         return res.status(403).json({ message: "Not authorized to update this communication" });
       }
@@ -5640,6 +5687,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check both communication ownership AND client access
+      const hasClientAccess = await userHasClientAccess(effectiveUserId, existingCommunication.clientId, req.user.isAdmin);
+      if (!hasClientAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to access this client's communications." });
+      }
+      
       if (existingCommunication.userId !== effectiveUserId && !req.user.isAdmin) {
         return res.status(403).json({ message: "Not authorized to delete this communication" });
       }

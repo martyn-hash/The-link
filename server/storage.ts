@@ -5910,7 +5910,17 @@ export class DatabaseStorage implements IStorage {
   // User integrations operations
   async getUserIntegrations(userId: string): Promise<UserIntegration[]> {
     return await db
-      .select()
+      .select({
+        id: userIntegrations.id,
+        userId: userIntegrations.userId,
+        integrationType: userIntegrations.integrationType,
+        tokenExpiry: userIntegrations.tokenExpiry,
+        isActive: userIntegrations.isActive,
+        metadata: userIntegrations.metadata,
+        createdAt: userIntegrations.createdAt,
+        updatedAt: userIntegrations.updatedAt,
+        // Explicitly exclude accessToken and refreshToken
+      })
       .from(userIntegrations)
       .where(eq(userIntegrations.userId, userId))
       .orderBy(userIntegrations.createdAt);

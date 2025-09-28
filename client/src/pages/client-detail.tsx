@@ -119,7 +119,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   const { toast } = useToast();
 
   // Fetch communications for this client
-  const { data: communications, isLoading } = useQuery({
+  const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
     queryKey: ['/api/communications/client', clientId],
     enabled: !!clientId,
   });
@@ -131,10 +131,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   });
 
   const addCommunicationMutation = useMutation({
-    mutationFn: (data: any) => apiRequest(`/api/communications`, {
-      method: 'POST',
-      body: data,
-    }),
+    mutationFn: (data: any) => apiRequest(`/api/communications`, 'POST', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
       setIsAddingCommunication(false);
@@ -165,6 +162,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
       subject: '',
       content: '',
       personId: undefined,
+      actualContactTime: new Date(),
     },
   });
 
@@ -295,7 +293,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                       {getTypeLabel(comm.type)}
                     </Badge>
                     <span className="text-sm text-muted-foreground">
-                      {new Date(comm.loggedAt).toLocaleString()}
+                      {comm.loggedAt ? new Date(comm.loggedAt).toLocaleString() : 'No date'}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       by {comm.user.firstName} {comm.user.lastName}
@@ -310,8 +308,9 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                     <div 
                       className="text-sm text-muted-foreground whitespace-pre-wrap"
                       data-testid={`communication-content-${comm.id}`}
-                      dangerouslySetInnerHTML={{ __html: comm.content }}
-                    />
+                    >
+                      {comm.content}
+                    </div>
                   )}
                   {comm.person && (
                     <div className="mt-2">
