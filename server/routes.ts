@@ -412,6 +412,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ authUrl });
     } catch (error) {
       console.error("Error generating Outlook auth URL:", error instanceof Error ? error.message : error);
+      
+      // Check if it's a configuration error
+      if (error instanceof Error && error.message.includes('Microsoft OAuth not configured')) {
+        return res.status(400).json({ 
+          message: "Microsoft Outlook integration is not configured on this server",
+          configured: false 
+        });
+      }
+      
       res.status(500).json({ message: "Failed to generate auth URL" });
     }
   });
@@ -441,32 +450,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/oauth/outlook/status', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const userId = req.user!.effectiveUserId;
-      const account = await storage.getUserOauthAccount(userId, 'outlook');
       
-      if (!account) {
-        return res.json({ connected: false });
-      }
-
-      // Check if tokens are valid by trying to get user info
       try {
-        const client = await getUserOutlookClient(userId);
-        if (!client) {
+        const account = await storage.getUserOauthAccount(userId, 'outlook');
+        
+        if (!account) {
           return res.json({ connected: false });
         }
-        
-        const userInfo = await client.api('/me').get();
-        res.json({ 
-          connected: true,
-          email: userInfo.mail || userInfo.userPrincipalName,
-          displayName: userInfo.displayName
-        });
-      } catch (tokenError) {
-        // Tokens might be expired or invalid
-        res.json({ connected: false, needsReauth: true });
+
+        // Check if tokens are valid by trying to get user info
+        try {
+          const client = await getUserOutlookClient(userId);
+          if (!client) {
+            return res.json({ connected: false });
+          }
+          
+          const userInfo = await client.api('/me').get();
+          res.json({ 
+            connected: true,
+            email: userInfo.mail || userInfo.userPrincipalName,
+            displayName: userInfo.displayName
+          });
+        } catch (tokenError) {
+          // Tokens might be expired or invalid
+          res.json({ connected: false, needsReauth: true });
+        }
+      } catch (dbError) {
+        // Database or schema error - return disconnected status
+        console.error("Database error checking OAuth status:", dbError instanceof Error ? dbError.message : dbError);
+        res.json({ connected: false });
       }
     } catch (error) {
       console.error("Error checking Outlook status:", error instanceof Error ? error.message : error);
-      res.status(500).json({ message: "Failed to check connection status" });
+      // Return disconnected instead of 500 to prevent UI blocking
+      res.json({ connected: false });
     }
   });
 

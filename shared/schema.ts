@@ -1645,6 +1645,8 @@ export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
+export type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
+export type InsertUserOauthAccount = z.infer<typeof insertUserOauthAccountSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
