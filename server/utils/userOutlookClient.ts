@@ -169,7 +169,27 @@ export async function getUserOutlookProfile(userId: string) {
 // OAuth configuration
 const CLIENT_ID = process.env.MICROSOFT_CLIENT_ID || 'demo-client-id';
 const CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET || 'demo-client-secret';
-const REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI || 'http://localhost:5000/api/oauth/outlook/callback';
+// Auto-detect the correct redirect URI based on environment
+const getRedirectUri = () => {
+  if (process.env.MICROSOFT_REDIRECT_URI) {
+    return process.env.MICROSOFT_REDIRECT_URI;
+  }
+  
+  // Production environment
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://flow.growth.accountants/api/oauth/outlook/callback';
+  }
+  
+  // Replit environment - use REPLIT_DEV_DOMAIN
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}/api/oauth/outlook/callback`;
+  }
+  
+  // Default fallback for local development
+  return 'http://localhost:5000/api/oauth/outlook/callback';
+};
+
+const REDIRECT_URI = getRedirectUri();
 const TENANT_ID = process.env.MICROSOFT_TENANT_ID || 'common';
 const SCOPES = 'openid email profile offline_access Mail.Send User.Read';
 
