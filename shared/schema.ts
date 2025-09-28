@@ -182,6 +182,9 @@ export const people = pgTable("people", {
   // Contact Information (existing fields)
   email: text("email"), // Existing field
   telephone: text("telephone"), // Existing field
+  // Primary contact information (for SMS/Email integration)
+  primaryPhone: text("primary_phone"), // UK mobile in international format (+447...)
+  primaryEmail: text("primary_email"), // Primary email for communications
   // Extended contact information
   telephone2: text("telephone_2"),
   email2: text("email_2"),
@@ -807,9 +810,10 @@ export const insertClientSchema = createInsertSchema(clients).omit({
   createdAt: true,
 });
 
-// Zod validation schemas for NI and UTR numbers
+// Zod validation schemas for NI, UTR, and phone numbers
 const niNumberRegex = /^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$/;
 const personalUtrRegex = /^[0-9]{10}$/;
+const ukMobileRegex = /^07[0-9]{9}$/; // UK mobile format: 07xxxxxxxxx
 
 export const insertPersonSchema = createInsertSchema(people).omit({
   id: true,
@@ -818,6 +822,9 @@ export const insertPersonSchema = createInsertSchema(people).omit({
   // Add validation for new fields
   niNumber: z.string().regex(niNumberRegex, "Invalid National Insurance number format").optional().or(z.literal("")),
   personalUtrNumber: z.string().regex(personalUtrRegex, "Personal UTR must be 10 digits").optional().or(z.literal("")),
+  // Primary contact validation
+  primaryPhone: z.string().regex(ukMobileRegex, "Invalid UK mobile number format (must be 07xxxxxxxxx)").optional().or(z.literal("")),
+  primaryEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
   nationality: z.enum([
     "afghan", "albanian", "algerian", "american", "andorran", "angolan", "antiguans", "argentinean", "armenian", "australian",
     "austrian", "azerbaijani", "bahamian", "bahraini", "bangladeshi", "barbadian", "barbudans", "batswana", "belarusian", "belgian",

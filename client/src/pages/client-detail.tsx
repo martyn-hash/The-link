@@ -172,8 +172,6 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
 
   // Watch the communication type to show/hide SMS/email fields
   const communicationType = addCommunicationForm.watch("type");
-  const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
-  const [emailAddress, setEmailAddress] = useState("");
 
   // SMS sending mutation
   const sendSmsMutation = useMutation({
@@ -218,40 +216,62 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   });
 
   const onSubmitCommunication = (values: any) => {
-    // Handle SMS sending separately
+    // Handle SMS sending separately - now requires person selection
     if (values.type === 'sms_sent') {
-      if (!smsPhoneNumber.trim()) {
+      if (!values.personId || values.personId === 'none') {
         toast({
-          title: "Phone number required",
-          description: "Please enter a phone number to send SMS.",
+          title: "Person selection required",
+          description: "Please select a person to send SMS to.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Find the selected person and validate mobile number
+      const selectedPerson = clientPeople?.find((cp: any) => cp.person.id === values.personId);
+      if (!selectedPerson?.person.primaryPhone) {
+        toast({
+          title: "No mobile number available",
+          description: "The selected person does not have a primary mobile number on file. Please update their contact information first.",
           variant: "destructive",
         });
         return;
       }
       
       sendSmsMutation.mutate({
-        to: smsPhoneNumber,
+        to: selectedPerson.person.primaryPhone,
         message: values.content,
         clientId: values.clientId,
-        personId: values.personId === 'none' ? null : values.personId,
+        personId: values.personId,
       });
     } else if (values.type === 'email_sent') {
-      // Handle email sending separately
-      if (!emailAddress.trim()) {
+      // Handle email sending - also requires person selection for consistency
+      if (!values.personId || values.personId === 'none') {
         toast({
-          title: "Email address required",
-          description: "Please enter an email address to send email.",
+          title: "Person selection required",
+          description: "Please select a person to send email to.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Find the selected person and validate email address
+      const selectedPerson = clientPeople?.find((cp: any) => cp.person.id === values.personId);
+      if (!selectedPerson?.person.primaryEmail) {
+        toast({
+          title: "No email address available",
+          description: "The selected person does not have a primary email address on file. Please update their contact information first.",
           variant: "destructive",
         });
         return;
       }
       
       sendEmailMutation.mutate({
-        to: emailAddress,
+        to: selectedPerson.person.primaryEmail,
         subject: values.subject || 'Message from CRM',
         content: values.content,
         clientId: values.clientId,
-        personId: values.personId === 'none' ? null : values.personId,
+        personId: values.personId,
       });
     } else {
       // Handle regular communication logging
@@ -571,51 +591,47 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
               Send SMS
             </DialogTitle>
             <DialogDescription>
-              Send an SMS message and log it in the communications timeline. All fields marked with * are required.
+              Send an SMS using the selected person's Primary Mobile. Fields marked with * are required.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const phoneNumber = formData.get('phoneNumber') as string;
-            const message = formData.get('message') as string;
-            
-            if (!phoneNumber.trim() || !message.trim()) {
-              toast({
-                title: "Missing information",
-                description: "Please enter both phone number and message.",
-                variant: "destructive"
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const message = formData.get('message') as string;
+
+              if (!smsPersonId) {
+                toast({ title: 'Contact person required', description: 'Please select a person to send the SMS to.', variant: 'destructive' });
+                return;
+              }
+              const selected = (clientPeople || []).find((cp: any) => cp.person.id === smsPersonId);
+              const to = selected?.person?.primaryPhone;
+
+              if (!to) {
+                toast({ title: 'No mobile number', description: 'The selected person has no Primary Mobile saved.', variant: 'destructive' });
+                return;
+              }
+              if (!message?.trim()) {
+                toast({ title: 'Message required', description: 'Please enter a message.', variant: 'destructive' });
+                return;
+              }
+
+              sendSmsMutation.mutate({
+                to,
+                message,
+                clientId,
+                personId: smsPersonId,
               });
-              return;
-            }
-            
-            sendSmsMutation.mutate({
-              to: phoneNumber,
-              message: message,
-              clientId: clientId,
-              personId: smsPersonId,
-            });
-          }} className="space-y-4">
+            }}
+            className="space-y-4"
+          >
             <div className="space-y-2">
-              <label className="text-sm font-medium">Phone Number <span className="text-destructive">*</span></label>
-              <Input
-                name="phoneNumber"
-                type="tel"
-                placeholder="e.g., +44 123 456 7890"
-                data-testid="input-sms-phone-dialog"
-                required
-              />
-              <p className="text-xs text-muted-foreground">Include country code for international numbers</p>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Contact Person (Optional)</label>
-              <Select onValueChange={(value) => setSmsPersonId(value === 'none' ? undefined : value)} defaultValue="none">
-                <SelectTrigger>
+              <label className="text-sm font-medium">Contact Person <span className="text-destructive">*</span></label>
+              <Select value={smsPersonId} onValueChange={(value) => setSmsPersonId(value)}>
+                <SelectTrigger data-testid="select-sms-person">
                   <SelectValue placeholder="Select person" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No specific person</SelectItem>
                   {(clientPeople || []).map((cp: any) => (
                     <SelectItem key={cp.person.id} value={cp.person.id}>
                       {formatPersonName(cp.person.fullName)}
@@ -623,8 +639,13 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                   ))}
                 </SelectContent>
               </Select>
+              {smsPersonId && (
+                <p className="text-xs text-muted-foreground">
+                  Mobile: {(clientPeople || []).find((cp: any) => cp.person.id === smsPersonId)?.person?.primaryPhone || '—'}
+                </p>
+              )}
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
               <Textarea
@@ -634,9 +655,9 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 data-testid="input-sms-message-dialog"
                 required
               />
-              <p className="text-xs text-muted-foreground">Keep messages concise for SMS</p>
+              <p className="text-xs text-muted-foreground">Uses the person's Primary Mobile (stored in +447… format)</p>
             </div>
-            
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsSendingSMS(false)}>
                 Cancel
@@ -1555,6 +1576,8 @@ function AddPersonModal({
       occupation: "",
       telephone: "",
       email: "",
+      primaryPhone: "",
+      primaryEmail: "",
       telephone2: "",
       email2: "",
       linkedinUrl: "",
@@ -1576,6 +1599,24 @@ function AddPersonModal({
   });
 
   const handleSubmit = (data: InsertPersonData) => {
+    // Convert UK mobile number to international format for primaryPhone
+    if (data.primaryPhone) {
+      // If it starts with 07, convert to +447
+      if (data.primaryPhone.startsWith('07')) {
+        data.primaryPhone = '+447' + data.primaryPhone.slice(2);
+      }
+      // If it starts with 447 or +447, ensure it has the + prefix
+      else if (data.primaryPhone.startsWith('447')) {
+        data.primaryPhone = '+' + data.primaryPhone;
+      }
+      else if (!data.primaryPhone.startsWith('+447')) {
+        // For other formats, try to clean and convert
+        const cleanPhone = data.primaryPhone.replace(/[^\d]/g, '');
+        if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
+          data.primaryPhone = '+447' + cleanPhone.slice(2);
+        }
+      }
+    }
     onSave(data);
   };
 
@@ -1869,12 +1910,51 @@ function AddPersonModal({
                   
                   <FormField
                     control={form.control}
+                    name="primaryEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} value={field.value || ""} data-testid="input-primaryEmail" />
+                        </FormControl>
+                        <FormDescription>
+                          Main email address for SMS/Email communications
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="primaryPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Mobile Phone</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            value={field.value || ""} 
+                            placeholder="07123456789"
+                            data-testid="input-primaryPhone" 
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          UK mobile number for SMS (format: 07xxxxxxxxx)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>Additional Email</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} data-testid="input-email" />
+                          <Input type="email" {...field} value={field.value || ""} data-testid="input-email" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1886,7 +1966,7 @@ function AddPersonModal({
                     name="telephone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone</FormLabel>
+                        <FormLabel>Additional Phone</FormLabel>
                         <FormControl>
                           <Input {...field} value={field.value || ""} data-testid="input-telephone" />
                         </FormControl>
@@ -1898,7 +1978,7 @@ function AddPersonModal({
 
                 {/* Secondary Contact */}
                 <div className="space-y-4">
-                  <h6 className="text-sm font-medium">Additional Contact Details</h6>
+                  <h6 className="text-sm font-medium">Secondary Contact Details</h6>
                   
                   <FormField
                     control={form.control}
@@ -1907,7 +1987,7 @@ function AddPersonModal({
                       <FormItem>
                         <FormLabel>Secondary Email</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} data-testid="input-email2" />
+                          <Input type="email" {...field} value={field.value || ""} data-testid="input-email2" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1921,7 +2001,7 @@ function AddPersonModal({
                       <FormItem>
                         <FormLabel>Secondary Phone</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-telephone2" />
+                          <Input {...field} value={field.value || ""} data-testid="input-telephone2" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
