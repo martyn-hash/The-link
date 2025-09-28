@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import AddressLookup from "@/components/address-lookup";
 import AddressMap from "@/components/address-map";
 import TagManager from "@/components/tag-manager";
+import ClientChronology from "@/components/client-chronology";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -5687,6 +5688,20 @@ export default function ClientDetail() {
                   isLoading={projectsLoading}
                   clientId={id}
                 />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="chronology" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Client Activity Chronology
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ClientChronology clientId={id} />
               </CardContent>
             </Card>
           </TabsContent>
