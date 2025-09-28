@@ -31,6 +31,8 @@ import {
   projectSchedulingHistory,
   schedulingRunLogs,
   normalizeProjectMonth,
+  communications,
+  userIntegrations,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -99,6 +101,10 @@ import {
   type ProjectWithRelations,
   type UpdateProjectStatus,
   type UpdateProjectType,
+  type Communication,
+  type InsertCommunication,
+  type UserIntegration,
+  type InsertUserIntegration,
 } from "@shared/schema";
 
 // Type for scheduled services view that combines client and people services
@@ -453,6 +459,22 @@ export interface IStorage {
   createSchedulingRunLog(data: InsertSchedulingRunLogs): Promise<SchedulingRunLogs>;
   getSchedulingRunLogs(limit?: number): Promise<SchedulingRunLogs[]>;
   getLatestSchedulingRunLog(): Promise<SchedulingRunLogs | undefined>;
+  
+  // Communications operations
+  getAllCommunications(): Promise<(Communication & { client: Client; person?: Person; user: User })[]>;
+  getCommunicationsByClientId(clientId: string): Promise<(Communication & { person?: Person; user: User })[]>;
+  getCommunicationsByPersonId(personId: string): Promise<(Communication & { client: Client; user: User })[]>;
+  getCommunicationById(id: string): Promise<(Communication & { client: Client; person?: Person; user: User }) | undefined>;
+  createCommunication(communication: InsertCommunication): Promise<Communication>;
+  updateCommunication(id: string, communication: Partial<InsertCommunication>): Promise<Communication>;
+  deleteCommunication(id: string): Promise<void>;
+  
+  // User integrations operations  
+  getUserIntegrations(userId: string): Promise<UserIntegration[]>;
+  getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms'): Promise<UserIntegration | undefined>;
+  createUserIntegration(integration: InsertUserIntegration): Promise<UserIntegration>;
+  updateUserIntegration(id: string, integration: Partial<InsertUserIntegration>): Promise<UserIntegration>;
+  deleteUserIntegration(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5768,6 +5790,166 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(schedulingRunLogs.runDate))
       .limit(1);
     return log;
+  }
+
+  // Communications operations
+  async getAllCommunications(): Promise<(Communication & { client: Client; person?: Person; user: User })[]> {
+    const results = await db
+      .select({
+        communication: communications,
+        client: clients,
+        person: people,
+        user: users,
+      })
+      .from(communications)
+      .innerJoin(clients, eq(communications.clientId, clients.id))
+      .leftJoin(people, eq(communications.personId, people.id))
+      .innerJoin(users, eq(communications.userId, users.id))
+      .orderBy(desc(communications.loggedAt));
+
+    return results.map(result => ({
+      ...result.communication,
+      client: result.client,
+      person: result.person || undefined,
+      user: result.user,
+    }));
+  }
+
+  async getCommunicationsByClientId(clientId: string): Promise<(Communication & { person?: Person; user: User })[]> {
+    const results = await db
+      .select({
+        communication: communications,
+        person: people,
+        user: users,
+      })
+      .from(communications)
+      .leftJoin(people, eq(communications.personId, people.id))
+      .innerJoin(users, eq(communications.userId, users.id))
+      .where(eq(communications.clientId, clientId))
+      .orderBy(desc(communications.loggedAt));
+
+    return results.map(result => ({
+      ...result.communication,
+      person: result.person || undefined,
+      user: result.user,
+    }));
+  }
+
+  async getCommunicationsByPersonId(personId: string): Promise<(Communication & { client: Client; user: User })[]> {
+    const results = await db
+      .select({
+        communication: communications,
+        client: clients,
+        user: users,
+      })
+      .from(communications)
+      .innerJoin(clients, eq(communications.clientId, clients.id))
+      .innerJoin(users, eq(communications.userId, users.id))
+      .where(eq(communications.personId, personId))
+      .orderBy(desc(communications.loggedAt));
+
+    return results.map(result => ({
+      ...result.communication,
+      client: result.client,
+      user: result.user,
+    }));
+  }
+
+  async getCommunicationById(id: string): Promise<(Communication & { client: Client; person?: Person; user: User }) | undefined> {
+    const [result] = await db
+      .select({
+        communication: communications,
+        client: clients,
+        person: people,
+        user: users,
+      })
+      .from(communications)
+      .innerJoin(clients, eq(communications.clientId, clients.id))
+      .leftJoin(people, eq(communications.personId, people.id))
+      .innerJoin(users, eq(communications.userId, users.id))
+      .where(eq(communications.id, id))
+      .limit(1);
+
+    if (!result) return undefined;
+
+    return {
+      ...result.communication,
+      client: result.client,
+      person: result.person || undefined,
+      user: result.user,
+    };
+  }
+
+  async createCommunication(communication: InsertCommunication): Promise<Communication> {
+    const [newCommunication] = await db
+      .insert(communications)
+      .values({
+        ...communication,
+        loggedAt: new Date(),
+      })
+      .returning();
+    return newCommunication;
+  }
+
+  async updateCommunication(id: string, communication: Partial<InsertCommunication>): Promise<Communication> {
+    const [updated] = await db
+      .update(communications)
+      .set({
+        ...communication,
+        updatedAt: new Date(),
+      })
+      .where(eq(communications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCommunication(id: string): Promise<void> {
+    await db.delete(communications).where(eq(communications.id, id));
+  }
+
+  // User integrations operations
+  async getUserIntegrations(userId: string): Promise<UserIntegration[]> {
+    return await db
+      .select()
+      .from(userIntegrations)
+      .where(eq(userIntegrations.userId, userId))
+      .orderBy(userIntegrations.createdAt);
+  }
+
+  async getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms'): Promise<UserIntegration | undefined> {
+    const [integration] = await db
+      .select()
+      .from(userIntegrations)
+      .where(and(
+        eq(userIntegrations.userId, userId),
+        eq(userIntegrations.integrationType, integrationType)
+      ))
+      .limit(1);
+    return integration;
+  }
+
+  async createUserIntegration(integration: InsertUserIntegration): Promise<UserIntegration> {
+    const [newIntegration] = await db
+      .insert(userIntegrations)
+      .values(integration)
+      .returning();
+    return newIntegration;
+  }
+
+  async updateUserIntegration(id: string, integration: Partial<InsertUserIntegration>): Promise<UserIntegration> {
+    const [updated] = await db
+      .update(userIntegrations)
+      .set({
+        ...integration,
+        updatedAt: new Date(),
+      })
+      .where(eq(userIntegrations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUserIntegration(id: string): Promise<void> {
+    await db.delete(userIntegrations).where(eq(userIntegrations.id, id));
   }
 }
 
