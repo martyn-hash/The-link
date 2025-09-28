@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { List, UserX } from "lucide-react";
+import { List, UserX, Calendar } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import ClientSearch from "@/components/client-search";
 import AdminDropdown from "@/components/admin-dropdown";
@@ -123,6 +123,20 @@ export default function TopNavigation({ user }: TopNavigationProps) {
                 >
                   <List className="w-4 h-4" />
                   <span>All Tasks</span>
+                </Button>
+              </Link>
+            )}
+
+            {/* Services */}
+            {(user?.isAdmin || user?.canSeeAdminMenu) && (
+              <Link href="/scheduled-services">
+                <Button
+                  variant={isActive("/scheduled-services") ? "default" : "ghost"}
+                  className="flex items-center space-x-2"
+                  data-testid="link-services"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>Services</span>
                 </Button>
               </Link>
             )}

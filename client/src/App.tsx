@@ -20,6 +20,7 @@ import MagicLinkVerify from "@/pages/magic-link-verify";
 import Clients from "@/pages/clients";
 import ClientDetail from "@/pages/client-detail";
 import Services from "@/pages/services";
+import ScheduledServices from "@/pages/scheduled-services";
 import ChChanges from "@/pages/ch-changes";
 import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
       <Route path="/users" component={Users} />
       <Route path="/services" component={Services} />
+      <Route path="/scheduled-services" component={ScheduledServices} />
       <Route path="/ch-changes" component={ChChanges} />
       <Route path="/tags" component={Tags} />
       <Route path="/upload" component={Upload} />
