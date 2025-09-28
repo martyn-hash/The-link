@@ -81,6 +81,12 @@ export default function Clients() {
     setShowClientModal(true);
   };
 
+  // Handle view client (for card clicks)
+  const handleViewClient = (client: Client) => {
+    // Navigate to client detail view
+    setLocation(`/clients/${client.id}`);
+  };
+
   // Handle edit client
   const handleEditClient = (client: Client) => {
     // Navigate to client detail view
@@ -213,7 +219,12 @@ export default function Clients() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredClients.map((client) => (
-                <Card key={client.id} className="hover:shadow-md transition-shadow group" data-testid={`card-client-${client.id}`}>
+                <Card 
+                  key={client.id} 
+                  className="hover:shadow-md transition-shadow group cursor-pointer" 
+                  onClick={() => handleViewClient(client)}
+                  data-testid={`card-client-${client.id}`}
+                >
                   <CardHeader>
                     <div className="flex items-center space-x-4">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
