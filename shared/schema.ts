@@ -249,6 +249,26 @@ export const projectChronology = pgTable("project_chronology", {
   businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business minutes (for precision)
 });
 
+// Client chronology table - tracks client-level events like service activation/deactivation
+export const clientChronology = pgTable("client_chronology", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  eventType: varchar("event_type").notNull(), // 'service_activated', 'service_deactivated', etc.
+  entityType: varchar("entity_type").notNull(), // 'client_service', 'people_service'
+  entityId: varchar("entity_id").notNull(), // ID of the affected service
+  fromValue: varchar("from_value"), // Previous value (e.g., 'true' for isActive)
+  toValue: varchar("to_value").notNull(), // New value (e.g., 'false' for isActive)
+  userId: varchar("user_id").references(() => users.id), // User who made the change
+  changeReason: varchar("change_reason"),
+  notes: text("notes"),
+  timestamp: timestamp("timestamp").defaultNow(),
+}, (table) => [
+  index("idx_client_chronology_client_id").on(table.clientId),
+  index("idx_client_chronology_event_type").on(table.eventType),
+  index("idx_client_chronology_timestamp").on(table.timestamp),
+  index("idx_client_chronology_entity").on(table.entityType, table.entityId),
+]);
+
 // Stage approvals configuration table
 export const stageApprovals = pgTable("stage_approvals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -587,6 +607,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   ownedServices: many(services, { relationName: "serviceOwner" }),
   ownedClientServices: many(clientServices, { relationName: "clientServiceOwner" }),
   chronologyEntries: many(projectChronology),
+  clientChronologyEntries: many(clientChronology),
   magicLinkTokens: many(magicLinkTokens),
   notificationPreferences: one(userNotificationPreferences),
   clientServiceRoleAssignments: many(clientServiceRoleAssignments),
@@ -603,6 +624,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
   clientServices: many(clientServices),
   clientPeople: many(clientPeople),
+  chronologyEntries: many(clientChronology),
   // Many-to-many person-company relationships are now handled via clientPeople junction table
 }));
 
@@ -664,6 +686,17 @@ export const projectChronologyRelations = relations(projectChronology, ({ one, m
     references: [users.id],
   }),
   fieldResponses: many(reasonFieldResponses),
+}));
+
+export const clientChronologyRelations = relations(clientChronology, ({ one }) => ({
+  client: one(clients, {
+    fields: [clientChronology.clientId],
+    references: [clients.id],
+  }),
+  user: one(users, {
+    fields: [clientChronology.userId],
+    references: [users.id],
+  }),
 }));
 
 export const kanbanStagesRelations = relations(kanbanStages, ({ one, many }) => ({
@@ -826,6 +859,14 @@ export const insertProjectChronologySchema = createInsertSchema(projectChronolog
   id: true,
   timestamp: true,
 });
+
+export const insertClientChronologySchema = createInsertSchema(clientChronology).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertClientChronology = z.infer<typeof insertClientChronologySchema>;
+export type SelectClientChronology = typeof clientChronology.$inferSelect;
 
 // Base schema without refinements (for use with .partial())
 const baseKanbanStageSchema = createInsertSchema(kanbanStages).omit({

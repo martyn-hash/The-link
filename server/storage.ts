@@ -5,6 +5,7 @@ import {
   clientPeople,
   projects,
   projectChronology,
+  clientChronology,
   kanbanStages,
   changeReasons,
   projectTypes,
@@ -43,6 +44,8 @@ import {
   type InsertProject,
   type ProjectChronology,
   type InsertProjectChronology,
+  type SelectClientChronology,
+  type InsertClientChronology,
   type KanbanStage,
   type InsertKanbanStage,
   type ChangeReason,
@@ -185,6 +188,10 @@ export interface IStorage {
   // Chronology operations
   createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology>;
   getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]>;
+  
+  // Client chronology operations
+  createClientChronologyEntry(entry: InsertClientChronology): Promise<SelectClientChronology>;
+  getClientChronology(clientId: string): Promise<(SelectClientChronology & { user?: User })[]>;
   
   // Configuration operations
   getAllKanbanStages(): Promise<KanbanStage[]>;
@@ -1880,6 +1887,28 @@ export class DatabaseStorage implements IStorage {
       ...c,
       assignee: c.assignee || undefined,
       fieldResponses: c.fieldResponses || [],
+    }));
+  }
+
+  // Client chronology operations
+  async createClientChronologyEntry(entry: InsertClientChronology): Promise<SelectClientChronology> {
+    const [chronology] = await db.insert(clientChronology).values(entry).returning();
+    return chronology;
+  }
+
+  async getClientChronology(clientId: string): Promise<(SelectClientChronology & { user?: User })[]> {
+    const results = await db.query.clientChronology.findMany({
+      where: eq(clientChronology.clientId, clientId),
+      with: {
+        user: true,
+      },
+      orderBy: desc(clientChronology.timestamp),
+    });
+    
+    // Convert null relations to undefined to match TypeScript expectations
+    return results.map(c => ({
+      ...c,
+      user: c.user || undefined,
     }));
   }
 
