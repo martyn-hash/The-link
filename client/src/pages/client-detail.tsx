@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
@@ -26,7 +26,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication } from "@shared/schema";
 import { insertPersonSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
@@ -103,6 +103,193 @@ function formatBirthDate(dateOfBirth: string | Date | null): string {
   return date.toLocaleDateString('en-GB', {
     timeZone: 'UTC'
   });
+}
+
+// Communication types with relations
+type CommunicationWithRelations = Communication & {
+  client: Client;
+  person?: Person;
+  user: User;
+};
+
+// Communications Timeline Component
+function CommunicationsTimeline({ clientId }: { clientId: string }) {
+  const [isAddingCommunication, setIsAddingCommunication] = useState(false);
+
+  // Fetch communications for this client
+  const { data: communications, isLoading } = useQuery({
+    queryKey: ['/api/communications/client', clientId],
+    enabled: !!clientId,
+  });
+
+  const addCommunicationMutation = useMutation({
+    mutationFn: (data: any) => apiRequest(`/api/communications`, {
+      method: 'POST',
+      body: data,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+      setIsAddingCommunication(false);
+    },
+  });
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'phone_call':
+        return <PhoneCall className="h-4 w-4" />;
+      case 'note':
+        return <FileText className="h-4 w-4" />;
+      case 'sms_sent':
+        return <Send className="h-4 w-4" />;
+      case 'sms_received':
+        return <Inbox className="h-4 w-4" />;
+      case 'email_sent':
+        return <Mail className="h-4 w-4" />;
+      case 'email_received':
+        return <Inbox className="h-4 w-4" />;
+      default:
+        return <MessageSquare className="h-4 w-4" />;
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'phone_call':
+        return 'Phone Call';
+      case 'note':
+        return 'Note';
+      case 'sms_sent':
+        return 'SMS Sent';
+      case 'sms_received':
+        return 'SMS Received';
+      case 'email_sent':
+        return 'Email Sent';
+      case 'email_received':
+        return 'Email Received';
+      default:
+        return 'Communication';
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'phone_call':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'note':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+      case 'sms_sent':
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'sms_received':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'email_sent':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+      case 'email_received':
+        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5" />
+            Communications Timeline
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex gap-4 animate-pulse">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5" />
+            Communications Timeline
+          </CardTitle>
+          <Button
+            onClick={() => setIsAddingCommunication(true)}
+            size="sm"
+            data-testid="button-add-communication"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Communication
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!communications || communications.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No communications recorded yet</p>
+            <p className="text-sm">Add phone calls, notes, or messages to track client interactions</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {communications.map((comm: CommunicationWithRelations) => (
+              <div key={comm.id} className="flex gap-4 pb-6 border-b border-border last:border-b-0" data-testid={`communication-${comm.id}`}>
+                <div className="flex-shrink-0">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                    {getIcon(comm.type)}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className={getTypeColor(comm.type)}>
+                      {getTypeLabel(comm.type)}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {new Date(comm.loggedAt).toLocaleString()}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      by {comm.user.firstName} {comm.user.lastName}
+                    </span>
+                  </div>
+                  {comm.subject && (
+                    <h4 className="font-medium mb-2" data-testid={`communication-subject-${comm.id}`}>
+                      {comm.subject}
+                    </h4>
+                  )}
+                  {comm.content && (
+                    <div 
+                      className="text-sm text-muted-foreground whitespace-pre-wrap"
+                      data-testid={`communication-content-${comm.id}`}
+                      dangerouslySetInnerHTML={{ __html: comm.content }}
+                    />
+                  )}
+                  {comm.person && (
+                    <div className="mt-2">
+                      <Badge variant="outline" className="text-xs">
+                        <UserIcon className="h-3 w-3 mr-1" />
+                        {formatPersonName(comm.person.fullName)}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 type ClientPersonWithPerson = ClientPerson & { person: Person };
@@ -5694,6 +5881,10 @@ export default function ClientDetail() {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="communications" className="space-y-6 mt-6">
+            <CommunicationsTimeline clientId={id} />
           </TabsContent>
 
           <TabsContent value="chronology" className="space-y-6 mt-6">
