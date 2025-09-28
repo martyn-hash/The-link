@@ -116,6 +116,8 @@ type CommunicationWithRelations = Communication & {
 // Communications Timeline Component
 function CommunicationsTimeline({ clientId }: { clientId: string }) {
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
+  const [isSendingSMS, setIsSendingSMS] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const { toast } = useToast();
 
   // Fetch communications for this client
@@ -354,14 +356,34 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             <MessageSquare className="w-5 h-5" />
             Communications Timeline
           </CardTitle>
-          <Button
-            onClick={() => setIsAddingCommunication(true)}
-            size="sm"
-            data-testid="button-add-communication"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Communication
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setIsSendingSMS(true)}
+              size="sm"
+              variant="outline"
+              data-testid="button-send-sms"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send SMS
+            </Button>
+            <Button
+              onClick={() => setIsSendingEmail(true)}
+              size="sm"
+              variant="outline"
+              data-testid="button-send-email"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Send Email
+            </Button>
+            <Button
+              onClick={() => setIsAddingCommunication(true)}
+              size="sm"
+              data-testid="button-add-communication"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Communication
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -444,10 +466,6 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                         <SelectContent>
                           <SelectItem value="phone_call">Phone Call</SelectItem>
                           <SelectItem value="note">Note</SelectItem>
-                          <SelectItem value="sms_sent">SMS Sent</SelectItem>
-                          <SelectItem value="sms_received">SMS Received</SelectItem>
-                          <SelectItem value="email_sent">Email Sent</SelectItem>
-                          <SelectItem value="email_received">Email Received</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -500,47 +518,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 )}
               />
 
-              {/* SMS Phone Number Field - only show when SMS is selected */}
-              {communicationType === 'sms_sent' && (
-                <div className="space-y-2">
-                  <label htmlFor="sms-phone" className="text-sm font-medium">
-                    Phone Number <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    id="sms-phone"
-                    type="tel"
-                    placeholder="e.g., +44 123 456 7890 or 07123456789"
-                    value={smsPhoneNumber}
-                    onChange={(e) => setSmsPhoneNumber(e.target.value)}
-                    data-testid="input-sms-phone"
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the phone number to send SMS to. Include country code if international.
-                  </p>
-                </div>
-              )}
-
-              {/* Email Address Field - only show when Email is selected */}
-              {communicationType === 'email_sent' && (
-                <div className="space-y-2">
-                  <label htmlFor="email-address" className="text-sm font-medium">
-                    Email Address <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    id="email-address"
-                    type="email"
-                    placeholder="e.g., client@example.com"
-                    value={emailAddress}
-                    onChange={(e) => setEmailAddress(e.target.value)}
-                    data-testid="input-email-address"
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the recipient's email address.
-                  </p>
-                </div>
-              )}
+              {/* SMS and Email fields removed - now handled by separate dedicated dialogs */}
 
               <FormField
                 control={addCommunicationForm.control}
@@ -575,14 +553,10 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={addCommunicationMutation.isPending || sendSmsMutation.isPending || sendEmailMutation.isPending}
+                  disabled={addCommunicationMutation.isPending}
                   data-testid="button-save-communication"
                 >
-                  {sendSmsMutation.isPending ? 'Sending SMS...' : 
-                   sendEmailMutation.isPending ? 'Sending Email...' :
-                   addCommunicationMutation.isPending ? 'Saving...' : 
-                   communicationType === 'sms_sent' ? 'Send SMS' :
-                   communicationType === 'email_sent' ? 'Send Email' : 'Save Communication'}
+                  {addCommunicationMutation.isPending ? 'Saving...' : 'Save Communication'}
                 </Button>
               </div>
             </form>
