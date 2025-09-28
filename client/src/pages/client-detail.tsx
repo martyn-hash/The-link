@@ -118,6 +118,8 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
+  const [emailPersonId, setEmailPersonId] = useState<string | undefined>();
   const { toast } = useToast();
 
   // Fetch communications for this client
@@ -179,9 +181,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
       apiRequest('/api/sms/send', 'POST', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
-      setIsAddingCommunication(false);
-      addCommunicationForm.reset();
-      setSmsPhoneNumber("");
+      setIsSendingSMS(false);
       toast({
         title: "SMS sent successfully",
         description: "The SMS message has been sent and logged.",
@@ -202,9 +202,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
       apiRequest('/api/email/send', 'POST', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
-      setIsAddingCommunication(false);
-      addCommunicationForm.reset();
-      setEmailAddress("");
+      setIsSendingEmail(false);
       toast({
         title: "Email sent successfully",
         description: "The email has been sent and logged.",
@@ -561,6 +559,191 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SMS Sending Dialog */}
+      <Dialog open={isSendingSMS} onOpenChange={setIsSendingSMS}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5" />
+              Send SMS
+            </DialogTitle>
+            <DialogDescription>
+              Send an SMS message and log it in the communications timeline. All fields marked with * are required.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const phoneNumber = formData.get('phoneNumber') as string;
+            const message = formData.get('message') as string;
+            
+            if (!phoneNumber.trim() || !message.trim()) {
+              toast({
+                title: "Missing information",
+                description: "Please enter both phone number and message.",
+                variant: "destructive"
+              });
+              return;
+            }
+            
+            sendSmsMutation.mutate({
+              to: phoneNumber,
+              message: message,
+              clientId: clientId,
+              personId: smsPersonId,
+            });
+          }} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Phone Number <span className="text-destructive">*</span></label>
+              <Input
+                name="phoneNumber"
+                type="tel"
+                placeholder="e.g., +44 123 456 7890"
+                data-testid="input-sms-phone-dialog"
+                required
+              />
+              <p className="text-xs text-muted-foreground">Include country code for international numbers</p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contact Person (Optional)</label>
+              <Select onValueChange={(value) => setSmsPersonId(value === 'none' ? undefined : value)} defaultValue="none">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select person" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No specific person</SelectItem>
+                  {(clientPeople || []).map((cp: any) => (
+                    <SelectItem key={cp.person.id} value={cp.person.id}>
+                      {formatPersonName(cp.person.fullName)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
+              <Textarea
+                name="message"
+                placeholder="Enter your SMS message..."
+                className="min-h-20"
+                data-testid="input-sms-message-dialog"
+                required
+              />
+              <p className="text-xs text-muted-foreground">Keep messages concise for SMS</p>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsSendingSMS(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={sendSmsMutation.isPending} data-testid="button-send-sms-dialog">
+                {sendSmsMutation.isPending ? 'Sending...' : 'Send SMS'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Sending Dialog */}
+      <Dialog open={isSendingEmail} onOpenChange={setIsSendingEmail}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Send Email
+            </DialogTitle>
+            <DialogDescription>
+              Send an email message and log it in the communications timeline. All fields marked with * are required.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const emailAddress = formData.get('emailAddress') as string;
+            const subject = formData.get('subject') as string;
+            const content = formData.get('content') as string;
+            
+            if (!emailAddress.trim() || !content.trim()) {
+              toast({
+                title: "Missing information",
+                description: "Please enter both email address and message content.",
+                variant: "destructive"
+              });
+              return;
+            }
+            
+            sendEmailMutation.mutate({
+              to: emailAddress,
+              subject: subject || 'Message from CRM',
+              content: content,
+              clientId: clientId,
+              personId: emailPersonId,
+            });
+          }} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email Address <span className="text-destructive">*</span></label>
+                <Input
+                  name="emailAddress"
+                  type="email"
+                  placeholder="client@example.com"
+                  data-testid="input-email-address-dialog"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Contact Person (Optional)</label>
+                <Select onValueChange={(value) => setEmailPersonId(value === 'none' ? undefined : value)} defaultValue="none">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No specific person</SelectItem>
+                    {(clientPeople || []).map((cp: any) => (
+                      <SelectItem key={cp.person.id} value={cp.person.id}>
+                        {formatPersonName(cp.person.fullName)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subject</label>
+              <Input
+                name="subject"
+                placeholder="Message from CRM"
+                data-testid="input-email-subject-dialog"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
+              <Textarea
+                name="content"
+                placeholder="Enter your email message..."
+                className="min-h-32"
+                data-testid="input-email-content-dialog"
+                required
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsSendingEmail(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={sendEmailMutation.isPending} data-testid="button-send-email-dialog">
+                {sendEmailMutation.isPending ? 'Sending...' : 'Send Email'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </Card>
