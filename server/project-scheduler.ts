@@ -942,6 +942,11 @@ async function findServicesDueToday(
 
   // Process client services - use already hydrated data to avoid refetch mismatches
   for (const clientServiceWithDetails of clientServicesWithDetails) {
+    // Skip inactive services
+    if (clientServiceWithDetails.isActive === false) {
+      continue;
+    }
+    
     if (clientServiceWithDetails.nextStartDate && isServiceDueToday(clientServiceWithDetails.nextStartDate, targetDate)) {
       // Validate configuration before proceeding
       if (!clientServiceWithDetails.service.projectType || clientServiceWithDetails.service.projectType.id === '') {
@@ -977,9 +982,11 @@ async function findServicesDueToday(
   }
 
   // Process people services - currently not implemented but counted and logged
-  const peopleServicesSkipped = peopleServicesWithDetails.length;
+  // Only count active people services
+  const activePeopleServices = peopleServicesWithDetails.filter(ps => ps.isActive !== false);
+  const peopleServicesSkipped = activePeopleServices.length;
   if (peopleServicesSkipped > 0) {
-    console.log(`[Project Scheduler] Skipping ${peopleServicesSkipped} people services (not yet implemented)`);
+    console.log(`[Project Scheduler] Skipping ${peopleServicesSkipped} active people services (not yet implemented)`);
   }
 
   return {
