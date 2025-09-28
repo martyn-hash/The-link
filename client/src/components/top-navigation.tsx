@@ -11,7 +11,7 @@ import type { User } from "@shared/schema";
 import logoPath from "@assets/resized_logo_1758262615320.png";
 
 interface TopNavigationProps {
-  user: User;
+  user?: User;
 }
 
 export default function TopNavigation({ user }: TopNavigationProps) {
