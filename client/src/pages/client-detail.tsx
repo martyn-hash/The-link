@@ -166,8 +166,55 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
     },
   });
 
+  // Watch the communication type to show/hide SMS fields
+  const communicationType = addCommunicationForm.watch("type");
+  const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
+
+  // SMS sending mutation
+  const sendSmsMutation = useMutation({
+    mutationFn: (data: { to: string; message: string; clientId: string; personId?: string }) => 
+      apiRequest('/api/sms/send', 'POST', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+      setIsAddingCommunication(false);
+      addCommunicationForm.reset();
+      setSmsPhoneNumber("");
+      toast({
+        title: "SMS sent successfully",
+        description: "The SMS message has been sent and logged.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error sending SMS",
+        description: error?.message || "Failed to send SMS. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmitCommunication = (values: any) => {
-    addCommunicationMutation.mutate(values);
+    // Handle SMS sending separately
+    if (values.type === 'sms_sent') {
+      if (!smsPhoneNumber.trim()) {
+        toast({
+          title: "Phone number required",
+          description: "Please enter a phone number to send SMS.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      sendSmsMutation.mutate({
+        to: smsPhoneNumber,
+        message: values.content,
+        clientId: values.clientId,
+        personId: values.personId,
+      });
+    } else {
+      // Handle regular communication logging
+      addCommunicationMutation.mutate(values);
+    }
   };
 
   const getIcon = (type: string) => {
@@ -407,6 +454,27 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 )}
               />
 
+              {/* SMS Phone Number Field - only show when SMS is selected */}
+              {communicationType === 'sms_sent' && (
+                <div className="space-y-2">
+                  <label htmlFor="sms-phone" className="text-sm font-medium">
+                    Phone Number <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    id="sms-phone"
+                    type="tel"
+                    placeholder="e.g., +44 123 456 7890 or 07123456789"
+                    value={smsPhoneNumber}
+                    onChange={(e) => setSmsPhoneNumber(e.target.value)}
+                    data-testid="input-sms-phone"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the phone number to send SMS to. Include country code if international.
+                  </p>
+                </div>
+              )}
+
               <FormField
                 control={addCommunicationForm.control}
                 name="content"
@@ -440,10 +508,12 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={addCommunicationMutation.isPending}
+                  disabled={addCommunicationMutation.isPending || sendSmsMutation.isPending}
                   data-testid="button-save-communication"
                 >
-                  {addCommunicationMutation.isPending ? 'Saving...' : 'Save Communication'}
+                  {sendSmsMutation.isPending ? 'Sending SMS...' : 
+                   addCommunicationMutation.isPending ? 'Saving...' : 
+                   communicationType === 'sms_sent' ? 'Send SMS' : 'Save Communication'}
                 </Button>
               </div>
             </form>

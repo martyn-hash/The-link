@@ -5706,6 +5706,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // SMS Integration Routes
+  
+  // POST /api/sms/send - Send SMS via VoodooSMS
+  app.post("/api/sms/send", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { to, message, clientId, personId } = req.body;
+      
+      if (!to || !message || !clientId) {
+        return res.status(400).json({ 
+          message: "Missing required fields: to, message, clientId" 
+        });
+      }
+      
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if user has access to this client
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to send SMS for this client." });
+      }
+      
+      // Prepare SMS data for VoodooSMS API
+      const smsData = {
+        to: parseInt(to.replace(/\D/g, '')), // Remove non-digits and convert to number
+        from: "CRM", // Default sender ID
+        msg: message,
+        external_reference: `client_${clientId}_${Date.now()}`
+      };
+      
+      // Send SMS via VoodooSMS API
+      const response = await fetch('https://api.voodoosms.com/sendsms', {
+        method: 'POST',
+        headers: {
+          'Authorization': process.env.VOODOO_SMS_API_KEY || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(smsData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('VoodooSMS API error:', response.status, errorText);
+        return res.status(500).json({ 
+          message: "Failed to send SMS", 
+          error: `API responded with ${response.status}` 
+        });
+      }
+      
+      const smsResponse = await response.json();
+      
+      // Log the SMS as a communication record
+      const communication = await storage.createCommunication({
+        clientId,
+        personId: personId || null,
+        type: 'sms_sent',
+        subject: 'SMS Sent',
+        content: message,
+        actualContactTime: new Date(),
+        userId: effectiveUserId,
+        externalReference: (smsResponse as any).message_id || smsData.external_reference
+      });
+      
+      res.json({
+        success: true,
+        message: "SMS sent successfully",
+        smsResponse,
+        communication: await storage.getCommunicationById(communication.id)
+      });
+      
+    } catch (error) {
+      console.error("Error sending SMS:", error);
+      res.status(500).json({ message: "Failed to send SMS" });
+    }
+  });
+
   // User Integrations API Routes
   
   // GET /api/user-integrations - Get current user's integrations
