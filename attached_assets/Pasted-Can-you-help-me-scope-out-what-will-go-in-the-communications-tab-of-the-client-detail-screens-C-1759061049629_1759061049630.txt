@@ -1,0 +1,30 @@
+Can you help me scope out what will go in the 'communications' tab of the client detail screens. 
+
+Comms - emails, sms etc. 
+I’d like us to focus on how we build out creating and logging communications sent and received from clients. 
+The focal point for this activity will be in the client details view, under the ‘Communication’ tab. 
+The view here should be that of a timeline with the newest entries at the top. 
+There should be the ability to log a phone call, make a note, send an SMS and send an email. 
+Taking these in a logical order – the ‘phone call’ and the ‘note’ will behave in a very similar way, the user presses to add a record of one of these, they get a wysiwyg editor and a long text field to add their notes. The system records a time /date stamp for when it was added, and there’s a required field for ‘time of call / note’ -to capture when the contact actually took place. 
+Later, we’ll be building in the ability to create tasks that are assigned to users and mapped to clients and related people, and there’s likely to be a quick way to do this from a contact note that provides context for a task (for example, imagine in the real world, a staff member speaks to a client, who asks for some extra help with some management accounts – the user would log the contact note / call, and then create an associated task) 
+Then for SMS, the user should have the ability to send an SMS from the system. They should be able to originate the SMS from inside the ‘communications’ tab from the client detail. When it’s sent, it would then log as a record in the timeline on this page. 
+We use a service called voodoo sms and I can provide the sender ID’s and api key’s to assist with the development of this feature. 
+Finally, is email. We are all using Microsoft 365. This is a 2 stage process. 
+In each user’s profile, there should be the ability to link their Link account with their M365 outlook account. 
+Then, when in the ‘communications’ tab of the Client Details screen, the user should be able to create and send an email. 
+Equally, this email integration, should mean that if any client sends a user an email, if the email address of the sender is equal to the email address of a person, then the email should be logged against the client record. 
+Later – but not in this wave of development, for inbound emails that match the email address of a client, we’ll strip the hmtl, send to open ai, and create potential lists of tasks for the recipient. 
+
+this is the voodoosms api key: 
+
+gZ10u2mZZdfwwJTUIDjM9NaFArkhci7A8z1sscII7o5txO
+
+
+So let's focus on: 
+
+1) Adding the building blocks for the communications tab - including adding a phone call, or a note. 
+2) Sketching out the voodoosms integration 
+3) Same for Outlook 365 intregration
+4) Get to a point where I can log calls, send sms, send email and these log chronologically in the communications tab. 
+
+We can worry about 'tasks' later, but just factor it in to your thinking. 
