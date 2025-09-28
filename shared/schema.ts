@@ -813,7 +813,7 @@ export const insertClientSchema = createInsertSchema(clients).omit({
 // Zod validation schemas for NI, UTR, and phone numbers
 const niNumberRegex = /^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$/;
 const personalUtrRegex = /^[0-9]{10}$/;
-const ukMobileRegex = /^07[0-9]{9}$/; // UK mobile format: 07xxxxxxxxx
+const ukMobileRegex = /^(\+447[0-9]{9}|07[0-9]{9})$/; // UK mobile format: 07xxxxxxxxx or international +447xxxxxxxxx
 
 export const insertPersonSchema = createInsertSchema(people).omit({
   id: true,
@@ -823,7 +823,7 @@ export const insertPersonSchema = createInsertSchema(people).omit({
   niNumber: z.string().regex(niNumberRegex, "Invalid National Insurance number format").optional().or(z.literal("")),
   personalUtrNumber: z.string().regex(personalUtrRegex, "Personal UTR must be 10 digits").optional().or(z.literal("")),
   // Primary contact validation
-  primaryPhone: z.string().regex(ukMobileRegex, "Invalid UK mobile number format (must be 07xxxxxxxxx)").optional().or(z.literal("")),
+  primaryPhone: z.string().regex(ukMobileRegex, "Invalid UK mobile number format (must be 07xxxxxxxxx or +447xxxxxxxxx)").optional().or(z.literal("")),
   primaryEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
   nationality: z.enum([
     "afghan", "albanian", "algerian", "american", "andorran", "angolan", "antiguans", "argentinean", "armenian", "australian",

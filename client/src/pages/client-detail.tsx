@@ -6471,6 +6471,20 @@ export default function ClientDetail() {
         }
         return null;
       })()}
+
+      {/* Add Person Modal */}
+      <AddPersonModal
+        clientId={id}
+        isOpen={isAddPersonModalOpen}
+        onClose={() => setIsAddPersonModalOpen(false)}
+        onSave={(data) => {
+          createPersonMutation.mutate({
+            ...data,
+            clientId: id,
+          });
+        }}
+        isSaving={createPersonMutation.isPending}
+      />
     </div>
   );
 }
