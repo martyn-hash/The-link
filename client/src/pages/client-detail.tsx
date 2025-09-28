@@ -358,13 +358,20 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
   // Create people service mutation for personal services
   const createPeopleServiceMutation = useMutation({
     mutationFn: async (data: AddServiceData) => {
+      // Convert date strings to datetime format for backend validation
+      const formatDateToDateTime = (dateString: string | undefined): string | null => {
+        if (!dateString) return null;
+        // HTML date inputs provide YYYY-MM-DD format, convert to ISO datetime
+        return new Date(dateString + 'T00:00:00.000Z').toISOString();
+      };
+
       return await apiRequest("POST", "/api/people-services", {
         personId: selectedPersonId,
         serviceId: data.serviceId,
         serviceOwnerId: data.serviceOwnerId || null,
         frequency: data.frequency,
-        nextStartDate: data.nextStartDate || null,
-        nextDueDate: data.nextDueDate || null,
+        nextStartDate: formatDateToDateTime(data.nextStartDate),
+        nextDueDate: formatDateToDateTime(data.nextDueDate),
         notes: null,
       });
     },

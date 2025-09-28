@@ -4016,17 +4016,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const peopleServiceData = validation.data;
 
+      // Convert ISO string dates to Date objects for database insertion
+      const dataForStorage = {
+        ...peopleServiceData,
+        nextStartDate: peopleServiceData.nextStartDate ? new Date(peopleServiceData.nextStartDate) : null,
+        nextDueDate: peopleServiceData.nextDueDate ? new Date(peopleServiceData.nextDueDate) : null,
+      };
+
       // Verify the service is a personal service before creation
-      const service = await storage.getServiceById(peopleServiceData.serviceId);
+      const service = await storage.getServiceById(dataForStorage.serviceId);
       if (!service) {
-        return res.status(404).json({ message: `Service with ID '${peopleServiceData.serviceId}' not found` });
+        return res.status(404).json({ message: `Service with ID '${dataForStorage.serviceId}' not found` });
       }
       if (!service.isPersonalService) {
         return res.status(400).json({ message: `Service '${service.name}' is not a personal service and cannot be assigned to people` });
       }
 
       // Create the people service
-      const newPeopleService = await storage.createPeopleService(peopleServiceData);
+      const newPeopleService = await storage.createPeopleService(dataForStorage);
       
       // Fetch the complete people service with relations
       const completePeopleService = await storage.getPeopleServiceById(newPeopleService.id);
