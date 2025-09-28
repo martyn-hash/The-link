@@ -3342,6 +3342,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/scheduled-services - Get all scheduled services (admin only)
+  app.get("/api/scheduled-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const scheduledServices = await storage.getScheduledServices();
+      res.json(scheduledServices);
+    } catch (error) {
+      console.error("Error fetching scheduled services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch scheduled services" });
+    }
+  });
+
   // GET /api/services/:id - Get service by ID
   app.get("/api/services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {

@@ -1243,11 +1243,12 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
  * Reschedule a service to its next occurrence
  */
 async function rescheduleService(dueService: DueService, targetDate: Date): Promise<void> {
-  // Calculate next dates
+  // Calculate next dates with fallback frequency
+  const frequency = dueService.service.frequency || dueService.frequency || 'monthly';
   const { nextStartDate, nextDueDate } = calculateNextServiceDates(
     dueService.nextStartDate,
     dueService.nextDueDate,
-    dueService.service.frequency
+    frequency
   );
 
   // Update the service
@@ -1279,7 +1280,7 @@ async function logSchedulingAction(
     scheduledDate,
     previousNextStartDate: dueService.nextStartDate,
     previousNextDueDate: dueService.nextDueDate,
-    frequency: dueService.service.frequency,
+    frequency: dueService.service.frequency || dueService.frequency || 'monthly',
     notes: `Project created for ${dueService.service.name}`
   };
 

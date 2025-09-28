@@ -97,6 +97,23 @@ import {
   type UpdateProjectStatus,
   type UpdateProjectType,
 } from "@shared/schema";
+
+// Type for scheduled services view that combines client and people services
+export interface ScheduledServiceView {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  clientOrPersonName: string;
+  clientOrPersonType: 'client' | 'person';
+  nextStartDate: string | null;
+  nextDueDate: string | null;
+  projectTypeName: string | null;
+  hasActiveProject: boolean;
+  frequency: string;
+  isActive: boolean;
+  serviceOwnerId?: string;
+  serviceOwnerName?: string;
+}
 import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
@@ -314,6 +331,7 @@ export interface IStorage {
   getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
+  getScheduledServices(): Promise<ScheduledServiceView[]>;
   createService(service: InsertService): Promise<Service>;
   updateService(id: string, service: Partial<InsertService>): Promise<Service>;
   deleteService(id: string): Promise<void>;
@@ -3687,6 +3705,138 @@ export class DatabaseStorage implements IStorage {
   async getServiceById(id: string): Promise<Service | undefined> {
     const [service] = await db.select().from(services).where(eq(services.id, id));
     return service;
+  }
+
+  async getScheduledServices(): Promise<ScheduledServiceView[]> {
+    // Get client services data
+    const clientServicesData = await db
+      .select({
+        id: clientServices.id,
+        serviceId: clientServices.serviceId,
+        serviceName: services.name,
+        clientOrPersonName: clients.name,
+        nextStartDate: clientServices.nextStartDate,
+        nextDueDate: clientServices.nextDueDate,
+        frequency: clientServices.frequency,
+        isActive: clientServices.isActive,
+        serviceOwnerId: clientServices.serviceOwnerId,
+        serviceOwnerName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        projectTypeName: projectTypes.name,
+        clientId: clientServices.clientId,
+        projectTypeId: projectTypes.id,
+      })
+      .from(clientServices)
+      .leftJoin(services, eq(clientServices.serviceId, services.id))
+      .leftJoin(clients, eq(clientServices.clientId, clients.id))
+      .leftJoin(users, eq(clientServices.serviceOwnerId, users.id))
+      .leftJoin(projectTypes, eq(services.id, projectTypes.serviceId))
+      .where(eq(clientServices.isActive, true));
+
+    // Get people services data with client context
+    const peopleServicesData = await db
+      .select({
+        id: peopleServices.id,
+        serviceId: peopleServices.serviceId,
+        serviceName: services.name,
+        clientOrPersonName: people.fullName,
+        nextStartDate: peopleServices.nextStartDate,
+        nextDueDate: peopleServices.nextDueDate,
+        frequency: peopleServices.frequency,
+        isActive: peopleServices.isActive,
+        serviceOwnerId: peopleServices.serviceOwnerId,
+        serviceOwnerName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        projectTypeName: projectTypes.name,
+        clientId: clientPeople.clientId, // Include client context for project detection
+        projectTypeId: projectTypes.id,
+      })
+      .from(peopleServices)
+      .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .leftJoin(people, eq(peopleServices.personId, people.id))
+      .leftJoin(users, eq(peopleServices.serviceOwnerId, users.id))
+      .leftJoin(projectTypes, eq(services.id, projectTypes.serviceId))
+      .leftJoin(clientPeople, eq(peopleServices.personId, clientPeople.personId))
+      .where(eq(peopleServices.isActive, true));
+
+    // Get active projects to check which services have active projects
+    const activeProjects = await db
+      .select({
+        projectTypeId: projects.projectTypeId,
+        clientId: projects.clientId,
+      })
+      .from(projects)
+      .where(and(
+        eq(projects.archived, false),
+        eq(projects.inactive, false)
+      ));
+
+    // Create a set of client-projectType combinations that have active projects
+    const activeProjectKeys = new Set(
+      activeProjects.map(p => `${p.clientId}-${p.projectTypeId}`)
+    );
+
+    // Combine and transform the data, filtering out duplicates and calculating hasActiveProject
+    const seenServices = new Set<string>();
+    const scheduledServices: ScheduledServiceView[] = [];
+
+    // Process client services
+    for (const cs of clientServicesData) {
+      const uniqueKey = `client-${cs.id}`;
+      if (!seenServices.has(uniqueKey)) {
+        seenServices.add(uniqueKey);
+        
+        // Calculate hasActiveProject for client services
+        const hasActiveProject = cs.clientId && cs.projectTypeId 
+          ? activeProjectKeys.has(`${cs.clientId}-${cs.projectTypeId}`)
+          : false;
+
+        scheduledServices.push({
+          id: cs.id || '',
+          serviceId: cs.serviceId || '',
+          serviceName: cs.serviceName || '',
+          clientOrPersonName: cs.clientOrPersonName || '',
+          clientOrPersonType: 'client' as const,
+          nextStartDate: cs.nextStartDate ? cs.nextStartDate.toISOString() : null,
+          nextDueDate: cs.nextDueDate ? cs.nextDueDate.toISOString() : null,
+          projectTypeName: cs.projectTypeName || null,
+          hasActiveProject,
+          frequency: cs.frequency || 'monthly', // Default to monthly if undefined
+          isActive: cs.isActive || false,
+          serviceOwnerId: cs.serviceOwnerId || undefined,
+          serviceOwnerName: cs.serviceOwnerName || undefined,
+        });
+      }
+    }
+
+    // Process people services
+    for (const ps of peopleServicesData) {
+      const uniqueKey = `person-${ps.id}`;
+      if (!seenServices.has(uniqueKey)) {
+        seenServices.add(uniqueKey);
+        
+        // Calculate hasActiveProject for people services (requires client context)
+        const hasActiveProject = ps.clientId && ps.projectTypeId 
+          ? activeProjectKeys.has(`${ps.clientId}-${ps.projectTypeId}`)
+          : false;
+
+        scheduledServices.push({
+          id: ps.id || '',
+          serviceId: ps.serviceId || '',
+          serviceName: ps.serviceName || '',
+          clientOrPersonName: ps.clientOrPersonName || '',
+          clientOrPersonType: 'person' as const,
+          nextStartDate: ps.nextStartDate ? ps.nextStartDate.toISOString() : null,
+          nextDueDate: ps.nextDueDate ? ps.nextDueDate.toISOString() : null,
+          projectTypeName: ps.projectTypeName || null,
+          hasActiveProject,
+          frequency: ps.frequency || 'monthly', // Default to monthly if undefined
+          isActive: ps.isActive || false,
+          serviceOwnerId: ps.serviceOwnerId || undefined,
+          serviceOwnerName: ps.serviceOwnerName || undefined,
+        });
+      }
+    }
+
+    return scheduledServices;
   }
 
   async createService(service: InsertService): Promise<Service> {

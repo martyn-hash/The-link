@@ -21,8 +21,8 @@ interface ScheduledServiceView {
   serviceName: string;
   clientOrPersonName: string;
   clientOrPersonType: 'client' | 'person';
-  nextStartDate: Date | null;
-  nextDueDate: Date | null;
+  nextStartDate: string | null;
+  nextDueDate: string | null;
   projectTypeName: string;
   hasActiveProject: boolean;
   frequency: string;
@@ -93,11 +93,21 @@ export default function ScheduledServices() {
   // Filter services based on current settings
   const filteredServices = scheduledServices.filter(service => {
     // Date filter: show only today's services or all services
-    if (!showAllServices && service.nextStartDate) {
+    if (!showAllServices) {
+      // For "today's services only", require either nextStartDate or nextDueDate to be today
+      if (!service.nextStartDate && !service.nextDueDate) {
+        return false; // Exclude services with no dates
+      }
+      
       const today = new Date();
-      const serviceDate = new Date(service.nextStartDate);
-      const isToday = serviceDate.toDateString() === today.toDateString();
-      if (!isToday) return false;
+      const startDateIsToday = service.nextStartDate ? 
+        new Date(service.nextStartDate).toDateString() === today.toDateString() : false;
+      const dueDateIsToday = service.nextDueDate ? 
+        new Date(service.nextDueDate).toDateString() === today.toDateString() : false;
+      
+      if (!startDateIsToday && !dueDateIsToday) {
+        return false;
+      }
     }
 
     // Service filter: show specific service or all services
@@ -109,9 +119,13 @@ export default function ScheduledServices() {
   });
 
   // Get unique services for filter dropdown
-  const uniqueServices = Array.from(
-    new Set(scheduledServices.map(s => ({ id: s.serviceId, name: s.serviceName })))
-  );
+  const uniqueServicesMap = new Map();
+  scheduledServices.forEach(s => {
+    if (!uniqueServicesMap.has(s.serviceId)) {
+      uniqueServicesMap.set(s.serviceId, { id: s.serviceId, name: s.serviceName });
+    }
+  });
+  const uniqueServices = Array.from(uniqueServicesMap.values());
 
   const handleCreateProjects = async () => {
     try {
