@@ -233,19 +233,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Strip password hash from response for security
+      // Strip password hash from response for security, but indicate if user has password authentication
       const { passwordHash, ...sanitizedUser } = effectiveUser;
+      const userWithPasswordStatus = {
+        ...sanitizedUser,
+        hasPassword: !!passwordHash // Boolean indicating if user has password-based auth
+      };
 
       // Include impersonation metadata if admin is impersonating
       if (req.user!.isImpersonating) {
         const impersonationState = await storage.getImpersonationState(originalUserId);
         return res.json({
-          ...sanitizedUser,
+          ...userWithPasswordStatus,
           _impersonationState: impersonationState
         });
       }
 
-      res.json(sanitizedUser);
+      res.json(userWithPasswordStatus);
     } catch (error) {
       console.error("Error fetching user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch user" });

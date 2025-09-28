@@ -1337,7 +1337,9 @@ export const insertSchedulingRunLogsSchema = createInsertSchema(schedulingRunLog
 });
 
 // Types
-export type User = typeof users.$inferSelect;
+export type User = typeof users.$inferSelect & {
+  hasPassword?: boolean; // Added for API responses to indicate password-based auth availability
+};
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;

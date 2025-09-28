@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/form";
 
 // Icons
-import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut } from "lucide-react";
 
 // Zod schemas
 const profileUpdateSchema = insertUserSchema.pick({
@@ -220,6 +220,11 @@ export default function Profile() {
     disconnectOutlookMutation.mutate();
   };
 
+  // Handle logout
+  const handleLogout = () => {
+    window.location.href = "/api/auth/logout";
+  };
+
   // Utility functions
   const getUserInitials = () => {
     if (!user) return "U";
@@ -285,26 +290,37 @@ export default function Profile() {
         {/* Profile Header */}
         <Card className="mb-8">
           <CardHeader className="pb-6">
-            <CardTitle className="flex items-center space-x-4">
-              <Avatar className="w-16 h-16">
-                <AvatarImage src={user.profileImageUrl || ""} alt={`${user.firstName || ''} ${user.lastName || ''}`} />
-                <AvatarFallback className="bg-accent text-accent-foreground text-lg">
-                  {getUserInitials()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h2 className="text-xl font-semibold" data-testid="text-profile-name">
-                  {user.firstName && user.lastName 
-                    ? `${user.firstName} ${user.lastName}` 
-                    : user.email || 'User'}
-                </h2>
-                <Badge variant="secondary" data-testid="badge-user-role">
-                  {getRoleLabel()}
-                </Badge>
-                <p className="text-sm text-muted-foreground mt-1" data-testid="text-user-email">
-                  {user.email}
-                </p>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Avatar className="w-16 h-16">
+                  <AvatarImage src={user.profileImageUrl || ""} alt={`${user.firstName || ''} ${user.lastName || ''}`} />
+                  <AvatarFallback className="bg-accent text-accent-foreground text-lg">
+                    {getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h2 className="text-xl font-semibold" data-testid="text-profile-name">
+                    {user.firstName && user.lastName 
+                      ? `${user.firstName} ${user.lastName}` 
+                      : user.email || 'User'}
+                  </h2>
+                  <Badge variant="secondary" data-testid="badge-user-role">
+                    {getRoleLabel()}
+                  </Badge>
+                  <p className="text-sm text-muted-foreground mt-1" data-testid="text-user-email">
+                    {user.email}
+                  </p>
+                </div>
               </div>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+                onClick={handleLogout}
+                data-testid="button-logout"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
             </CardTitle>
           </CardHeader>
         </Card>
@@ -390,8 +406,8 @@ export default function Profile() {
               </CardContent>
             </Card>
 
-            {/* Password Change - Only show if user has a password hash (not magic-link-only) */}
-            {user.passwordHash && (
+            {/* Password Change - Only show if user has password-based authentication */}
+            {user.hasPassword && (
               <Card>
                 <CardHeader>
                   <CardTitle>Change Password</CardTitle>

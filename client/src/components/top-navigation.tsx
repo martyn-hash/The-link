@@ -145,17 +145,8 @@ export default function TopNavigation({ user }: TopNavigationProps) {
             <AdminDropdown user={user} />
           </div>
 
-          {/* Right Section: Sign Out */}
-          <div>
-            <Button
-              variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={handleLogout}
-              data-testid="button-logout"
-            >
-              Sign Out
-            </Button>
-          </div>
+          {/* Right Section: Empty (Sign Out moved to profile page) */}
+          <div></div>
         </div>
       </div>
 
