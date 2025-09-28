@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/form";
 
 // Icons
-import { User, Bell, Save, Eye, EyeOff } from "lucide-react";
+import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
 
 // Zod schemas
 const profileUpdateSchema = insertUserSchema.pick({
@@ -61,6 +61,10 @@ export default function Profile() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Get initial tab from URL params
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialTab = urlParams.get('tab') || 'account';
 
   // Profile form
   const profileForm = useForm<ProfileUpdateData>({
@@ -84,6 +88,17 @@ export default function Profile() {
   // Fetch notification preferences
   const { data: notificationPreferences, isLoading: notificationsLoading } = useQuery<NotificationPreferences & {id: string, userId: string}>({
     queryKey: ["/api/users/notifications"],
+    enabled: !!user,
+  });
+
+  // Fetch Outlook connection status
+  const { data: outlookStatus, isLoading: outlookStatusLoading, refetch: refetchOutlookStatus } = useQuery<{
+    connected: boolean;
+    email?: string;
+    displayName?: string;
+    needsReauth?: boolean;
+  }>({
+    queryKey: ["/api/oauth/outlook/status"],
     enabled: !!user,
   });
 
@@ -144,6 +159,24 @@ export default function Profile() {
     },
   });
 
+  // Outlook disconnect mutation
+  const disconnectOutlookMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", "/api/oauth/outlook/disconnect");
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Outlook account disconnected successfully" });
+      refetchOutlookStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to disconnect Outlook account",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handle profile form submission
   const onProfileSubmit = (data: ProfileUpdateData) => {
     updateProfileMutation.mutate(data);
@@ -157,6 +190,34 @@ export default function Profile() {
   // Handle notification toggle
   const handleNotificationToggle = (field: keyof NotificationPreferences, value: boolean) => {
     updateNotificationsMutation.mutate({ [field]: value });
+  };
+
+  // Handle Outlook connection
+  const handleOutlookConnect = async () => {
+    try {
+      const response = await fetch('/api/oauth/outlook/auth-url');
+      const data = await response.json();
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to generate authentication URL",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to connect to Outlook",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle Outlook disconnect
+  const handleOutlookDisconnect = () => {
+    disconnectOutlookMutation.mutate();
   };
 
   // Utility functions
@@ -249,8 +310,8 @@ export default function Profile() {
         </Card>
 
         {/* Profile Tabs */}
-        <Tabs defaultValue="account" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue={initialTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="account" data-testid="tab-account" className="flex items-center gap-2">
               <User className="w-4 h-4" />
               Account
@@ -258,6 +319,10 @@ export default function Profile() {
             <TabsTrigger value="notifications" data-testid="tab-notifications" className="flex items-center gap-2">
               <Bell className="w-4 h-4" />
               Notifications
+            </TabsTrigger>
+            <TabsTrigger value="integrations" data-testid="tab-integrations" className="flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              Integrations
             </TabsTrigger>
           </TabsList>
 
@@ -543,6 +608,98 @@ export default function Profile() {
                     )}
                   </>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Integrations Tab */}
+          <TabsContent value="integrations" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Email Integrations</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Outlook Integration */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                      <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold" data-testid="text-outlook-title">
+                        Microsoft Outlook
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Connect your personal Outlook account to send emails from your own mailbox
+                      </p>
+                      {outlookStatus?.connected && outlookStatus.email && (
+                        <p className="text-sm text-green-600 dark:text-green-400 mt-1" data-testid="text-outlook-email">
+                          Connected as {outlookStatus.email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    {outlookStatusLoading ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                    ) : outlookStatus?.connected ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1">
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                          <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-outlook-connected">
+                            Connected
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleOutlookDisconnect}
+                          disabled={disconnectOutlookMutation.isPending}
+                          data-testid="button-disconnect-outlook"
+                        >
+                          {disconnectOutlookMutation.isPending ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+                          ) : (
+                            "Disconnect"
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        {outlookStatus?.needsReauth && (
+                          <div className="flex items-center space-x-1">
+                            <AlertCircle className="w-5 h-5 text-yellow-500" />
+                            <span className="text-sm text-yellow-600 dark:text-yellow-400">
+                              Needs reauth
+                            </span>
+                          </div>
+                        )}
+                        <Button
+                          onClick={handleOutlookConnect}
+                          size="sm"
+                          data-testid="button-connect-outlook"
+                          className="flex items-center gap-2"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Connect
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Info about email integrations */}
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                    About Email Integrations
+                  </h4>
+                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                    <li>• Connect your personal email account to send communications directly from your mailbox</li>
+                    <li>• Emails will appear to come from your personal account, not the system</li>
+                    <li>• Your email credentials are encrypted and stored securely</li>
+                    <li>• You can disconnect at any time to revoke access</li>
+                  </ul>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
