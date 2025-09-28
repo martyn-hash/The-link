@@ -2971,6 +2971,57 @@ function PersonTabbedView({
                     </div>
                   </div>
 
+                  {/* Primary Contact Fields */}
+                  <div className="space-y-4">
+                    <h6 className="font-medium text-sm">Primary Contact Details (for SMS & Email)</h6>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={editForm.control}
+                        name="primaryPhone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Primary Mobile Phone</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="tel" 
+                                placeholder="07123456789"
+                                data-testid={`input-primaryPhone-${clientPerson.id}`}
+                              />
+                            </FormControl>
+                            <div className="text-xs text-muted-foreground">
+                              UK mobile format (07xxxxxxxxx)
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={editForm.control}
+                        name="primaryEmail"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Primary Email Address</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="email" 
+                                placeholder="user@example.com"
+                                data-testid={`input-primaryEmail-${clientPerson.id}`}
+                              />
+                            </FormControl>
+                            <div className="text-xs text-muted-foreground">
+                              Used for email communications
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
                   {/* Additional Contact Fields */}
                   <div className="space-y-4">
                     <h6 className="font-medium text-sm">Additional Contact Details</h6>
