@@ -5821,9 +5821,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied. You don't have permission to send SMS for this client." });
       }
       
+      // Convert phone number to international format for VoodooSMS API
+      let formattedPhoneNumber: string;
+      
+      // Clean the phone number - remove all non-digits
+      const cleanPhone = to.replace(/[^\d]/g, '');
+      
+      // Check if it's a UK mobile number (starts with 07 and has 11 digits)
+      if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
+        // Convert UK mobile (07xxxxxxxx) to international format (+447xxxxxxx)
+        formattedPhoneNumber = `+447${cleanPhone.slice(2)}`;
+      } else if (cleanPhone.startsWith('447') && cleanPhone.length === 12) {
+        // Already in UK international format without +, just add the +
+        formattedPhoneNumber = `+${cleanPhone}`;
+      } else if (to.startsWith('+447') && cleanPhone.length === 12) {
+        // Already in correct international format
+        formattedPhoneNumber = to;
+      } else {
+        // For other formats, try to use as-is but ensure it starts with +
+        formattedPhoneNumber = to.startsWith('+') ? to : `+${cleanPhone}`;
+      }
+      
       // Prepare SMS data for VoodooSMS API
       const smsData = {
-        to: parseInt(to.replace(/\D/g, '')), // Remove non-digits and convert to number
+        to: formattedPhoneNumber,
         from: "CRM", // Default sender ID
         msg: message,
         external_reference: `client_${clientId}_${Date.now()}`
