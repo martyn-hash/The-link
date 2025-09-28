@@ -1,6 +1,8 @@
 import { useParams, Link as RouterLink, useLocation } from "wouter";
 import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -113,6 +115,25 @@ type CommunicationWithRelations = Communication & {
   user: User;
 };
 
+// Quill editor configuration for email
+const emailEditorModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    ['link'],
+    ['clean']
+  ],
+};
+
+const emailEditorFormats = [
+  'header', 'bold', 'italic', 'underline',
+  'color', 'background', 'list', 'bullet',
+  'align', 'link'
+];
+
 // Communications Timeline Component
 function CommunicationsTimeline({ clientId }: { clientId: string }) {
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
@@ -120,6 +141,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
   const [emailPersonId, setEmailPersonId] = useState<string | undefined>();
+  const [emailContent, setEmailContent] = useState<string>('');
   const { toast } = useToast();
 
   // Fetch communications for this client
@@ -671,7 +693,14 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
       </Dialog>
 
       {/* Email Sending Dialog */}
-      <Dialog open={isSendingEmail} onOpenChange={setIsSendingEmail}>
+      <Dialog open={isSendingEmail} onOpenChange={(open) => {
+        setIsSendingEmail(open);
+        if (open) {
+          // Reset form when opening
+          setEmailContent('');
+          setEmailPersonId(undefined);
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -686,7 +715,6 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
             const subject = formData.get('subject') as string;
-            const content = formData.get('content') as string;
             
             if (!emailPersonId) {
               toast({ title: 'Contact person required', description: 'Please select a person to send the email to.', variant: 'destructive' });
@@ -699,7 +727,13 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
               toast({ title: 'No email address', description: 'The selected person has no Primary Email saved.', variant: 'destructive' });
               return;
             }
-            if (!content?.trim()) {
+            // Check for empty content (Quill returns HTML even when empty)
+            const textContent = emailContent
+              .replace(/<[^>]*>/g, '')  // Remove HTML tags
+              .replace(/&nbsp;/g, ' ')   // Replace non-breaking spaces
+              .replace(/&[a-zA-Z]+;/g, '') // Remove other HTML entities
+              .trim();
+            if (!textContent || textContent.length === 0) {
               toast({ title: 'Message required', description: 'Please enter a message.', variant: 'destructive' });
               return;
             }
@@ -707,10 +741,13 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             sendEmailMutation.mutate({
               to,
               subject: subject || 'Message from CRM',
-              content: content,
+              content: emailContent,
+              isHtml: true,
               clientId: clientId,
               personId: emailPersonId,
             });
+            
+            // Form will be reset in onSuccess handler
           }} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Contact Person <span className="text-destructive">*</span></label>
@@ -744,13 +781,17 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             
             <div className="space-y-2">
               <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
-              <Textarea
-                name="content"
-                placeholder="Enter your email message..."
-                className="min-h-32"
-                data-testid="input-email-content-dialog"
-                required
-              />
+              <div data-testid="input-email-content-editor">
+                <ReactQuill
+                  value={emailContent}
+                  onChange={setEmailContent}
+                  modules={emailEditorModules}
+                  formats={emailEditorFormats}
+                  theme="snow"
+                  placeholder="Enter your email message..."
+                  style={{ minHeight: '128px' }}
+                />
+              </div>
               <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
             </div>
             
