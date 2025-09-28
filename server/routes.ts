@@ -3900,6 +3900,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const clientService = await storage.updateClientService(id, validationResult.data);
+      
+      // Log chronology entry if isActive status changed
+      if (validationResult.data.isActive !== undefined && 
+          validationResult.data.isActive !== existingClientService.isActive) {
+        const service = await storage.getServiceById(clientService.serviceId);
+        const eventType = validationResult.data.isActive ? 'service_activated' : 'service_deactivated';
+        const fromValue = existingClientService.isActive?.toString() || 'true';
+        const toValue = validationResult.data.isActive.toString();
+        
+        await storage.createClientChronologyEntry({
+          clientId: clientService.clientId,
+          eventType,
+          entityType: 'client_service',
+          entityId: clientService.id,
+          fromValue,
+          toValue,
+          userId: req.user?.effectiveUserId || req.user?.id,
+          changeReason: `Service "${service?.name || 'Unknown'}" ${validationResult.data.isActive ? 'activated' : 'deactivated'}`,
+          notes: null,
+        });
+      }
+      
       res.json(clientService);
     } catch (error) {
       console.error("Error updating client service:", error instanceof Error ? error.message : error);
@@ -4091,6 +4113,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { peopleServiceId } = paramValidation.data;
       const peopleServiceData = validation.data;
 
+      // Get existing people service for comparison
+      const existingPeopleService = await storage.getPeopleServiceById(peopleServiceId);
+      if (!existingPeopleService) {
+        return res.status(404).json({ message: "People service not found" });
+      }
+
       // If serviceId is being changed, verify it's a personal service
       if (peopleServiceData.serviceId) {
         const service = await storage.getServiceById(peopleServiceData.serviceId);
@@ -4104,6 +4132,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update the people service
       const updatedPeopleService = await storage.updatePeopleService(peopleServiceId, peopleServiceData);
+      
+      // Log chronology entry if isActive status changed
+      if (peopleServiceData.isActive !== undefined && 
+          peopleServiceData.isActive !== existingPeopleService.isActive) {
+        const service = await storage.getServiceById(updatedPeopleService.serviceId);
+        const eventType = peopleServiceData.isActive ? 'service_activated' : 'service_deactivated';
+        const fromValue = existingPeopleService.isActive?.toString() || 'true';
+        const toValue = peopleServiceData.isActive.toString();
+        
+        // Get the client ID through the person relationship
+        const person = await storage.getPersonById(updatedPeopleService.personId);
+        if (person) {
+          const clientPeople = await storage.getClientPeopleByPersonId(person.id);
+          if (clientPeople.length > 0) {
+            await storage.createClientChronologyEntry({
+              clientId: clientPeople[0].clientId, // Use the first client relationship
+              eventType,
+              entityType: 'people_service',
+              entityId: updatedPeopleService.id,
+              fromValue,
+              toValue,
+              userId: req.user?.effectiveUserId || req.user?.id,
+              changeReason: `People service "${service?.name || 'Unknown'}" for ${person.fullName} ${peopleServiceData.isActive ? 'activated' : 'deactivated'}`,
+              notes: null,
+            });
+          }
+        }
+      }
       
       // Fetch the complete people service with relations
       const completePeopleService = await storage.getPeopleServiceById(updatedPeopleService.id);
