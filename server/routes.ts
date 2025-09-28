@@ -3901,6 +3901,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/client-services/:id - Get single client service by ID
+  app.get("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate client service ID parameter
+      const paramValidation = z.object({
+        id: z.string().min(1, "Client service ID is required").uuid("Invalid client service ID format")
+      }).safeParse(req.params);
+      
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client service ID format", 
+          errors: paramValidation.error.issues 
+        });
+      }
+      
+      const { id } = paramValidation.data;
+      
+      // Get the client service
+      const clientService = await storage.getClientServiceById(id);
+      if (!clientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+      
+      res.status(200).json(clientService);
+      
+    } catch (error) {
+      console.error("Error fetching client service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client service" });
+    }
+  });
+
   // PUT /api/client-services/:id - Update client service (admin only)
   app.put("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
@@ -4136,6 +4167,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(500).json({ message: "Failed to create people service" });
+    }
+  });
+
+  // GET /api/people-services/:peopleServiceId - Get single people service by ID
+  app.get("/api/people-services/:peopleServiceId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Validate people service ID parameter
+      const paramValidation = validateParams(paramPeopleServiceIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid people service ID", 
+          errors: paramValidation.errors 
+        });
+      }
+      
+      const { peopleServiceId } = paramValidation.data;
+      
+      // Get the people service
+      const peopleService = await storage.getPeopleServiceById(peopleServiceId);
+      if (!peopleService) {
+        return res.status(404).json({ message: "People service not found" });
+      }
+      
+      res.status(200).json(peopleService);
+      
+    } catch (error) {
+      console.error("Error fetching people service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch people service" });
     }
   });
 

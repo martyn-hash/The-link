@@ -4120,6 +4120,7 @@ export class DatabaseStorage implements IStorage {
         frequency: clientServices.frequency,
         nextStartDate: clientServices.nextStartDate,
         nextDueDate: clientServices.nextDueDate,
+        isActive: clientServices.isActive,
         createdAt: clientServices.createdAt,
         clientId_data: clients.id,
         clientName: clients.name,
@@ -4154,6 +4155,10 @@ export class DatabaseStorage implements IStorage {
       clientId: result.clientId,
       serviceId: result.serviceId,
       serviceOwnerId: result.serviceOwnerId,
+      frequency: result.frequency,
+      nextStartDate: result.nextStartDate,
+      nextDueDate: result.nextDueDate,
+      isActive: result.isActive,
       createdAt: result.createdAt,
       client: {
         id: result.clientId_data,
@@ -4250,6 +4255,7 @@ export class DatabaseStorage implements IStorage {
             frequency: cs.frequency,
             nextStartDate: cs.nextStartDate,
             nextDueDate: cs.nextDueDate,
+            isActive: cs.isActive,
             createdAt: cs.createdAt,
             service: {
               id: service.id,

@@ -1456,6 +1456,10 @@ function EditServiceModal({
       } else {
         queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${service.clientId}`] });
       }
+      
+      // Also invalidate chronology to show service activation/deactivation events
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", service.clientId, "chronology"] });
+      
       toast({
         title: "Success",
         description: "Service updated successfully",
