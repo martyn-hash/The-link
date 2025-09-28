@@ -2494,6 +2494,9 @@ function PersonTabbedView({
       addressVerified: Boolean(clientPerson.person.addressVerified),
       telephone2: clientPerson.person.telephone2 || "",
       email2: clientPerson.person.email2 || "",
+      // Primary contact fields
+      primaryPhone: clientPerson.person.primaryPhone || "",
+      primaryEmail: clientPerson.person.primaryEmail || "",
       linkedinUrl: clientPerson.person.linkedinUrl || "",
       instagramUrl: clientPerson.person.instagramUrl || "",
       twitterUrl: clientPerson.person.twitterUrl || "",
@@ -2526,6 +2529,9 @@ function PersonTabbedView({
     addressVerified: Boolean(clientPerson.person.addressVerified),
     telephone2: clientPerson.person.telephone2 || "",
     email2: clientPerson.person.email2 || "",
+    // Primary contact fields
+    primaryPhone: clientPerson.person.primaryPhone || "",
+    primaryEmail: clientPerson.person.primaryEmail || "",
     linkedinUrl: clientPerson.person.linkedinUrl || "",
     instagramUrl: clientPerson.person.instagramUrl || "",
     twitterUrl: clientPerson.person.twitterUrl || "",
