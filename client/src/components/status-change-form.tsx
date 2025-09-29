@@ -97,8 +97,15 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Filter reasons based on stage-reason mappings (server should handle this filtering)
-  const filteredReasons = allProjectReasons;
+  // Fetch valid change reasons for the selected stage
+  const { data: validStageReasons = [], isLoading: validReasonsLoading } = useQuery<ChangeReason[]>({
+    queryKey: ['/api/config/stages', selectedStage?.id, 'reasons'],
+    enabled: !!selectedStage?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Use the valid reasons directly from the API
+  const filteredReasons = selectedStage ? validStageReasons : [];
 
   // Find the selected reason to get its ID
   const selectedReasonObj = filteredReasons.find(reason => reason.reason === changeReason);
@@ -457,7 +464,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
               <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
                 Please select a stage first
               </div>
-            ) : reasonsLoading ? (
+            ) : reasonsLoading || validReasonsLoading ? (
               <div className="flex items-center gap-2 p-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm text-muted-foreground">Loading reasons...</span>
