@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { getCurrentMonthForFiltering } from "@shared/schema";
+import { getCurrentMonthForFiltering, type ProjectWithRelations, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Columns3, List, Filter, Folder, Clock, AlertTriangle, Calendar, Archive, Power } from "lucide-react";
+import { Columns3, List, Filter, Folder, Clock, AlertTriangle, Calendar, Archive, Power, Eye, UserCheck, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -22,21 +22,43 @@ import {
 } from "@/components/ui/select";
 
 type ViewMode = "kanban" | "list";
+type ViewScope = "all" | "my";
 
 // Note: Using shared month normalization utility for consistent filtering
 
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
-  const [filter, setFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState<boolean>(false);
-  const [showInactive, setShowInactive] = useState<boolean>(false);
+  
+  // New scope filter: For staff, default to "my", for managers default to "all"
+  const [viewScope, setViewScope] = useState<ViewScope>(() => {
+    // We'll set this properly once user is loaded
+    return "all";
+  });
 
-  const { data: projects, isLoading: projectsLoading, error } = useQuery({
-    queryKey: ["/api/projects", { month: monthFilter, archived: showArchived, inactive: showInactive }],
+  // Set initial view scope based on user role
+  useEffect(() => {
+    if (user && !user.isAdmin && !user.canSeeAdminMenu) {
+      setViewScope("my");
+    } else {
+      setViewScope("all");
+    }
+  }, [user]);
+
+  const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/projects", { month: monthFilter || undefined, archived: showArchived }],
     enabled: isAuthenticated && !!user,
+    retry: false,
+  });
+
+  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: isAuthenticated && Boolean(user?.isAdmin || user?.canSeeAdminMenu),
     retry: false,
   });
 
@@ -81,65 +103,80 @@ export default function Projects() {
     );
   }
 
-  // Role-based access control - allow non-admin users to view their projects
-  const canViewMyProjects = !user.isAdmin; // Regular users (non-admins) can view their own projects
-  
-  if (!canViewMyProjects) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-muted-foreground mb-2">Access Denied</h1>
-          <p className="text-muted-foreground">This page is for project team members only.</p>
-        </div>
-      </div>
-    );
-  }
+  const isManagerOrAdmin = user.isAdmin || user.canSeeAdminMenu;
 
-  // Apply client-side filters (month and archived are handled server-side)
-  const filteredProjects = projects && Array.isArray(projects) ? projects.filter((project: any) => {
-    switch (filter) {
-      case "urgent":
-        return project.priority === "urgent";
-      case "overdue":
-        // Simple overdue check - projects in same stage for more than 7 days
-        const lastChronology = project.chronology?.[0];
-        if (!lastChronology) return false;
-        const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-        return daysSinceLastChange > 7;
-      case "my-assignments":
-        return project.currentAssigneeId === user.id;
-      case "pending-review":
-        return project.currentStatus.toLowerCase().includes("review");
-      case "in-progress":
-        return !project.currentStatus.toLowerCase().includes("completed") && 
-               !project.currentStatus.toLowerCase().includes("review");
-      default:
-        return true;
+  const filteredProjects = (projects || []).filter((project: ProjectWithRelations) => {
+    // Scope filter: Show user's assigned projects or all projects
+    let scopeMatch = true;
+    if (viewScope === "my") {
+      scopeMatch = project.bookkeeperId === user.id || 
+                   project.clientManagerId === user.id ||
+                   project.currentAssigneeId === user.id;
     }
-  }) : [];
+
+    // Status filter
+    let statusMatch = true;
+    switch (statusFilter) {
+      case "overdue":
+        const lastChronology = project.chronology?.[0];
+        if (!lastChronology || !lastChronology.timestamp) {
+          statusMatch = false;
+          break;
+        }
+        const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+        statusMatch = daysSinceLastChange > 7;
+        break;
+      case "in-review":
+        statusMatch = project.currentStatus.toLowerCase().includes("review");
+        break;
+      case "completed":
+        statusMatch = project.currentStatus.toLowerCase().includes("completed");
+        break;
+      default:
+        statusMatch = true;
+    }
+
+    // User filter (only available for managers/admins when viewing all projects)
+    let userMatch = true;
+    if (userFilter !== "all" && viewScope === "all" && isManagerOrAdmin) {
+      userMatch = project.bookkeeperId === userFilter || 
+                  project.clientManagerId === userFilter ||
+                  project.currentAssigneeId === userFilter;
+    }
+
+    return scopeMatch && statusMatch && userMatch;
+  });
 
   const projectStats = projects && Array.isArray(projects) ? {
     total: projects.length,
-    myAssignments: projects.filter((p: any) => p.currentAssigneeId === user.id).length,
-    urgent: projects.filter((p: any) => p.priority === "urgent").length,
-    overdue: projects.filter((p: any) => {
+    myAssignments: projects.filter((p: ProjectWithRelations) => 
+      p.bookkeeperId === user.id || 
+      p.clientManagerId === user.id || 
+      p.currentAssigneeId === user.id
+    ).length,
+    urgent: projects.filter((p: ProjectWithRelations) => p.priority === "urgent").length,
+    overdue: projects.filter((p: ProjectWithRelations) => {
       const lastChronology = p.chronology?.[0];
-      if (!lastChronology) return false;
+      if (!lastChronology || !lastChronology.timestamp) return false;
       const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
       return daysSinceLastChange > 7;
     }).length,
   } : null;
 
-  const getRoleSpecificTitle = () => {
-    if (user.isAdmin) return 'My Projects';
-    if (user.canSeeAdminMenu) return 'My Projects';
-    return 'My Projects';
+  const getPageTitle = () => {
+    if (viewScope === "my") {
+      return "My Tasks";
+    }
+    return isManagerOrAdmin ? "All Projects" : "Projects";
   };
 
-  const getRoleSpecificDescription = () => {
-    if (user.isAdmin) return 'Projects you are connected with';
-    if (user.canSeeAdminMenu) return 'Projects you are connected with';
-    return 'Projects assigned to you';
+  const getPageDescription = () => {
+    if (viewScope === "my") {
+      return "Projects and tasks assigned to you";
+    }
+    return isManagerOrAdmin 
+      ? "Complete overview of all projects across the organization"
+      : "Project overview and task management";
   };
 
   return (
@@ -152,27 +189,53 @@ export default function Projects() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-                {getRoleSpecificTitle()}
+                {getPageTitle()}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {getRoleSpecificDescription()}
+                {getPageDescription()}
               </p>
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* View Scope Toggle (for managers/admins) */}
+              {isManagerOrAdmin && (
+                <div className="flex items-center bg-muted rounded-lg p-1">
+                  <Button
+                    variant={viewScope === "my" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewScope("my")}
+                    className="px-3"
+                    data-testid="button-my-tasks-scope"
+                  >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    My Tasks
+                  </Button>
+                  <Button
+                    variant={viewScope === "all" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewScope("all")}
+                    className="px-3"
+                    data-testid="button-all-projects-scope"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    All Projects
+                  </Button>
+                </div>
+              )}
+
               {/* Month Filter */}
               <div className="flex items-center space-x-2">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <div className="flex flex-col">
-                  <Label htmlFor="month-filter" className="text-xs text-muted-foreground mb-1">Month</Label>
+                  <Label htmlFor="month-filter-projects" className="text-xs text-muted-foreground mb-1">Month</Label>
                   <Input
-                    id="month-filter"
+                    id="month-filter-projects"
                     type="text"
                     placeholder="DD/MM/YYYY"
                     value={monthFilter}
                     onChange={(e) => setMonthFilter(e.target.value)}
                     className="w-32 h-9"
-                    data-testid="input-month-filter"
+                    data-testid="input-month-filter-projects"
                   />
                 </div>
               </div>
@@ -182,50 +245,53 @@ export default function Projects() {
                 <Archive className="w-4 h-4 text-muted-foreground" />
                 <div className="flex items-center space-x-2">
                   <Switch
-                    id="show-archived"
+                    id="show-archived-projects"
                     checked={showArchived}
                     onCheckedChange={setShowArchived}
-                    data-testid="switch-show-archived"
+                    data-testid="switch-show-archived-projects"
                   />
-                  <Label htmlFor="show-archived" className="text-sm">
+                  <Label htmlFor="show-archived-projects" className="text-sm">
                     Show archived
                   </Label>
                 </div>
               </div>
 
-              {/* Inactive Toggle */}
-              <div className="flex items-center space-x-2">
-                <Power className="w-4 h-4 text-muted-foreground" />
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="show-inactive"
-                    checked={showInactive}
-                    onCheckedChange={setShowInactive}
-                    data-testid="switch-show-inactive"
-                  />
-                  <Label htmlFor="show-inactive" className="text-sm">
-                    Show inactive
-                  </Label>
-                </div>
-              </div>
-              
               {/* Status Filter */}
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-muted-foreground" />
-                <Select value={filter} onValueChange={setFilter}>
-                  <SelectTrigger className="w-44" data-testid="select-filter">
-                    <SelectValue placeholder="Filter projects" />
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-40" data-testid="select-status-filter-projects">
+                    <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Projects</SelectItem>
-                    <SelectItem value="my-assignments">My Assignments</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="overdue">Overdue</SelectItem>
-                    <SelectItem value="pending-review">Pending Review</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="in-review">In Review</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* User Filter (only for managers/admins viewing all projects) */}
+              {isManagerOrAdmin && viewScope === "all" && (
+                <div className="flex items-center space-x-2">
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  <Select value={userFilter} onValueChange={setUserFilter}>
+                    <SelectTrigger className="w-48" data-testid="select-user-filter-projects">
+                      <SelectValue placeholder="Filter by user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      {(users || []).map((u: User) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email} 
+                          ({u.isAdmin ? "Admin" : u.canSeeAdminMenu ? "Manager" : "User"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               
               {/* View Toggle */}
               <div className="flex items-center bg-muted rounded-lg p-1">
@@ -234,7 +300,7 @@ export default function Projects() {
                   size="sm"
                   onClick={() => setViewMode("kanban")}
                   className="px-3"
-                  data-testid="button-kanban-view"
+                  data-testid="button-kanban-view-projects"
                 >
                   <Columns3 className="w-4 h-4 mr-2" />
                   Kanban
@@ -244,7 +310,7 @@ export default function Projects() {
                   size="sm"
                   onClick={() => setViewMode("list")}
                   className="px-3"
-                  data-testid="button-list-view"
+                  data-testid="button-list-view-projects"
                 >
                   <List className="w-4 h-4 mr-2" />
                   List
@@ -316,8 +382,8 @@ export default function Projects() {
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          {projectsLoading ? (
+        <main className="flex-1 overflow-hidden">
+          {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
