@@ -15,6 +15,7 @@ import {
   User,
   Briefcase 
 } from "lucide-react";
+import { CompaniesHouseClientModal } from "@/components/companies-house-client-modal";
 
 // Type definitions for search results
 interface SearchResult {
@@ -47,6 +48,7 @@ export default function SuperSearch({
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
   const [, setLocation] = useLocation();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +129,11 @@ export default function SuperSearch({
     if (searchValue.length >= 2) {
       setShowDropdown(true);
     }
+  };
+
+  const handleAddClient = () => {
+    setShowClientModal(true);
+    setShowDropdown(false); // Close search dropdown if open
   };
 
   const getResultIcon = (type: string) => {
@@ -251,9 +258,19 @@ export default function SuperSearch({
         onChange={handleChange}
         onKeyPress={handleKeyPress}
         onFocus={handleFocus}
-        className="pl-10"
+        className="pl-10 pr-12"
         data-testid="input-super-search"
       />
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleAddClient}
+        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700 border-blue-600"
+        data-testid="button-add-client"
+        title="Add new client"
+      >
+        <Plus className="w-4 h-4 text-white" />
+      </Button>
 
       {/* Search Results Mega Menu */}
       {showDropdown && debouncedSearch.length >= 2 && (
@@ -334,6 +351,12 @@ export default function SuperSearch({
           )}
         </div>
       )}
+
+      {/* Client Creation Modal */}
+      <CompaniesHouseClientModal
+        open={showClientModal}
+        onOpenChange={setShowClientModal}
+      />
     </div>
   );
 }
