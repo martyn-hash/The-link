@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+// Navigation handled via window.location.href for reliability
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -123,7 +124,11 @@ export default function Dashboard() {
             
             <div className="flex items-center space-x-4">
               {/* Quick Actions */}
-              <Button className="bg-primary hover:bg-primary/90" data-testid="button-create-project">
+              <Button 
+                className="bg-primary hover:bg-primary/90" 
+                data-testid="button-create-project"
+                onClick={() => window.location.href = '/scheduled-services'}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 New Project
               </Button>
@@ -394,24 +399,49 @@ function QuickAccessPanel({ user }: { user: any }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Button className="w-full justify-start" variant="outline" data-testid="button-create-monthly-bookkeeping">
+        <Button 
+          className="w-full justify-start" 
+          variant="outline" 
+          data-testid="button-create-monthly-bookkeeping"
+          onClick={() => window.location.href = '/scheduled-services'}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Monthly Bookkeeping
         </Button>
-        <Button className="w-full justify-start" variant="outline" data-testid="button-create-payroll">
+        <Button 
+          className="w-full justify-start" 
+          variant="outline" 
+          data-testid="button-create-payroll"
+          onClick={() => window.location.href = '/scheduled-services'}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Payroll Project
         </Button>
-        <Button className="w-full justify-start" variant="outline" data-testid="button-create-tax-return">
+        <Button 
+          className="w-full justify-start" 
+          variant="outline" 
+          data-testid="button-create-tax-return"
+          onClick={() => window.location.href = '/scheduled-services'}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Tax Return
         </Button>
         <hr className="my-3" />
-        <Button className="w-full justify-start" variant="outline" data-testid="button-view-all-projects">
+        <Button 
+          className="w-full justify-start" 
+          variant="outline" 
+          data-testid="button-view-all-projects"
+          onClick={() => window.location.href = '/all-projects'}
+        >
           <FolderOpen className="w-4 h-4 mr-2" />
           View All Projects
         </Button>
-        <Button className="w-full justify-start" variant="outline" data-testid="button-view-clients">
+        <Button 
+          className="w-full justify-start" 
+          variant="outline" 
+          data-testid="button-view-clients"
+          onClick={() => window.location.href = '/clients'}
+        >
           <Building2 className="w-4 h-4 mr-2" />
           View All Clients
         </Button>
