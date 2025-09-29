@@ -96,22 +96,20 @@ export default function TopNavigation({ user }: TopNavigationProps) {
                     </div>
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/projects" className="w-full">
+                    <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-projects-menu">
+                      <FolderOpen className="w-4 h-4" />
+                      <span>Projects</span>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
                 {(user?.isAdmin || user?.canSeeAdminMenu) && (
                   <DropdownMenuItem asChild>
                     <Link href="/scheduled-services" className="w-full">
                       <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-services-menu">
                         <Calendar className="w-4 h-4" />
                         <span>Services</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                  <DropdownMenuItem asChild>
-                    <Link href="/projects" className="w-full">
-                      <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-projects-menu">
-                        <FolderOpen className="w-4 h-4" />
-                        <span>Projects</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>

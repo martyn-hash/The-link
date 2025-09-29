@@ -32,7 +32,7 @@ export default function Projects() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>("");
+  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
   const [showArchived, setShowArchived] = useState<boolean>(false);
   
   // New scope filter: For staff, default to "my", for managers default to "all"
