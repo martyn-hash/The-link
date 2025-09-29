@@ -4267,6 +4267,9 @@ export class DatabaseStorage implements IStorage {
     service: Service & { projectType: ProjectType }; 
     serviceOwner?: User; 
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
+    hasActiveProject?: boolean;
+    currentProjectStartDate?: string | null;
+    currentProjectDueDate?: string | null;
   })[]> {
     try {
       console.log(`[DEBUG] Fetching client services for clientId: ${clientId}`);
@@ -4324,6 +4327,58 @@ export class DatabaseStorage implements IStorage {
           const roleAssignments = await this.getActiveClientServiceRoleAssignments(cs.id);
           console.log(`[DEBUG] Found ${roleAssignments.length} role assignments`);
           
+          // Get current active project information if project type exists
+          let hasActiveProject = false;
+          let currentProjectStartDate: string | null = null;
+          let currentProjectDueDate: string | null = null;
+          
+          if (projectType?.id) {
+            const activeProjectsList = await db
+              .select({
+                projectMonth: projects.projectMonth,
+                dueDate: projects.dueDate,
+              })
+              .from(projects)
+              .where(and(
+                eq(projects.clientId, cs.clientId),
+                eq(projects.projectTypeId, projectType.id),
+                ne(projects.status, 'Completed')
+              ))
+              .limit(1);
+            
+            if (activeProjectsList.length > 0) {
+              hasActiveProject = true;
+              const activeProject = activeProjectsList[0];
+              
+              // Safe date conversion with type checking
+              if (activeProject.projectMonth) {
+                try {
+                  if (activeProject.projectMonth instanceof Date) {
+                    currentProjectStartDate = activeProject.projectMonth.toISOString();
+                  } else if (typeof activeProject.projectMonth === 'string') {
+                    currentProjectStartDate = activeProject.projectMonth;
+                  }
+                } catch (error) {
+                  console.warn(`[WARNING] Error processing project start date for client service ${cs.id}:`, error);
+                }
+              }
+              
+              if (activeProject.dueDate) {
+                try {
+                  if (activeProject.dueDate instanceof Date) {
+                    currentProjectDueDate = activeProject.dueDate.toISOString();
+                  } else if (typeof activeProject.dueDate === 'string') {
+                    currentProjectDueDate = activeProject.dueDate;
+                  }
+                } catch (error) {
+                  console.warn(`[WARNING] Error processing project due date for client service ${cs.id}:`, error);
+                }
+              }
+              
+              console.log(`[DEBUG] Found active project for client service ${cs.id}: start=${currentProjectStartDate}, due=${currentProjectDueDate}`);
+            }
+          }
+          
           return {
             id: cs.id,
             clientId: cs.clientId,
@@ -4345,6 +4400,9 @@ export class DatabaseStorage implements IStorage {
             },
             serviceOwner,
             roleAssignments,
+            hasActiveProject,
+            currentProjectStartDate,
+            currentProjectDueDate,
           };
         })
       );
