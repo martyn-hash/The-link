@@ -13,7 +13,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, RefreshCw, AlertCircle } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
+
+// Helper function to safely format dates
+const safeFormatDate = (dateValue: string | null | undefined, formatString: string = 'MMM d, yyyy'): string | null => {
+  if (!dateValue) return null;
+  try {
+    const date = new Date(dateValue);
+    if (!isValid(date)) return null;
+    return format(date, formatString);
+  } catch {
+    return null;
+  }
+};
 
 interface ScheduledServiceView {
   id: string;
@@ -102,10 +114,27 @@ export default function ScheduledServices() {
       }
       
       const today = new Date();
-      const startDateIsToday = service.nextStartDate ? 
-        new Date(service.nextStartDate).toDateString() === today.toDateString() : false;
-      const dueDateIsToday = service.nextDueDate ? 
-        new Date(service.nextDueDate).toDateString() === today.toDateString() : false;
+      today.setHours(0, 0, 0, 0); // Normalize to start of day
+      
+      const startDateIsToday = service.nextStartDate ? (() => {
+        try {
+          const startDate = new Date(service.nextStartDate);
+          startDate.setHours(0, 0, 0, 0);
+          return startDate.getTime() === today.getTime();
+        } catch {
+          return false;
+        }
+      })() : false;
+      
+      const dueDateIsToday = service.nextDueDate ? (() => {
+        try {
+          const dueDate = new Date(service.nextDueDate);
+          dueDate.setHours(0, 0, 0, 0);
+          return dueDate.getTime() === today.getTime();
+        } catch {
+          return false;
+        }
+      })() : false;
       
       if (!startDateIsToday && !dueDateIsToday) {
         return false;
@@ -299,19 +328,19 @@ export default function ScheduledServices() {
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          {service.nextStartDate && (
+                          {service.nextStartDate && safeFormatDate(service.nextStartDate) && (
                             <div className="flex items-center space-x-2">
                               <span className="text-xs text-muted-foreground">Start:</span>
-                              <span className="text-sm">{format(new Date(service.nextStartDate), 'MMM d, yyyy')}</span>
-                              {new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
+                              <span className="text-sm">{safeFormatDate(service.nextStartDate)}</span>
+                              {service.nextStartDate && new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
                                 <Badge variant="default" className="text-xs">Today</Badge>
                               )}
                             </div>
                           )}
-                          {service.nextDueDate && (
+                          {service.nextDueDate && safeFormatDate(service.nextDueDate) && (
                             <div className="flex items-center space-x-2">
                               <span className="text-xs text-muted-foreground">Due:</span>
-                              <span className="text-sm">{format(new Date(service.nextDueDate), 'MMM d, yyyy')}</span>
+                              <span className="text-sm">{safeFormatDate(service.nextDueDate)}</span>
                             </div>
                           )}
                           {!service.nextStartDate && !service.nextDueDate && (
@@ -322,19 +351,19 @@ export default function ScheduledServices() {
                       <TableCell>
                         {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate) ? (
                           <div className="space-y-1">
-                            {service.currentProjectStartDate && (
+                            {service.currentProjectStartDate && safeFormatDate(service.currentProjectStartDate) && (
                               <div className="flex items-center space-x-2">
                                 <span className="text-xs text-muted-foreground">Started:</span>
                                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                                  {format(new Date(service.currentProjectStartDate), 'MMM d, yyyy')}
+                                  {safeFormatDate(service.currentProjectStartDate)}
                                 </span>
                               </div>
                             )}
-                            {service.currentProjectDueDate && (
+                            {service.currentProjectDueDate && safeFormatDate(service.currentProjectDueDate) && (
                               <div className="flex items-center space-x-2">
                                 <span className="text-xs text-muted-foreground">Due:</span>
                                 <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                                  {format(new Date(service.currentProjectDueDate), 'MMM d, yyyy')}
+                                  {safeFormatDate(service.currentProjectDueDate)}
                                 </span>
                               </div>
                             )}

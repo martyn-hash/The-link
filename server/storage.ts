@@ -3881,8 +3881,14 @@ export class DatabaseStorage implements IStorage {
           clientOrPersonType: 'client' as const,
           nextStartDate: cs.nextStartDate ? cs.nextStartDate.toISOString() : null,
           nextDueDate: cs.nextDueDate ? cs.nextDueDate.toISOString() : null,
-          currentProjectStartDate: currentProjectDates?.startDate ? currentProjectDates.startDate.toISOString() : null,
-          currentProjectDueDate: currentProjectDates?.dueDate ? currentProjectDates.dueDate.toISOString() : null,
+          currentProjectStartDate: currentProjectDates?.startDate ? 
+            (currentProjectDates.startDate instanceof Date ? currentProjectDates.startDate.toISOString() : 
+             typeof currentProjectDates.startDate === 'string' ? currentProjectDates.startDate : 
+             new Date(currentProjectDates.startDate).toISOString()) : null,
+          currentProjectDueDate: currentProjectDates?.dueDate ? 
+            (currentProjectDates.dueDate instanceof Date ? currentProjectDates.dueDate.toISOString() : 
+             typeof currentProjectDates.dueDate === 'string' ? currentProjectDates.dueDate : 
+             new Date(currentProjectDates.dueDate).toISOString()) : null,
           projectTypeName: cs.projectTypeName || null,
           hasActiveProject,
           frequency: cs.frequency || 'monthly', // Default to monthly if undefined
@@ -3918,8 +3924,14 @@ export class DatabaseStorage implements IStorage {
           clientOrPersonType: 'person' as const,
           nextStartDate: ps.nextStartDate ? ps.nextStartDate.toISOString() : null,
           nextDueDate: ps.nextDueDate ? ps.nextDueDate.toISOString() : null,
-          currentProjectStartDate: currentProjectDates?.startDate ? currentProjectDates.startDate.toISOString() : null,
-          currentProjectDueDate: currentProjectDates?.dueDate ? currentProjectDates.dueDate.toISOString() : null,
+          currentProjectStartDate: currentProjectDates?.startDate ? 
+            (currentProjectDates.startDate instanceof Date ? currentProjectDates.startDate.toISOString() : 
+             typeof currentProjectDates.startDate === 'string' ? currentProjectDates.startDate : 
+             new Date(currentProjectDates.startDate).toISOString()) : null,
+          currentProjectDueDate: currentProjectDates?.dueDate ? 
+            (currentProjectDates.dueDate instanceof Date ? currentProjectDates.dueDate.toISOString() : 
+             typeof currentProjectDates.dueDate === 'string' ? currentProjectDates.dueDate : 
+             new Date(currentProjectDates.dueDate).toISOString()) : null,
           projectTypeName: ps.projectTypeName || null,
           hasActiveProject,
           frequency: ps.frequency || 'monthly', // Default to monthly if undefined
