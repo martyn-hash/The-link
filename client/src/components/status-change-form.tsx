@@ -210,14 +210,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
   });
 
   const canUpdateStatus = () => {
-    // Check if user has permission to update this project
-    return (
-      user.role === 'admin' ||
-      user.role === 'manager' ||
-      project.currentAssigneeId === user.id ||
-      (user.role === 'client_manager' && project.clientManagerId === user.id) ||
-      (user.role === 'bookkeeper' && project.bookkeeperId === user.id)
-    );
+    // Allow any authenticated user to update project status
+    return true;
   };
 
   const getAvailableStatuses = () => {

@@ -2330,16 +2330,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project not found" });
       }
 
-      // Check if effective user is authorized to move this project
-      const canUpdate = 
-        effectiveUser.isAdmin ||
-        project.currentAssigneeId === effectiveUserId ||
-        project.clientManagerId === effectiveUserId ||
-        project.bookkeeperId === effectiveUserId;
-
-      if (!canUpdate) {
-        return res.status(403).json({ message: "Not authorized to update this project" });
-      }
+      // Allow any authenticated user to update project status
+      // Note: Removed role-based restrictions to allow all users to update project status
 
       // Validate stage-reason mapping is valid
       const stageValidation = await storage.validateProjectStatus(updateData.newStatus);

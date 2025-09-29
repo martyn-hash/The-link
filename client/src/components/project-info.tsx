@@ -112,6 +112,21 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
               {project.clientManager.firstName} {project.clientManager.lastName}
             </span>
           </div>
+          {project.projectOwner ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Service Owner:</span>
+              <span className="font-medium" data-testid="text-service-owner">
+                {project.projectOwner.firstName} {project.projectOwner.lastName}
+              </span>
+            </div>
+          ) : (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Service Owner:</span>
+              <span className="font-medium text-muted-foreground" data-testid="text-service-owner-none">
+                Not assigned
+              </span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Time in Current Stage:</span>
             <span className="font-medium" data-testid="text-time-in-stage">
