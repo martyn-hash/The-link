@@ -112,19 +112,6 @@ export default function TopNavigation({ user }: TopNavigationProps) {
               className="w-80"
             />
 
-            {/* All Tasks */}
-            {(user?.isAdmin || user?.canSeeAdminMenu) && (
-              <Link href="/all-projects">
-                <Button
-                  variant={isActive("/all-projects") ? "default" : "ghost"}
-                  className="flex items-center space-x-2"
-                  data-testid="link-all-tasks"
-                >
-                  <List className="w-4 h-4" />
-                  <span>All Tasks</span>
-                </Button>
-              </Link>
-            )}
 
             {/* Services */}
             {(user?.isAdmin || user?.canSeeAdminMenu) && (
