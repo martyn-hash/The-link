@@ -2,7 +2,13 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { List, UserX, Calendar } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import SuperSearch from "@/components/super-search";
 import AdminDropdown from "@/components/admin-dropdown";
@@ -67,18 +73,51 @@ export default function TopNavigation({ user }: TopNavigationProps) {
       {/* Main Navigation */}
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
-          {/* Left Section: Logo */}
+          {/* Left Section: Logo Dropdown */}
           <div className="flex items-center space-x-6">
-            <Link href="/">
-              <div className="flex items-center space-x-3 cursor-pointer" data-testid="link-logo-home">
-                <img 
-                  src={logoPath} 
-                  alt="Growth Accountants Logo" 
-                  className="h-8 w-auto"
-                  data-testid="img-navigation-logo"
-                />
-              </div>
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="flex items-center space-x-3 cursor-pointer hover:bg-accent/50 transition-colors px-3 py-2 rounded-md" data-testid="dropdown-logo-menu">
+                  <img 
+                    src={logoPath} 
+                    alt="Growth Accountants Logo" 
+                    className="h-8 w-auto"
+                    data-testid="img-navigation-logo"
+                  />
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/" className="w-full">
+                    <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-dashboard">
+                      <Home className="w-4 h-4" />
+                      <span>Dashboard</span>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                {(user?.isAdmin || user?.canSeeAdminMenu) && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/scheduled-services" className="w-full">
+                      <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-services-menu">
+                        <Calendar className="w-4 h-4" />
+                        <span>Services</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {(user?.isAdmin || user?.canSeeAdminMenu) && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/projects" className="w-full">
+                      <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-projects-menu">
+                        <FolderOpen className="w-4 h-4" />
+                        <span>Projects</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Center Section: Navigation Items */}
