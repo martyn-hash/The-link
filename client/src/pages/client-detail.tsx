@@ -31,6 +31,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { useActivityTracker } from "@/lib/activityTracker";
 import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication } from "@shared/schema";
 import { insertPersonSchema, insertCommunicationSchema } from "@shared/schema";
 
@@ -4897,6 +4898,7 @@ export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { trackClientView } = useActivityTracker();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
   const [expandedClientServiceId, setExpandedClientServiceId] = useState<string | null>(null);
   const [expandedPersonalServiceId, setExpandedPersonalServiceId] = useState<string | null>(null);
@@ -4905,6 +4907,13 @@ export default function ClientDetail() {
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
+  
+  // Track client view activity when component mounts
+  useEffect(() => {
+    if (id) {
+      trackClientView(id);
+    }
+  }, [id, trackClientView]);
   
   // DEBUG: Tab jumping investigation
   const [activeTab, setActiveTab] = useState<string>("overview");

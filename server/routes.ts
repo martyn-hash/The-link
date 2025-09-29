@@ -628,6 +628,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User activity tracking endpoint
+  app.post("/api/track-activity", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const { entityType, entityId } = req.body;
+      
+      if (!entityType || !entityId) {
+        return res.status(400).json({ message: "entityType and entityId are required" });
+      }
+      
+      // Validate entityType
+      const validEntityTypes = ['client', 'project', 'person', 'communication'];
+      if (!validEntityTypes.includes(entityType)) {
+        return res.status(400).json({ message: "Invalid entityType. Must be one of: " + validEntityTypes.join(', ') });
+      }
+      
+      await storage.trackUserActivity(effectiveUserId, entityType, entityId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error tracking user activity:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to track activity" });
+    }
+  });
+
   // Client management routes
   app.get("/api/clients", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -6268,12 +6292,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         project.projectOwnerId === effectiveUserId
       );
 
-      // Get recent clients with mock stats for now
-      const allClients = await storage.getAllClients();
-      const recentClients = allClients.slice(0, 5).map(client => ({
-        ...client,
-        activeProjects: userProjects.filter(p => p.clientId === client.id).length,
-        lastContact: "2 days ago" // Mock data for now
+      // Get recent clients using actual recently viewed data
+      const recentlyViewed = await storage.getRecentlyViewedByUser(effectiveUserId, 20);
+      const recentClientViews = recentlyViewed.filter(item => item.entityType === 'client' && item.entityData);
+      const recentClients = recentClientViews.slice(0, 5).map(item => ({
+        ...item.entityData,
+        activeProjects: userProjects.filter(p => p.clientId === item.entityData.id).length,
+        lastViewed: item.viewedAt
       }));
 
       // Calculate overdue items (projects in same stage for >7 days)
@@ -6301,7 +6326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed").slice(0, 5),
         overdueItems: overdueItems,
         recentClients: recentClients,
-        recentProjects: userProjects.slice(0, 5),
+        recentProjects: recentlyViewed.filter(item => item.entityType === 'project' && item.entityData).slice(0, 5).map(item => item.entityData),
         projectsByType: projectsByType,
         deadlineAlerts: [], // TODO: Implement deadline alerts
         stuckProjects: stuckProjects,

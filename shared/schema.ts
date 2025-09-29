@@ -1629,6 +1629,28 @@ export const userIntegrations = pgTable("user_integrations", {
   uniqueUserIntegrationType: unique("unique_user_integration_type").on(table.userId, table.integrationType),
 }));
 
+// Entity type enum for tracking what type of entity was viewed
+export const viewedEntityTypeEnum = pgEnum("viewed_entity_type", [
+  "client", 
+  "project", 
+  "person", 
+  "communication"
+]);
+
+// User activity tracking table - tracks when users view different entities
+export const userActivityTracking = pgTable("user_activity_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  entityType: viewedEntityTypeEnum("entity_type").notNull(),
+  entityId: varchar("entity_id").notNull(), // ID of the viewed entity
+  viewedAt: timestamp("viewed_at").defaultNow(),
+}, (table) => ({
+  // Index for efficient user activity lookups ordered by most recent
+  userViewedAtIdx: index("user_activity_tracking_user_viewed_at_idx").on(table.userId, table.viewedAt),
+  // Unique constraint to prevent duplicate tracking of same entity view within short timeframe
+  uniqueUserEntityView: unique("unique_user_entity_view").on(table.userId, table.entityType, table.entityId),
+}));
+
 // Zod schemas for communications
 export const insertCommunicationSchema = createInsertSchema(communications).omit({
   id: true,
@@ -1643,11 +1665,18 @@ export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).
   updatedAt: true,
 });
 
+export const insertUserActivityTrackingSchema = createInsertSchema(userActivityTracking).omit({
+  id: true,
+  viewedAt: true,
+});
+
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
+export type UserActivityTracking = typeof userActivityTracking.$inferSelect;
+export type InsertUserActivityTracking = z.infer<typeof insertUserActivityTrackingSchema>;
 export type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
 export type InsertUserOauthAccount = z.infer<typeof insertUserOauthAccountSchema>;
 

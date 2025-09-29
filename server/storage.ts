@@ -34,6 +34,7 @@ import {
   communications,
   userIntegrations,
   userOauthAccounts,
+  userActivityTracking,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -106,6 +107,8 @@ import {
   type InsertCommunication,
   type UserIntegration,
   type InsertUserIntegration,
+  type UserActivityTracking,
+  type InsertUserActivityTracking,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -174,6 +177,10 @@ export interface IStorage {
   stopImpersonation(adminUserId: string): Promise<void>;
   getImpersonationState(adminUserId: string): Promise<{ isImpersonating: boolean; originalUserId?: string; impersonatedUserId?: string }>;
   getEffectiveUser(adminUserId: string): Promise<User | undefined>;
+  
+  // User activity tracking operations
+  trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void>;
+  getRecentlyViewedByUser(userId: string, limit?: number): Promise<{ entityType: string; entityId: string; viewedAt: Date; entityData?: any }[]>;
   
   // Client operations
   createClient(client: InsertClient): Promise<Client>;
@@ -942,6 +949,78 @@ export class DatabaseStorage implements IStorage {
     }
     // Return the original user
     return await this.getUser(adminUserId);
+  }
+
+  // User activity tracking operations
+  async trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void> {
+    try {
+      // Insert or update activity tracking (upsert to handle duplicate views)
+      await db
+        .insert(userActivityTracking)
+        .values({
+          userId,
+          entityType: entityType as any,
+          entityId,
+        })
+        .onConflictDoUpdate({
+          target: [userActivityTracking.userId, userActivityTracking.entityType, userActivityTracking.entityId],
+          set: {
+            viewedAt: sql`now()`,
+          },
+        });
+    } catch (error) {
+      console.error('Error tracking user activity:', error);
+      // Don't throw error - activity tracking is non-critical
+    }
+  }
+
+  async getRecentlyViewedByUser(userId: string, limit: number = 10): Promise<{ entityType: string; entityId: string; viewedAt: Date; entityData?: any }[]> {
+    try {
+      const recentActivities = await db
+        .select()
+        .from(userActivityTracking)
+        .where(eq(userActivityTracking.userId, userId))
+        .orderBy(desc(userActivityTracking.viewedAt))
+        .limit(limit);
+
+
+      // Enrich with entity data
+      const enrichedActivities = await Promise.all(
+        recentActivities.map(async (activity) => {
+          let entityData = null;
+          try {
+            switch (activity.entityType) {
+              case 'client':
+                entityData = await this.getClientById(activity.entityId);
+                break;
+              case 'project':
+                entityData = await this.getProject(activity.entityId);
+                break;
+              case 'person':
+                entityData = await this.getPersonById(activity.entityId);
+                break;
+              case 'communication':
+                // For now, we'll skip enriching communications
+                break;
+            }
+          } catch (error) {
+            console.warn(`Error enriching entity data for ${activity.entityType}:${activity.entityId}:`, error);
+          }
+
+          return {
+            entityType: activity.entityType,
+            entityId: activity.entityId,
+            viewedAt: activity.viewedAt!,
+            entityData,
+          };
+        })
+      );
+
+      return enrichedActivities;
+    } catch (error) {
+      console.error('Error getting recently viewed by user:', error);
+      return [];
+    }
   }
 
   // Client operations
