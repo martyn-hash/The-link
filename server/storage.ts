@@ -3822,22 +3822,35 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(clientPeople, eq(peopleServices.personId, clientPeople.personId))
       .where(eq(peopleServices.isActive, true));
 
-    // Get active projects to check which services have active projects
+    // Get active projects to check which services have active projects and fetch their dates
     const activeProjects = await db
       .select({
         projectTypeId: projects.projectTypeId,
         clientId: projects.clientId,
+        projectMonth: projects.projectMonth,
+        dueDate: projects.dueDate,
       })
       .from(projects)
       .where(and(
         eq(projects.archived, false),
-        eq(projects.inactive, false)
+        eq(projects.inactive, false),
+        sql`${projects.currentStatus} != 'completed'` // Exclude completed projects
       ));
 
     // Create a set of client-projectType combinations that have active projects
     const activeProjectKeys = new Set(
       activeProjects.map(p => `${p.clientId}-${p.projectTypeId}`)
     );
+
+    // Create a map of client-projectType combinations to their project dates
+    const activeProjectDates = new Map<string, { startDate: Date | null; dueDate: Date | null }>();
+    activeProjects.forEach(p => {
+      const key = `${p.clientId}-${p.projectTypeId}`;
+      activeProjectDates.set(key, {
+        startDate: p.projectMonth,
+        dueDate: p.dueDate
+      });
+    });
 
     // Combine and transform the data, filtering out duplicates and calculating hasActiveProject
     const seenServices = new Set<string>();
@@ -3850,9 +3863,15 @@ export class DatabaseStorage implements IStorage {
         seenServices.add(uniqueKey);
         
         // Calculate hasActiveProject for client services
+        const projectKey = `${cs.clientId}-${cs.projectTypeId}`;
         const hasActiveProject = cs.clientId && cs.projectTypeId 
-          ? activeProjectKeys.has(`${cs.clientId}-${cs.projectTypeId}`)
+          ? activeProjectKeys.has(projectKey)
           : false;
+
+        // Get current project dates if there's an active project
+        const currentProjectDates = hasActiveProject && cs.clientId && cs.projectTypeId
+          ? activeProjectDates.get(projectKey)
+          : null;
 
         scheduledServices.push({
           id: cs.id || '',
@@ -3862,6 +3881,8 @@ export class DatabaseStorage implements IStorage {
           clientOrPersonType: 'client' as const,
           nextStartDate: cs.nextStartDate ? cs.nextStartDate.toISOString() : null,
           nextDueDate: cs.nextDueDate ? cs.nextDueDate.toISOString() : null,
+          currentProjectStartDate: currentProjectDates?.startDate ? currentProjectDates.startDate.toISOString() : null,
+          currentProjectDueDate: currentProjectDates?.dueDate ? currentProjectDates.dueDate.toISOString() : null,
           projectTypeName: cs.projectTypeName || null,
           hasActiveProject,
           frequency: cs.frequency || 'monthly', // Default to monthly if undefined
@@ -3879,9 +3900,15 @@ export class DatabaseStorage implements IStorage {
         seenServices.add(uniqueKey);
         
         // Calculate hasActiveProject for people services (requires client context)
+        const projectKey = `${ps.clientId}-${ps.projectTypeId}`;
         const hasActiveProject = ps.clientId && ps.projectTypeId 
-          ? activeProjectKeys.has(`${ps.clientId}-${ps.projectTypeId}`)
+          ? activeProjectKeys.has(projectKey)
           : false;
+
+        // Get current project dates if there's an active project
+        const currentProjectDates = hasActiveProject && ps.clientId && ps.projectTypeId
+          ? activeProjectDates.get(projectKey)
+          : null;
 
         scheduledServices.push({
           id: ps.id || '',
@@ -3891,6 +3918,8 @@ export class DatabaseStorage implements IStorage {
           clientOrPersonType: 'person' as const,
           nextStartDate: ps.nextStartDate ? ps.nextStartDate.toISOString() : null,
           nextDueDate: ps.nextDueDate ? ps.nextDueDate.toISOString() : null,
+          currentProjectStartDate: currentProjectDates?.startDate ? currentProjectDates.startDate.toISOString() : null,
+          currentProjectDueDate: currentProjectDates?.dueDate ? currentProjectDates.dueDate.toISOString() : null,
           projectTypeName: ps.projectTypeName || null,
           hasActiveProject,
           frequency: ps.frequency || 'monthly', // Default to monthly if undefined

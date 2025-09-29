@@ -23,6 +23,8 @@ interface ScheduledServiceView {
   clientOrPersonType: 'client' | 'person';
   nextStartDate: string | null;
   nextDueDate: string | null;
+  currentProjectStartDate: string | null; // Current project start date (when hasActiveProject is true)
+  currentProjectDueDate: string | null;   // Current project due date (when hasActiveProject is true)
   projectTypeName: string;
   hasActiveProject: boolean;
   frequency: string;
