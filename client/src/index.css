@@ -35,9 +35,9 @@
   --sidebar-accent-foreground: hsl(222.2, 84%, 4.9%);
   --sidebar-border: hsl(214.3, 31.8%, 91.4%);
   --sidebar-ring: hsl(202deg 91% 37%);
-  --font-sans: Roboto Mono;
-  --font-serif: Roboto Mono;
-  --font-mono: Open Sans;
+  --font-sans: 'DM Sans', sans-serif;
+  --font-serif: 'JetBrains Mono', monospace;
+  --font-mono: 'Space Grotesk', sans-serif;
   --radius: 0.5rem;
   --required-empty: hsl(25, 95%, 53%);
   --required-empty-foreground: hsl(0, 0%, 100%);
