@@ -12,7 +12,6 @@ import ProjectTypes from "@/pages/project-types";
 import ProjectTypeDetail from "@/pages/project-type-detail";
 import Users from "@/pages/users";
 import Upload from "@/pages/upload";
-import AllProjects from "@/pages/all-projects";
 import Projects from "@/pages/projects";
 import ProjectDetail from "@/pages/project-detail";
 import Profile from "@/pages/profile";
@@ -52,7 +51,8 @@ function Router() {
       {/* Protected routes - render regardless of auth state, let components handle auth */}
       <Route path="/projects" component={Projects} />
       <Route path="/projects/:id" component={ProjectDetail} />
-      <Route path="/all-projects" component={AllProjects} />
+      {/* Redirect old /all-projects route to new /projects route */}
+      <Route path="/all-projects" component={() => { window.location.href = "/projects"; return null; }} />
       <Route path="/clients" component={Clients} />
       <Route path="/clients/:id" component={ClientDetail} />
       <Route path="/people" component={People} />
