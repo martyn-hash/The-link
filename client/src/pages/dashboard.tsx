@@ -200,7 +200,7 @@ function MyActiveWorkPanel({ data, user }: { data?: DashboardStats; user: any })
                       {task.currentStatus?.replace(/_/g, ' ')}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{task.projectType?.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{(task as any).projectType?.name || "Unknown Project Type"}</p>
                 </div>
               ))}
               {myTasks.length === 0 && (
@@ -225,7 +225,7 @@ function MyActiveWorkPanel({ data, user }: { data?: DashboardStats; user: any })
                         Overdue
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{item.projectType?.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{(item as any).projectType?.name || "Unknown Project Type"}</p>
                   </div>
                 ))}
               </div>
@@ -283,7 +283,7 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                     <span className="text-sm font-medium">{project.client?.name}</span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{project.projectType?.name}</span>
+                    <span>{(project as any).projectType?.name || "Unknown Project Type"}</span>
                     <Badge variant="outline" className="text-xs">
                       {project.currentStatus?.replace(/_/g, ' ')}
                     </Badge>
@@ -465,7 +465,7 @@ function IntelligencePanel({ data }: { data?: DashboardStats }) {
               {stuckProjects.slice(0, 2).map((project) => (
                 <div key={project.id} className="p-2 bg-orange-50 dark:bg-orange-950/20 rounded border border-orange-200 dark:border-orange-800">
                   <p className="text-xs font-medium">{project.client?.name}</p>
-                  <p className="text-xs text-muted-foreground">{project.projectType?.name}</p>
+                  <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
                 </div>
               ))}
             </div>

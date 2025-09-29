@@ -6262,6 +6262,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/dashboard - Get personalized dashboard data
+  app.get("/api/dashboard", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Get all projects assigned to user
+      const allProjects = await storage.getAllProjects();
+      const userProjects = allProjects.filter(project => 
+        project.currentAssigneeId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId ||
+        project.clientManagerId === effectiveUserId ||
+        project.projectOwnerId === effectiveUserId
+      );
+
+      // Get recent clients with mock stats for now
+      const allClients = await storage.getAllClients();
+      const recentClients = allClients.slice(0, 5).map(client => ({
+        ...client,
+        activeProjects: userProjects.filter(p => p.clientId === client.id).length,
+        lastContact: "2 days ago" // Mock data for now
+      }));
+
+      // Calculate overdue items (projects in same stage for >7 days)
+      const overdueItems = userProjects.filter(project => {
+        const lastChronology = project.chronology?.[0];
+        if (!lastChronology || !lastChronology.timestamp) return false;
+        const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+        return daysSinceLastChange > 7;
+      });
+
+      // Group projects by type
+      const projectsByType: { [key: string]: any[] } = {};
+      userProjects.forEach(project => {
+        const typeName = project.projectType?.name || "Unknown";
+        if (!projectsByType[typeName]) {
+          projectsByType[typeName] = [];
+        }
+        projectsByType[typeName].push(project);
+      });
+
+      // Calculate stuck projects (same criteria as overdue for now)
+      const stuckProjects = overdueItems;
+
+      const dashboardData = {
+        myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed").slice(0, 5),
+        overdueItems: overdueItems,
+        recentClients: recentClients,
+        recentProjects: userProjects.slice(0, 5),
+        projectsByType: projectsByType,
+        deadlineAlerts: [], // TODO: Implement deadline alerts
+        stuckProjects: stuckProjects,
+        upcomingRenewals: [] // TODO: Implement renewal tracking
+      };
+
+      res.json(dashboardData);
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard data" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
