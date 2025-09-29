@@ -135,7 +135,7 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt, or, ilike, isNull } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, or, ilike, isNull, ne } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -4301,7 +4301,7 @@ export class DatabaseStorage implements IStorage {
           const service = servicesList[0];
           console.log(`[DEBUG] Found service: ${service.name}`);
           
-          // Get project type if exists
+          // Get project type - try by ID first, then by name matching
           let projectType = undefined;
           if (service.projectTypeId) {
             const projectTypesList = await db
@@ -4309,7 +4309,19 @@ export class DatabaseStorage implements IStorage {
               .from(projectTypes)
               .where(eq(projectTypes.id, service.projectTypeId));
             projectType = projectTypesList.length ? projectTypesList[0] : undefined;
-            console.log(`[DEBUG] Project type found: ${projectType?.name || 'None'}`);
+            console.log(`[DEBUG] Project type found by ID: ${projectType?.name || 'None'}`);
+          } else {
+            // Try to match by name if no projectTypeId is set
+            const projectTypesList = await db
+              .select()
+              .from(projectTypes)
+              .where(or(
+                eq(projectTypes.name, service.name),
+                ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`),
+                ilike(service.name, `%${projectTypes.name}%`)
+              ));
+            projectType = projectTypesList.length ? projectTypesList[0] : undefined;
+            console.log(`[DEBUG] Project type found by name matching: ${projectType?.name || 'None'} for service: ${service.name}`);
           }
           
           // Get service owner if exists
@@ -4342,7 +4354,7 @@ export class DatabaseStorage implements IStorage {
               .where(and(
                 eq(projects.clientId, cs.clientId),
                 eq(projects.projectTypeId, projectType.id),
-                ne(projects.status, 'Completed')
+                ne(projects.currentStatus, 'Completed')
               ))
               .limit(1);
             
@@ -4356,7 +4368,19 @@ export class DatabaseStorage implements IStorage {
                   if (activeProject.projectMonth instanceof Date) {
                     currentProjectStartDate = activeProject.projectMonth.toISOString();
                   } else if (typeof activeProject.projectMonth === 'string') {
-                    currentProjectStartDate = activeProject.projectMonth;
+                    // Convert DD/MM/YYYY format to ISO format
+                    const parts = activeProject.projectMonth.split('/');
+                    if (parts.length === 3) {
+                      const [day, month, year] = parts;
+                      const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+                      if (!isNaN(date.getTime())) {
+                        currentProjectStartDate = date.toISOString();
+                      } else {
+                        currentProjectStartDate = activeProject.projectMonth; // fallback
+                      }
+                    } else {
+                      currentProjectStartDate = activeProject.projectMonth; // fallback
+                    }
                   }
                 } catch (error) {
                   console.warn(`[WARNING] Error processing project start date for client service ${cs.id}:`, error);
