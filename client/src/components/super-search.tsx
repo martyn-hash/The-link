@@ -166,15 +166,20 @@ export default function SuperSearch({
   const getCategoryTitle = (type: string) => {
     switch (type) {
       case 'client':
-        return 'Clients';
+      case 'clients':
+        return 'Companies';
       case 'person':
+      case 'people':
         return 'People';
       case 'project':
+      case 'projects':
         return 'Projects';
       case 'communication':
+      case 'communications':
         return 'Communications';
       case 'service':
-        return 'Services';
+      case 'services':
+        return 'Work';
       default:
         return 'Results';
     }
