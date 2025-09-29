@@ -4,6 +4,21 @@ The Link is a comprehensive bookkeeping project workflow management system desig
 
 The system facilitates project assignment, task tracking, status updates with mandatory change reasons, and automated email notifications. Administrators can bulk-upload client data via CSV files, which automatically creates initial tasks for client managers. The application features both kanban board and task list views, comprehensive project chronology tracking, time governance for SLA compliance monitoring, enhanced service management with accordion-style interfaces for detailed service information, and a responsive design built with modern web technologies.
 
+## Enhanced SuperSearch System
+The dashboard features a comprehensive search system designed to provide quick access to all entities across the platform:
+
+- **Mega-Menu Style Interface**: Three-column layout organizing search results by category for better visual organization
+- **Cross-Entity Search**: Searches across clients, people, projects, communications, and services from a single input field
+- **Smart Result Categorization**: Results are organized into logical categories with distinct color coding:
+  - Clients: Blue theme with building icons
+  - People: Emerald theme with user icons  
+  - Projects: Violet theme with folder icons
+  - Communications: Amber theme with message icons
+  - Services: Rose theme with service icons
+- **Enhanced Context**: Related people are automatically included when searching for clients, providing comprehensive search results
+- **Intelligent Navigation**: Each result type navigates to appropriate detail pages or filtered list views
+- **People Management**: Dedicated people page at `/people` route with role-based access controls and search capabilities
+
 ## Service Management Enhancement
 The services tab provides comprehensive service management capabilities with an accordion-style interface similar to the "Related People" section:
 
