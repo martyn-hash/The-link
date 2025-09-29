@@ -90,6 +90,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  emailSignature: text("email_signature"), // HTML email signature
   isAdmin: boolean("is_admin").default(false), // Simple admin flag
   canSeeAdminMenu: boolean("can_see_admin_menu").default(false), // Can see admin menu flag
   passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
