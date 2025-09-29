@@ -30,7 +30,9 @@ import {
 } from "@/components/ui/form";
 
 // Icons
-import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut } from "lucide-react";
+import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3 } from "lucide-react";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 // Zod schemas
 const profileUpdateSchema = insertUserSchema.pick({
@@ -39,6 +41,10 @@ const profileUpdateSchema = insertUserSchema.pick({
 }).extend({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+});
+
+const emailSignatureUpdateSchema = z.object({
+  emailSignature: z.string().optional(),
 });
 
 const passwordChangeSchema = z.object({
@@ -52,6 +58,7 @@ const passwordChangeSchema = z.object({
 
 type ProfileUpdateData = z.infer<typeof profileUpdateSchema>;
 type PasswordChangeData = z.infer<typeof passwordChangeSchema>;
+type EmailSignatureUpdateData = z.infer<typeof emailSignatureUpdateSchema>;
 type NotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 
 export default function Profile() {
@@ -61,6 +68,7 @@ export default function Profile() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailSignature, setEmailSignature] = useState('');
   
   // Get initial tab from URL params
   const urlParams = new URLSearchParams(window.location.search);
@@ -159,6 +167,24 @@ export default function Profile() {
     },
   });
 
+  // Email signature update mutation
+  const updateEmailSignatureMutation = useMutation({
+    mutationFn: async (data: EmailSignatureUpdateData) => {
+      return await apiRequest("PUT", "/api/users/profile", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Email signature updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update email signature",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Outlook disconnect mutation
   const disconnectOutlookMutation = useMutation({
     mutationFn: async () => {
@@ -190,6 +216,11 @@ export default function Profile() {
   // Handle notification toggle
   const handleNotificationToggle = (field: keyof NotificationPreferences, value: boolean) => {
     updateNotificationsMutation.mutate({ [field]: value });
+  };
+
+  // Handle email signature save
+  const handleEmailSignatureSave = () => {
+    updateEmailSignatureMutation.mutate({ emailSignature });
   };
 
   // Handle Outlook connection
@@ -249,8 +280,11 @@ export default function Profile() {
       }, {
         keepDirty: false
       });
+      
+      // Initialize email signature from user data
+      setEmailSignature(user.emailSignature || "");
     }
-  }, [user?.firstName, user?.lastName, user?.id]);
+  }, [user?.firstName, user?.lastName, user?.id, user?.emailSignature]);
 
   if (isAuthLoading) {
     return (
@@ -703,8 +737,76 @@ export default function Profile() {
                     )}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
 
+            {/* Email Signature */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Edit3 className="h-5 w-5" />
+                  Email Signature
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Create an HTML email signature that will be automatically appended to all emails you send from the CRM.
+                </p>
                 
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Signature Content</Label>
+                  <div className="border rounded-md" data-testid="editor-email-signature">
+                    <ReactQuill
+                      value={emailSignature}
+                      onChange={setEmailSignature}
+                      theme="snow"
+                      placeholder="Enter your email signature..."
+                      style={{ minHeight: '200px' }}
+                      modules={{
+                        toolbar: [
+                          [{ 'header': [1, 2, 3, false] }],
+                          ['bold', 'italic', 'underline'],
+                          [{ 'color': [] }, { 'background': [] }],
+                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                          [{ 'align': [] }],
+                          ['link', 'image'],
+                          ['clean']
+                        ],
+                      }}
+                      formats={[
+                        'header', 'bold', 'italic', 'underline',
+                        'color', 'background', 'list', 'bullet',
+                        'align', 'link', 'image'
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleEmailSignatureSave}
+                    disabled={updateEmailSignatureMutation.isPending}
+                    className="flex items-center gap-2"
+                    data-testid="button-save-email-signature"
+                  >
+                    {updateEmailSignatureMutation.isPending ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    Save Signature
+                  </Button>
+                  
+                  {emailSignature && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setEmailSignature("")}
+                      data-testid="button-clear-email-signature"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
