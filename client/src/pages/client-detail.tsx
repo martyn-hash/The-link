@@ -3,6 +3,7 @@ import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -701,7 +702,7 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
           setEmailPersonId(undefined);
         }
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-5xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
@@ -781,18 +782,22 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             
             <div className="space-y-2">
               <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
-              <div data-testid="input-email-content-editor">
-                <ReactQuill
-                  value={emailContent}
-                  onChange={setEmailContent}
-                  modules={emailEditorModules}
-                  formats={emailEditorFormats}
-                  theme="snow"
-                  placeholder="Enter your email message..."
-                  style={{ minHeight: '128px' }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
+              <ResizablePanelGroup direction="vertical" className="border rounded-md">
+                <ResizablePanel defaultSize={100} minSize={30}>
+                  <div data-testid="input-email-content-editor" className="h-full">
+                    <ReactQuill
+                      value={emailContent}
+                      onChange={setEmailContent}
+                      modules={emailEditorModules}
+                      formats={emailEditorFormats}
+                      theme="snow"
+                      placeholder="Enter your email message..."
+                      style={{ height: '300px', minHeight: '200px' }}
+                    />
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address • Drag the editor corner to resize</p>
             </div>
             
             <div className="flex justify-end gap-2">
