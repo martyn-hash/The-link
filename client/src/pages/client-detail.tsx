@@ -137,7 +137,7 @@ const emailEditorFormats = [
 ];
 
 // Communications Timeline Component
-function CommunicationsTimeline({ clientId }: { clientId: string }) {
+function CommunicationsTimeline({ clientId, user }: { clientId: string; user: any }) {
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -754,11 +754,10 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             
             // Append user's email signature if it exists
             let finalEmailContent = emailContent;
-            const currentUser = user; // Capture user in local scope
-            if (currentUser?.emailSignature && currentUser.emailSignature.trim()) {
+            if (user?.emailSignature && user.emailSignature.trim()) {
               // Add some spacing before the signature
               const spacing = emailContent.trim() ? '<br><br>' : '';
-              finalEmailContent = emailContent + spacing + currentUser.emailSignature;
+              finalEmailContent = emailContent + spacing + user.emailSignature;
             }
             
             sendEmailMutation.mutate({
@@ -6666,7 +6665,7 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="communications" className="space-y-6 mt-6">
-            <CommunicationsTimeline clientId={id} />
+            <CommunicationsTimeline clientId={id} user={user} />
           </TabsContent>
 
           <TabsContent value="chronology" className="space-y-6 mt-6">
