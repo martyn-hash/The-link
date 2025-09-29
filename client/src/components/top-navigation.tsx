@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { List, UserX, Calendar } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import ClientSearch from "@/components/client-search";
+import SuperSearch from "@/components/super-search";
 import AdminDropdown from "@/components/admin-dropdown";
 import ImpersonationPanel from "@/components/impersonation-panel";
 import type { User } from "@shared/schema";
@@ -106,11 +106,10 @@ export default function TopNavigation({ user }: TopNavigationProps) {
               </div>
             </Link>
 
-            {/* Global Client Search */}
-            <ClientSearch 
-              isGlobal={true} 
-              placeholder="Search clients..." 
-              className="w-64"
+            {/* Global Super Search */}
+            <SuperSearch 
+              placeholder="Search clients, people, projects..." 
+              className="w-80"
             />
 
             {/* All Tasks */}
