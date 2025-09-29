@@ -1657,6 +1657,7 @@ export type ProjectWithRelations = Project & {
   bookkeeper: User;
   clientManager: User;
   currentAssignee?: User;
+  projectOwner?: User;
   projectType: ProjectType & {
     service?: Service;
   };

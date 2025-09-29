@@ -10,18 +10,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Clock, User as UserIcon } from "lucide-react";
+import { Eye, Clock, User as UserIcon, Calendar, Building2, Columns3 } from "lucide-react";
 import { useLocation } from "wouter";
 import type { ProjectWithRelations, User } from "@shared/schema";
 
 interface TaskListProps {
   projects: ProjectWithRelations[];
   user: User;
+  serviceFilter?: string;
+  onSwitchToKanban?: () => void;
 }
 
-export default function TaskList({ projects, user }: TaskListProps) {
+export default function TaskList({ projects, user, serviceFilter, onSwitchToKanban }: TaskListProps) {
   const [, setLocation] = useLocation();
-  const [sortBy, setSortBy] = useState<"client" | "status" | "time">("time");
+  const [sortBy, setSortBy] = useState<"client" | "projectType" | "serviceOwner" | "dueDate" | "status" | "time">("time");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const getStatusLabel = (status: string) => {
@@ -72,6 +74,19 @@ export default function TaskList({ projects, user }: TaskListProps) {
       case "client":
         comparison = a.client.name.localeCompare(b.client.name);
         break;
+      case "projectType":
+        comparison = (a.projectType?.name || "").localeCompare(b.projectType?.name || "");
+        break;
+      case "serviceOwner":
+        const aOwner = a.projectOwner ? `${a.projectOwner.firstName} ${a.projectOwner.lastName}` : "";
+        const bOwner = b.projectOwner ? `${b.projectOwner.firstName} ${b.projectOwner.lastName}` : "";
+        comparison = aOwner.localeCompare(bOwner);
+        break;
+      case "dueDate":
+        const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        const bDate = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+        comparison = aDate - bDate;
+        break;
       case "status":
         comparison = a.currentStatus.localeCompare(b.currentStatus);
         break;
@@ -82,6 +97,16 @@ export default function TaskList({ projects, user }: TaskListProps) {
     
     return sortOrder === "asc" ? comparison : -comparison;
   });
+
+  const formatDueDate = (dueDate: Date | string | null) => {
+    if (!dueDate) return "No due date";
+    const date = new Date(dueDate);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
 
   const handleSort = (column: typeof sortBy) => {
     if (sortBy === column) {
@@ -109,9 +134,24 @@ export default function TaskList({ projects, user }: TaskListProps) {
     <div className="p-6" data-testid="task-list">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <span>Task List</span>
-            <Badge variant="secondary">{visibleProjects.length} tasks</Badge>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span>Task List</span>
+              <Badge variant="secondary">{visibleProjects.length} tasks</Badge>
+            </div>
+            {/* Dynamic Kanban button - only show when service filter is selected */}
+            {serviceFilter && serviceFilter !== "all" && onSwitchToKanban && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSwitchToKanban}
+                className="flex items-center space-x-2"
+                data-testid="button-switch-to-kanban"
+              >
+                <Columns3 className="w-4 h-4" />
+                <span>Switch to Kanban</span>
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -129,6 +169,24 @@ export default function TaskList({ projects, user }: TaskListProps) {
                     onClick={() => handleSort("client")}
                   >
                     Client {sortBy === "client" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50" 
+                    onClick={() => handleSort("projectType")}
+                  >
+                    Project Type {sortBy === "projectType" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50" 
+                    onClick={() => handleSort("serviceOwner")}
+                  >
+                    Service Owner {sortBy === "serviceOwner" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50" 
+                    onClick={() => handleSort("dueDate")}
+                  >
+                    Due Date {sortBy === "dueDate" && (sortOrder === "asc" ? "↑" : "↓")}
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted/50" 
@@ -154,17 +212,43 @@ export default function TaskList({ projects, user }: TaskListProps) {
                     data-testid={`task-row-${project.id}`}
                   >
                     <TableCell className="font-medium">
-                      <span>{project.client.name}</span>
+                      <span data-testid={`text-client-${project.id}`}>{project.client.name}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(project.currentStatus)}>
+                      <div className="flex items-center space-x-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`text-project-type-${project.id}`}>
+                          {project.projectType?.name || "No type"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`text-service-owner-${project.id}`}>
+                          {project.projectOwner
+                            ? `${project.projectOwner.firstName} ${project.projectOwner.lastName}`
+                            : "Unassigned"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`text-due-date-${project.id}`}>
+                          {formatDueDate(project.dueDate)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(project.currentStatus)} data-testid={`badge-status-${project.id}`}>
                         {getStatusLabel(project.currentStatus)}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <UserIcon className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">
+                        <span className="text-sm" data-testid={`text-assigned-to-${project.id}`}>
                           {project.currentAssignee 
                             ? `${project.currentAssignee.firstName} ${project.currentAssignee.lastName}`
                             : project.clientManager
