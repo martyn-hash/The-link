@@ -219,9 +219,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       return [];
     }
     
-    // Filter statuses based on current status and user role
+    // Filter statuses based on current status
     const currentStatus = project.currentStatus;
-    const currentStage = stages.find((s: KanbanStage) => s.name === currentStatus);
     
     // Convert stages to status options format
     const statusOptions = stages.map((stage) => ({
@@ -231,26 +230,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       stage: stage
     }));
     
-    if (user.role === 'admin' || user.role === 'manager') {
-      return statusOptions.filter(option => option.value !== currentStatus);
-    }
-    
-    // Terminal stages - can't move from these
-    const terminalStages = ['completed', 'not_completed_in_time'];
-    if (terminalStages.includes(currentStatus)) {
-      return []; // Can't move from terminal stages
-    }
-    
-    // Regular users can only move between certain statuses
-    const allowedTransitions: Record<string, string[]> = {
-      no_latest_action: ["bookkeeping_work_required", "in_review", "needs_client_input"],
-      bookkeeping_work_required: ["in_review", "needs_client_input"],
-      in_review: ["bookkeeping_work_required", "needs_client_input", "completed", "not_completed_in_time"],
-      needs_client_input: ["bookkeeping_work_required", "in_review"],
-    };
-    
-    const allowed = allowedTransitions[currentStatus] || [];
-    return statusOptions.filter(option => allowed.includes(option.value));
+    // Allow any authenticated user to move to any stage except the current one
+    return statusOptions.filter(option => option.value !== currentStatus);
   };
 
   // Helper function to validate required custom fields
