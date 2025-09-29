@@ -29,11 +29,13 @@ import {
 // Dashboard data interfaces
 interface DashboardStats {
   myActiveTasks: ProjectWithRelations[];
-  overdueItems: ProjectWithRelations[];
-  recentClients: (Client & { activeProjects: number; lastContact: string })[];
+  myProjects: ProjectWithRelations[];
+  overdueProjects: ProjectWithRelations[];
+  behindScheduleProjects: ProjectWithRelations[];
+  recentClients: (Client & { activeProjects: number; lastViewed: Date })[];
   recentProjects: ProjectWithRelations[];
   projectsByType: { [key: string]: ProjectWithRelations[] };
-  deadlineAlerts: any[];
+  deadlineAlerts: { message: string; projectId: string; dueDate: Date | null }[];
   stuckProjects: ProjectWithRelations[];
   upcomingRenewals: any[];
 }
@@ -148,25 +150,22 @@ export default function Dashboard() {
         <main className="flex-1 overflow-auto p-6">
           <div className="grid grid-cols-12 gap-6 h-full">
             
-            {/* Left Column: My Active Work */}
-            <div className="col-span-3 space-y-6">
-              <MyActiveWorkPanel data={dashboardData} user={user} />
+            {/* Left Column: My Tasks & Overdue */}
+            <div className="col-span-4 space-y-6">
+              <MyTasksPanel data={dashboardData} user={user} />
+              <OverdueProjectsPanel data={dashboardData} />
             </div>
             
-            {/* Center Column: Recently Viewed & Projects Overview */}
-            <div className="col-span-6 space-y-6">
+            {/* Center Column: Recently Viewed & My Projects */}
+            <div className="col-span-4 space-y-6">
               <RecentlyViewedPanel data={dashboardData} />
-              <MyProjectsOverviewPanel 
-                data={dashboardData} 
-                selectedProjectType={selectedProjectType}
-                onProjectTypeChange={setSelectedProjectType}
-              />
+              <MyProjectsPanel data={dashboardData} />
             </div>
             
-            {/* Right Column: Quick Access & Intelligence */}
-            <div className="col-span-3 space-y-6">
-              <QuickAccessPanel user={user} />
-              <IntelligencePanel data={dashboardData} />
+            {/* Right Column: Behind Schedule & Quick Actions */}
+            <div className="col-span-4 space-y-6">
+              <BehindSchedulePanel data={dashboardData} />
+              <QuickActionsPanel user={user} />
             </div>
             
           </div>
@@ -178,68 +177,91 @@ export default function Dashboard() {
 
 // Panel Components
 
-function MyActiveWorkPanel({ data, user }: { data?: DashboardStats; user: any }) {
+function MyTasksPanel({ data, user }: { data?: DashboardStats; user: any }) {
   const myTasks = data?.myActiveTasks || [];
-  const overdueItems = data?.overdueItems || [];
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="w-5 h-5 text-blue-500" />
-            My Active Work
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          
-          {/* Tasks Due Soon */}
-          <div>
-            <h4 className="text-sm font-semibold text-muted-foreground mb-2">Tasks Due Soon</h4>
-            <div className="space-y-2">
-              {myTasks.slice(0, 3).map((task) => (
-                <div key={task.id} className="p-3 bg-muted/50 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{task.client?.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {task.currentStatus?.replace(/_/g, ' ')}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">{(task as any).projectType?.name || "Unknown Project Type"}</p>
-                </div>
-              ))}
-              {myTasks.length === 0 && (
-                <p className="text-sm text-muted-foreground">No active tasks</p>
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-blue-500" />
+          My Tasks
+        </CardTitle>
+        <CardDescription>Tasks assigned to you</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {myTasks.slice(0, 5).map((task) => (
+            <div 
+              key={task.id} 
+              className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+              onClick={() => window.location.href = `/project/${task.id}`}
+              data-testid={`task-item-${task.id}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium">{task.client?.name}</span>
+                <Badge variant="outline" className="text-xs">
+                  {task.currentStatus?.replace(/_/g, ' ')}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{(task as any).projectType?.name || "Unknown Project Type"}</p>
+              {task.dueDate && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Due: {new Date(task.dueDate).toLocaleDateString()}
+                </p>
               )}
             </div>
-          </div>
-
-          {/* Overdue Items */}
-          {overdueItems.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-orange-500" />
-                Overdue Items
-              </h4>
-              <div className="space-y-2">
-                {overdueItems.slice(0, 2).map((item) => (
-                  <div key={item.id} className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{item.client?.name}</span>
-                      <Badge variant="destructive" className="text-xs">
-                        Overdue
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{(item as any).projectType?.name || "Unknown Project Type"}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          ))}
+          {myTasks.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No active tasks</p>
           )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-        </CardContent>
-      </Card>
-    </div>
+function OverdueProjectsPanel({ data }: { data?: DashboardStats }) {
+  const overdueProjects = data?.overdueProjects || [];
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-orange-500" />
+          Overdue Projects
+        </CardTitle>
+        <CardDescription>Projects past their due date</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {overdueProjects.slice(0, 5).map((project) => (
+            <div 
+              key={project.id} 
+              className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/30 cursor-pointer transition-colors"
+              onClick={() => window.location.href = `/project/${project.id}`}
+              data-testid={`overdue-project-${project.id}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium">{project.client?.name}</span>
+                <Badge variant="destructive" className="text-xs">
+                  Overdue
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
+              {project.dueDate && (
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                  Was due: {new Date(project.dueDate).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          ))}
+          {overdueProjects.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No overdue projects</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -270,7 +292,7 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>{client.activeProjects} active projects</span>
-                    <span>{client.lastContact}</span>
+                    <span>{new Date(client.lastViewed).toLocaleDateString()}</span>
                   </div>
                 </div>
               ))}
@@ -304,133 +326,126 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
   );
 }
 
-function MyProjectsOverviewPanel({ 
-  data, 
-  selectedProjectType, 
-  onProjectTypeChange 
-}: { 
-  data?: DashboardStats; 
-  selectedProjectType: string;
-  onProjectTypeChange: (type: string) => void;
-}) {
-  const projectsByType = data?.projectsByType || {};
-  const projectTypes = Object.keys(projectsByType);
+function MyProjectsPanel({ data }: { data?: DashboardStats }) {
+  const myProjects = data?.myProjects || [];
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Target className="w-5 h-5 text-violet-500" />
-          My Projects Overview
+          <FolderOpen className="w-5 h-5 text-violet-500" />
+          My Projects
         </CardTitle>
-        <div className="flex gap-2 mt-3">
-          <Button
-            variant={selectedProjectType === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => onProjectTypeChange("all")}
-          >
-            All Types
-          </Button>
-          {projectTypes.slice(0, 3).map((type) => (
-            <Button
-              key={type}
-              variant={selectedProjectType === type ? "default" : "outline"}
-              size="sm"
-              onClick={() => onProjectTypeChange(type)}
-              className="text-xs"
-            >
-              {type}
-            </Button>
-          ))}
-        </div>
+        <CardDescription>All projects you're involved in</CardDescription>
       </CardHeader>
       <CardContent>
-        {selectedProjectType === "all" ? (
-          <div className="space-y-4">
-            {projectTypes.map((type) => (
-              <div key={type} className="p-4 bg-muted/50 rounded-lg border">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-semibold">{type}</h4>
-                  <Badge variant="outline">{projectsByType[type]?.length || 0} projects</Badge>
-                </div>
-                <div className="flex gap-2">
-                  {["no_latest_action", "bookkeeping_work_required", "in_review", "needs_client_input", "completed"].map((status) => {
-                    const count = projectsByType[type]?.filter(p => p.currentStatus === status).length || 0;
-                    return (
-                      <div key={status} className="text-xs text-center">
-                        <div className="w-8 h-8 bg-muted rounded flex items-center justify-center mb-1 text-xs font-medium">
-                          {count}
-                        </div>
-                        <div className="text-muted-foreground">{status.replace(/_/g, ' ')}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {myProjects.slice(0, 10).map((project) => (
+            <div 
+              key={project.id} 
+              className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+              onClick={() => window.location.href = `/project/${project.id}`}
+              data-testid={`project-item-${project.id}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium">{project.client?.name}</span>
+                <Badge variant="outline" className="text-xs">
+                  {project.currentStatus?.replace(/_/g, ' ')}
+                </Badge>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {(projectsByType[selectedProjectType] || []).map((project) => (
-              <div key={project.id} className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{project.client?.name}</span>
-                  <Badge variant="outline" className="text-xs">
-                    {project.currentStatus?.replace(/_/g, ' ')}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{project.description}</p>
-              </div>
-            ))}
-          </div>
+              <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
+            </div>
+          ))}
+          {myProjects.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No projects assigned</p>
+          )}
+        </div>
+        {myProjects.length > 10 && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full mt-3"
+            onClick={() => window.location.href = '/all-projects'}
+            data-testid="button-view-all-projects"
+          >
+            View All {myProjects.length} Projects
+          </Button>
         )}
       </CardContent>
     </Card>
   );
 }
 
-function QuickAccessPanel({ user }: { user: any }) {
+function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
+  const behindScheduleProjects = data?.behindScheduleProjects || [];
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-green-500" />
+          <Clock className="w-5 h-5 text-amber-500" />
+          Behind Schedule
+        </CardTitle>
+        <CardDescription>Projects stuck in current stage</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {behindScheduleProjects.slice(0, 5).map((project) => (
+            <div 
+              key={project.id} 
+              className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/30 cursor-pointer transition-colors"
+              onClick={() => window.location.href = `/project/${project.id}`}
+              data-testid={`behind-schedule-project-${project.id}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium">{project.client?.name}</span>
+                <Badge variant="secondary" className="text-xs">
+                  {project.currentStatus?.replace(/_/g, ' ')}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
+              {project.chronology?.[0]?.timestamp && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  In stage for {Math.floor((Date.now() - new Date(project.chronology[0].timestamp).getTime()) / (1000 * 60 * 60 * 24))} days
+                </p>
+              )}
+            </div>
+          ))}
+          {behindScheduleProjects.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">All projects on schedule</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QuickActionsPanel({ user }: { user: any }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Target className="w-5 h-5 text-green-500" />
           Quick Actions
         </CardTitle>
+        <CardDescription>Common tasks and shortcuts</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         <Button 
           className="w-full justify-start" 
           variant="outline" 
-          data-testid="button-create-monthly-bookkeeping"
+          size="sm"
+          data-testid="button-create-project"
           onClick={() => window.location.href = '/scheduled-services'}
         >
           <Plus className="w-4 h-4 mr-2" />
-          Monthly Bookkeeping
+          Create New Project
         </Button>
         <Button 
           className="w-full justify-start" 
           variant="outline" 
-          data-testid="button-create-payroll"
-          onClick={() => window.location.href = '/scheduled-services'}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Payroll Project
-        </Button>
-        <Button 
-          className="w-full justify-start" 
-          variant="outline" 
-          data-testid="button-create-tax-return"
-          onClick={() => window.location.href = '/scheduled-services'}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Tax Return
-        </Button>
-        <hr className="my-3" />
-        <Button 
-          className="w-full justify-start" 
-          variant="outline" 
-          data-testid="button-view-all-projects"
+          size="sm"
+          data-testid="button-view-all-projects-quick"
           onClick={() => window.location.href = '/all-projects'}
         >
           <FolderOpen className="w-4 h-4 mr-2" />
@@ -439,90 +454,23 @@ function QuickAccessPanel({ user }: { user: any }) {
         <Button 
           className="w-full justify-start" 
           variant="outline" 
+          size="sm"
           data-testid="button-view-clients"
           onClick={() => window.location.href = '/clients'}
         >
           <Building2 className="w-4 h-4 mr-2" />
           View All Clients
         </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function IntelligencePanel({ data }: { data?: DashboardStats }) {
-  const deadlineAlerts = data?.deadlineAlerts || [];
-  const stuckProjects = data?.stuckProjects || [];
-  const upcomingRenewals = data?.upcomingRenewals || [];
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 text-amber-500" />
-          Intelligence Panel
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        
-        {/* Deadline Alerts */}
-        <div>
-          <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            Deadline Alerts
-          </h4>
-          {deadlineAlerts.length > 0 ? (
-            <div className="space-y-2">
-              {deadlineAlerts.slice(0, 2).map((alert, index) => (
-                <div key={index} className="p-2 bg-red-50 dark:bg-red-950/20 rounded border border-red-200 dark:border-red-800">
-                  <p className="text-xs text-red-700 dark:text-red-300">{alert.message}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No urgent deadlines</p>
-          )}
-        </div>
-
-        {/* Stuck Projects */}
-        <div>
-          <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
-            Stuck Projects
-          </h4>
-          {stuckProjects.length > 0 ? (
-            <div className="space-y-2">
-              {stuckProjects.slice(0, 2).map((project) => (
-                <div key={project.id} className="p-2 bg-orange-50 dark:bg-orange-950/20 rounded border border-orange-200 dark:border-orange-800">
-                  <p className="text-xs font-medium">{project.client?.name}</p>
-                  <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No stuck projects</p>
-          )}
-        </div>
-
-        {/* Upcoming Renewals */}
-        <div>
-          <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            Service Renewals
-          </h4>
-          {upcomingRenewals.length > 0 ? (
-            <div className="space-y-2">
-              {upcomingRenewals.slice(0, 2).map((renewal, index) => (
-                <div key={index} className="p-2 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs text-blue-700 dark:text-blue-300">{renewal.message}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No upcoming renewals</p>
-          )}
-        </div>
-
+        <Button 
+          className="w-full justify-start" 
+          variant="outline" 
+          size="sm"
+          data-testid="button-view-people"
+          onClick={() => window.location.href = '/people'}
+        >
+          <Users className="w-4 h-4 mr-2" />
+          View All People
+        </Button>
       </CardContent>
     </Card>
   );

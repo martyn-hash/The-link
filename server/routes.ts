@@ -6301,12 +6301,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastViewed: item.viewedAt
       }));
 
-      // Calculate overdue items (projects in same stage for >7 days)
-      const overdueItems = userProjects.filter(project => {
+      // Calculate overdue projects (active projects past their due date)
+      const now = new Date();
+      const overdueProjects = userProjects.filter(project => {
+        // Must have a due date, not be archived or inactive, and not be completed
+        if (!project.dueDate || project.archived || project.inactive || project.currentStatus === "completed") {
+          return false;
+        }
+        // Check if due date has passed
+        return new Date(project.dueDate) < now;
+      });
+
+      // Calculate behind schedule projects (at current stage longer than permitted time)
+      // Note: This requires stage configuration data which we'll implement when stage configs are available
+      const behindScheduleProjects = userProjects.filter(project => {
+        if (project.archived || project.inactive || project.currentStatus === "completed") {
+          return false;
+        }
+
         const lastChronology = project.chronology?.[0];
         if (!lastChronology || !lastChronology.timestamp) return false;
-        const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-        return daysSinceLastChange > 7;
+
+        // For now, consider projects stuck in a stage for more than 7 days as "behind schedule"
+        // TODO: Enhance this with actual stage maxInstanceTime and maxTotalTime when stage data is accessible
+        const timeInCurrentStageMs = Date.now() - new Date(lastChronology.timestamp).getTime();
+        const timeInCurrentStageDays = timeInCurrentStageMs / (1000 * 60 * 60 * 24);
+
+        return timeInCurrentStageDays > 7;
       });
 
       // Group projects by type
@@ -6319,17 +6340,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         projectsByType[typeName].push(project);
       });
 
-      // Calculate stuck projects (same criteria as overdue for now)
-      const stuckProjects = overdueItems;
-
       const dashboardData = {
-        myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed").slice(0, 5),
-        overdueItems: overdueItems,
+        myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed" && !p.archived && !p.inactive).slice(0, 10),
+        myProjects: userProjects.filter(p => !p.archived && !p.inactive),
+        overdueProjects: overdueProjects,
+        behindScheduleProjects: behindScheduleProjects,
         recentClients: recentClients,
         recentProjects: recentlyViewed.filter(item => item.entityType === 'project' && item.entityData).slice(0, 5).map(item => item.entityData),
         projectsByType: projectsByType,
-        deadlineAlerts: [], // TODO: Implement deadline alerts
-        stuckProjects: stuckProjects,
+        deadlineAlerts: overdueProjects.map(p => ({
+          message: `${p.client?.name || 'Unknown Client'} - ${p.projectType?.name || 'Project'} is overdue`,
+          projectId: p.id,
+          dueDate: p.dueDate
+        })),
+        stuckProjects: behindScheduleProjects,
         upcomingRenewals: [] // TODO: Implement renewal tracking
       };
 
