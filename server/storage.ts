@@ -1724,6 +1724,11 @@ export class DatabaseStorage implements IStorage {
         bookkeeper: true,
         clientManager: true,
         currentAssignee: true,
+        projectType: {
+          with: {
+            service: true,
+          },
+        },
         chronology: {
           with: {
             assignee: true,
@@ -1792,6 +1797,11 @@ export class DatabaseStorage implements IStorage {
         bookkeeper: true,
         clientManager: true,
         currentAssignee: true,
+        projectType: {
+          with: {
+            service: true,
+          },
+        },
         chronology: {
           with: {
             assignee: true,

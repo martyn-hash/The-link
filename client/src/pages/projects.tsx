@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { getCurrentMonthForFiltering, type ProjectWithRelations, type User } from "@shared/schema";
+import { type ProjectWithRelations, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Columns3, List, Filter, Calendar, Archive, Eye, UserCheck, Users } from "lucide-react";
+import { Columns3, List, Filter, Archive, Eye, UserCheck, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -31,8 +31,14 @@ export default function Projects() {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
+
+  // Reset to list view when no service is selected for kanban
+  useEffect(() => {
+    if (serviceFilter === "all" && viewMode === "kanban") {
+      setViewMode("list");
+    }
+  }, [serviceFilter, viewMode]);
   const [userFilter, setUserFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState<boolean>(false);
   
   // New scope filter: For staff, default to "my", for managers default to "all"
@@ -51,7 +57,7 @@ export default function Projects() {
   }, [user]);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/projects", { month: monthFilter || undefined, archived: showArchived }],
+    queryKey: ["/api/projects", { archived: showArchived }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -114,9 +120,11 @@ export default function Projects() {
                    project.currentAssigneeId === user.id;
     }
 
-    // Service filter - temporarily simplified until projectType relation is available
+    // Service filter using projectType and service data
     let serviceMatch = true;
-    // TODO: Implement service filtering once projectType relation is included in ProjectWithRelations type
+    if (serviceFilter !== "all") {
+      serviceMatch = project.projectType?.service?.name === serviceFilter;
+    }
 
     // User filter (only available for managers/admins when viewing all projects)
     let userMatch = true;
@@ -190,23 +198,6 @@ export default function Projects() {
                 </div>
               )}
 
-              {/* Month Filter */}
-              <div className="flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <div className="flex flex-col">
-                  <Label htmlFor="month-filter-projects" className="text-xs text-muted-foreground mb-1">Month</Label>
-                  <Input
-                    id="month-filter-projects"
-                    type="text"
-                    placeholder="DD/MM/YYYY"
-                    value={monthFilter}
-                    onChange={(e) => setMonthFilter(e.target.value)}
-                    className="w-32 h-9"
-                    data-testid="input-month-filter-projects"
-                  />
-                </div>
-              </div>
-
               {/* Archived Toggle */}
               <div className="flex items-center space-x-2">
                 <Archive className="w-4 h-4 text-muted-foreground" />
@@ -232,7 +223,11 @@ export default function Projects() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Services</SelectItem>
-                    {/* TODO: Add service options once projectType relation is available */}
+                    {Array.from(new Set((projects || []).map((p: ProjectWithRelations) => p.projectType?.service?.name).filter((s): s is string => Boolean(s)))).map((serviceName) => (
+                      <SelectItem key={serviceName} value={serviceName}>
+                        {serviceName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -258,13 +253,14 @@ export default function Projects() {
                 </div>
               )}
               
-              {/* View Toggle */}
+              {/* View Toggle - Kanban only available when service is selected */}
               <div className="flex items-center bg-muted rounded-lg p-1">
                 <Button
                   variant={viewMode === "kanban" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("kanban")}
                   className="px-3"
+                  disabled={serviceFilter === "all"}
                   data-testid="button-kanban-view-projects"
                 >
                   <Columns3 className="w-4 h-4 mr-2" />
