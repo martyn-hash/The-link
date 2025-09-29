@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -465,7 +466,19 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                       className="text-sm text-muted-foreground whitespace-pre-wrap"
                       data-testid={`communication-content-${comm.id}`}
                     >
-                      {comm.content}
+                      {comm.type === 'email_sent' || comm.type === 'email_received' ? (
+                        <div 
+                          dangerouslySetInnerHTML={{ 
+                            __html: DOMPurify.sanitize(comm.content, {
+                              ALLOWED_TAGS: ['br', 'p', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a'],
+                              ALLOWED_ATTR: ['href', 'style'],
+                              ALLOW_DATA_ATTR: false
+                            })
+                          }}
+                        />
+                      ) : (
+                        comm.content
+                      )}
                     </div>
                   )}
                   {comm.person && (
@@ -739,10 +752,19 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
               return;
             }
             
+            // Append user's email signature if it exists
+            let finalEmailContent = emailContent;
+            const currentUser = user; // Capture user in local scope
+            if (currentUser?.emailSignature && currentUser.emailSignature.trim()) {
+              // Add some spacing before the signature
+              const spacing = emailContent.trim() ? '<br><br>' : '';
+              finalEmailContent = emailContent + spacing + currentUser.emailSignature;
+            }
+            
             sendEmailMutation.mutate({
               to,
               subject: subject || 'Message from CRM',
-              content: emailContent,
+              content: finalEmailContent,
               isHtml: true,
               clientId: clientId,
               personId: emailPersonId,
