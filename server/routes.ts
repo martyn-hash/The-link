@@ -2353,8 +2353,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid change reason" });
       }
 
-      // Allow any change reason for any stage to provide more flexibility
-      // Note: Removed strict stage-reason mapping validation to match relaxed permission policy
+      // Validate stage-reason mapping using reasonId
+      const mappingValidation = await storage.validateStageReasonMapping(targetStage.id, changeReason.id);
+      if (!mappingValidation.isValid) {
+        return res.status(400).json({ message: mappingValidation.reason || "Invalid change reason for this stage" });
+      }
 
       // Validate required fields for this change reason
       const fieldValidation = await storage.validateRequiredFields(changeReason.id, updateData.fieldResponses);
