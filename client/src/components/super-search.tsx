@@ -148,17 +148,17 @@ export default function SuperSearch({
   const getResultColor = (type: string) => {
     switch (type) {
       case 'client':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200';
       case 'person':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200';
       case 'project':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+        return 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-200';
       case 'communication':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
       case 'service':
-        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+        return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200';
     }
   };
 
@@ -179,51 +179,55 @@ export default function SuperSearch({
     }
   };
 
-  const renderResultCategory = (type: keyof SuperSearchResults, results: SearchResult[]) => {
+  const renderResultCategory = (type: keyof SuperSearchResults, results: SearchResult[], columnClass: string = "") => {
     if (results.length === 0) return null;
 
     return (
-      <div key={type} className="border-b border-border/50 last:border-b-0">
-        <div className="px-3 py-2 bg-muted/50">
+      <div key={type} className={`${columnClass} min-h-0`}>
+        <div className="px-4 py-3 border-b border-border/20">
           <div className="flex items-center gap-2">
-            {getResultIcon(type)}
-            <span className="text-sm font-medium text-muted-foreground">
-              {getCategoryTitle(type)} ({results.length})
+            <div className={`w-6 h-6 rounded-md flex items-center justify-center ${getResultColor(type)}`}>
+              {getResultIcon(type)}
+            </div>
+            <span className="text-sm font-semibold text-foreground">
+              {getCategoryTitle(type)}
             </span>
+            <Badge variant="outline" className="text-xs ml-auto">
+              {results.length}
+            </Badge>
           </div>
         </div>
-        {results.map((result) => (
-          <div
-            key={`${result.type}-${result.id}`}
-            className="p-3 hover:bg-accent cursor-pointer border-b border-border/50 last:border-b-0"
-            onClick={() => handleResultClick(result)}
-            data-testid={`search-result-${result.type}-${result.id}`}
-          >
-            <div className="flex items-start gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getResultColor(result.type)}`}>
-                {getResultIcon(result.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-foreground truncate">
-                  {result.title}
+        <div className="max-h-80 overflow-y-auto">
+          {results.map((result) => (
+            <div
+              key={`${result.type}-${result.id}`}
+              className="p-3 hover:bg-accent/50 cursor-pointer border-b border-border/10 last:border-b-0 transition-colors"
+              onClick={() => handleResultClick(result)}
+              data-testid={`search-result-${result.type}-${result.id}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getResultColor(result.type)} flex-shrink-0`}>
+                  {getResultIcon(result.type)}
                 </div>
-                {result.subtitle && (
-                  <div className="text-sm text-muted-foreground truncate">
-                    {result.subtitle}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-foreground truncate text-sm">
+                    {result.title}
                   </div>
-                )}
-                {result.description && (
-                  <div className="text-xs text-muted-foreground truncate mt-1">
-                    {result.description}
-                  </div>
-                )}
+                  {result.subtitle && (
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {result.subtitle}
+                    </div>
+                  )}
+                  {result.description && (
+                    <div className="text-xs text-muted-foreground/80 truncate mt-1">
+                      {result.description}
+                    </div>
+                  )}
+                </div>
               </div>
-              <Badge variant="secondary" className="text-xs shrink-0">
-                {result.type}
-              </Badge>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   };
@@ -245,37 +249,80 @@ export default function SuperSearch({
         data-testid="input-super-search"
       />
 
-      {/* Search Results Dropdown */}
+      {/* Search Results Mega Menu */}
       {showDropdown && debouncedSearch.length >= 2 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-md z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-xl z-50 min-h-[400px] max-h-[600px]">
           {isLoading ? (
-            <div className="p-4 text-center text-muted-foreground">
-              <div className="flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                Searching across all data...
+            <div className="p-8 text-center text-muted-foreground">
+              <div className="flex items-center justify-center gap-3">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                <span className="text-base">Searching across all data...</span>
               </div>
             </div>
           ) : hasResults ? (
             <>
-              {renderResultCategory('clients', searchResults.clients)}
-              {renderResultCategory('people', searchResults.people)}
-              {renderResultCategory('projects', searchResults.projects)}
-              {renderResultCategory('communications', searchResults.communications)}
-              {renderResultCategory('services', searchResults.services)}
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-border/20 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-foreground">Search Results</h3>
+                  <Badge variant="secondary" className="text-sm">
+                    {searchResults.total} total results
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Results for "{debouncedSearch}"
+                </p>
+              </div>
               
-              {/* Footer with total count */}
-              <div className="p-3 bg-muted/30 text-center">
-                <span className="text-xs text-muted-foreground">
-                  Showing {searchResults.total} results for "{debouncedSearch}"
-                </span>
+              {/* 3-Column Layout */}
+              <div className="grid grid-cols-3 divide-x divide-border/20 min-h-[300px]">
+                {/* Column 1: Clients & Communications */}
+                <div className="flex flex-col">
+                  {renderResultCategory('clients', searchResults.clients, 'flex-1')}
+                  {searchResults.clients.length > 0 && searchResults.communications.length > 0 && (
+                    <div className="border-t border-border/20"></div>
+                  )}
+                  {renderResultCategory('communications', searchResults.communications, 'flex-1')}
+                </div>
+                
+                {/* Column 2: Projects & Services */}
+                <div className="flex flex-col">
+                  {renderResultCategory('projects', searchResults.projects, 'flex-1')}
+                  {searchResults.projects.length > 0 && searchResults.services.length > 0 && (
+                    <div className="border-t border-border/20"></div>
+                  )}
+                  {renderResultCategory('services', searchResults.services, 'flex-1')}
+                </div>
+                
+                {/* Column 3: People */}
+                <div className="flex flex-col">
+                  {renderResultCategory('people', searchResults.people, 'flex-1')}
+                </div>
+              </div>
+              
+              {/* Footer */}
+              <div className="px-6 py-3 border-t border-border/20 bg-muted/10">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Press Enter to search all clients</span>
+                  <span>Click any result to navigate</span>
+                </div>
               </div>
             </>
           ) : (
-            <div className="p-4 text-center">
+            <div className="p-8 text-center min-h-[300px] flex flex-col items-center justify-center">
               <div className="text-muted-foreground">
-                <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <div className="text-sm">No results found for "{debouncedSearch}"</div>
-                <div className="text-xs mt-1">Try searching for clients, people, projects, or communications</div>
+                <Search className="w-12 h-12 mx-auto mb-4 opacity-40" />
+                <div className="text-lg font-medium mb-2">No results found</div>
+                <div className="text-sm mb-4">No matches for "{debouncedSearch}"</div>
+                <div className="text-xs space-y-1 max-w-md">
+                  <div>Try searching for:</div>
+                  <div className="flex flex-wrap gap-2 justify-center mt-2">
+                    <Badge variant="outline" className="text-xs">Client names</Badge>
+                    <Badge variant="outline" className="text-xs">People names</Badge>
+                    <Badge variant="outline" className="text-xs">Project titles</Badge>
+                    <Badge variant="outline" className="text-xs">Services</Badge>
+                  </div>
+                </div>
               </div>
             </div>
           )}
