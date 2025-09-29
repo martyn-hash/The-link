@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Columns3, List, Filter, Folder, Clock, AlertTriangle, Calendar, Archive, Power, Eye, UserCheck, Users } from "lucide-react";
+import { Columns3, List, Filter, Calendar, Archive, Eye, UserCheck, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -30,9 +30,9 @@ export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [serviceFilter, setServiceFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState<string>(getCurrentMonthForFiltering());
+  const [monthFilter, setMonthFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState<boolean>(false);
   
   // New scope filter: For staff, default to "my", for managers default to "all"
@@ -114,27 +114,9 @@ export default function Projects() {
                    project.currentAssigneeId === user.id;
     }
 
-    // Status filter
-    let statusMatch = true;
-    switch (statusFilter) {
-      case "overdue":
-        const lastChronology = project.chronology?.[0];
-        if (!lastChronology || !lastChronology.timestamp) {
-          statusMatch = false;
-          break;
-        }
-        const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-        statusMatch = daysSinceLastChange > 7;
-        break;
-      case "in-review":
-        statusMatch = project.currentStatus.toLowerCase().includes("review");
-        break;
-      case "completed":
-        statusMatch = project.currentStatus.toLowerCase().includes("completed");
-        break;
-      default:
-        statusMatch = true;
-    }
+    // Service filter - temporarily simplified until projectType relation is available
+    let serviceMatch = true;
+    // TODO: Implement service filtering once projectType relation is included in ProjectWithRelations type
 
     // User filter (only available for managers/admins when viewing all projects)
     let userMatch = true;
@@ -144,24 +126,9 @@ export default function Projects() {
                   project.currentAssigneeId === userFilter;
     }
 
-    return scopeMatch && statusMatch && userMatch;
+    return scopeMatch && serviceMatch && userMatch;
   });
 
-  const projectStats = projects && Array.isArray(projects) ? {
-    total: projects.length,
-    myAssignments: projects.filter((p: ProjectWithRelations) => 
-      p.bookkeeperId === user.id || 
-      p.clientManagerId === user.id || 
-      p.currentAssigneeId === user.id
-    ).length,
-    urgent: projects.filter((p: ProjectWithRelations) => p.priority === "urgent").length,
-    overdue: projects.filter((p: ProjectWithRelations) => {
-      const lastChronology = p.chronology?.[0];
-      if (!lastChronology || !lastChronology.timestamp) return false;
-      const daysSinceLastChange = (Date.now() - new Date(lastChronology.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-      return daysSinceLastChange > 7;
-    }).length,
-  } : null;
 
   const getPageTitle = () => {
     if (viewScope === "my") {
@@ -256,18 +223,16 @@ export default function Projects() {
                 </div>
               </div>
 
-              {/* Status Filter */}
+              {/* Service Filter */}
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-muted-foreground" />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40" data-testid="select-status-filter-projects">
-                    <SelectValue placeholder="Filter by status" />
+                <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                  <SelectTrigger className="w-40" data-testid="select-service-filter-projects">
+                    <SelectValue placeholder="Filter by service" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                    <SelectItem value="in-review">In Review</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="all">All Services</SelectItem>
+                    {/* TODO: Add service options once projectType relation is available */}
                   </SelectContent>
                 </Select>
               </div>
@@ -319,66 +284,6 @@ export default function Projects() {
             </div>
           </div>
 
-          {/* Project Stats */}
-          {projectStats && (
-            <div className="grid grid-cols-4 gap-4 mt-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center">
-                    <Folder className="w-4 h-4 mr-2 text-primary" />
-                    Total Projects
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-total-projects">
-                    {filteredProjects.length} / {projectStats.total}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-blue-600" />
-                    My Assignments
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-600" data-testid="text-my-assignments">
-                    {projectStats.myAssignments}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center">
-                    <AlertTriangle className="w-4 h-4 mr-2 text-red-600" />
-                    Urgent
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-600" data-testid="text-urgent-projects">
-                    {projectStats.urgent}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center">
-                    <AlertTriangle className="w-4 h-4 mr-2 text-orange-600" />
-                    Overdue
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-600" data-testid="text-overdue-projects">
-                    {projectStats.overdue}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
         </header>
         
         {/* Main Content */}
