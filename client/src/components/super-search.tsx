@@ -101,7 +101,8 @@ export default function SuperSearch({
         setLocation(`/clients/${result.id}`);
         break;
       case 'person':
-        setLocation(`/people/${result.id}`);
+        // Navigate to people page with search filter since no person detail page exists yet
+        setLocation(`/people?search=${encodeURIComponent(result.title)}`);
         break;
       case 'project':
         setLocation(`/projects/${result.id}`);

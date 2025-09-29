@@ -73,16 +73,16 @@ export default function People() {
     (person.primaryEmail && person.primaryEmail.toLowerCase().includes(searchTerm.toLowerCase()))
   ) || [];
 
-  // Handle view person (for card clicks)
+  // Handle view person (for card clicks) - disabled for now since no detail page exists
   const handleViewPerson = (person: Person) => {
-    // Navigate to person detail view (if it exists) or placeholder for now
-    setLocation(`/people/${person.id}`);
+    // TODO: Navigate to person detail view when implemented
+    console.log("Person card clicked:", person.fullName || person.id);
   };
 
-  // Handle edit person
+  // Handle edit person - disabled for now since no detail page exists
   const handleEditPerson = (person: Person) => {
-    // Navigate to person detail view (if it exists) or placeholder for now
-    setLocation(`/people/${person.id}`);
+    // TODO: Navigate to person edit view when implemented
+    console.log("Edit person clicked:", person.fullName || person.id);
   };
 
   // Handle search input change

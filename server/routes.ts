@@ -640,6 +640,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // People management routes
+  app.get("/api/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const people = await storage.getAllPeople();
+      res.json(people);
+    } catch (error) {
+      console.error("Error fetching people:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch people" });
+    }
+  });
+
   // GET /api/clients/:id - Get single client by ID
   app.get("/api/clients/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
