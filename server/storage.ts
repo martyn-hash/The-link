@@ -1077,6 +1077,30 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(limit);
 
+    // Get related people for found clients (to show associated contacts)
+    let relatedPeople: any[] = [];
+    if (clientResults.length > 0) {
+      const clientIds = clientResults.map(c => c.id);
+      relatedPeople = await db
+        .select({
+          id: people.id,
+          fullName: people.fullName,
+          firstName: people.firstName,
+          lastName: people.lastName,
+          email: people.email,
+          primaryEmail: people.primaryEmail,
+          occupation: people.occupation,
+          clientId: clientPeople.clientId,
+          clientName: clients.name,
+          isPrimaryContact: clientPeople.isPrimaryContact,
+        })
+        .from(people)
+        .innerJoin(clientPeople, eq(people.id, clientPeople.personId))
+        .innerJoin(clients, eq(clientPeople.clientId, clients.id))
+        .where(inArray(clientPeople.clientId, clientIds))
+        .limit(limit * 2); // Allow more related people
+    }
+
     // Search projects by description, including client name via join
     const projectResults = await db
       .select({
@@ -1144,7 +1168,8 @@ export class DatabaseStorage implements IStorage {
       }
     }));
 
-    const peopleSearchResults: SearchResult[] = peopleResults.map(person => ({
+    // Combine direct people search results with related people from clients
+    const directPeopleResults: SearchResult[] = peopleResults.map(person => ({
       id: person.id,
       type: 'person' as const,
       title: person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim(),
@@ -1156,6 +1181,43 @@ export class DatabaseStorage implements IStorage {
         occupation: person.occupation
       }
     }));
+
+    const relatedPeopleResults: SearchResult[] = relatedPeople.map(person => ({
+      id: person.id,
+      type: 'person' as const,
+      title: person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim(),
+      subtitle: person.email || person.primaryEmail || undefined,
+      description: person.clientName ? `Contact at ${person.clientName}` : person.occupation || undefined,
+      metadata: {
+        email: person.email,
+        primaryEmail: person.primaryEmail,
+        occupation: person.occupation,
+        clientName: person.clientName,
+        isPrimaryContact: person.isPrimaryContact
+      }
+    }));
+
+    // Combine and deduplicate people results
+    const allPeopleIds = new Set();
+    const combinedPeopleResults: SearchResult[] = [];
+    
+    // Add direct people search results first
+    for (const person of directPeopleResults) {
+      if (!allPeopleIds.has(person.id)) {
+        allPeopleIds.add(person.id);
+        combinedPeopleResults.push(person);
+      }
+    }
+    
+    // Add related people results (avoiding duplicates)
+    for (const person of relatedPeopleResults) {
+      if (!allPeopleIds.has(person.id) && combinedPeopleResults.length < limit * 2) {
+        allPeopleIds.add(person.id);
+        combinedPeopleResults.push(person);
+      }
+    }
+
+    const peopleSearchResults = combinedPeopleResults;
 
     const projectSearchResults: SearchResult[] = projectResults.map(project => ({
       id: project.id,
