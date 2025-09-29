@@ -804,9 +804,9 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
             
             <div className="space-y-2">
               <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
-              <ResizablePanelGroup direction="vertical" className="border rounded-md">
-                <ResizablePanel defaultSize={100} minSize={30}>
-                  <div data-testid="input-email-content-editor" className="h-full">
+              <ResizablePanelGroup direction="vertical" className="min-h-[300px] border rounded-md">
+                <ResizablePanel defaultSize={100} minSize={40}>
+                  <div data-testid="input-email-content-editor" className="h-full p-0">
                     <ReactQuill
                       value={emailContent}
                       onChange={setEmailContent}
@@ -814,12 +814,19 @@ function CommunicationsTimeline({ clientId }: { clientId: string }) {
                       formats={emailEditorFormats}
                       theme="snow"
                       placeholder="Enter your email message..."
-                      style={{ height: '300px', minHeight: '200px' }}
+                      className="h-full"
+                      style={{ height: '100%' }}
                     />
                   </div>
                 </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={0} minSize={0} className="bg-muted/20">
+                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                    Drag to resize editor
+                  </div>
+                </ResizablePanel>
               </ResizablePanelGroup>
-              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address • Drag the editor corner to resize</p>
+              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address • Drag the handle above to resize editor height</p>
             </div>
             
             <div className="flex justify-end gap-2">
