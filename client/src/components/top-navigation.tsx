@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import SuperSearch from "@/components/super-search";
 import AdminDropdown from "@/components/admin-dropdown";
@@ -87,82 +87,132 @@ export default function TopNavigation({ user }: TopNavigationProps) {
                   <ChevronDown className="w-4 h-4 text-muted-foreground" />
                 </div>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link href="/" className="w-full">
-                    <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-dashboard">
-                      <Home className="w-4 h-4" />
-                      <span>Dashboard</span>
+              <DropdownMenuContent align="start" className="w-80 p-0">
+                <div className="bg-card rounded-lg border border-border shadow-lg">
+                  {/* Header */}
+                  <div className="px-6 py-4 border-b border-border/20">
+                    <div className="flex items-center gap-3">
+                      <img 
+                        src={logoPath} 
+                        alt="Growth Accountants" 
+                        className="h-6 w-auto"
+                      />
+                      <span className="text-base font-semibold text-foreground">Growth Accountants</span>
                     </div>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/projects" className="w-full">
-                    <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-projects-menu">
-                      <FolderOpen className="w-4 h-4" />
-                      <span>Projects</span>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
-                {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                  <DropdownMenuItem asChild>
-                    <Link href="/scheduled-services" className="w-full">
-                      <div className="flex items-center space-x-2 w-full px-2 py-1" data-testid="link-services-menu">
-                        <Calendar className="w-4 h-4" />
-                        <span>Services</span>
+                  </div>
+                  
+                  {/* Navigation Section */}
+                  <div className="px-6 py-4 border-b border-border/20">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                        <FolderOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       </div>
-                    </Link>
-                  </DropdownMenuItem>
-                )}
+                      <span className="text-sm font-semibold text-foreground">Navigation</span>
+                    </div>
+                    <div className="space-y-1">
+                      <DropdownMenuItem asChild>
+                        <Link href="/" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-dashboard">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center">
+                              <Home className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-foreground text-sm">Dashboard</div>
+                              <div className="text-xs text-muted-foreground">Overview and quick access</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/projects" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-projects-menu">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center">
+                              <FolderOpen className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-foreground text-sm">Projects</div>
+                              <div className="text-xs text-muted-foreground">Manage client projects</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
+                        <DropdownMenuItem asChild>
+                          <Link href="/scheduled-services" className="w-full">
+                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-services-menu">
+                              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center">
+                                <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-foreground text-sm">Services</div>
+                                <div className="text-xs text-muted-foreground">Scheduled services overview</div>
+                              </div>
+                            </div>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Profile Section */}
+                  <div className="px-6 py-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900 flex items-center justify-center">
+                        <UserIcon className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                      </div>
+                      <span className="text-sm font-semibold text-foreground">Account</span>
+                    </div>
+                    <div className="space-y-1">
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-user-profile">
+                            <Avatar className="w-8 h-8">
+                              <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
+                              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+                                {getUserInitials()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <div className="font-medium text-foreground text-sm">
+                                {getUserDisplayName()}
+                                {isImpersonating && (
+                                  <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">View and edit profile</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <button 
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors text-left"
+                          data-testid="button-logout"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                            <Settings className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-foreground text-sm">Sign Out</div>
+                            <div className="text-xs text-muted-foreground">Log out of your account</div>
+                          </div>
+                        </button>
+                      </DropdownMenuItem>
+                    </div>
+                  </div>
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
-          {/* Center Section: Navigation Items */}
+          {/* Center Section: Search and Admin */}
           <div className="flex items-center space-x-6">
-            {/* User Info */}
-            <Link href="/profile">
-              <div 
-                className="flex items-center space-x-3 hover:bg-accent/50 transition-colors cursor-pointer px-3 py-2 rounded-md" 
-                data-testid="link-user-profile"
-              >
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
-                  <AvatarFallback className="bg-accent text-accent-foreground text-sm">
-                    {getUserInitials()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium" data-testid="text-user-name">
-                    {getUserDisplayName()}
-                    {isImpersonating && (
-                      <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            </Link>
-
             {/* Global Super Search */}
             <SuperSearch 
               placeholder="Search clients, people, projects..." 
               className="w-80"
             />
-
-
-            {/* Services */}
-            {(user?.isAdmin || user?.canSeeAdminMenu) && (
-              <Link href="/scheduled-services">
-                <Button
-                  variant={isActive("/scheduled-services") ? "default" : "ghost"}
-                  className="flex items-center space-x-2"
-                  data-testid="link-services"
-                >
-                  <Calendar className="w-4 h-4" />
-                  <span>Services</span>
-                </Button>
-              </Link>
-            )}
 
             {/* Admin Dropdown */}
             {user && <AdminDropdown user={user} />}
