@@ -5867,33 +5867,62 @@ export default function ClientDetail() {
                                         </div>
                                       </div>
 
-                                      {/* Column 2: Next Start Date */}
+                                      {/* Column 2: Next Service Dates (Start & Due) */}
                                       <div className="space-y-2">
                                         <div className="flex items-center gap-2 mb-2">
                                           <Clock className="h-4 w-4 text-muted-foreground" />
-                                          <span className="text-sm font-medium text-muted-foreground">Next Start Date</span>
+                                          <span className="text-sm font-medium text-muted-foreground">Next Service Dates</span>
                                         </div>
-                                        {clientService.nextStartDate ? (
-                                          <div className="text-sm font-medium" data-testid={`text-next-start-date-${clientService.id}`}>
-                                            {formatDate(clientService.nextStartDate)}
-                                          </div>
-                                        ) : (
-                                          <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                        )}
+                                        <div className="space-y-1">
+                                          {clientService.nextStartDate ? (
+                                            <div className="flex items-center space-x-2">
+                                              <span className="text-xs text-muted-foreground">Start:</span>
+                                              <span className="text-sm font-medium" data-testid={`text-next-start-date-${clientService.id}`}>
+                                                {formatDate(clientService.nextStartDate)}
+                                              </span>
+                                            </div>
+                                          ) : null}
+                                          {clientService.nextDueDate ? (
+                                            <div className="flex items-center space-x-2">
+                                              <span className="text-xs text-muted-foreground">Due:</span>
+                                              <span className="text-sm font-medium" data-testid={`text-next-due-date-${clientService.id}`}>
+                                                {formatDate(clientService.nextDueDate)}
+                                              </span>
+                                            </div>
+                                          ) : null}
+                                          {!clientService.nextStartDate && !clientService.nextDueDate && (
+                                            <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                          )}
+                                        </div>
                                       </div>
 
-                                      {/* Column 3: Next Due Date */}
+                                      {/* Column 3: Current Project Dates (Start & Due) */}
                                       <div className="space-y-2">
                                         <div className="flex items-center gap-2 mb-2">
                                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                                          <span className="text-sm font-medium text-muted-foreground">Next Due Date</span>
+                                          <span className="text-sm font-medium text-muted-foreground">Current Project Dates</span>
                                         </div>
-                                        {clientService.nextDueDate ? (
-                                          <div className="text-sm font-medium" data-testid={`text-next-due-date-${clientService.id}`}>
-                                            {formatDate(clientService.nextDueDate)}
+                                        {clientService.hasActiveProject && (clientService.currentProjectStartDate || clientService.currentProjectDueDate) ? (
+                                          <div className="space-y-1">
+                                            {clientService.currentProjectStartDate ? (
+                                              <div className="flex items-center space-x-2">
+                                                <span className="text-xs text-muted-foreground">Started:</span>
+                                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300" data-testid={`text-current-start-date-${clientService.id}`}>
+                                                  {formatDate(clientService.currentProjectStartDate)}
+                                                </span>
+                                              </div>
+                                            ) : null}
+                                            {clientService.currentProjectDueDate ? (
+                                              <div className="flex items-center space-x-2">
+                                                <span className="text-xs text-muted-foreground">Due:</span>
+                                                <span className="text-sm font-medium text-orange-700 dark:text-orange-300" data-testid={`text-current-due-date-${clientService.id}`}>
+                                                  {formatDate(clientService.currentProjectDueDate)}
+                                                </span>
+                                              </div>
+                                            ) : null}
                                           </div>
                                         ) : (
-                                          <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                          <p className="text-sm text-muted-foreground italic">No active project</p>
                                         )}
                                       </div>
 
@@ -6254,34 +6283,42 @@ export default function ClientDetail() {
                                   </div>
                                 </div>
 
-                                {/* Column 2: Next Start Date */}
+                                {/* Column 2: Next Service Dates (Start & Due) */}
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2 mb-2">
                                     <Clock className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm font-medium text-muted-foreground">Next Start Date</span>
+                                    <span className="text-sm font-medium text-muted-foreground">Next Service Dates</span>
                                   </div>
-                                  {peopleService.nextStartDate ? (
-                                    <div className="text-sm font-medium" data-testid={`text-next-start-date-${peopleService.id}`}>
-                                      {formatDate(peopleService.nextStartDate)}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                  )}
+                                  <div className="space-y-1">
+                                    {peopleService.nextStartDate ? (
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-xs text-muted-foreground">Start:</span>
+                                        <span className="text-sm font-medium" data-testid={`text-next-start-date-${peopleService.id}`}>
+                                          {formatDate(peopleService.nextStartDate)}
+                                        </span>
+                                      </div>
+                                    ) : null}
+                                    {peopleService.nextDueDate ? (
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-xs text-muted-foreground">Due:</span>
+                                        <span className="text-sm font-medium" data-testid={`text-next-due-date-${peopleService.id}`}>
+                                          {formatDate(peopleService.nextDueDate)}
+                                        </span>
+                                      </div>
+                                    ) : null}
+                                    {!peopleService.nextStartDate && !peopleService.nextDueDate && (
+                                      <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                    )}
+                                  </div>
                                 </div>
 
-                                {/* Column 3: Next Due Date */}
+                                {/* Column 3: Current Project Dates */}
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2 mb-2">
                                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm font-medium text-muted-foreground">Next Due Date</span>
+                                    <span className="text-sm font-medium text-muted-foreground">Current Project Dates</span>
                                   </div>
-                                  {peopleService.nextDueDate ? (
-                                    <div className="text-sm font-medium" data-testid={`text-next-due-date-${peopleService.id}`}>
-                                      {formatDate(peopleService.nextDueDate)}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                  )}
+                                  <p className="text-sm text-muted-foreground italic">No active project</p>
                                 </div>
 
                                 {/* Column 4: Person */}
@@ -6452,34 +6489,42 @@ export default function ClientDetail() {
                                             </div>
                                           </div>
 
-                                          {/* Column 2: Next Start Date */}
+                                          {/* Column 2: Next Service Dates (Start & Due) */}
                                           <div className="space-y-2">
                                             <div className="flex items-center gap-2 mb-2">
                                               <Clock className="h-4 w-4 text-muted-foreground" />
-                                              <span className="text-sm font-medium text-muted-foreground">Next Start Date</span>
+                                              <span className="text-sm font-medium text-muted-foreground">Next Service Dates</span>
                                             </div>
-                                            {peopleService.nextStartDate ? (
-                                              <div className="text-sm font-medium" data-testid={`text-personal-next-start-date-${peopleService.id}`}>
-                                                {formatDate(peopleService.nextStartDate)}
-                                              </div>
-                                            ) : (
-                                              <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                            )}
+                                            <div className="space-y-1">
+                                              {peopleService.nextStartDate ? (
+                                                <div className="flex items-center space-x-2">
+                                                  <span className="text-xs text-muted-foreground">Start:</span>
+                                                  <span className="text-sm font-medium" data-testid={`text-personal-next-start-date-${peopleService.id}`}>
+                                                    {formatDate(peopleService.nextStartDate)}
+                                                  </span>
+                                                </div>
+                                              ) : null}
+                                              {peopleService.nextDueDate ? (
+                                                <div className="flex items-center space-x-2">
+                                                  <span className="text-xs text-muted-foreground">Due:</span>
+                                                  <span className="text-sm font-medium" data-testid={`text-personal-next-due-date-${peopleService.id}`}>
+                                                    {formatDate(peopleService.nextDueDate)}
+                                                  </span>
+                                                </div>
+                                              ) : null}
+                                              {!peopleService.nextStartDate && !peopleService.nextDueDate && (
+                                                <p className="text-sm text-muted-foreground italic">Not scheduled</p>
+                                              )}
+                                            </div>
                                           </div>
 
-                                          {/* Column 3: Next Due Date */}
+                                          {/* Column 3: Current Project Dates */}
                                           <div className="space-y-2">
                                             <div className="flex items-center gap-2 mb-2">
                                               <Calendar className="h-4 w-4 text-muted-foreground" />
-                                              <span className="text-sm font-medium text-muted-foreground">Next Due Date</span>
+                                              <span className="text-sm font-medium text-muted-foreground">Current Project Dates</span>
                                             </div>
-                                            {peopleService.nextDueDate ? (
-                                              <div className="text-sm font-medium" data-testid={`text-personal-next-due-date-${peopleService.id}`}>
-                                                {formatDate(peopleService.nextDueDate)}
-                                              </div>
-                                            ) : (
-                                              <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                            )}
+                                            <p className="text-sm text-muted-foreground italic">No active project</p>
                                           </div>
 
                                           {/* Column 4: Service Owner */}
