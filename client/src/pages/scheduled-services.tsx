@@ -279,10 +279,10 @@ export default function ScheduledServices() {
                   <TableRow>
                     <TableHead>Service Name</TableHead>
                     <TableHead>Client / Person Name</TableHead>
-                    <TableHead>Next Start Date</TableHead>
-                    <TableHead>Next Due Date</TableHead>
+                    <TableHead>Service Dates (Next)</TableHead>
+                    <TableHead>Current Project Dates</TableHead>
                     <TableHead>Project Type</TableHead>
-                    <TableHead>Active Project</TableHead>
+                    <TableHead>Project Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -298,29 +298,64 @@ export default function ScheduledServices() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {service.nextStartDate ? (
-                          <div className="flex items-center space-x-2">
-                            <span>{format(new Date(service.nextStartDate), 'MMM d, yyyy')}</span>
-                            {new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
-                              <Badge variant="default" className="text-xs">Today</Badge>
+                        <div className="space-y-1">
+                          {service.nextStartDate && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs text-muted-foreground">Start:</span>
+                              <span className="text-sm">{format(new Date(service.nextStartDate), 'MMM d, yyyy')}</span>
+                              {new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
+                                <Badge variant="default" className="text-xs">Today</Badge>
+                              )}
+                            </div>
+                          )}
+                          {service.nextDueDate && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs text-muted-foreground">Due:</span>
+                              <span className="text-sm">{format(new Date(service.nextDueDate), 'MMM d, yyyy')}</span>
+                            </div>
+                          )}
+                          {!service.nextStartDate && !service.nextDueDate && (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate) ? (
+                          <div className="space-y-1">
+                            {service.currentProjectStartDate && (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs text-muted-foreground">Started:</span>
+                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                  {format(new Date(service.currentProjectStartDate), 'MMM d, yyyy')}
+                                </span>
+                              </div>
+                            )}
+                            {service.currentProjectDueDate && (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs text-muted-foreground">Due:</span>
+                                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                  {format(new Date(service.currentProjectDueDate), 'MMM d, yyyy')}
+                                </span>
+                              </div>
                             )}
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {service.nextDueDate ? (
-                          format(new Date(service.nextDueDate), 'MMM d, yyyy')
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
+                          <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
                       <TableCell>{service.projectTypeName}</TableCell>
                       <TableCell>
-                        <Badge variant={service.hasActiveProject ? "default" : "secondary"}>
-                          {service.hasActiveProject ? "Yes" : "No"}
-                        </Badge>
+                        {service.hasActiveProject ? (
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                              Active Project
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Badge variant="secondary" className="text-muted-foreground">
+                            No Active Project
+                          </Badge>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
