@@ -167,7 +167,7 @@ export default function TopNavigation({ user }: TopNavigationProps) {
             )}
 
             {/* Admin Dropdown */}
-            <AdminDropdown user={user} />
+            {user && <AdminDropdown user={user} />}
           </div>
 
           {/* Right Section: Empty (Sign Out moved to profile page) */}
