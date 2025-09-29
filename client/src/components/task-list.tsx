@@ -94,7 +94,7 @@ export default function TaskList({ projects, user }: TaskListProps) {
 
   // Filter projects assigned to current user or visible to their role
   const visibleProjects = sortedProjects.filter(project => {
-    if (user.role === 'admin' || user.role === 'manager') {
+    if (user.isAdmin || user.canSeeAdminMenu) {
       return true; // Can see all projects
     }
     
