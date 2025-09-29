@@ -131,6 +131,25 @@ export interface ScheduledServiceView {
   serviceOwnerId?: string;
   serviceOwnerName?: string;
 }
+
+// Super search result types
+export interface SearchResult {
+  id: string;
+  type: 'client' | 'person' | 'project' | 'communication' | 'service';
+  title: string;
+  subtitle?: string;
+  description?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface SuperSearchResults {
+  clients: SearchResult[];
+  people: SearchResult[];
+  projects: SearchResult[];
+  communications: SearchResult[];
+  services: SearchResult[];
+  total: number;
+}
 import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
@@ -163,6 +182,9 @@ export interface IStorage {
   getAllClients(search?: string): Promise<Client[]>;
   updateClient(id: string, client: Partial<InsertClient>): Promise<Client>;
   deleteClient(id: string): Promise<void>;
+  
+  // Super search operations
+  superSearch(query: string, limit?: number): Promise<SuperSearchResults>;
   
   // Person-Company many-to-many relationship operations
   unlinkPersonFromClient(clientId: string, personId: string): Promise<void>;
@@ -1020,6 +1042,172 @@ export class DatabaseStorage implements IStorage {
     if (result.length === 0) {
       throw new Error(`Failed to delete client with ID '${id}'`);
     }
+  }
+
+  // Super search implementation
+  async superSearch(query: string, limit: number = 5): Promise<SuperSearchResults> {
+    const searchTerm = `%${query}%`;
+    
+    // Search clients by name, email, company number, companies house name
+    const clientResults = await db
+      .select()
+      .from(clients)
+      .where(
+        or(
+          ilike(clients.name, searchTerm),
+          ilike(clients.email, searchTerm),
+          ilike(clients.companyNumber, searchTerm),
+          ilike(clients.companiesHouseName, searchTerm)
+        )
+      )
+      .limit(limit);
+
+    // Search people by name, email
+    const peopleResults = await db
+      .select()
+      .from(people)
+      .where(
+        or(
+          ilike(people.fullName, searchTerm),
+          ilike(people.firstName, searchTerm),
+          ilike(people.lastName, searchTerm),
+          ilike(people.email, searchTerm),
+          ilike(people.primaryEmail, searchTerm)
+        )
+      )
+      .limit(limit);
+
+    // Search projects by description, including client name via join
+    const projectResults = await db
+      .select({
+        id: projects.id,
+        description: projects.description,
+        currentStatus: projects.currentStatus,
+        clientName: clients.name,
+        projectTypeId: projects.projectTypeId
+      })
+      .from(projects)
+      .leftJoin(clients, eq(projects.clientId, clients.id))
+      .where(
+        or(
+          ilike(projects.description, searchTerm),
+          ilike(clients.name, searchTerm)
+        )
+      )
+      .limit(limit);
+
+    // Search communications by subject and content
+    const communicationResults = await db
+      .select({
+        id: communications.id,
+        subject: communications.subject,
+        content: communications.content,
+        type: communications.type,
+        actualContactTime: communications.actualContactTime,
+        clientName: clients.name,
+        personName: people.fullName
+      })
+      .from(communications)
+      .leftJoin(clients, eq(communications.clientId, clients.id))
+      .leftJoin(people, eq(communications.personId, people.id))
+      .where(
+        or(
+          ilike(communications.subject, searchTerm),
+          ilike(communications.content, searchTerm)
+        )
+      )
+      .limit(limit);
+
+    // Search services by name and description
+    const serviceResults = await db
+      .select()
+      .from(services)
+      .where(
+        or(
+          ilike(services.name, searchTerm),
+          ilike(services.description, searchTerm)
+        )
+      )
+      .limit(limit);
+
+    // Transform results into SearchResult format
+    const clientSearchResults: SearchResult[] = clientResults.map(client => ({
+      id: client.id,
+      type: 'client' as const,
+      title: client.name,
+      subtitle: client.companiesHouseName || client.email || undefined,
+      description: client.companyNumber ? `Company #${client.companyNumber}` : undefined,
+      metadata: {
+        email: client.email,
+        companyNumber: client.companyNumber,
+        companyStatus: client.companyStatus
+      }
+    }));
+
+    const peopleSearchResults: SearchResult[] = peopleResults.map(person => ({
+      id: person.id,
+      type: 'person' as const,
+      title: person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim(),
+      subtitle: person.email || person.primaryEmail || undefined,
+      description: person.occupation || undefined,
+      metadata: {
+        email: person.email,
+        primaryEmail: person.primaryEmail,
+        occupation: person.occupation
+      }
+    }));
+
+    const projectSearchResults: SearchResult[] = projectResults.map(project => ({
+      id: project.id,
+      type: 'project' as const,
+      title: project.description,
+      subtitle: project.clientName || undefined,
+      description: project.currentStatus,
+      metadata: {
+        clientName: project.clientName,
+        currentStatus: project.currentStatus,
+        projectTypeId: project.projectTypeId
+      }
+    }));
+
+    const communicationSearchResults: SearchResult[] = communicationResults.map(comm => ({
+      id: comm.id,
+      type: 'communication' as const,
+      title: comm.subject || `${comm.type.replace('_', ' ')} communication`,
+      subtitle: comm.clientName || comm.personName || undefined,
+      description: comm.content?.substring(0, 100) + (comm.content && comm.content.length > 100 ? '...' : ''),
+      metadata: {
+        type: comm.type,
+        actualContactTime: comm.actualContactTime,
+        clientName: comm.clientName,
+        personName: comm.personName
+      }
+    }));
+
+    const serviceSearchResults: SearchResult[] = serviceResults.map(service => ({
+      id: service.id,
+      type: 'service' as const,
+      title: service.name,
+      subtitle: service.description || undefined,
+      description: service.isPersonalService ? 'Personal Service' : 'Business Service',
+      metadata: {
+        isPersonalService: service.isPersonalService,
+        isActive: service.isActive
+      }
+    }));
+
+    const totalResults = clientSearchResults.length + peopleSearchResults.length + 
+                        projectSearchResults.length + communicationSearchResults.length + 
+                        serviceSearchResults.length;
+
+    return {
+      clients: clientSearchResults,
+      people: peopleSearchResults,
+      projects: projectSearchResults,
+      communications: communicationSearchResults,
+      services: serviceSearchResults,
+      total: totalResults
+    };
   }
 
   // People operations
