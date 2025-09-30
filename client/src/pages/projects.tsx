@@ -150,9 +150,6 @@ export default function Projects() {
               <h2 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
                 {getPageTitle()}
               </h2>
-              <p className="text-sm text-muted-foreground">
-                {getPageDescription()}
-              </p>
             </div>
             
             <div className="flex items-center space-x-4">
