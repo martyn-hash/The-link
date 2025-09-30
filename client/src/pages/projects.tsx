@@ -262,7 +262,11 @@ export default function Projects() {
               </div>
             </div>
           ) : viewMode === "kanban" ? (
-            <KanbanBoard projects={filteredProjects} user={user} />
+            <KanbanBoard 
+              projects={filteredProjects} 
+              user={user}
+              onSwitchToList={() => setViewMode("list")}
+            />
           ) : (
             <TaskList 
               projects={filteredProjects} 
