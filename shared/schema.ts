@@ -143,6 +143,18 @@ export const userOauthAccounts = pgTable("user_oauth_accounts", {
   unique("unique_user_provider").on(table.userId, table.provider),
 ]);
 
+// Project views table - Saved filter configurations for projects page
+export const projectViews = pgTable("project_views", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  filters: text("filters").notNull(), // JSON string of filter state
+  viewMode: varchar("view_mode").notNull(), // 'kanban' or 'list'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_project_views_user_id").on(table.userId),
+]);
+
 // Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -636,6 +648,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   magicLinkTokens: many(magicLinkTokens),
   notificationPreferences: one(userNotificationPreferences),
   clientServiceRoleAssignments: many(clientServiceRoleAssignments),
+  projectViews: many(projectViews),
 }));
 
 export const magicLinkTokensRelations = relations(magicLinkTokens, ({ one }) => ({
@@ -806,6 +819,13 @@ export const stageApprovalResponsesRelations = relations(stageApprovalResponses,
 export const userNotificationPreferencesRelations = relations(userNotificationPreferences, ({ one }) => ({
   user: one(users, {
     fields: [userNotificationPreferences.userId],
+    references: [users.id],
+  }),
+}));
+
+export const projectViewsRelations = relations(projectViews, ({ one }) => ({
+  user: one(users, {
+    fields: [projectViews.userId],
     references: [users.id],
   }),
 }));
@@ -1123,6 +1143,11 @@ export const insertUserNotificationPreferencesSchema = createInsertSchema(userNo
 });
 
 export const updateUserNotificationPreferencesSchema = insertUserNotificationPreferencesSchema.partial();
+
+export const insertProjectViewSchema = createInsertSchema(projectViews).omit({
+  id: true,
+  createdAt: true,
+});
 
 // UDF definition schema
 export const udfDefinitionSchema = z.object({
@@ -1477,6 +1502,9 @@ export type UpdateStageApprovalField = z.infer<typeof updateStageApprovalFieldSc
 export type StageApprovalResponse = typeof stageApprovalResponses.$inferSelect;
 export type InsertStageApprovalResponse = z.infer<typeof insertStageApprovalResponseSchema>;
 export type UserNotificationPreferences = typeof userNotificationPreferences.$inferSelect;
+
+export type ProjectView = typeof projectViews.$inferSelect;
+export type InsertProjectView = z.infer<typeof insertProjectViewSchema>;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;
