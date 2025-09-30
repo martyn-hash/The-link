@@ -1865,6 +1865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: true,
         lastName: true,
         profileImageUrl: true,
+        emailSignature: true,
       }).partial();
       
       const validProfileData = safeProfileSchema.parse(profileData);
