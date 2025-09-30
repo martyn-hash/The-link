@@ -4963,6 +4963,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { projectId } = req.params;
       const { stageName } = req.query;
       
+      console.log(`[role-assignee] Request for project ${projectId}, stageName: ${stageName || 'current'}`);
+      
       if (!projectId || typeof projectId !== 'string') {
         return res.status(400).json({ message: "Valid project ID is required" });
       }
@@ -4979,7 +4981,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const targetStageName = stageName || project.currentStatus;
       const currentStage = stages.find(stage => stage.name === targetStageName);
       
-      if (!currentStage || !currentStage.assignedRole) {
+      console.log(`[role-assignee] Target stage: ${targetStageName}, found stage: ${currentStage ? 'yes' : 'no'}, assigned role ID: ${currentStage?.assignedWorkRoleId || 'none'}`);
+      
+      if (!currentStage || !currentStage.assignedWorkRoleId) {
         // If no stage found or no role assigned to stage, fallback to client manager or current assignee
         const assignee = project.currentAssignee || project.clientManager;
         if (assignee) {
@@ -5014,11 +5018,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Try to resolve the user assigned to this role for this client
-      let resolvedUser = await storage.resolveRoleAssigneeForClient(
+      let resolvedUser = await storage.resolveRoleAssigneeForClientByRoleId(
         project.clientId, 
         project.projectTypeId, 
-        currentStage.assignedRole
+        currentStage.assignedWorkRoleId
       );
+
+      console.log(`[role-assignee] Resolved user for role ID ${currentStage.assignedWorkRoleId}: ${resolvedUser ? `${resolvedUser.firstName} ${resolvedUser.lastName}` : 'none'}`);
 
       let usedFallback = false;
       let source = 'role_assignment';
@@ -5033,7 +5039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // CRITICAL FIX: Return 200 with null user instead of 404
           return res.json({ 
             user: null, 
-            roleUsed: currentStage.assignedRole,
+            roleUsed: currentStage.assignedWorkRoleId,
             usedFallback: false,
             source: 'none'
           });
@@ -5045,7 +5051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         user: sanitizedUser,
-        roleUsed: currentStage.assignedRole,
+        roleUsed: currentStage.assignedWorkRoleId,
         usedFallback,
         source
       });

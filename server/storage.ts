@@ -5319,14 +5319,91 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Role Resolution for Project Creation
-  async resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string): Promise<User | undefined> {
+  // Role Resolution by Role ID (NEW - more efficient)
+  async resolveRoleAssigneeForClientByRoleId(clientId: string, projectTypeId: string, workRoleId: string): Promise<User | undefined> {
     try {
       // Find the service for this project type
+      const [projectType] = await db
+        .select()
+        .from(projectTypes)
+        .where(eq(projectTypes.id, projectTypeId));
+      
+      if (!projectType?.serviceId) {
+        console.warn(`No project type or service found for project type ID: ${projectTypeId}`);
+        return undefined;
+      }
+
       const [service] = await db
         .select()
         .from(services)
+        .where(eq(services.id, projectType.serviceId));
+      
+      if (!service) {
+        console.warn(`No service found for project type ID: ${projectTypeId}`);
+        return undefined;
+      }
+
+      // Find the client-service mapping
+      const [clientService] = await db
+        .select()
+        .from(clientServices)
+        .where(and(
+          eq(clientServices.clientId, clientId),
+          eq(clientServices.serviceId, service.id)
+        ));
+      
+      if (!clientService) {
+        console.warn(`No client-service mapping found for client ID: ${clientId} and service ID: ${service.id}`);
+        return undefined;
+      }
+
+      // Find ALL active role assignments and pick most recent (deterministic selection)
+      const assignments = await db
+        .select()
+        .from(clientServiceRoleAssignments)
+        .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+        .where(and(
+          eq(clientServiceRoleAssignments.clientServiceId, clientService.id),
+          eq(clientServiceRoleAssignments.workRoleId, workRoleId),
+          eq(clientServiceRoleAssignments.isActive, true)
+        ))
+        .orderBy(desc(clientServiceRoleAssignments.createdAt));
+      
+      if (assignments.length === 0) {
+        console.warn(`No active role assignment found for client ${clientId}, work role ID ${workRoleId}`);
+        return undefined;
+      }
+
+      if (assignments.length > 1) {
+        console.warn(`Multiple active assignments found for client ${clientId}, work role ID ${workRoleId}. Selecting most recent assignment.`);
+      }
+      
+      // Return the most recent assignment (deterministic selection)
+      return assignments[0].users;
+    } catch (error) {
+      console.error(`Error resolving role assignee for client ${clientId}, project type ${projectTypeId}, work role ID ${workRoleId}:`, error);
+      return undefined;
+    }
+  }
+
+  // Role Resolution for Project Creation (by role name - kept for backwards compatibility)
+  async resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string): Promise<User | undefined> {
+    try {
+      // Find the service for this project type
+      const [projectType] = await db
+        .select()
+        .from(projectTypes)
         .where(eq(projectTypes.id, projectTypeId));
+      
+      if (!projectType?.serviceId) {
+        console.warn(`No project type or service found for project type ID: ${projectTypeId}`);
+        return undefined;
+      }
+
+      const [service] = await db
+        .select()
+        .from(services)
+        .where(eq(services.id, projectType.serviceId));
       
       if (!service) {
         console.warn(`No service found for project type ID: ${projectTypeId}`);
