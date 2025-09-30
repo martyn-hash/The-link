@@ -6081,7 +6081,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/email/test-send - Test endpoint to send email to jamsplan1@gmail.com
-  app.post("/api/email/test-send", isAuthenticated, async (req: any, res: any) => {
+  app.post("/api/email/test-send", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
       const testEmail = "jamsplan1@gmail.com";
       const testSubject = `Test Email from The Link - ${new Date().toLocaleString()}`;

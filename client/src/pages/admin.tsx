@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar } from "lucide-react";
+import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar, Mail, Send } from "lucide-react";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -78,6 +78,27 @@ export default function Admin() {
       toast({
         title: "Delete Failed",
         description: error.message || "Failed to delete test data. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Test email mutation
+  const testEmailMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/email/test-send", {});
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Test Email Sent",
+        description: `Test email successfully sent to ${data.details.to}. Check the inbox to confirm receipt.`,
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Test Email Failed",
+        description: error.message || "Failed to send test email. Check console for details.",
         variant: "destructive",
       });
     },
@@ -381,6 +402,17 @@ export default function Admin() {
                     >
                       <Settings className="w-3 h-3 mr-2" />
                       Configure
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => testEmailMutation.mutate()}
+                      disabled={testEmailMutation.isPending}
+                      data-testid="button-test-email"
+                    >
+                      <Send className="w-3 h-3 mr-2" />
+                      {testEmailMutation.isPending ? "Sending..." : "Test Email"}
                     </Button>
                     <Button 
                       variant="outline" 
