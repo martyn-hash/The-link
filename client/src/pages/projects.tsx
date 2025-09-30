@@ -104,10 +104,10 @@ export default function Projects() {
       serviceMatch = project.projectType?.service?.name === serviceFilter;
     }
 
-    // Task Assignee filter
+    // Task Assignee filter (using stageRoleAssignee)
     let taskAssigneeMatch = true;
     if (taskAssigneeFilter !== "all") {
-      taskAssigneeMatch = project.currentAssigneeId === taskAssigneeFilter;
+      taskAssigneeMatch = project.stageRoleAssignee?.id === taskAssigneeFilter;
     }
 
     // Service Owner filter
@@ -196,11 +196,11 @@ export default function Projects() {
                 <Users className="w-4 h-4 text-muted-foreground" />
                 <Select value={taskAssigneeFilter} onValueChange={setTaskAssigneeFilter}>
                   <SelectTrigger className="w-48" data-testid="select-task-assignee-filter-projects">
-                    <SelectValue placeholder="Filter by assignee" />
+                    <SelectValue placeholder="Task Assignee" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Assignees</SelectItem>
-                    {Array.from(new Map((projects || []).map((p: ProjectWithRelations) => p.currentAssignee).filter((assignee): assignee is NonNullable<typeof assignee> => Boolean(assignee)).map(assignee => [assignee.id, assignee])).values()).map((assignee) => (
+                    <SelectItem value="all">Task Assignee</SelectItem>
+                    {Array.from(new Map((projects || []).map((p: ProjectWithRelations) => p.stageRoleAssignee).filter((assignee): assignee is NonNullable<typeof assignee> => Boolean(assignee)).map(assignee => [assignee.id, assignee])).values()).map((assignee) => (
                       <SelectItem key={assignee.id} value={assignee.id}>
                         {assignee.firstName && assignee.lastName ? `${assignee.firstName} ${assignee.lastName}` : assignee.email}
                       </SelectItem>
