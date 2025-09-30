@@ -441,7 +441,7 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
 
 function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedServiceId: string; onServiceChange: (serviceId: string) => void }) {
   const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
-    queryKey: ["/api/services"],
+    queryKey: ["/api/services/with-active-clients"],
   });
 
   const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithRelations[]>({
@@ -449,13 +449,20 @@ function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedSe
     enabled: !!selectedServiceId,
   });
 
-  const statusColumns = [
-    { id: "no_latest_action", label: "No Latest Action", color: "bg-slate-100 dark:bg-slate-900" },
-    { id: "bookkeeping_work_required", label: "Bookkeeping Work Required", color: "bg-blue-100 dark:bg-blue-900" },
-    { id: "in_review", label: "In Review", color: "bg-yellow-100 dark:bg-yellow-900" },
-    { id: "needs_client_input", label: "Needs Client Input", color: "bg-orange-100 dark:bg-orange-900" },
-    { id: "completed", label: "Completed", color: "bg-green-100 dark:bg-green-900" },
-  ];
+  // Get all unique statuses from the filtered projects
+  const statusColumns = projects && projects.length > 0
+    ? Array.from(new Set(projects.map(p => p.currentStatus))).map((status, index) => ({
+        id: status,
+        label: status,
+        color: [
+          "bg-slate-100 dark:bg-slate-900",
+          "bg-blue-100 dark:bg-blue-900",
+          "bg-yellow-100 dark:bg-yellow-900",
+          "bg-orange-100 dark:bg-orange-900",
+          "bg-green-100 dark:bg-green-900"
+        ][index % 5]
+      }))
+    : [];
 
   const projectsByStatus = statusColumns.reduce((acc, column) => {
     acc[column.id] = projects?.filter(p => p.currentStatus === column.id) || [];

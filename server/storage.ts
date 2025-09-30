@@ -379,6 +379,7 @@ export interface IStorage {
   // Services CRUD
   getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
+  getServicesWithActiveClients(): Promise<Service[]>;
   getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
   getScheduledServices(): Promise<ScheduledServiceView[]>;
@@ -4095,6 +4096,17 @@ export class DatabaseStorage implements IStorage {
       },
       roles: rolesByServiceId[row.service.id] || [],
     }));
+  }
+
+  async getServicesWithActiveClients(): Promise<Service[]> {
+    // Get distinct services that have at least one active client service
+    const servicesWithActiveClients = await db
+      .selectDistinct({ service: services })
+      .from(services)
+      .innerJoin(clientServices, eq(services.id, clientServices.serviceId))
+      .where(eq(clientServices.isActive, true));
+
+    return servicesWithActiveClients.map(row => row.service);
   }
 
   async getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {

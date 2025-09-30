@@ -3629,6 +3629,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/services/with-active-clients - Get services that have active client services
+  app.get("/api/services/with-active-clients", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const services = await storage.getServicesWithActiveClients();
+      res.json(services);
+    } catch (error) {
+      console.error("Error fetching services with active clients:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch services with active clients" });
+    }
+  });
+
   // GET /api/services/client-assignable - Get services that can be assigned to clients (excludes personal services)
   app.get("/api/services/client-assignable", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
