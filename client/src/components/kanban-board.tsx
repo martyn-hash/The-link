@@ -50,27 +50,21 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     setLocation(`/projects/${projectId}`);
   };
 
-  // Get unique project types from the projects
-  const projectTypes = Array.from(new Set(projects.map(p => p.projectTypeId).filter(Boolean)));
+  // Get unique project type (kanban assumes single project type/service filter)
+  const projectTypeId = projects[0]?.projectTypeId;
 
-  // Fetch stages for all project types represented in the projects
-  const stageQueries = projectTypes.map(projectTypeId => 
-    useQuery<KanbanStage[]>({
-      queryKey: ['/api/config/project-types', projectTypeId, 'stages'],
-      enabled: !!projectTypeId && isAuthenticated && !!authUser,
-      staleTime: 5 * 60 * 1000,
-    })
-  );
-
-  // Combine all stages from different project types
-  const allStages = stageQueries.flatMap(query => query.data || []);
-  const stagesLoading = stageQueries.some(query => query.isLoading);
-  const stagesError = stageQueries.some(query => query.isError);
-  const error = stageQueries.find(query => query.error)?.error;
-  const refetchStages = () => stageQueries.forEach(query => query.refetch());
-  
-  // Use combined stages
-  const stages = allStages;
+  // Fetch stages for the project type
+  const { 
+    data: stages, 
+    isLoading: stagesLoading, 
+    isError: stagesError,
+    error,
+    refetch: refetchStages 
+  } = useQuery<KanbanStage[]>({
+    queryKey: ['/api/config/project-types', projectTypeId, 'stages'],
+    enabled: !!projectTypeId && isAuthenticated && !!authUser,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Transform stages to match expected structure
   const stageConfig = stages?.reduce((acc, stage, index) => {
@@ -79,7 +73,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
         word.charAt(0).toUpperCase() + word.slice(1)
       ).join(' '),
       color: stage.color ?? "#6b7280",
-      assignedTo: getRoleDisplayName(stage.assignedRole ?? ""),
+      assignedTo: "Role-based", // This will be determined by role assignments
       order: stage.order ?? index,
     };
     return acc;
