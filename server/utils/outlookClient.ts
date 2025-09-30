@@ -52,7 +52,9 @@ export async function getUncachableOutlookClient() {
 // Helper function to send email via Microsoft Graph API
 export async function sendEmail(to: string, subject: string, content: string, isHtml: boolean = false) {
   try {
+    console.log('[Outlook Client] Getting Outlook client...');
     const graphClient = await getUncachableOutlookClient();
+    console.log('[Outlook Client] Client obtained successfully');
     
     const message = {
       subject,
@@ -69,14 +71,22 @@ export async function sendEmail(to: string, subject: string, content: string, is
       ]
     };
 
+    console.log('[Outlook Client] Sending email via Graph API to:', to, 'Subject:', subject);
     const result = await graphClient.api('/me/sendMail').post({
       message,
       saveToSentItems: true
     });
+    console.log('[Outlook Client] Email sent successfully via Graph API');
 
     return { success: true, result };
   } catch (error) {
-    console.error('Error sending email via Outlook:', error);
+    console.error('[Outlook Client] Error sending email:', {
+      error: error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      to,
+      subject
+    });
     throw error;
   }
 }

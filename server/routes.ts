@@ -5993,8 +5993,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/email/send - Send email via Microsoft Graph (Outlook)
   app.post("/api/email/send", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
+      console.log('[EMAIL SEND] Starting email send request:', { 
+        to: req.body.to, 
+        subject: req.body.subject,
+        hasContent: !!req.body.content,
+        contentLength: req.body.content?.length || 0
+      });
+      
       const bodyValidation = sendEmailSchema.safeParse(req.body);
       if (!bodyValidation.success) {
+        console.error('[EMAIL SEND] Validation failed:', bodyValidation.error.issues);
         return res.status(400).json({ 
           message: "Invalid email data", 
           errors: bodyValidation.error.issues 
@@ -6004,18 +6012,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { to, subject, content, clientId, personId, isHtml } = bodyValidation.data;
       
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId);
       
       // Check if user has access to this client
       const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
       if (!hasAccess) {
+        console.error('[EMAIL SEND] Access denied for user:', effectiveUserId, 'to client:', clientId);
         return res.status(403).json({ message: "Access denied. You don't have permission to send emails for this client." });
       }
       
       // Import the Outlook client functions
       const { sendEmail } = await import('./utils/outlookClient');
       
+      console.log('[EMAIL SEND] Attempting to send email via Outlook connector...');
       // Send email via Microsoft Graph API
       const emailResult = await sendEmail(to, subject, content, isHtml || false);
+      console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject, result: emailResult });
       
       // Log the email as a communication record
       const communication = await storage.createCommunication({
@@ -6029,6 +6041,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         externalReference: `outlook_${Date.now()}`
       });
       
+      console.log('[EMAIL SEND] Communication logged with ID:', communication.id);
+      
       res.json({
         success: true,
         message: "Email sent successfully",
@@ -6037,7 +6051,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error) {
-      console.error("Error sending email:", error);
+      console.error("[EMAIL SEND] ERROR Details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        fullError: error
+      });
       
       // Map common errors to user-friendly messages
       let statusCode = 500;
@@ -6059,6 +6077,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(statusCode).json({ message });
+    }
+  });
+
+  // POST /api/email/test-send - Test endpoint to send email to jamsplan1@gmail.com
+  app.post("/api/email/test-send", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const testEmail = "jamsplan1@gmail.com";
+      const testSubject = `Test Email from The Link - ${new Date().toLocaleString()}`;
+      const testContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #4f46e5;">Test Email from The Link</h2>
+          <p>This is a test email to verify that email sending is working correctly.</p>
+          
+          <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #0369a1;">Test Details</h3>
+            <p><strong>Sent at:</strong> ${new Date().toLocaleString()}</p>
+            <p><strong>Sent by:</strong> ${req.user?.email || 'Unknown'}</p>
+            <p><strong>Recipient:</strong> ${testEmail}</p>
+          </div>
+          
+          <p>If you received this email, the email sending functionality is working correctly!</p>
+          
+          <p style="margin-top: 30px;">
+            Best regards,<br>
+            The Link Email System
+          </p>
+        </div>
+      `;
+      
+      console.log('[TEST EMAIL] Starting test email send to:', testEmail);
+      
+      // Import the Outlook client functions
+      const { sendEmail } = await import('./utils/outlookClient');
+      
+      console.log('[TEST EMAIL] Attempting to send via Outlook connector...');
+      const emailResult = await sendEmail(testEmail, testSubject, testContent, true);
+      console.log('[TEST EMAIL] Email sent successfully:', emailResult);
+      
+      res.json({
+        success: true,
+        message: `Test email sent successfully to ${testEmail}`,
+        emailResult,
+        details: {
+          to: testEmail,
+          subject: testSubject,
+          sentAt: new Date().toISOString()
+        }
+      });
+      
+    } catch (error) {
+      console.error("[TEST EMAIL] ERROR Details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        fullError: error
+      });
+      
+      let statusCode = 500;
+      let message = "Failed to send test email";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Outlook not connected')) {
+          statusCode = 503;
+          message = "Outlook connector not configured. Please set up the Outlook integration in Replit.";
+        } else if (error.message.includes('X_REPLIT_TOKEN')) {
+          statusCode = 503;
+          message = "Replit authentication error. Please check your deployment configuration.";
+        } else {
+          message = `Test email failed: ${error.message}`;
+        }
+      }
+      
+      res.status(statusCode).json({ 
+        message,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        details: {
+          attemptedRecipient: "jamsplan1@gmail.com",
+          timestamp: new Date().toISOString()
+        }
+      });
     }
   });
 
