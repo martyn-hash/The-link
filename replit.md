@@ -41,10 +41,12 @@ The application includes a comprehensive time governance system to monitor proje
 The dashboard features a service-specific kanban board for focused project management:
 
 - **Service Filter**: Dropdown displays only services that have active client services, ensuring relevant service selection
-- **Dynamic Columns**: Kanban columns automatically adapt to actual project statuses from the database, accommodating varying stage configurations per service
-- **Project Filtering**: Seamlessly filters and displays projects based on selected service for focused workflow management
+- **Complete Stage Display**: All configured kanban stages for the selected service's project type are displayed as columns, including empty stages with "0 projects" count
+- **Dynamic Grid Layout**: Grid automatically adapts to the number of stages (1-5 columns) for optimal visualization
+- **Project Filtering**: Seamlessly filters and displays projects based on selected service for focused workflow management  
+- **Stage-to-Project Mapping**: Projects are matched to stages by comparing project.currentStatus to stage.name
 - **Persistent Selection**: Selected service is saved in localStorage for consistent user experience across sessions
-- **Smart Data Integration**: Leverages existing project relationships and client service associations for accurate filtering
+- **Smart Data Integration**: Backend correctly joins kanbanStages → projectTypes (via project_type_id) → WHERE projectTypes.service_id matches selected service
 
 # User Preferences
 
