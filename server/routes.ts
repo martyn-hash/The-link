@@ -2436,20 +2436,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
 
-      // Send email notification to new assignee
-      const newAssigneeId = updatedProject.currentAssigneeId;
-      if (newAssigneeId && newAssigneeId !== effectiveUserId) {
-        const assignee = await storage.getUser(newAssigneeId);
-        if (assignee?.email) {
-          await sendTaskAssignmentEmail(
-            assignee.email,
-            `${assignee.firstName} ${assignee.lastName}`,
-            project.description,
-            project.client.name,
-            updateData.newStatus
-          );
-        }
-      }
+      // Send stage change notification to role assignee
+      await storage.sendStageChangeNotifications(
+        updatedProject.id,
+        updateData.newStatus,
+        project.currentStatus
+      );
 
       res.json(updatedProject);
     } catch (error) {
