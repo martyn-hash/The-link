@@ -3640,6 +3640,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/services/:serviceId/kanban-stages - Get kanban stages for a service
+  app.get("/api/services/:serviceId/kanban-stages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { serviceId } = req.params;
+      const stages = await storage.getKanbanStagesByServiceId(serviceId);
+      res.json(stages);
+    } catch (error) {
+      console.error("Error fetching kanban stages for service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch kanban stages" });
+    }
+  });
+
   // GET /api/services/client-assignable - Get services that can be assigned to clients (excludes personal services)
   app.get("/api/services/client-assignable", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

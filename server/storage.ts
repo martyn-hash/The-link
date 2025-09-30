@@ -239,6 +239,7 @@ export interface IStorage {
   // Configuration operations
   getAllKanbanStages(): Promise<KanbanStage[]>;
   getKanbanStagesByProjectTypeId(projectTypeId: string): Promise<KanbanStage[]>;
+  getKanbanStagesByServiceId(serviceId: string): Promise<KanbanStage[]>;
   createKanbanStage(stage: InsertKanbanStage): Promise<KanbanStage>;
   updateKanbanStage(id: string, stage: Partial<InsertKanbanStage>): Promise<KanbanStage>;
   deleteKanbanStage(id: string): Promise<void>;
@@ -2338,6 +2339,34 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     
+    return await db
+      .select()
+      .from(kanbanStages)
+      .where(eq(kanbanStages.projectTypeId, projectTypeId))
+      .orderBy(kanbanStages.order);
+  }
+
+  async getKanbanStagesByServiceId(serviceId: string): Promise<KanbanStage[]> {
+    if (!serviceId || serviceId.trim() === '') {
+      console.warn(`[Storage] getKanbanStagesByServiceId called with invalid serviceId: "${serviceId}"`);
+      return [];
+    }
+
+    // Get the service to find its project type
+    const service = await db
+      .select()
+      .from(services)
+      .where(eq(services.id, serviceId))
+      .limit(1);
+
+    if (!service || service.length === 0) {
+      console.warn(`[Storage] Service not found for serviceId: "${serviceId}"`);
+      return [];
+    }
+
+    const projectTypeId = service[0].projectTypeId;
+    
+    // Get kanban stages for the project type
     return await db
       .select()
       .from(kanbanStages)
