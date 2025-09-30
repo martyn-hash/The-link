@@ -37,6 +37,15 @@ The application includes a comprehensive time governance system to monitor proje
 - **Time Calculation**: Automated calculation of current instance time and total time spent using business hours logic
 - **SLA Monitoring**: Helper functions enable identification of projects exceeding stage time limits for management intervention
 
+## Service Kanban Board (Dashboard)
+The dashboard features a service-specific kanban board for focused project management:
+
+- **Service Filter**: Dropdown displays only services that have active client services, ensuring relevant service selection
+- **Dynamic Columns**: Kanban columns automatically adapt to actual project statuses from the database, accommodating varying stage configurations per service
+- **Project Filtering**: Seamlessly filters and displays projects based on selected service for focused workflow management
+- **Persistent Selection**: Selected service is saved in localStorage for consistent user experience across sessions
+- **Smart Data Integration**: Leverages existing project relationships and client service associations for accurate filtering
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
