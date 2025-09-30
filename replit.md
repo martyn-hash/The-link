@@ -37,6 +37,24 @@ The application includes a comprehensive time governance system to monitor proje
 - **Time Calculation**: Automated calculation of current instance time and total time spent using business hours logic
 - **SLA Monitoring**: Helper functions enable identification of projects exceeding stage time limits for management intervention
 
+## Dashboard Service Kanban Board
+The dashboard includes a service-filtered kanban board for quick project visualization:
+
+- **Service Filtering**: Dropdown selector displays only active services (consistent with the projects page)
+- **Persistent Selection**: Selected service is remembered across page refreshes using localStorage
+- **Initially Empty**: Board displays an empty state until a service is selected
+- **Status Columns**: Projects are organized into 5 status columns (No Latest Action, Bookkeeping Work Required, In Review, Needs Client Input, Completed)
+- **Project Display**: Each project card shows client name, project type, and due date with clickable navigation to project details
+- **Full Width Layout**: Board spans the full width below the dashboard panels for maximum visibility
+
+## Recent Changes (September 30, 2025)
+- Fixed project navigation URLs from `/project/` to `/projects/` to eliminate 404 errors
+- Removed Quick Actions Panel from dashboard layout
+- Added service-filtered kanban board to dashboard with localStorage state persistence
+- Enhanced backend `/api/projects` endpoint to support service-based filtering via `serviceId` query parameter
+- Updated `getProjectsByUser` storage function to include `projectType` and `service` relations for proper filtering
+- Modified dashboard services query to fetch only active services using `/api/services?active=true`
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
