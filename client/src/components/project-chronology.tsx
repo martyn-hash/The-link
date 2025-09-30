@@ -3,7 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
-import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
+import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,47 @@ import { Eye, Clock, User as UserIcon } from "lucide-react";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
+}
+
+interface RoleAssigneeResponse {
+  user: User | null;
+  roleUsed: string | null;
+  usedFallback: boolean;
+  source: 'role_assignment' | 'fallback_user' | 'direct_assignment' | 'none';
+}
+
+// Component to display the role assignee for a specific stage
+function ChronologyAssignee({ projectId, stageName }: { projectId: string; stageName: string | null }) {
+  // Guard against null/undefined stageName
+  const { data: roleAssigneeData, isLoading } = useQuery<RoleAssigneeResponse>({
+    queryKey: ['/api/projects', projectId, 'role-assignee', stageName],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${projectId}/role-assignee?stageName=${encodeURIComponent(stageName!)}`);
+      if (!response.ok) throw new Error('Failed to fetch role assignee');
+      return response.json();
+    },
+    enabled: !!stageName, // Only fetch if stageName is not null/undefined
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Show "System" for null/undefined stageName (initial project creation)
+  if (!stageName) {
+    return <span className="text-sm text-muted-foreground">System</span>;
+  }
+
+  if (isLoading) {
+    return <span className="text-sm">...</span>;
+  }
+
+  if (roleAssigneeData?.user) {
+    return (
+      <span className="text-sm">
+        {roleAssigneeData.user.firstName} {roleAssigneeData.user.lastName}
+      </span>
+    );
+  }
+
+  return <span className="text-sm text-muted-foreground">Unassigned</span>;
 }
 
 // Helper function to format stage names for display
@@ -222,6 +263,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Timestamp</TableHead>
               <TableHead>From Stage</TableHead>
               <TableHead>To Stage</TableHead>
               <TableHead>Assigned To</TableHead>
@@ -232,6 +274,13 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           <TableBody>
             {sortedChronology.map((entry, index) => (
               <TableRow key={entry.id} data-testid={`chronology-row-${entry.id}`}>
+                <TableCell data-testid={`cell-timestamp-${entry.id}`}>
+                  <span className="text-xs text-muted-foreground" data-testid={`text-timestamp-${entry.id}`}>
+                    {entry.timestamp 
+                      ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })
+                      : 'Unknown'}
+                  </span>
+                </TableCell>
                 <TableCell data-testid={`cell-from-status-${entry.id}`}>
                   {entry.fromStatus ? (
                     <Badge 
@@ -257,11 +306,9 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                 <TableCell data-testid={`cell-assignee-${entry.id}`}>
                   <div className="flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid={`text-assignee-${entry.id}`}>
-                      {entry.assignee 
-                        ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
-                        : "System"}
-                    </span>
+                    <div data-testid={`text-assignee-${entry.id}`}>
+                      <ChronologyAssignee projectId={project.id} stageName={entry.toStatus} />
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell data-testid={`cell-time-${entry.id}`}>
@@ -322,11 +369,9 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                   <span className="text-xs text-muted-foreground">Assigned To</span>
                   <div className="mt-1 flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid={`text-modal-assignee-${selectedEntry.entry.id}`}>
-                      {selectedEntry.entry.assignee 
-                        ? `${selectedEntry.entry.assignee.firstName} ${selectedEntry.entry.assignee.lastName}`
-                        : "System"}
-                    </span>
+                    <div data-testid={`text-modal-assignee-${selectedEntry.entry.id}`}>
+                      <ChronologyAssignee projectId={project.id} stageName={selectedEntry.entry.toStatus} />
+                    </div>
                   </div>
                 </div>
               </div>

@@ -4957,9 +4957,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/projects/:projectId/role-assignee - Get the user assigned to the current stage's role for a project
+  // Optional query param: stageName - if provided, get assignee for that stage instead of current stage
   app.get("/api/projects/:projectId/role-assignee", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectId } = req.params;
+      const { stageName } = req.query;
       
       if (!projectId || typeof projectId !== 'string') {
         return res.status(400).json({ message: "Valid project ID is required" });
@@ -4971,9 +4973,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project not found" });
       }
 
-      // Get the current stage configuration to find the assigned role
+      // Get the stage configuration to find the assigned role
+      // Use provided stageName or fall back to project's current status
       const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
-      const currentStage = stages.find(stage => stage.name === project.currentStatus);
+      const targetStageName = stageName || project.currentStatus;
+      const currentStage = stages.find(stage => stage.name === targetStageName);
       
       if (!currentStage || !currentStage.assignedRole) {
         // If no stage found or no role assigned to stage, fallback to client manager or current assignee
@@ -5048,6 +5052,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error resolving project role assignee:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to resolve project role assignee" });
+    }
+  });
+
+  // GET /api/projects/:projectId/service-roles - Get current bookkeeper, client manager, and service owner for a project
+  app.get("/api/projects/:projectId/service-roles", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { projectId } = req.params;
+      
+      if (!projectId || typeof projectId !== 'string') {
+        return res.status(400).json({ message: "Valid project ID is required" });
+      }
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Resolve current role assignments for this client and service
+      let bookkeeper = null;
+      let clientManager = null;
+      let serviceOwner = null;
+
+      // Try to resolve bookkeeper role
+      if (project.projectTypeId) {
+        const bookkeeperUser = await storage.resolveRoleAssigneeForClient(
+          project.clientId,
+          project.projectTypeId,
+          'bookkeeper'
+        );
+        if (bookkeeperUser) {
+          const { passwordHash, ...sanitizedBookkeeper } = bookkeeperUser;
+          bookkeeper = sanitizedBookkeeper;
+        }
+
+        // Try to resolve client manager role
+        const clientManagerUser = await storage.resolveRoleAssigneeForClient(
+          project.clientId,
+          project.projectTypeId,
+          'client_manager'
+        );
+        if (clientManagerUser) {
+          const { passwordHash, ...sanitizedClientManager } = clientManagerUser;
+          clientManager = sanitizedClientManager;
+        }
+
+        // Try to resolve service owner
+        const serviceOwnerUser = await storage.resolveServiceOwner(
+          project.clientId,
+          project.projectTypeId
+        );
+        if (serviceOwnerUser) {
+          const { passwordHash, ...sanitizedServiceOwner } = serviceOwnerUser;
+          serviceOwner = sanitizedServiceOwner;
+        }
+      }
+
+      // Fallback to project fields if role resolution fails
+      if (!bookkeeper && project.bookkeeper) {
+        const { passwordHash, ...sanitizedBookkeeper } = project.bookkeeper;
+        bookkeeper = sanitizedBookkeeper;
+      }
+      if (!clientManager && project.clientManager) {
+        const { passwordHash, ...sanitizedClientManager } = project.clientManager;
+        clientManager = sanitizedClientManager;
+      }
+      if (!serviceOwner && project.projectOwner) {
+        const { passwordHash, ...sanitizedServiceOwner } = project.projectOwner;
+        serviceOwner = sanitizedServiceOwner;
+      }
+
+      res.json({
+        bookkeeper,
+        clientManager,
+        serviceOwner
+      });
+    } catch (error) {
+      console.error("Error resolving project service roles:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to resolve project service roles" });
     }
   });
 

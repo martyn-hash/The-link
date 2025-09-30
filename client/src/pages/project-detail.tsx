@@ -5,12 +5,20 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import ProjectInfo from "@/components/project-info";
 import StatusChangeForm from "@/components/status-change-form";
 import ProjectChronology from "@/components/project-chronology";
-import type { ProjectWithRelations } from "@shared/schema";
+import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect } from "react";
+
+interface RoleAssigneeResponse {
+  user: User | null;
+  roleUsed: string | null;
+  usedFallback: boolean;
+  source: 'role_assignment' | 'fallback_user' | 'direct_assignment' | 'none';
+}
 
 export default function ProjectDetail() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -28,6 +36,18 @@ export default function ProjectDetail() {
     queryKey: ['/api/projects', projectId],
     enabled: isAuthenticated && !!user && !!projectId,
     retry: false,
+  });
+
+  // Fetch current stage assignee
+  const { data: currentAssignee, isLoading: assigneeLoading } = useQuery<RoleAssigneeResponse>({
+    queryKey: ['/api/projects', projectId, 'role-assignee'],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${projectId}/role-assignee`);
+      if (!response.ok) throw new Error('Failed to fetch role assignee');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user && !!projectId && !!project,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Redirect to login if not authenticated
@@ -234,8 +254,25 @@ export default function ProjectDetail() {
           </div>
           
           <h1 className="text-3xl font-bold text-foreground" data-testid="text-project-title">
-            {project.client.name} - {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+            {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
           </h1>
+          
+          {/* Current Stage Assignee Display */}
+          <Alert className="mt-4 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900" data-testid="alert-current-assignee">
+            <UserIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertDescription className="text-blue-800 dark:text-blue-200">
+              <span className="font-medium">Currently assigned to: </span>
+              {assigneeLoading ? (
+                <span>Loading...</span>
+              ) : currentAssignee?.user ? (
+                <span className="font-semibold" data-testid="text-current-assignee-name">
+                  {currentAssignee.user.firstName} {currentAssignee.user.lastName}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Unassigned</span>
+              )}
+            </AlertDescription>
+          </Alert>
         </div>
 
         {/* Two-row layout */}

@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { ProjectWithRelations, User } from "@shared/schema";
@@ -9,6 +9,12 @@ import type { ProjectWithRelations, User } from "@shared/schema";
 interface ProjectInfoProps {
   project: ProjectWithRelations;
   user: User;
+}
+
+interface ServiceRolesResponse {
+  bookkeeper: User | null;
+  clientManager: User | null;
+  serviceOwner: User | null;
 }
 
 // Helper function to format stage names for display
@@ -36,6 +42,12 @@ const getCurrentTimeInStage = (project: ProjectWithRelations) => {
 export default function ProjectInfo({ project, user }: ProjectInfoProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch current service roles for this project
+  const { data: serviceRoles, isLoading: isLoadingServiceRoles } = useQuery<ServiceRolesResponse>({
+    queryKey: ['/api/projects', project.id, 'service-roles'],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Check if user has permission to modify projects
   const canModifyProject = () => {
@@ -102,31 +114,42 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
         <div className="space-y-3">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Bookkeeper:</span>
-            <span className="font-medium">
-              {project.bookkeeper.firstName} {project.bookkeeper.lastName}
-            </span>
+            {isLoadingServiceRoles ? (
+              <span className="font-medium">Loading...</span>
+            ) : serviceRoles?.bookkeeper ? (
+              <span className="font-medium">
+                {serviceRoles.bookkeeper.firstName} {serviceRoles.bookkeeper.lastName}
+              </span>
+            ) : (
+              <span className="font-medium text-muted-foreground">Not assigned</span>
+            )}
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Client Manager:</span>
-            <span className="font-medium">
-              {project.clientManager.firstName} {project.clientManager.lastName}
-            </span>
-          </div>
-          {project.projectOwner ? (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Service Owner:</span>
-              <span className="font-medium" data-testid="text-service-owner">
-                {project.projectOwner.firstName} {project.projectOwner.lastName}
+            {isLoadingServiceRoles ? (
+              <span className="font-medium">Loading...</span>
+            ) : serviceRoles?.clientManager ? (
+              <span className="font-medium">
+                {serviceRoles.clientManager.firstName} {serviceRoles.clientManager.lastName}
               </span>
-            </div>
-          ) : (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Service Owner:</span>
+            ) : (
+              <span className="font-medium text-muted-foreground">Not assigned</span>
+            )}
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Service Owner:</span>
+            {isLoadingServiceRoles ? (
+              <span className="font-medium">Loading...</span>
+            ) : serviceRoles?.serviceOwner ? (
+              <span className="font-medium" data-testid="text-service-owner">
+                {serviceRoles.serviceOwner.firstName} {serviceRoles.serviceOwner.lastName}
+              </span>
+            ) : (
               <span className="font-medium text-muted-foreground" data-testid="text-service-owner-none">
                 Not assigned
               </span>
-            </div>
-          )}
+            )}
+          </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Time in Current Stage:</span>
             <span className="font-medium" data-testid="text-time-in-stage">
