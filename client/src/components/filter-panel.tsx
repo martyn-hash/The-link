@@ -150,8 +150,13 @@ export default function FilterPanel({
         "DELETE",
         `/api/project-views/${id}`
       );
-      // Immediately refetch after successful delete
-      await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+      return id;
+    },
+    onSuccess: (deletedId) => {
+      // Eagerly update the cache by removing the deleted view
+      queryClient.setQueryData<ProjectView[]>(["/api/project-views"], (oldData) => {
+        return oldData ? oldData.filter(view => view.id !== deletedId) : oldData;
+      });
     },
   });
 

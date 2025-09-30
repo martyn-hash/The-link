@@ -48,6 +48,18 @@ The dashboard features a service-specific kanban board for focused project manag
 - **Persistent Selection**: Selected service is saved in localStorage for consistent user experience across sessions
 - **Smart Data Integration**: Backend correctly joins kanbanStages → projectTypes (via project_type_id) → WHERE projectTypes.service_id matches selected service
 
+## Advanced Project Filtering & Saved Views
+The projects page features a comprehensive filtering system with saved view functionality:
+
+- **Collapsible Filter Panel**: Sheet/Drawer UI component accessed via "Filters" button in header, showing active filter count badge
+- **Date-Based Filtering**: Dynamic date options (Overdue, Due Today, Next 7/14/30 Days) plus custom date range picker using react-day-picker
+- **Multi-Dimensional Filters**: Filter by service, task assignee, service owner, user assignment, and archived status
+- **Saved Project Views**: Users can save current filter configurations with custom names for quick access
+- **View Management**: Load previously saved views to instantly reapply filter combinations, delete outdated views
+- **Clear All Filters**: Single-click reset to default filter state
+- **Active Filter Indication**: Badge on Filters button displays count of currently active filters
+- **Backend Persistence**: Saved views stored per user in PostgreSQL with filters as JSON strings
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
