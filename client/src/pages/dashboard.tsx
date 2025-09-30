@@ -441,7 +441,7 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
 
 function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedServiceId: string; onServiceChange: (serviceId: string) => void }) {
   const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
-    queryKey: ["/api/services", { active: "true" }],
+    queryKey: ["/api/services"],
   });
 
   const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithRelations[]>({

@@ -1987,12 +1987,6 @@ export class DatabaseStorage implements IStorage {
         bookkeeper: true,
         clientManager: true,
         currentAssignee: true,
-        projectOwner: true,
-        projectType: {
-          with: {
-            service: true,
-          },
-        },
         chronology: {
           with: {
             assignee: true,
