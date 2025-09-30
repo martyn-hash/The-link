@@ -4,6 +4,10 @@ import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import type { SelectClientChronology, User } from "@shared/schema";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Eye, Clock, User as UserIcon } from "lucide-react";
 
 interface ClientChronologyProps {
   clientId: string;
@@ -56,6 +60,8 @@ const getEventBadgeVariant = (eventType: string): "default" | "secondary" | "des
 export default function ClientChronology({ clientId }: ClientChronologyProps) {
   // State for live time updates
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [selectedEntry, setSelectedEntry] = useState<ClientChronologyEntry | null>(null);
+  const [isViewingEntry, setIsViewingEntry] = useState(false);
 
   // Update current time every minute for live time calculations
   useEffect(() => {
@@ -108,82 +114,190 @@ export default function ClientChronology({ clientId }: ClientChronologyProps) {
   }
 
   return (
-    <ScrollArea className="h-[600px] pr-4" data-testid="client-chronology-scroll">
-      <div className="space-y-4">
-        {sortedChronology.map((entry) => (
-          <div
-            key={entry.id}
-            className="border rounded-lg p-4 bg-card hover:bg-muted/50 transition-colors"
-            data-testid={`chronology-entry-${entry.id}`}
-          >
-            <div className="flex flex-col gap-3">
-              {/* Header with timestamp and event type */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge 
-                    variant={getEventBadgeVariant(entry.eventType)}
-                    data-testid={`badge-event-type-${entry.id}`}
-                  >
-                    {formatEventType(entry.eventType)}
-                  </Badge>
-                  <Badge variant="outline" data-testid={`badge-entity-type-${entry.id}`}>
-                    {formatEntityType(entry.entityType)}
-                  </Badge>
-                </div>
-                <span 
-                  className="text-sm text-muted-foreground"
-                  data-testid={`timestamp-${entry.id}`}
+    <div data-testid="client-chronology">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Event Type</TableHead>
+            <TableHead>Entity Type</TableHead>
+            <TableHead>Date/Time</TableHead>
+            <TableHead>Changed By</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedChronology.map((entry) => (
+            <TableRow key={entry.id} data-testid={`chronology-row-${entry.id}`}>
+              <TableCell data-testid={`cell-event-type-${entry.id}`}>
+                <Badge 
+                  variant={getEventBadgeVariant(entry.eventType)}
+                  data-testid={`badge-event-type-${entry.id}`}
                 >
-                  {entry.timestamp 
-                    ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })
-                    : 'Unknown time'
-                  }
-                </span>
+                  {formatEventType(entry.eventType)}
+                </Badge>
+              </TableCell>
+              <TableCell data-testid={`cell-entity-type-${entry.id}`}>
+                <Badge variant="outline" data-testid={`badge-entity-type-${entry.id}`}>
+                  {formatEntityType(entry.entityType)}
+                </Badge>
+              </TableCell>
+              <TableCell data-testid={`cell-timestamp-${entry.id}`}>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm" data-testid={`text-timestamp-${entry.id}`}>
+                    {entry.timestamp 
+                      ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })
+                      : 'Unknown time'
+                    }
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell data-testid={`cell-user-${entry.id}`}>
+                {entry.user ? (
+                  <div className="flex items-center gap-2" data-testid={`user-attribution-${entry.id}`}>
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-user-${entry.id}`}>
+                      {entry.user.firstName} {entry.user.lastName}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-muted-foreground" data-testid={`text-no-user-${entry.id}`}>—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedEntry(entry);
+                    setIsViewingEntry(true);
+                  }}
+                  data-testid={`button-view-chronology-${entry.id}`}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      {/* View Chronology Detail Modal */}
+      <Dialog open={isViewingEntry} onOpenChange={setIsViewingEntry}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Client Chronology Entry Details</DialogTitle>
+          </DialogHeader>
+          {selectedEntry && (
+            <div className="space-y-4">
+              {/* Header Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <span className="text-xs text-muted-foreground">Event Type</span>
+                  <div className="mt-1">
+                    <Badge variant={getEventBadgeVariant(selectedEntry.eventType)} data-testid={`modal-badge-event-type-${selectedEntry.id}`}>
+                      {formatEventType(selectedEntry.eventType)}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Entity Type</span>
+                  <div className="mt-1">
+                    <Badge variant="outline" data-testid={`modal-badge-entity-type-${selectedEntry.id}`}>
+                      {formatEntityType(selectedEntry.entityType)}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Timestamp</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-modal-timestamp-${selectedEntry.id}`}>
+                      {selectedEntry.timestamp 
+                        ? formatDistanceToNow(new Date(selectedEntry.timestamp), { addSuffix: true })
+                        : 'Unknown time'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Changed By</span>
+                  <div className="mt-1">
+                    {selectedEntry.user ? (
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`text-modal-user-${selectedEntry.id}`}>
+                          {selectedEntry.user.firstName} {selectedEntry.user.lastName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid={`text-modal-no-user-${selectedEntry.id}`}>—</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Change reason */}
-              {entry.changeReason && (
-                <div data-testid={`change-reason-${entry.id}`}>
-                  <p className="text-sm font-medium text-foreground">
-                    {entry.changeReason}
+              {/* Change Reason */}
+              {selectedEntry.changeReason && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Change Reason</span>
+                  <p className="text-sm font-medium mt-2" data-testid={`text-modal-change-reason-${selectedEntry.id}`}>
+                    {selectedEntry.changeReason}
                   </p>
                 </div>
               )}
 
-              {/* Value change display */}
-              {entry.fromValue !== null && entry.toValue !== null && (
-                <div className="flex items-center gap-2 text-sm" data-testid={`value-change-${entry.id}`}>
-                  <span className="text-muted-foreground">Changed from:</span>
-                  <Badge variant="outline">{entry.fromValue}</Badge>
-                  <span className="text-muted-foreground">to:</span>
-                  <Badge variant="outline">{entry.toValue}</Badge>
+              {/* Value Changes */}
+              {selectedEntry.fromValue !== null && selectedEntry.toValue !== null && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Value Changes</span>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg" data-testid={`div-modal-value-change-${selectedEntry.id}`}>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <span className="text-xs text-muted-foreground">From:</span>
+                        <Badge variant="outline" className="ml-2" data-testid={`badge-modal-from-value-${selectedEntry.id}`}>{selectedEntry.fromValue}</Badge>
+                      </div>
+                      <span className="text-muted-foreground">→</span>
+                      <div>
+                        <span className="text-xs text-muted-foreground">To:</span>
+                        <Badge variant="outline" className="ml-2" data-testid={`badge-modal-to-value-${selectedEntry.id}`}>{selectedEntry.toValue}</Badge>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* User attribution */}
-              {entry.user && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid={`user-attribution-${entry.id}`}>
-                  <span>Changed by:</span>
-                  <span className="font-medium">
-                    {entry.user.firstName} {entry.user.lastName}
-                  </span>
-                  {entry.user.email && (
-                    <span className="text-muted-foreground">({entry.user.email})</span>
-                  )}
+              {/* Notes */}
+              {selectedEntry.notes && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Notes</span>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-sm" data-testid={`text-modal-notes-${selectedEntry.id}`}>{selectedEntry.notes}</p>
+                  </div>
                 </div>
               )}
 
-              {/* Notes if present */}
-              {entry.notes && (
-                <div className="mt-2 p-2 bg-muted/30 rounded text-sm" data-testid={`notes-${entry.id}`}>
-                  <span className="font-medium text-muted-foreground">Notes:</span>
-                  <p className="mt-1">{entry.notes}</p>
+              {/* User Email */}
+              {selectedEntry.user?.email && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">User Email</span>
+                  <p className="text-sm text-muted-foreground mt-1" data-testid={`text-modal-user-email-${selectedEntry.id}`}>{selectedEntry.user.email}</p>
                 </div>
               )}
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={() => setIsViewingEntry(false)}
+                  data-testid="button-close-chronology-detail"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

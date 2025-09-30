@@ -5,6 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
 import { calculateBusinessHours } from "@shared/businessTime";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Eye, Clock, User as UserIcon } from "lucide-react";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -29,6 +33,8 @@ const formatChangeReason = (reason: string): string => {
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
   // State for live time updates
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
+  const [isViewingEntry, setIsViewingEntry] = useState(false);
 
   // Update current time every minute for live time calculations
   useEffect(() => {
@@ -208,173 +214,250 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
   return (
     <div className="space-y-6">
       <h4 className="font-semibold text-foreground mb-4">Project Chronology</h4>
-      <ScrollArea className="h-96">
-        <div className="space-y-4">
-          {sortedChronology.map((entry, index) => {
-            const hasFields = entry.fieldResponses && entry.fieldResponses.length > 0;
-            return (
-              <div key={entry.id} className="border-l-2 border-primary pl-4 pb-4 min-h-[200px] flex flex-col">
-                {/* Timestamp header */}
-                <div className="flex justify-end mb-2">
-                  <span className="text-xs text-muted-foreground">
-                    {entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true }) : 'Unknown'}
-                  </span>
-                </div>
-                
-                {/* Fixed two-column layout with scrollable right column */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
-                  {/* Left Column: Main chronology information */}
-                  <div className="space-y-2">
-                    {/* Status Change */}
-                    <div className="flex items-center space-x-2">
-                      {entry.fromStatus ? (
-                        <div className="flex items-center space-x-2 text-sm">
-                          <Badge 
-                            className="text-xs border-0" 
-                            style={getStageColorStyle(entry.fromStatus || '')}
-                            data-testid={`badge-from-status-${entry.id}`}
-                          >
-                            {formatStageName(entry.fromStatus || '')}
-                          </Badge>
-                          <span className="text-muted-foreground">→</span>
-                          <Badge 
-                            className="text-xs border-0" 
-                            style={getStageColorStyle(entry.toStatus)}
-                            data-testid={`badge-to-status-${entry.id}`}
-                          >
-                            {formatStageName(entry.toStatus)}
-                          </Badge>
-                        </div>
-                      ) : (
-                        <Badge 
-                          className="text-xs border-0" 
-                          style={getStageColorStyle(entry.toStatus)}
-                          data-testid={`badge-initial-status-${entry.id}`}
-                        >
-                          {formatStageName(entry.toStatus)}
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    {/* Change Reason */}
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-muted-foreground font-medium">Reason:</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {entry.changeReason ? formatChangeReason(entry.changeReason) : 'Not specified'}
-                      </Badge>
-                    </div>
-                    
-                    {/* Time in Current Stage */}
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-muted-foreground font-medium">
-                          {index === 0 ? "Time in current stage:" : "Time spent in this stage:"}
-                        </span>
-                        <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded" data-testid={`time-duration-${entry.id}`}>
-                          {formatDuration(calculateTimeInCurrentStage(entry, index, sortedChronology))}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-muted-foreground font-medium">
-                          {index === 0 ? "Business hours in current stage:" : "Business hours spent in this stage:"}
-                        </span>
-                        <span className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded" data-testid={`business-hours-${entry.id}`}>
-                          {getBusinessHoursInCurrentStage(entry, index, sortedChronology)}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Assignee Information */}
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {entry.fromStatus ? "Assigned to:" : "Project created - Assigned to:"}
-                      </span>
-                      <span className="text-xs text-foreground">
-                        {entry.assignee 
-                          ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
-                          : "System"}
-                      </span>
-                    </div>
-
-                    {/* Notes */}
-                    {entry.notes && (
-                      <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded text-xs text-muted-foreground italic">
-                        "{entry.notes}"
-                      </div>
-                    )}
+      {!sortedChronology.length ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <p className="text-sm">No chronology available</p>
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>From Stage</TableHead>
+              <TableHead>To Stage</TableHead>
+              <TableHead>Assigned To</TableHead>
+              <TableHead>Time in Stage</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedChronology.map((entry, index) => (
+              <TableRow key={entry.id} data-testid={`chronology-row-${entry.id}`}>
+                <TableCell data-testid={`cell-from-status-${entry.id}`}>
+                  {entry.fromStatus ? (
+                    <Badge 
+                      className="text-xs border-0" 
+                      style={getStageColorStyle(entry.fromStatus)}
+                      data-testid={`badge-from-status-${entry.id}`}
+                    >
+                      {formatStageName(entry.fromStatus)}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground" data-testid={`text-no-from-status-${entry.id}`}>—</span>
+                  )}
+                </TableCell>
+                <TableCell data-testid={`cell-to-status-${entry.id}`}>
+                  <Badge 
+                    className="text-xs border-0" 
+                    style={getStageColorStyle(entry.toStatus)}
+                    data-testid={`badge-to-status-${entry.id}`}
+                  >
+                    {formatStageName(entry.toStatus)}
+                  </Badge>
+                </TableCell>
+                <TableCell data-testid={`cell-assignee-${entry.id}`}>
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-assignee-${entry.id}`}>
+                      {entry.assignee 
+                        ? `${entry.assignee.firstName} ${entry.assignee.lastName}`
+                        : "System"}
+                    </span>
                   </div>
+                </TableCell>
+                <TableCell data-testid={`cell-time-${entry.id}`}>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex flex-col">
+                      <span className="text-xs" data-testid={`text-time-duration-${entry.id}`}>
+                        {formatDuration(calculateTimeInCurrentStage(entry, index, sortedChronology))}
+                      </span>
+                      <span className="text-xs text-muted-foreground" data-testid={`text-business-hours-${entry.id}`}>
+                        {getBusinessHoursInCurrentStage(entry, index, sortedChronology)}
+                      </span>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedEntry({ entry, index });
+                      setIsViewingEntry(true);
+                    }}
+                    data-testid={`button-view-chronology-${entry.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
-                  {/* Right Column: Additional Information with scrollable content */}
-                  <div className="space-y-2">
-                    <span className="text-xs text-muted-foreground font-medium">Additional Information</span>
-                    <ScrollArea className="h-[120px] w-full">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-md p-3 space-y-3 min-h-[120px]" data-testid={`additional-info-${entry.id}`}>
-                        {/* Field Responses */}
-                        {entry.fieldResponses && entry.fieldResponses.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="text-xs font-medium text-foreground border-b border-slate-300 dark:border-slate-600 pb-1">
-                              Stage Approval Responses
-                            </div>
-                            {entry.fieldResponses.map((response) => {
-                              // Get the appropriate value based on field type
-                              const getFieldValue = () => {
-                                switch (response.fieldType) {
-                                  case 'number':
-                                    return response.valueNumber?.toString() || 'No value';
-                                  case 'short_text':
-                                    return response.valueShortText || 'No value';
-                                  case 'long_text':
-                                    return response.valueLongText || 'No value';
-                                  case 'multi_select':
-                                    return response.valueMultiSelect?.join(', ') || 'No selections';
-                                  default:
-                                    return 'Unknown field type';
-                                }
-                              };
-
-                              return (
-                                <div key={response.id} className="space-y-1" data-testid={`field-response-${response.id}`}>
-                                  <span className="text-xs font-medium text-foreground block">
-                                    {response.customField.fieldName}
-                                  </span>
-                                  <div className="ml-1">
-                                    {response.fieldType === 'long_text' ? (
-                                      <div className="text-xs text-foreground bg-white dark:bg-slate-700 p-2 rounded border max-h-16 overflow-y-auto">
-                                        {getFieldValue()}
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs text-foreground">
-                                        {getFieldValue()}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        
-                        {/* Show placeholder if no additional information */}
-                        {(!entry.fieldResponses || entry.fieldResponses.length === 0) && (
-                          <div className="text-xs text-muted-foreground italic flex items-center justify-center h-full">
-                            No additional information available
-                          </div>
-                        )}
-                      </div>
-                    </ScrollArea>
+      {/* View Chronology Detail Modal */}
+      <Dialog open={isViewingEntry} onOpenChange={setIsViewingEntry}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chronology Entry Details</DialogTitle>
+          </DialogHeader>
+          {selectedEntry && (
+            <div className="space-y-4">
+              {/* Header Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <span className="text-xs text-muted-foreground">Timestamp</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-modal-timestamp-${selectedEntry.entry.id}`}>
+                      {selectedEntry.entry.timestamp 
+                        ? formatDistanceToNow(new Date(selectedEntry.entry.timestamp), { addSuffix: true }) 
+                        : 'Unknown'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Assigned To</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-modal-assignee-${selectedEntry.entry.id}`}>
+                      {selectedEntry.entry.assignee 
+                        ? `${selectedEntry.entry.assignee.firstName} ${selectedEntry.entry.assignee.lastName}`
+                        : "System"}
+                    </span>
                   </div>
                 </div>
               </div>
-            );
-          })}
-          
-          {!sortedChronology.length && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-sm">No chronology available</p>
+
+              {/* Stage Transition */}
+              <div>
+                <span className="text-xs text-muted-foreground font-medium">Stage Transition</span>
+                <div className="mt-2 flex items-center gap-3">
+                  {selectedEntry.entry.fromStatus ? (
+                    <>
+                      <Badge 
+                        className="text-sm border-0" 
+                        style={getStageColorStyle(selectedEntry.entry.fromStatus)}
+                      >
+                        {formatStageName(selectedEntry.entry.fromStatus)}
+                      </Badge>
+                      <span className="text-muted-foreground text-lg">→</span>
+                      <Badge 
+                        className="text-sm border-0" 
+                        style={getStageColorStyle(selectedEntry.entry.toStatus)}
+                      >
+                        {formatStageName(selectedEntry.entry.toStatus)}
+                      </Badge>
+                    </>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Project Created</p>
+                      <Badge 
+                        className="text-sm border-0" 
+                        style={getStageColorStyle(selectedEntry.entry.toStatus)}
+                      >
+                        {formatStageName(selectedEntry.entry.toStatus)}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Change Reason */}
+              <div>
+                <span className="text-xs text-muted-foreground font-medium">Change Reason</span>
+                <div className="mt-2">
+                  <Badge variant="secondary">
+                    {selectedEntry.entry.changeReason ? formatChangeReason(selectedEntry.entry.changeReason) : 'Not specified'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Time Metrics */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    {selectedEntry.index === 0 ? "Time in Current Stage" : "Time Spent in Stage"}
+                  </span>
+                  <p className="text-lg font-semibold text-blue-700 dark:text-blue-300 mt-1">
+                    {formatDuration(calculateTimeInCurrentStage(selectedEntry.entry, selectedEntry.index, sortedChronology))}
+                  </p>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <span className="text-xs text-green-700 dark:text-green-300 font-medium">
+                    {selectedEntry.index === 0 ? "Business Hours in Current Stage" : "Business Hours Spent"}
+                  </span>
+                  <p className="text-lg font-semibold text-green-700 dark:text-green-300 mt-1">
+                    {getBusinessHoursInCurrentStage(selectedEntry.entry, selectedEntry.index, sortedChronology)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedEntry.entry.notes && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Notes</span>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-sm italic">"{selectedEntry.entry.notes}"</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Field Responses */}
+              {selectedEntry.entry.fieldResponses && selectedEntry.entry.fieldResponses.length > 0 && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Stage Approval Responses</span>
+                  <div className="mt-2 space-y-3">
+                    {selectedEntry.entry.fieldResponses.map((response: any) => {
+                      const getFieldValue = () => {
+                        switch (response.fieldType) {
+                          case 'number':
+                            return response.valueNumber?.toString() || 'No value';
+                          case 'short_text':
+                            return response.valueShortText || 'No value';
+                          case 'long_text':
+                            return response.valueLongText || 'No value';
+                          case 'multi_select':
+                            return response.valueMultiSelect?.join(', ') || 'No selections';
+                          default:
+                            return 'Unknown field type';
+                        }
+                      };
+
+                      return (
+                        <div key={response.id} className="p-3 bg-muted/30 rounded-lg">
+                          <span className="text-sm font-medium block mb-2">
+                            {response.customField.fieldName}
+                          </span>
+                          {response.fieldType === 'long_text' ? (
+                            <div className="text-sm bg-background p-2 rounded border max-h-32 overflow-y-auto">
+                              {getFieldValue()}
+                            </div>
+                          ) : (
+                            <span className="text-sm">{getFieldValue()}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={() => setIsViewingEntry(false)}
+                  data-testid="button-close-chronology-detail"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           )}
-        </div>
-      </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

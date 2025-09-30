@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
@@ -145,6 +146,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
   const [emailPersonId, setEmailPersonId] = useState<string | undefined>();
   const [emailContent, setEmailContent] = useState<string>('');
+  const [selectedCommunication, setSelectedCommunication] = useState<CommunicationWithRelations | null>(null);
+  const [isViewingCommunication, setIsViewingCommunication] = useState(false);
   const { toast } = useToast();
 
   // Fetch communications for this client
@@ -437,63 +440,73 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             <p className="text-sm">Add phone calls, notes, or messages to track client interactions</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {communications.map((comm: CommunicationWithRelations) => (
-              <div key={comm.id} className="flex gap-4 pb-6 border-b border-border last:border-b-0" data-testid={`communication-${comm.id}`}>
-                <div className="flex-shrink-0">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                    {getIcon(comm.type)}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="secondary" className={getTypeColor(comm.type)}>
-                      {getTypeLabel(comm.type)}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {comm.loggedAt ? new Date(comm.loggedAt).toLocaleString() : 'No date'}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      by {comm.user.firstName} {comm.user.lastName}
-                    </span>
-                  </div>
-                  {comm.subject && (
-                    <h4 className="font-medium mb-2" data-testid={`communication-subject-${comm.id}`}>
-                      {comm.subject}
-                    </h4>
-                  )}
-                  {comm.content && (
-                    <div 
-                      className="text-sm text-muted-foreground whitespace-pre-wrap"
-                      data-testid={`communication-content-${comm.id}`}
-                    >
-                      {comm.type === 'email_sent' || comm.type === 'email_received' ? (
-                        <div 
-                          dangerouslySetInnerHTML={{ 
-                            __html: DOMPurify.sanitize(comm.content, {
-                              ALLOWED_TAGS: ['br', 'p', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a'],
-                              ALLOWED_ATTR: ['href', 'style'],
-                              ALLOW_DATA_ATTR: false
-                            })
-                          }}
-                        />
-                      ) : (
-                        comm.content
-                      )}
-                    </div>
-                  )}
-                  {comm.person && (
-                    <div className="mt-2">
-                      <Badge variant="outline" className="text-xs">
-                        <UserIcon className="h-3 w-3 mr-1" />
-                        {formatPersonName(comm.person.fullName)}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Date/Time</TableHead>
+                <TableHead>Person</TableHead>
+                <TableHead>Created By</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {communications.map((comm: CommunicationWithRelations) => (
+                <TableRow key={comm.id} data-testid={`communication-row-${comm.id}`}>
+                  <TableCell data-testid={`cell-type-${comm.id}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                        {getIcon(comm.type)}
+                      </div>
+                      <Badge variant="secondary" className={getTypeColor(comm.type)} data-testid={`badge-type-${comm.id}`}>
+                        {getTypeLabel(comm.type)}
                       </Badge>
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+                  </TableCell>
+                  <TableCell data-testid={`cell-date-${comm.id}`}>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm" data-testid={`text-date-${comm.id}`}>
+                        {comm.loggedAt ? new Date(comm.loggedAt).toLocaleString() : 'No date'}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell data-testid={`cell-person-${comm.id}`}>
+                    {comm.person ? (
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`text-person-${comm.id}`}>{formatPersonName(comm.person.fullName)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid={`text-no-person-${comm.id}`}>—</span>
+                    )}
+                  </TableCell>
+                  <TableCell data-testid={`cell-user-${comm.id}`}>
+                    <div className="flex items-center gap-2">
+                      <UserIcon className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm" data-testid={`text-user-${comm.id}`}>
+                        {comm.user.firstName} {comm.user.lastName}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCommunication(comm);
+                        setIsViewingCommunication(true);
+                      }}
+                      data-testid={`button-view-communication-${comm.id}`}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </CardContent>
 
@@ -838,6 +851,111 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Communication Detail Modal */}
+      <Dialog open={isViewingCommunication} onOpenChange={setIsViewingCommunication}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedCommunication && getIcon(selectedCommunication.type)}
+              Communication Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCommunication && (
+            <div className="space-y-4">
+              {/* Header Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <span className="text-xs text-muted-foreground">Type</span>
+                  <div className="mt-1">
+                    <Badge variant="secondary" className={getTypeColor(selectedCommunication.type)} data-testid={`modal-badge-type-${selectedCommunication.id}`}>
+                      {getTypeLabel(selectedCommunication.type)}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Date/Time</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-modal-date-${selectedCommunication.id}`}>
+                      {selectedCommunication.loggedAt 
+                        ? new Date(selectedCommunication.loggedAt).toLocaleString() 
+                        : 'No date'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Created By</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-modal-user-${selectedCommunication.id}`}>
+                      {selectedCommunication.user.firstName} {selectedCommunication.user.lastName}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Contact Person</span>
+                  <div className="mt-1">
+                    {selectedCommunication.person ? (
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid={`text-modal-person-${selectedCommunication.id}`}>
+                          {formatPersonName(selectedCommunication.person.fullName)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid={`text-modal-no-person-${selectedCommunication.id}`}>—</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Subject */}
+              {selectedCommunication.subject && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Subject</span>
+                  <h4 className="font-medium text-lg mt-1" data-testid={`text-modal-subject-${selectedCommunication.id}`}>
+                    {selectedCommunication.subject}
+                  </h4>
+                </div>
+              )}
+
+              {/* Content */}
+              {selectedCommunication.content && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Content</span>
+                  <div className="mt-2 p-4 bg-muted/30 rounded-lg" data-testid={`div-modal-content-${selectedCommunication.id}`}>
+                    {selectedCommunication.type === 'email_sent' || selectedCommunication.type === 'email_received' ? (
+                      <div 
+                        className="prose prose-sm dark:prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ 
+                          __html: DOMPurify.sanitize(selectedCommunication.content, {
+                            ALLOWED_TAGS: ['br', 'p', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div'],
+                            ALLOWED_ATTR: ['href', 'style', 'class'],
+                            ALLOW_DATA_ATTR: false
+                          })
+                        }}
+                      />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{selectedCommunication.content}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={() => setIsViewingCommunication(false)}
+                  data-testid="button-close-communication-detail"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>
