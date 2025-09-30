@@ -133,7 +133,7 @@ export default function FilterPanel({
       return await apiRequest(
         "POST",
         "/api/project-views",
-        { name, filters, viewMode }
+        { name, filters: JSON.stringify(filters), viewMode }
       );
     },
     onSuccess: () => {
@@ -146,13 +146,12 @@ export default function FilterPanel({
   // Delete view mutation
   const deleteViewMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(
+      await apiRequest(
         "DELETE",
         `/api/project-views/${id}`
       );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+      // Immediately refetch after successful delete
+      await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
     },
   });
 
@@ -167,7 +166,9 @@ export default function FilterPanel({
   };
 
   const handleLoadView = (view: ProjectView) => {
-    const filters = view.filters as any;
+    const filters = typeof view.filters === 'string' 
+      ? JSON.parse(view.filters) 
+      : view.filters as any;
     
     setServiceFilter(filters.serviceFilter || "all");
     setTaskAssigneeFilter(filters.taskAssigneeFilter || "all");
