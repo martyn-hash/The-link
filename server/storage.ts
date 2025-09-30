@@ -5232,14 +5232,25 @@ export class DatabaseStorage implements IStorage {
   // Role Resolution for Project Creation
   async resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string): Promise<User | undefined> {
     try {
-      // Find the service for this project type
+      // Find the project type to get its service ID
+      const [projectType] = await db
+        .select()
+        .from(projectTypes)
+        .where(eq(projectTypes.id, projectTypeId));
+      
+      if (!projectType || !projectType.serviceId) {
+        console.warn(`No service linked to project type ID: ${projectTypeId}`);
+        return undefined;
+      }
+
+      // Find the service
       const [service] = await db
         .select()
         .from(services)
-        .where(eq(projectTypes.id, projectTypeId));
+        .where(eq(services.id, projectType.serviceId));
       
       if (!service) {
-        console.warn(`No service found for project type ID: ${projectTypeId}`);
+        console.warn(`No service found for service ID: ${projectType.serviceId}`);
         return undefined;
       }
 
@@ -5292,7 +5303,7 @@ export class DatabaseStorage implements IStorage {
           eq(clientServiceRoleAssignments.workRoleId, workRole.id),
           eq(clientServiceRoleAssignments.isActive, true)
         ))
-        .orderBy(desc(clientServiceRoleAssignments.createdAt));
+        .orderBy(desc(clientServiceRoleAssignments.createdAt), desc(clientServiceRoleAssignments.id));
       
       if (assignments.length === 0) {
         console.warn(`No active role assignment found for client ${clientId}, role ${roleName}`);
