@@ -4982,8 +4982,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
       const currentStage = stages.find(stage => stage.name === project.currentStatus);
       
-      if (!currentStage || !currentStage.assignedRole) {
-        // If no stage found or no role assigned to stage, fallback to client manager or current assignee
+      if (!currentStage) {
+        // If no stage found, fallback to current assignee or client manager
         const assignee = project.currentAssignee || project.clientManager;
         if (assignee) {
           const { passwordHash, ...sanitizedUser } = assignee;
@@ -5005,7 +5005,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               source: 'fallback_user'
             });
           } else {
-            // CRITICAL FIX: Return 200 with null user instead of 404
             return res.json({ 
               user: null, 
               roleUsed: null,
@@ -5016,31 +5015,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Try to resolve the user assigned to this role for this client
-      let resolvedUser = await storage.resolveRoleAssigneeForClient(
-        project.clientId, 
-        project.projectTypeId, 
-        currentStage.assignedRole
-      );
-
+      // Determine assignee based on stage configuration (same logic as updateProjectStatus)
+      let resolvedUser: any = null;
+      let roleUsed: string | null = null;
       let usedFallback = false;
-      let source = 'role_assignment';
+      let source = 'none';
 
-      // If no role assignment found, use fallback user
-      if (!resolvedUser) {
-        resolvedUser = await storage.getFallbackUser();
-        usedFallback = true;
-        source = 'fallback_user';
-        
-        if (!resolvedUser) {
-          // CRITICAL FIX: Return 200 with null user instead of 404
-          return res.json({ 
-            user: null, 
-            roleUsed: currentStage.assignedRole,
-            usedFallback: false,
-            source: 'none'
-          });
+      if (currentStage.assignedUserId) {
+        // Direct user assignment to stage
+        resolvedUser = await storage.getUser(currentStage.assignedUserId);
+        roleUsed = null;
+        source = 'stage_assigned_user';
+      } else if (currentStage.assignedWorkRoleId) {
+        // Work role assignment - get the work role name and resolve through client service role assignments
+        const workRole = await storage.getWorkRoleById(currentStage.assignedWorkRoleId);
+        if (workRole) {
+          resolvedUser = await storage.resolveRoleAssigneeForClient(
+            project.clientId, 
+            project.projectTypeId, 
+            workRole.name
+          );
+          roleUsed = workRole.name;
+          source = 'role_assignment';
         }
+      }
+
+      // If no user resolved from stage assignment, fallback to project assignments
+      if (!resolvedUser) {
+        resolvedUser = project.currentAssignee || project.clientManager;
+        if (resolvedUser) {
+          source = 'direct_assignment';
+        } else {
+          // Try global fallback user
+          resolvedUser = await storage.getFallbackUser();
+          if (resolvedUser) {
+            usedFallback = true;
+            source = 'fallback_user';
+          }
+        }
+      }
+
+      // If still no user found, return null response
+      if (!resolvedUser) {
+        return res.json({ 
+          user: null, 
+          roleUsed,
+          usedFallback: false,
+          source: 'none'
+        });
       }
 
       // Strip password hash from response for security
@@ -5048,7 +5070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         user: sanitizedUser,
-        roleUsed: currentStage.assignedRole,
+        roleUsed,
         usedFallback,
         source
       });
