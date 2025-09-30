@@ -41,6 +41,13 @@ export default function Projects() {
   }, [serviceFilter, viewMode]);
   const [userFilter, setUserFilter] = useState("all");
   const [showArchived, setShowArchived] = useState<boolean>(false);
+  
+  // Date filter state
+  const [dynamicDateFilter, setDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom">("all");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
@@ -124,7 +131,50 @@ export default function Projects() {
                   project.currentAssigneeId === userFilter;
     }
 
-    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch;
+    // Date filter (based on project dueDate)
+    let dateMatch = true;
+    if (dynamicDateFilter !== "all" && project.dueDate) {
+      const dueDate = new Date(project.dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (dynamicDateFilter) {
+        case "overdue":
+          dateMatch = dueDate < today;
+          break;
+        case "today":
+          const todayEnd = new Date(today);
+          todayEnd.setHours(23, 59, 59, 999);
+          dateMatch = dueDate >= today && dueDate <= todayEnd;
+          break;
+        case "next7days":
+          const next7Days = new Date(today);
+          next7Days.setDate(next7Days.getDate() + 7);
+          dateMatch = dueDate >= today && dueDate <= next7Days;
+          break;
+        case "next14days":
+          const next14Days = new Date(today);
+          next14Days.setDate(next14Days.getDate() + 14);
+          dateMatch = dueDate >= today && dueDate <= next14Days;
+          break;
+        case "next30days":
+          const next30Days = new Date(today);
+          next30Days.setDate(next30Days.getDate() + 30);
+          dateMatch = dueDate >= today && dueDate <= next30Days;
+          break;
+        case "custom":
+          if (customDateRange.from && customDateRange.to) {
+            const fromDate = new Date(customDateRange.from);
+            fromDate.setHours(0, 0, 0, 0);
+            const toDate = new Date(customDateRange.to);
+            toDate.setHours(23, 59, 59, 999);
+            dateMatch = dueDate >= fromDate && dueDate <= toDate;
+          }
+          break;
+      }
+    }
+
+    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch;
   });
 
 
