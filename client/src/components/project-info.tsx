@@ -46,6 +46,11 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
   // Fetch current service roles for this project
   const { data: serviceRoles, isLoading: isLoadingServiceRoles } = useQuery<ServiceRolesResponse>({
     queryKey: ['/api/projects', project.id, 'service-roles'],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${project.id}/service-roles`);
+      if (!response.ok) throw new Error('Failed to fetch service roles');
+      return response.json();
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 

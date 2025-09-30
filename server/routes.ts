@@ -5080,23 +5080,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let clientManager = null;
       let serviceOwner = null;
 
-      // Try to resolve bookkeeper role
+      // Try to resolve bookkeeper role (correct case-sensitive name)
       if (project.projectTypeId) {
         const bookkeeperUser = await storage.resolveRoleAssigneeForClient(
           project.clientId,
           project.projectTypeId,
-          'bookkeeper'
+          'Bookkeeper'  // Correct capitalization
         );
         if (bookkeeperUser) {
           const { passwordHash, ...sanitizedBookkeeper } = bookkeeperUser;
           bookkeeper = sanitizedBookkeeper;
         }
 
-        // Try to resolve client manager role
+        // Try to resolve client manager role (correct case-sensitive name with space)
         const clientManagerUser = await storage.resolveRoleAssigneeForClient(
           project.clientId,
           project.projectTypeId,
-          'client_manager'
+          'Client Manager'  // Correct capitalization with space
         );
         if (clientManagerUser) {
           const { passwordHash, ...sanitizedClientManager } = clientManagerUser;
