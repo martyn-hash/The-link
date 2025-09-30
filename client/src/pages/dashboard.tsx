@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service } from "@shared/schema";
+import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -449,20 +449,32 @@ function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedSe
     enabled: !!selectedServiceId,
   });
 
-  // Get all unique statuses from the filtered projects
-  const statusColumns = projects && projects.length > 0
-    ? Array.from(new Set(projects.map(p => p.currentStatus))).map((status, index) => ({
-        id: status,
-        label: status,
-        color: [
-          "bg-slate-100 dark:bg-slate-900",
-          "bg-blue-100 dark:bg-blue-900",
-          "bg-yellow-100 dark:bg-yellow-900",
-          "bg-orange-100 dark:bg-orange-900",
-          "bg-green-100 dark:bg-green-900"
-        ][index % 5]
-      }))
-    : [];
+  const { data: kanbanStages, isLoading: stagesLoading, refetch: refetchStages } = useQuery<KanbanStage[]>({
+    queryKey: [`/api/services/${selectedServiceId}/kanban-stages`],
+    enabled: !!selectedServiceId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  // Force refetch when service changes
+  useEffect(() => {
+    if (selectedServiceId) {
+      refetchStages();
+    }
+  }, [selectedServiceId, refetchStages]);
+
+  // Create columns from kanban stages (ordered by stage order)
+  const statusColumns = kanbanStages?.map((stage, index) => ({
+    id: stage.name,
+    label: stage.name,
+    color: [
+      "bg-slate-100 dark:bg-slate-900",
+      "bg-blue-100 dark:bg-blue-900",
+      "bg-yellow-100 dark:bg-yellow-900",
+      "bg-orange-100 dark:bg-orange-900",
+      "bg-green-100 dark:bg-green-900"
+    ][index % 5]
+  })) || [];
 
   const projectsByStatus = statusColumns.reduce((acc, column) => {
     acc[column.id] = projects?.filter(p => p.currentStatus === column.id) || [];
@@ -506,13 +518,19 @@ function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedSe
             <p className="text-lg font-medium">No service selected</p>
             <p className="text-sm">Select a service from the dropdown above to view projects</p>
           </div>
-        ) : projectsLoading ? (
+        ) : projectsLoading || stagesLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading projects...</p>
+            <p className="mt-4 text-muted-foreground">Loading...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-5 gap-4">
+          <div className={`grid gap-4 ${
+            statusColumns.length === 1 ? 'grid-cols-1' :
+            statusColumns.length === 2 ? 'grid-cols-2' :
+            statusColumns.length === 3 ? 'grid-cols-3' :
+            statusColumns.length === 4 ? 'grid-cols-4' :
+            'grid-cols-5'
+          }`}>
             {statusColumns.map((column) => (
               <div key={column.id} className="space-y-3" data-testid={`kanban-column-${column.id}`}>
                 <div className={`${column.color} p-3 rounded-lg`}>

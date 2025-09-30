@@ -2352,26 +2352,15 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
 
-    // Get the service to find its project type
-    const service = await db
-      .select()
-      .from(services)
-      .where(eq(services.id, serviceId))
-      .limit(1);
-
-    if (!service || service.length === 0) {
-      console.warn(`[Storage] Service not found for serviceId: "${serviceId}"`);
-      return [];
-    }
-
-    const projectTypeId = service[0].projectTypeId;
-    
-    // Get kanban stages for the project type
-    return await db
-      .select()
+    // Get kanban stages via project_types.service_id relationship
+    const stages = await db
+      .select({ stage: kanbanStages })
       .from(kanbanStages)
-      .where(eq(kanbanStages.projectTypeId, projectTypeId))
+      .innerJoin(projectTypes, eq(kanbanStages.projectTypeId, projectTypes.id))
+      .where(eq(projectTypes.serviceId, serviceId))
       .orderBy(kanbanStages.order);
+
+    return stages.map(s => s.stage);
   }
 
   async createKanbanStage(stage: InsertKanbanStage): Promise<KanbanStage> {
