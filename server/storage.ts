@@ -221,9 +221,9 @@ export interface IStorage {
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
-  getAllProjects(): Promise<ProjectWithRelations[]>;
-  getProjectsByUser(userId: string, role: string): Promise<ProjectWithRelations[]>;
-  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]>;
+  getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
@@ -1779,7 +1779,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
     if (filters?.month) {
@@ -1792,6 +1792,24 @@ export class DatabaseStorage implements IStorage {
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+
+    // Filter by service if provided - need to join with projectTypes
+    if (filters?.serviceId) {
+      // Use a subquery to find project types linked to the service
+      const serviceProjectTypes = await db
+        .select({ id: projectTypes.id })
+        .from(projectTypes)
+        .where(eq(projectTypes.serviceId, filters.serviceId));
+      
+      const projectTypeIds = serviceProjectTypes.map(pt => pt.id);
+      
+      if (projectTypeIds.length > 0) {
+        whereConditions.push(inArray(projects.projectTypeId, projectTypeIds));
+      } else {
+        // No project types found for this service, return empty result
+        return [];
+      }
     }
     
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
@@ -1835,7 +1853,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean }): Promise<ProjectWithRelations[]> {
+  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
     let userWhereCondition;
     
     switch (role) {
@@ -1866,6 +1884,24 @@ export class DatabaseStorage implements IStorage {
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+
+    // Filter by service if provided - need to join with projectTypes
+    if (filters?.serviceId) {
+      // Use a subquery to find project types linked to the service
+      const serviceProjectTypes = await db
+        .select({ id: projectTypes.id })
+        .from(projectTypes)
+        .where(eq(projectTypes.serviceId, filters.serviceId));
+      
+      const projectTypeIds = serviceProjectTypes.map(pt => pt.id);
+      
+      if (projectTypeIds.length > 0) {
+        whereConditions.push(inArray(projects.projectTypeId, projectTypeIds));
+      } else {
+        // No project types found for this service, return empty result
+        return [];
+      }
     }
     
     const whereClause = and(...whereConditions);

@@ -4,11 +4,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithRelations, type Client, type Person, type ProjectType } from "@shared/schema";
+import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Clock, 
   AlertTriangle, 
@@ -43,6 +50,9 @@ export default function Dashboard() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
+  const [selectedServiceId, setSelectedServiceId] = useState<string>(() => {
+    return localStorage.getItem('dashboard_kanban_service') || '';
+  });
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
@@ -166,6 +176,17 @@ export default function Dashboard() {
               <BehindSchedulePanel data={dashboardData} />
             </div>
             
+          </div>
+
+          {/* Kanban Board Section */}
+          <div className="mt-6">
+            <ServiceKanbanBoard 
+              selectedServiceId={selectedServiceId}
+              onServiceChange={(serviceId) => {
+                setSelectedServiceId(serviceId);
+                localStorage.setItem('dashboard_kanban_service', serviceId);
+              }}
+            />
           </div>
         </main>
       </div>
@@ -413,6 +434,110 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
             <p className="text-sm text-muted-foreground text-center py-4">All projects on schedule</p>
           )}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedServiceId: string; onServiceChange: (serviceId: string) => void }) {
+  const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
+    queryKey: ["/api/services"],
+  });
+
+  const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/projects", { serviceId: selectedServiceId }],
+    enabled: !!selectedServiceId,
+  });
+
+  const statusColumns = [
+    { id: "no_latest_action", label: "No Latest Action", color: "bg-slate-100 dark:bg-slate-900" },
+    { id: "bookkeeping_work_required", label: "Bookkeeping Work Required", color: "bg-blue-100 dark:bg-blue-900" },
+    { id: "in_review", label: "In Review", color: "bg-yellow-100 dark:bg-yellow-900" },
+    { id: "needs_client_input", label: "Needs Client Input", color: "bg-orange-100 dark:bg-orange-900" },
+    { id: "completed", label: "Completed", color: "bg-green-100 dark:bg-green-900" },
+  ];
+
+  const projectsByStatus = statusColumns.reduce((acc, column) => {
+    acc[column.id] = projects?.filter(p => p.currentStatus === column.id) || [];
+    return acc;
+  }, {} as Record<string, ProjectWithRelations[]>);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="w-5 h-5 text-purple-500" />
+              Service Kanban Board
+            </CardTitle>
+            <CardDescription>View projects by service and status</CardDescription>
+          </div>
+          <div className="w-64">
+            <Select value={selectedServiceId} onValueChange={onServiceChange}>
+              <SelectTrigger data-testid="select-service-filter">
+                <SelectValue placeholder="Select a service" />
+              </SelectTrigger>
+              <SelectContent>
+                {servicesLoading && (
+                  <SelectItem value="loading" disabled>Loading services...</SelectItem>
+                )}
+                {services?.map((service) => (
+                  <SelectItem key={service.id} value={service.id} data-testid={`service-option-${service.id}`}>
+                    {service.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!selectedServiceId ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Filter className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">No service selected</p>
+            <p className="text-sm">Select a service from the dropdown above to view projects</p>
+          </div>
+        ) : projectsLoading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading projects...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-5 gap-4">
+            {statusColumns.map((column) => (
+              <div key={column.id} className="space-y-3" data-testid={`kanban-column-${column.id}`}>
+                <div className={`${column.color} p-3 rounded-lg`}>
+                  <h3 className="font-semibold text-sm">{column.label}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {projectsByStatus[column.id]?.length || 0} project{projectsByStatus[column.id]?.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {projectsByStatus[column.id]?.map((project) => (
+                    <div
+                      key={project.id}
+                      className="p-3 bg-card border rounded-lg hover:shadow-md cursor-pointer transition-all"
+                      onClick={() => window.location.href = `/projects/${project.id}`}
+                      data-testid={`kanban-project-${project.id}`}
+                    >
+                      <p className="font-medium text-sm truncate">{project.client?.name}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-1">
+                        {(project as any).projectType?.name || "Unknown Type"}
+                      </p>
+                      {project.dueDate && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Due: {new Date(project.dueDate).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

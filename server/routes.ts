@@ -2276,6 +2276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         month: req.query.month as string | undefined,
         archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
         inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
+        serviceId: req.query.serviceId as string | undefined,
       };
 
       const projects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', filters);
