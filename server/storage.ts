@@ -17,6 +17,7 @@ import {
   stageApprovalResponses,
   magicLinkTokens,
   userNotificationPreferences,
+  projectViews,
   services,
   workRoles,
   serviceRoles,
@@ -73,6 +74,8 @@ import {
   type UserNotificationPreferences,
   type InsertUserNotificationPreferences,
   type UpdateUserNotificationPreferences,
+  type ProjectView,
+  type InsertProjectView,
   type Service,
   type InsertService,
   type WorkRole,
@@ -367,6 +370,11 @@ export interface IStorage {
   updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences>;
   getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences>;
   getUsersWithSchedulingNotifications(): Promise<User[]>;
+  
+  // Project views operations (saved filter configurations)
+  createProjectView(view: InsertProjectView): Promise<ProjectView>;
+  getProjectViewsByUserId(userId: string): Promise<ProjectView[]>;
+  deleteProjectView(id: string): Promise<void>;
   
   // Bulk project notification handling
   sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void>;
@@ -746,6 +754,30 @@ export class DatabaseStorage implements IStorage {
       );
     
     return usersWithNotifications as User[];
+  }
+
+  // Project views operations (saved filter configurations)
+  async createProjectView(view: InsertProjectView): Promise<ProjectView> {
+    const [newView] = await db
+      .insert(projectViews)
+      .values(view)
+      .returning();
+    return newView;
+  }
+
+  async getProjectViewsByUserId(userId: string): Promise<ProjectView[]> {
+    const views = await db
+      .select()
+      .from(projectViews)
+      .where(eq(projectViews.userId, userId))
+      .orderBy(desc(projectViews.createdAt));
+    return views;
+  }
+
+  async deleteProjectView(id: string): Promise<void> {
+    await db
+      .delete(projectViews)
+      .where(eq(projectViews.id, id));
   }
 
   async sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void> {
