@@ -19,7 +19,6 @@ import {
   Plus,
   ArrowRight,
   Calendar,
-  Target,
   TrendingUp,
   AlertCircle,
   Bell,
@@ -162,10 +161,9 @@ export default function Dashboard() {
               <MyProjectsPanel data={dashboardData} />
             </div>
             
-            {/* Right Column: Behind Schedule & Quick Actions */}
+            {/* Right Column: Behind Schedule */}
             <div className="col-span-4 space-y-6">
               <BehindSchedulePanel data={dashboardData} />
-              <QuickActionsPanel user={user} />
             </div>
             
           </div>
@@ -420,58 +418,3 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
   );
 }
 
-function QuickActionsPanel({ user }: { user: any }) {
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Target className="w-5 h-5 text-green-500" />
-          Quick Actions
-        </CardTitle>
-        <CardDescription>Common tasks and shortcuts</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <Button 
-          className="w-full justify-start" 
-          variant="outline" 
-          size="sm"
-          data-testid="button-create-project"
-          onClick={() => window.location.href = '/scheduled-services'}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create New Project
-        </Button>
-        <Button 
-          className="w-full justify-start" 
-          variant="outline" 
-          size="sm"
-          data-testid="button-view-all-projects-quick"
-          onClick={() => window.location.href = '/all-projects'}
-        >
-          <FolderOpen className="w-4 h-4 mr-2" />
-          View All Projects
-        </Button>
-        <Button 
-          className="w-full justify-start" 
-          variant="outline" 
-          size="sm"
-          data-testid="button-view-clients"
-          onClick={() => window.location.href = '/clients'}
-        >
-          <Building2 className="w-4 h-4 mr-2" />
-          View All Clients
-        </Button>
-        <Button 
-          className="w-full justify-start" 
-          variant="outline" 
-          size="sm"
-          data-testid="button-view-people"
-          onClick={() => window.location.href = '/people'}
-        >
-          <Users className="w-4 h-4 mr-2" />
-          View All People
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
