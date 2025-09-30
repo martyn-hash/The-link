@@ -195,7 +195,7 @@ function MyTasksPanel({ data, user }: { data?: DashboardStats; user: any }) {
             <div 
               key={task.id} 
               className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/project/${task.id}`}
+              onClick={() => window.location.href = `/projects/${task.id}`}
               data-testid={`task-item-${task.id}`}
             >
               <div className="flex items-center justify-between mb-1">
@@ -239,7 +239,7 @@ function OverdueProjectsPanel({ data }: { data?: DashboardStats }) {
             <div 
               key={project.id} 
               className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/30 cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/project/${project.id}`}
+              onClick={() => window.location.href = `/projects/${project.id}`}
               data-testid={`overdue-project-${project.id}`}
             >
               <div className="flex items-center justify-between mb-1">
@@ -344,7 +344,7 @@ function MyProjectsPanel({ data }: { data?: DashboardStats }) {
             <div 
               key={project.id} 
               className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/project/${project.id}`}
+              onClick={() => window.location.href = `/projects/${project.id}`}
               data-testid={`project-item-${project.id}`}
             >
               <div className="flex items-center justify-between mb-1">
@@ -394,7 +394,7 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
             <div 
               key={project.id} 
               className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/30 cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/project/${project.id}`}
+              onClick={() => window.location.href = `/projects/${project.id}`}
               data-testid={`behind-schedule-project-${project.id}`}
             >
               <div className="flex items-center justify-between mb-1">
