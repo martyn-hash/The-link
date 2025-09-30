@@ -7,19 +7,10 @@ import { type ProjectWithRelations, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
+import FilterPanel from "@/components/filter-panel";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Columns3, List, Filter, Archive, Users } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Columns3, List, Filter } from "lucide-react";
 
 type ViewMode = "kanban" | "list";
 
@@ -48,6 +39,9 @@ export default function Projects() {
     from: undefined,
     to: undefined,
   });
+  
+  // Filter panel state
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
@@ -103,6 +97,45 @@ export default function Projects() {
   }
 
   const isManagerOrAdmin = user.isAdmin || user.canSeeAdminMenu;
+
+  // Prepare data for FilterPanel
+  const services = Array.from(
+    new Set(
+      (projects || [])
+        .map((p: ProjectWithRelations) => p.projectType?.service?.name)
+        .filter((s): s is string => Boolean(s))
+    )
+  );
+
+  const taskAssignees = Array.from(
+    new Map(
+      (projects || [])
+        .map((p: ProjectWithRelations) => p.stageRoleAssignee)
+        .filter((assignee): assignee is NonNullable<typeof assignee> => Boolean(assignee))
+        .map(assignee => [assignee.id, assignee])
+    ).values()
+  );
+
+  const serviceOwners = Array.from(
+    new Map(
+      (projects || [])
+        .map((p: ProjectWithRelations) => p.projectOwner)
+        .filter((owner): owner is NonNullable<typeof owner> => Boolean(owner))
+        .map(owner => [owner.id, owner])
+    ).values()
+  );
+
+  // Calculate active filter count
+  const activeFilterCount = () => {
+    let count = 0;
+    if (serviceFilter !== "all") count++;
+    if (taskAssigneeFilter !== "all") count++;
+    if (serviceOwnerFilter !== "all") count++;
+    if (userFilter !== "all" && isManagerOrAdmin) count++;
+    if (showArchived) count++;
+    if (dynamicDateFilter !== "all") count++;
+    return count;
+  };
 
   const filteredProjects = (projects || []).filter((project: ProjectWithRelations) => {
     // Service filter using projectType and service data
@@ -203,100 +236,27 @@ export default function Projects() {
             </div>
             
             <div className="flex items-center space-x-4">
-
-              {/* Archived Toggle */}
-              <div className="flex items-center space-x-2">
-                <Archive className="w-4 h-4 text-muted-foreground" />
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="show-archived-projects"
-                    checked={showArchived}
-                    onCheckedChange={setShowArchived}
-                    data-testid="switch-show-archived-projects"
-                  />
-                  <Label htmlFor="show-archived-projects" className="text-sm">
-                    Show archived
-                  </Label>
-                </div>
-              </div>
-
-              {/* Service Filter */}
-              <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-muted-foreground" />
-                <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger className="w-40" data-testid="select-service-filter-projects">
-                    <SelectValue placeholder="Filter by service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Services</SelectItem>
-                    {Array.from(new Set((projects || []).map((p: ProjectWithRelations) => p.projectType?.service?.name).filter((s): s is string => Boolean(s)))).map((serviceName) => (
-                      <SelectItem key={serviceName} value={serviceName}>
-                        {serviceName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Task Assignee Filter */}
-              <div className="flex items-center space-x-2">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <Select value={taskAssigneeFilter} onValueChange={setTaskAssigneeFilter}>
-                  <SelectTrigger className="w-48" data-testid="select-task-assignee-filter-projects">
-                    <SelectValue placeholder="Task Assignee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Task Assignee</SelectItem>
-                    {Array.from(new Map((projects || []).map((p: ProjectWithRelations) => p.stageRoleAssignee).filter((assignee): assignee is NonNullable<typeof assignee> => Boolean(assignee)).map(assignee => [assignee.id, assignee])).values()).map((assignee) => (
-                      <SelectItem key={assignee.id} value={assignee.id}>
-                        {assignee.firstName && assignee.lastName ? `${assignee.firstName} ${assignee.lastName}` : assignee.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Service Owner Filter */}
-              <div className="flex items-center space-x-2">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <Select value={serviceOwnerFilter} onValueChange={setServiceOwnerFilter}>
-                  <SelectTrigger className="w-48" data-testid="select-service-owner-filter-projects">
-                    <SelectValue placeholder="Filter by service owner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Service Owners</SelectItem>
-                    {Array.from(new Map((projects || []).map((p: ProjectWithRelations) => p.projectOwner).filter((owner): owner is NonNullable<typeof owner> => Boolean(owner)).map(owner => [owner.id, owner])).values()).map((owner) => (
-                      <SelectItem key={owner.id} value={owner.id}>
-                        {owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : owner.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* User Filter (only for managers/admins) */}
-              {isManagerOrAdmin && (
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  <Select value={userFilter} onValueChange={setUserFilter}>
-                    <SelectTrigger className="w-48" data-testid="select-user-filter-projects">
-                      <SelectValue placeholder="Filter by user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Users</SelectItem>
-                      {(users || []).map((u: User) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email} 
-                          ({u.isAdmin ? "Admin" : u.canSeeAdminMenu ? "Manager" : "User"})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Filters Button */}
+              <Button
+                variant="outline"
+                onClick={() => setFilterPanelOpen(true)}
+                className="relative"
+                data-testid="button-open-filters"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filters
+                {activeFilterCount() > 0 && (
+                  <Badge 
+                    variant="secondary" 
+                    className="ml-2 rounded-full px-2"
+                    data-testid="badge-active-filters-count"
+                  >
+                    {activeFilterCount()}
+                  </Badge>
+                )}
+              </Button>
             </div>
           </div>
-
         </header>
         
         {/* Main Content */}
@@ -324,6 +284,33 @@ export default function Projects() {
           )}
         </main>
       </div>
+
+      {/* Filter Panel */}
+      <FilterPanel
+        open={filterPanelOpen}
+        onOpenChange={setFilterPanelOpen}
+        serviceFilter={serviceFilter}
+        setServiceFilter={setServiceFilter}
+        taskAssigneeFilter={taskAssigneeFilter}
+        setTaskAssigneeFilter={setTaskAssigneeFilter}
+        serviceOwnerFilter={serviceOwnerFilter}
+        setServiceOwnerFilter={setServiceOwnerFilter}
+        userFilter={userFilter}
+        setUserFilter={setUserFilter}
+        showArchived={showArchived}
+        setShowArchived={setShowArchived}
+        dynamicDateFilter={dynamicDateFilter}
+        setDynamicDateFilter={setDynamicDateFilter}
+        customDateRange={customDateRange}
+        setCustomDateRange={setCustomDateRange}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        services={services}
+        users={users || []}
+        taskAssignees={taskAssignees}
+        serviceOwners={serviceOwners}
+        isManagerOrAdmin={isManagerOrAdmin}
+      />
     </div>
   );
 }
