@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, AlertCircle, User as UserIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import TopNavigation from "@/components/top-navigation";
 import ProjectInfo from "@/components/project-info";
 import StatusChangeForm from "@/components/status-change-form";
 import ProjectChronology from "@/components/project-chronology";
@@ -119,8 +120,10 @@ export default function ProjectDetail() {
   // Project loading state
   if (projectLoading) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
+        
+        <div className="max-w-7xl mx-auto p-6 w-full">
           {/* Header skeleton */}
           <div className="mb-6">
             <div className="flex items-center space-x-4 mb-4">
@@ -169,8 +172,10 @@ export default function ProjectDetail() {
   // Error state
   if (projectError) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
+        
+        <div className="max-w-7xl mx-auto p-6 w-full">
           <div className="flex items-center space-x-4 mb-6">
             <Button 
               variant="ghost" 
@@ -207,8 +212,10 @@ export default function ProjectDetail() {
   // Not found state
   if (!project) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background flex flex-col">
+        <TopNavigation user={user} />
+        
+        <div className="max-w-7xl mx-auto p-6 w-full">
           <div className="flex items-center space-x-4 mb-6">
             <Button 
               variant="ghost" 
@@ -237,8 +244,10 @@ export default function ProjectDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-6">
+    <div className="min-h-screen bg-background flex flex-col">
+      <TopNavigation user={user} />
+      
+      <div className="max-w-7xl mx-auto p-6 w-full">
         {/* Header with back navigation */}
         <div className="mb-6">
           <div className="flex items-center space-x-4 mb-4">
