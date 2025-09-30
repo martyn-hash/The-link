@@ -5,7 +5,9 @@ const TOKEN_ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
 
 if (!TOKEN_ENCRYPTION_KEY) {
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('TOKEN_ENCRYPTION_KEY environment variable is required in production');
+    console.error('TOKEN_ENCRYPTION_KEY environment variable is not set in production!');
+    console.error('Available environment variables:', Object.keys(process.env).filter(k => !k.includes('SECRET') && !k.includes('KEY')).join(', '));
+    throw new Error('TOKEN_ENCRYPTION_KEY environment variable is required in production. Please add it to Account Secrets or Deployment Secrets.');
   }
   console.warn('TOKEN_ENCRYPTION_KEY not set, using development key. This is not secure for production.');
 }
