@@ -1699,4 +1699,5 @@ export type ProjectWithRelations = Project & {
     label: string;
     total: number;
   }[];
+  stageRoleAssignee?: User; // The user assigned to the role for the current stage
 };

@@ -249,10 +249,8 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
                       <div className="flex items-center space-x-2">
                         <UserIcon className="w-4 h-4 text-muted-foreground" />
                         <span className="text-sm" data-testid={`text-assigned-to-${project.id}`}>
-                          {project.currentAssignee 
-                            ? `${project.currentAssignee.firstName} ${project.currentAssignee.lastName}`
-                            : project.clientManager
-                            ? `${project.clientManager.firstName} ${project.clientManager.lastName}`
+                          {project.stageRoleAssignee 
+                            ? `${project.stageRoleAssignee.firstName} ${project.stageRoleAssignee.lastName}`
                             : "Unassigned"}
                         </span>
                       </div>

@@ -1781,6 +1781,58 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // Helper function to resolve the stage role assignee for a project
+  private async resolveStageRoleAssignee(project: any): Promise<User | undefined> {
+    try {
+      // If no current status, project type, or service, we can't resolve the assignee
+      if (!project.currentStatus || !project.projectType?.id || !project.projectType?.serviceId) {
+        return undefined;
+      }
+
+      // Find the kanban stage that matches the project's current status
+      const stage = await db.query.kanbanStages.findFirst({
+        where: and(
+          eq(kanbanStages.projectTypeId, project.projectType.id),
+          eq(kanbanStages.name, project.currentStatus)
+        ),
+      });
+
+      // If no stage found or no role assigned to the stage, return undefined
+      if (!stage || !stage.assignedWorkRoleId) {
+        return undefined;
+      }
+
+      // Find the client service for this project's client and service
+      const clientService = await db.query.clientServices.findFirst({
+        where: and(
+          eq(clientServices.clientId, project.clientId),
+          eq(clientServices.serviceId, project.projectType.serviceId)
+        ),
+      });
+
+      if (!clientService) {
+        return undefined;
+      }
+
+      // Find the role assignment for this client service and work role
+      const roleAssignment = await db.query.clientServiceRoleAssignments.findFirst({
+        where: and(
+          eq(clientServiceRoleAssignments.clientServiceId, clientService.id),
+          eq(clientServiceRoleAssignments.workRoleId, stage.assignedWorkRoleId),
+          eq(clientServiceRoleAssignments.isActive, true)
+        ),
+        with: {
+          user: true,
+        },
+      });
+
+      return roleAssignment?.user || undefined;
+    } catch (error) {
+      console.error('[Storage] Error resolving stage role assignee:', error);
+      return undefined;
+    }
+  }
+
   async getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
@@ -1843,16 +1895,23 @@ export class DatabaseStorage implements IStorage {
       },
     });
     
-    // Convert null relations to undefined to match TypeScript expectations
-    return results.map(project => ({
-      ...project,
-      currentAssignee: project.currentAssignee || undefined,
-      chronology: project.chronology.map(c => ({
-        ...c,
-        assignee: c.assignee || undefined,
-        fieldResponses: c.fieldResponses || [],
-      })),
+    // Convert null relations to undefined and populate stage role assignee
+    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
+      const stageRoleAssignee = await this.resolveStageRoleAssignee(project);
+      return {
+        ...project,
+        currentAssignee: project.currentAssignee || undefined,
+        projectOwner: project.projectOwner || undefined,
+        stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          fieldResponses: c.fieldResponses || [],
+        })),
+      };
     }));
+    
+    return projectsWithAssignees;
   }
 
   async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
@@ -1935,16 +1994,23 @@ export class DatabaseStorage implements IStorage {
       },
     });
     
-    // Convert null relations to undefined to match TypeScript expectations
-    return results.map(project => ({
-      ...project,
-      currentAssignee: project.currentAssignee || undefined,
-      chronology: project.chronology.map(c => ({
-        ...c,
-        assignee: c.assignee || undefined,
-        fieldResponses: c.fieldResponses || [],
-      })),
+    // Convert null relations to undefined and populate stage role assignee
+    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
+      const stageRoleAssignee = await this.resolveStageRoleAssignee(project);
+      return {
+        ...project,
+        currentAssignee: project.currentAssignee || undefined,
+        projectOwner: project.projectOwner || undefined,
+        stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          fieldResponses: c.fieldResponses || [],
+        })),
+      };
     }));
+    
+    return projectsWithAssignees;
   }
 
   async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
@@ -1989,6 +2055,12 @@ export class DatabaseStorage implements IStorage {
         bookkeeper: true,
         clientManager: true,
         currentAssignee: true,
+        projectOwner: true,
+        projectType: {
+          with: {
+            service: true,
+          },
+        },
         chronology: {
           with: {
             assignee: true,
@@ -2003,16 +2075,23 @@ export class DatabaseStorage implements IStorage {
       },
     });
     
-    // Convert null relations to undefined to match TypeScript expectations
-    return results.map(project => ({
-      ...project,
-      currentAssignee: project.currentAssignee || undefined,
-      chronology: project.chronology.map(c => ({
-        ...c,
-        assignee: c.assignee || undefined,
-        fieldResponses: c.fieldResponses || [],
-      })),
+    // Convert null relations to undefined and populate stage role assignee
+    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
+      const stageRoleAssignee = await this.resolveStageRoleAssignee(project);
+      return {
+        ...project,
+        currentAssignee: project.currentAssignee || undefined,
+        projectOwner: project.projectOwner || undefined,
+        stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          fieldResponses: c.fieldResponses || [],
+        })),
+      };
     }));
+    
+    return projectsWithAssignees;
   }
 
   async getProject(id: string): Promise<ProjectWithRelations | undefined> {
@@ -2023,6 +2102,12 @@ export class DatabaseStorage implements IStorage {
         bookkeeper: true,
         clientManager: true,
         currentAssignee: true,
+        projectOwner: true,
+        projectType: {
+          with: {
+            service: true,
+          },
+        },
         chronology: {
           with: {
             assignee: true,
@@ -2039,10 +2124,15 @@ export class DatabaseStorage implements IStorage {
     
     if (!result) return undefined;
     
+    // Resolve stage role assignee
+    const stageRoleAssignee = await this.resolveStageRoleAssignee(result);
+    
     // Convert null relations to undefined to match TypeScript expectations
     return {
       ...result,
       currentAssignee: result.currentAssignee || undefined,
+      projectOwner: result.projectOwner || undefined,
+      stageRoleAssignee,
       chronology: result.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
