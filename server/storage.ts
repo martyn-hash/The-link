@@ -5437,21 +5437,7 @@ export class DatabaseStorage implements IStorage {
 
       // Find ALL active role assignments and pick most recent (deterministic selection)
       const assignments = await db
-        .select({
-          user: {
-            id: users.id,
-            email: users.email,
-            firstName: users.firstName,
-            lastName: users.lastName,
-            profileImageUrl: users.profileImageUrl,
-            role: users.role,
-            passwordHash: users.passwordHash,
-            isFallbackUser: users.isFallbackUser,
-            createdAt: users.createdAt,
-            updatedAt: users.updatedAt,
-          },
-          assignmentCreatedAt: clientServiceRoleAssignments.createdAt,
-        })
+        .select()
         .from(clientServiceRoleAssignments)
         .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
         .where(and(
@@ -5471,7 +5457,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       // Return the most recent assignment (deterministic selection)
-      return assignments[0].user;
+      return assignments[0].users;
     } catch (error) {
       console.error(`Error resolving role assignee for client ${clientId}, project type ${projectTypeId}, role ${roleName}:`, error);
       return undefined;
