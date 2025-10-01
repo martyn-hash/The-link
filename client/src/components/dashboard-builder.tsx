@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -489,18 +489,21 @@ interface FilteredDataTableProps {
 }
 
 function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredDataTableProps) {
-  // Build query params from filters
-  const queryParams: Record<string, any> = {};
-  if (filters.serviceFilter !== "all") queryParams.serviceId = filters.serviceFilter;
-  queryParams.showArchived = filters.showArchived;
-  if (filters.taskAssigneeFilter !== "all") queryParams.assigneeId = filters.taskAssigneeFilter;
-  if (filters.serviceOwnerFilter !== "all") queryParams.serviceOwnerId = filters.serviceOwnerFilter;
-  if (filters.userFilter !== "all") queryParams.userId = filters.userFilter;
-  if (filters.dynamicDateFilter !== "all") queryParams.dynamicDateFilter = filters.dynamicDateFilter;
-  if (filters.dynamicDateFilter === "custom" && filters.customDateRange) {
-    if (filters.customDateRange.from) queryParams.dateFrom = filters.customDateRange.from.toISOString();
-    if (filters.customDateRange.to) queryParams.dateTo = filters.customDateRange.to.toISOString();
-  }
+  // Build query params from filters - memoized to prevent unnecessary re-renders
+  const queryParams = useMemo(() => {
+    const params: Record<string, any> = {};
+    if (filters.serviceFilter !== "all") params.serviceId = filters.serviceFilter;
+    params.showArchived = filters.showArchived;
+    if (filters.taskAssigneeFilter !== "all") params.assigneeId = filters.taskAssigneeFilter;
+    if (filters.serviceOwnerFilter !== "all") params.serviceOwnerId = filters.serviceOwnerFilter;
+    if (filters.userFilter !== "all") params.userId = filters.userFilter;
+    if (filters.dynamicDateFilter !== "all") params.dynamicDateFilter = filters.dynamicDateFilter;
+    if (filters.dynamicDateFilter === "custom" && filters.customDateRange) {
+      if (filters.customDateRange.from) params.dateFrom = filters.customDateRange.from.toISOString();
+      if (filters.customDateRange.to) params.dateTo = filters.customDateRange.to.toISOString();
+    }
+    return params;
+  }, [filters]);
 
   // Fetch projects with applied filters using default fetcher
   const { data: allProjects = [], isLoading } = useQuery<ProjectWithRelations[]>({
