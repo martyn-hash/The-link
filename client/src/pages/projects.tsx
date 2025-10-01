@@ -122,6 +122,8 @@ export default function Projects() {
   // Edit dashboard state
   const [dashboardDescription, setDashboardDescription] = useState("");
   const [dashboardIsHomescreen, setDashboardIsHomescreen] = useState(false);
+  const [newDashboardVisibility, setNewDashboardVisibility] = useState<"private" | "shared">("private");
+  const [dashboardVisibility, setDashboardVisibility] = useState<"private" | "shared">("private");
 
   // Dashboard-specific filter state (independent from list view filters)
   const [dashboardServiceFilter, setDashboardServiceFilter] = useState("all");
@@ -233,6 +235,7 @@ export default function Projects() {
       // Set description and homescreen dashboard states
       setDashboardDescription(dashboard.description || "");
       setDashboardIsHomescreen(dashboard.isHomescreenDashboard || false);
+      setDashboardVisibility(dashboard.visibility || "private");
       
       // Parse and apply filters to dashboard-specific state (not list view)
       if (dashboard.filters) {
@@ -310,6 +313,7 @@ export default function Projects() {
       setNewDashboardName("");
       setNewDashboardDescription("");
       setNewDashboardIsHomescreen(false);
+      setNewDashboardVisibility("private");
       setNewDashboardWidgets([]);
     },
     onError: () => {
@@ -448,7 +452,7 @@ export default function Projects() {
       description: newDashboardDescription.trim() || undefined,
       filters: JSON.stringify(filtersToSave),
       widgets: newDashboardWidgets,
-      visibility: "private",
+      visibility: newDashboardVisibility,
       isHomescreenDashboard: newDashboardIsHomescreen,
       isCreating: isCreatingDashboard,
     });
@@ -477,7 +481,7 @@ export default function Projects() {
       description: dashboardDescription.trim() || undefined,
       filters: JSON.stringify(filtersToSave),
       widgets: dashboardWidgets,
-      visibility: currentDashboard.visibility,
+      visibility: dashboardVisibility,
       isHomescreenDashboard: dashboardIsHomescreen,
       isCreating: false,
     });
@@ -756,6 +760,7 @@ export default function Projects() {
                       setNewDashboardName("");
                       setNewDashboardDescription("");
                       setNewDashboardIsHomescreen(false);
+                      setNewDashboardVisibility("private");
                       setNewDashboardWidgets([]);
                       // Reset dashboard filters to default
                       setDashboardServiceFilter("all");
@@ -785,6 +790,7 @@ export default function Projects() {
                           setNewDashboardName(currentDashboard.name);
                           setNewDashboardDescription(dashboardDescription);
                           setNewDashboardIsHomescreen(dashboardIsHomescreen);
+                          setNewDashboardVisibility(dashboardVisibility);
                           setNewDashboardWidgets(dashboardWidgets);
                           setCreateDashboardModalOpen(true);
                         }}
@@ -939,6 +945,7 @@ export default function Projects() {
           setNewDashboardName("");
           setNewDashboardDescription("");
           setNewDashboardIsHomescreen(false);
+          setNewDashboardVisibility("private");
           setNewDashboardWidgets([]);
           setNewWidgetTitle("");
           setNewWidgetType("bar");
@@ -1125,6 +1132,26 @@ export default function Projects() {
               )}
             </div>
 
+            {/* Share Dashboard Toggle */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="dashboard-share"
+                  checked={newDashboardVisibility === "shared"}
+                  onCheckedChange={(checked) => setNewDashboardVisibility(checked === true ? "shared" : "private")}
+                  data-testid="checkbox-share-dashboard"
+                />
+                <div className="space-y-1 leading-none">
+                  <Label htmlFor="dashboard-share" className="cursor-pointer font-medium">
+                    Share with all users
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Other users will be able to view this dashboard
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Widgets Section */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1191,6 +1218,7 @@ export default function Projects() {
               setNewDashboardName("");
               setNewDashboardDescription("");
               setNewDashboardIsHomescreen(false);
+              setNewDashboardVisibility("private");
               setNewDashboardWidgets([]);
             }} data-testid="button-cancel-create-dashboard">
               Cancel
