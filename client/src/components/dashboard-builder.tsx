@@ -3,6 +3,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import type { ProjectWithRelations } from "@shared/schema";
 import { 
   BarChart3, 
   PieChart, 
@@ -12,8 +13,17 @@ import {
   Layout,
   List,
   Trash2,
-  Settings
+  Settings,
+  Table as TableIcon
 } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -130,6 +140,13 @@ export default function DashboardBuilder({
         {filters.serviceFilter !== "all" && (
           <div className="mt-6">
             <MiniKanbanBoard serviceId={filters.serviceFilter} filters={filters} />
+          </div>
+        )}
+
+        {/* Data Table - Show underlying filtered data */}
+        {widgets.length > 0 && (
+          <div className="mt-6">
+            <FilteredDataTable filters={filters} />
           </div>
         )}
       </div>
@@ -407,6 +424,99 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
               );
             })}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Filtered Data Table Component
+interface FilteredDataTableProps {
+  filters: any;
+}
+
+function FilteredDataTable({ filters }: FilteredDataTableProps) {
+  // Build query params from filters
+  const queryParams: Record<string, any> = {};
+  if (filters.serviceFilter !== "all") queryParams.serviceId = filters.serviceFilter;
+  if (filters.showArchived) queryParams.showArchived = true;
+  if (filters.taskAssigneeFilter !== "all") queryParams.assigneeId = filters.taskAssigneeFilter;
+  if (filters.serviceOwnerFilter !== "all") queryParams.serviceOwnerId = filters.serviceOwnerFilter;
+  if (filters.userFilter !== "all") queryParams.userId = filters.userFilter;
+  if (filters.dynamicDateFilter !== "all") queryParams.dynamicDateFilter = filters.dynamicDateFilter;
+  if (filters.dynamicDateFilter === "custom" && filters.customDateRange) {
+    if (filters.customDateRange.from) queryParams.dateFrom = filters.customDateRange.from.toISOString();
+    if (filters.customDateRange.to) queryParams.dateTo = filters.customDateRange.to.toISOString();
+  }
+
+  // Fetch projects with applied filters using default fetcher
+  const { data: projects = [], isLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/projects", queryParams],
+  });
+
+  return (
+    <Card data-testid="filtered-data-table">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <TableIcon className="w-5 h-5" />
+          Filtered Project Data
+        </CardTitle>
+        <CardDescription>
+          {projects.length} project{projects.length !== 1 ? 's' : ''} matching current filters
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No projects found matching the current filters
+          </div>
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Project Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Assignee</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Due Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.map((project) => (
+                  <TableRow key={project.id} data-testid={`table-row-${project.id}`}>
+                    <TableCell className="font-medium" data-testid={`cell-client-${project.id}`}>
+                      {project.client?.name || 'N/A'}
+                    </TableCell>
+                    <TableCell data-testid={`cell-type-${project.id}`}>
+                      {project.projectType?.name || 'N/A'}
+                    </TableCell>
+                    <TableCell data-testid={`cell-status-${project.id}`}>
+                      <Badge variant="outline">{project.currentStatus || 'N/A'}</Badge>
+                    </TableCell>
+                    <TableCell data-testid={`cell-assignee-${project.id}`}>
+                      {project.currentAssignee ? 
+                        `${project.currentAssignee.firstName || ''} ${project.currentAssignee.lastName || ''}`.trim() 
+                        : 'Unassigned'}
+                    </TableCell>
+                    <TableCell data-testid={`cell-owner-${project.id}`}>
+                      {project.projectOwner ? 
+                        `${project.projectOwner.firstName || ''} ${project.projectOwner.lastName || ''}`.trim() 
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell data-testid={`cell-due-date-${project.id}`}>
+                      {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
