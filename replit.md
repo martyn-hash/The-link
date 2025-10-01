@@ -112,6 +112,32 @@ The dashboard builder implements a reactive filter system where all visualizatio
 5. **Filter Persistence**: Dashboard saves include current filter state as JSON, allowing complete dashboard restoration
 6. **Cross-View Consistency**: Same filter state applies to list view, dashboard view, and kanban view for consistent data
 
+## Progressive Web App (PWA) & Push Notifications
+The application is configured as a Progressive Web App with push notification support:
+
+- **PWA Installation**: Users can install The Link as a native-like app on their device from their browser
+  - Manifest file (`client/public/manifest.json`) defines app name, icons, theme colors, and display mode
+  - SVG icons provided for various device sizes (192x192, 512x512) with maskable variants for adaptive icons
+  - Service worker (`client/public/sw.js`) enables offline capabilities and caching strategies
+- **Push Notification System**: Web Push API integration allows real-time notifications to users
+  - VAPID keys (stored in environment variables) for secure push notification authentication
+  - Backend push service (`server/push-service.ts`) handles notification sending with web-push library
+  - Database table stores user subscriptions with unique endpoints and security keys
+  - API routes for subscribe/unsubscribe operations with proper authentication
+  - Admin-only send endpoint for triggering notifications to specific users
+- **User Experience**:
+  - Floating prompt appears for authenticated users to opt-in to push notifications
+  - Profile page Notifications tab includes push notification management section
+  - Users can enable/disable push notifications at any time
+  - Clear status indicators (Enabled/Disabled/Blocked) with appropriate alerts
+  - Handles permission denied state with guidance to update browser settings
+- **Service Worker Features**:
+  - Message handling for skip waiting behavior during updates
+  - Push event handler displays notifications with custom icons, badges, and actions
+  - Notification click handler focuses existing app windows or opens new ones
+  - Cache management for offline functionality and performance
+- **Future Enhancement Ready**: Infrastructure in place to send notifications when projects change status, tasks are assigned, or other important events occur
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
