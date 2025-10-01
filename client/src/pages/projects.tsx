@@ -97,6 +97,18 @@ export default function Projects() {
   const [newWidgetTitle, setNewWidgetTitle] = useState("");
   const [newWidgetGroupBy, setNewWidgetGroupBy] = useState<"projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue">("projectType");
 
+  // Dashboard-specific filter state (independent from list view filters)
+  const [dashboardServiceFilter, setDashboardServiceFilter] = useState("all");
+  const [dashboardTaskAssigneeFilter, setDashboardTaskAssigneeFilter] = useState("all");
+  const [dashboardServiceOwnerFilter, setDashboardServiceOwnerFilter] = useState("all");
+  const [dashboardUserFilter, setDashboardUserFilter] = useState("all");
+  const [dashboardShowArchived, setDashboardShowArchived] = useState<boolean>(false);
+  const [dashboardDynamicDateFilter, setDashboardDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom">("all");
+  const [dashboardCustomDateRange, setDashboardCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
+
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
     enabled: isAuthenticated && !!user,
@@ -159,19 +171,19 @@ export default function Projects() {
       setDashboardWidgets(dashboard.widgets || []);
       setDashboardEditMode(false);
       
-      // Parse and apply filters from dashboard
+      // Parse and apply filters to dashboard-specific state (not list view)
       if (dashboard.filters) {
         const parsedFilters = typeof dashboard.filters === 'string' 
           ? JSON.parse(dashboard.filters) 
           : dashboard.filters;
         
-        setServiceFilter(parsedFilters.serviceFilter || "all");
-        setTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
-        setServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
-        setUserFilter(parsedFilters.userFilter || "all");
-        setShowArchived(parsedFilters.showArchived || false);
-        setDynamicDateFilter(parsedFilters.dynamicDateFilter || "all");
-        setCustomDateRange({
+        setDashboardServiceFilter(parsedFilters.serviceFilter || "all");
+        setDashboardTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
+        setDashboardServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
+        setDashboardUserFilter(parsedFilters.userFilter || "all");
+        setDashboardShowArchived(parsedFilters.showArchived || false);
+        setDashboardDynamicDateFilter(parsedFilters.dynamicDateFilter || "all");
+        setDashboardCustomDateRange({
           from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
@@ -203,6 +215,25 @@ export default function Projects() {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
       setCurrentDashboard(savedDashboard);
       setDashboardWidgets(savedDashboard.widgets);
+      
+      // Load the saved dashboard filters so widgets can fetch data correctly
+      if (savedDashboard.filters) {
+        const parsedFilters = typeof savedDashboard.filters === 'string' 
+          ? JSON.parse(savedDashboard.filters) 
+          : savedDashboard.filters;
+        
+        setDashboardServiceFilter(parsedFilters.serviceFilter || "all");
+        setDashboardTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
+        setDashboardServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
+        setDashboardUserFilter(parsedFilters.userFilter || "all");
+        setDashboardShowArchived(parsedFilters.showArchived || false);
+        setDashboardDynamicDateFilter(parsedFilters.dynamicDateFilter || "all");
+        setDashboardCustomDateRange({
+          from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+          to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
+        });
+      }
+      
       toast({
         title: "Success",
         description: "Dashboard saved successfully",
@@ -276,17 +307,17 @@ export default function Projects() {
       return;
     }
 
-    // Save current filters with the dashboard
+    // Save dashboard-specific filters with the dashboard
     const filtersToSave = {
-      serviceFilter,
-      taskAssigneeFilter,
-      serviceOwnerFilter,
-      userFilter,
-      showArchived,
-      dynamicDateFilter,
+      serviceFilter: dashboardServiceFilter,
+      taskAssigneeFilter: dashboardTaskAssigneeFilter,
+      serviceOwnerFilter: dashboardServiceOwnerFilter,
+      userFilter: dashboardUserFilter,
+      showArchived: dashboardShowArchived,
+      dynamicDateFilter: dashboardDynamicDateFilter,
       customDateRange: {
-        from: customDateRange.from ? customDateRange.from.toISOString() : undefined,
-        to: customDateRange.to ? customDateRange.to.toISOString() : undefined,
+        from: dashboardCustomDateRange.from ? dashboardCustomDateRange.from.toISOString() : undefined,
+        to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
     };
 
@@ -296,6 +327,33 @@ export default function Projects() {
       widgets: newDashboardWidgets,
       visibility: "private",
       isCreating: isCreatingDashboard,
+    });
+  };
+
+  // Handler to save current dashboard as new (update existing)
+  const handleSaveDashboardAsNew = () => {
+    if (!currentDashboard) return;
+
+    // Save current dashboard state
+    const filtersToSave = {
+      serviceFilter: dashboardServiceFilter,
+      taskAssigneeFilter: dashboardTaskAssigneeFilter,
+      serviceOwnerFilter: dashboardServiceOwnerFilter,
+      userFilter: dashboardUserFilter,
+      showArchived: dashboardShowArchived,
+      dynamicDateFilter: dashboardDynamicDateFilter,
+      customDateRange: {
+        from: dashboardCustomDateRange.from ? dashboardCustomDateRange.from.toISOString() : undefined,
+        to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
+      },
+    };
+
+    saveDashboardMutation.mutate({
+      name: currentDashboard.name,
+      filters: JSON.stringify(filtersToSave),
+      widgets: dashboardWidgets,
+      visibility: currentDashboard.visibility,
+      isCreating: false,
     });
   };
 
@@ -520,21 +578,58 @@ export default function Projects() {
                       </SelectContent>
                     </Select>
                   )}
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => {
-                      setIsCreatingDashboard(true);
-                      setCurrentDashboard(null);
-                      setNewDashboardName("");
-                      setNewDashboardWidgets([]);
-                      setCreateDashboardModalOpen(true);
-                    }}
-                    data-testid="button-create-dashboard"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create New Dashboard
-                  </Button>
+                  
+                  {/* Show Save/Edit buttons when dashboard is loaded, Create button otherwise */}
+                  {currentDashboard ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Edit current dashboard
+                          setIsCreatingDashboard(false);
+                          setNewDashboardName(currentDashboard.name);
+                          setNewDashboardWidgets(dashboardWidgets);
+                          setCreateDashboardModalOpen(true);
+                        }}
+                        data-testid="button-edit-dashboard"
+                      >
+                        Edit Dashboard
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleSaveDashboardAsNew()}
+                        data-testid="button-save-dashboard"
+                      >
+                        Save Dashboard
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        setIsCreatingDashboard(true);
+                        setCurrentDashboard(null);
+                        setNewDashboardName("");
+                        setNewDashboardWidgets([]);
+                        // Reset dashboard filters to default
+                        setDashboardServiceFilter("all");
+                        setDashboardTaskAssigneeFilter("all");
+                        setDashboardServiceOwnerFilter("all");
+                        setDashboardUserFilter("all");
+                        setDashboardShowArchived(false);
+                        setDashboardDynamicDateFilter("all");
+                        setDashboardCustomDateRange({ from: undefined, to: undefined });
+                        setCreateDashboardModalOpen(true);
+                      }}
+                      data-testid="button-create-dashboard"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create New Dashboard
+                    </Button>
+                  )}
                 </>
               ) : null}
 
@@ -562,25 +657,27 @@ export default function Projects() {
                 </div>
               )}
               
-              {/* Filters Button */}
-              <Button
-                variant="outline"
-                onClick={() => setFilterPanelOpen(true)}
-                className="relative"
-                data-testid="button-open-filters"
-              >
-                <Filter className="w-4 h-4 mr-2" />
-                Filters
-                {activeFilterCount() > 0 && (
-                  <Badge 
-                    variant="secondary" 
-                    className="ml-2 rounded-full px-2"
-                    data-testid="badge-active-filters-count"
-                  >
-                    {activeFilterCount()}
-                  </Badge>
-                )}
-              </Button>
+              {/* Filters Button - Only visible in list view */}
+              {viewMode === "list" && (
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterPanelOpen(true)}
+                  className="relative"
+                  data-testid="button-open-filters"
+                >
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filters
+                  {activeFilterCount() > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="ml-2 rounded-full px-2"
+                      data-testid="badge-active-filters-count"
+                    >
+                      {activeFilterCount()}
+                    </Badge>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </header>
@@ -597,13 +694,13 @@ export default function Projects() {
           ) : viewMode === "dashboard" ? (
             <DashboardBuilder
               filters={{
-                serviceFilter,
-                taskAssigneeFilter,
-                serviceOwnerFilter,
-                userFilter,
-                showArchived,
-                dynamicDateFilter,
-                customDateRange,
+                serviceFilter: dashboardServiceFilter,
+                taskAssigneeFilter: dashboardTaskAssigneeFilter,
+                serviceOwnerFilter: dashboardServiceOwnerFilter,
+                userFilter: dashboardUserFilter,
+                showArchived: dashboardShowArchived,
+                dynamicDateFilter: dashboardDynamicDateFilter,
+                customDateRange: dashboardCustomDateRange,
               }}
               widgets={dashboardWidgets}
               editMode={dashboardEditMode}
@@ -697,50 +794,123 @@ export default function Projects() {
               />
             </div>
 
-            {/* Current Filters Section */}
-            <div className="space-y-2">
-              <Label>Applied Filters</Label>
-              <Card>
-                <CardContent className="pt-4">
-                  <div className="flex flex-wrap gap-2">
-                    {serviceFilter !== "all" && (
-                      <Badge variant="secondary">Service: {serviceFilter}</Badge>
-                    )}
-                    {taskAssigneeFilter !== "all" && (
-                      <Badge variant="secondary">Assignee: {(() => {
-                        const assignee = taskAssignees.find(a => a.id === taskAssigneeFilter);
-                        return assignee ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() : taskAssigneeFilter;
-                      })()}</Badge>
-                    )}
-                    {serviceOwnerFilter !== "all" && (
-                      <Badge variant="secondary">Owner: {(() => {
-                        const owner = serviceOwners.find(o => o.id === serviceOwnerFilter);
-                        return owner ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim() : serviceOwnerFilter;
-                      })()}</Badge>
-                    )}
-                    {userFilter !== "all" && isManagerOrAdmin && (
-                      <Badge variant="secondary">User: {(() => {
-                        const selectedUser = (users || []).find(u => u.id === userFilter);
-                        return selectedUser ? `${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim() : userFilter;
-                      })()}</Badge>
-                    )}
-                    {showArchived && (
-                      <Badge variant="secondary">Archived: Yes</Badge>
-                    )}
-                    {dynamicDateFilter === "custom" && customDateRange.from && customDateRange.to ? (
-                      <Badge variant="secondary">Date: {customDateRange.from.toLocaleDateString()} - {customDateRange.to.toLocaleDateString()}</Badge>
-                    ) : dynamicDateFilter !== "all" && (
-                      <Badge variant="secondary">Date: {dynamicDateFilter}</Badge>
-                    )}
-                    {(serviceFilter === "all" && taskAssigneeFilter === "all" && serviceOwnerFilter === "all" && userFilter === "all" && !showArchived && dynamicDateFilter === "all") && (
-                      <p className="text-sm text-muted-foreground">No filters applied - showing all data</p>
-                    )}
+            {/* Dashboard Filters Section */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base">Dashboard Filters</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Configure filters that will be applied to this dashboard
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Service Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-service-filter">Service</Label>
+                  <Select value={dashboardServiceFilter} onValueChange={setDashboardServiceFilter}>
+                    <SelectTrigger id="dashboard-service-filter" data-testid="select-dashboard-service">
+                      <SelectValue placeholder="All Services" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Services</SelectItem>
+                      {services.map((service) => (
+                        <SelectItem key={service} value={service}>
+                          {service}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Task Assignee Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-assignee-filter">Task Assignee</Label>
+                  <Select value={dashboardTaskAssigneeFilter} onValueChange={setDashboardTaskAssigneeFilter}>
+                    <SelectTrigger id="dashboard-assignee-filter" data-testid="select-dashboard-assignee">
+                      <SelectValue placeholder="All Assignees" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Assignees</SelectItem>
+                      {taskAssignees.map((assignee) => (
+                        <SelectItem key={assignee.id} value={assignee.id}>
+                          {`${assignee.firstName || ''} ${assignee.lastName || ''}`.trim()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Service Owner Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-owner-filter">Service Owner</Label>
+                  <Select value={dashboardServiceOwnerFilter} onValueChange={setDashboardServiceOwnerFilter}>
+                    <SelectTrigger id="dashboard-owner-filter" data-testid="select-dashboard-owner">
+                      <SelectValue placeholder="All Owners" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Owners</SelectItem>
+                      {serviceOwners.map((owner) => (
+                        <SelectItem key={owner.id} value={owner.id}>
+                          {`${owner.firstName || ''} ${owner.lastName || ''}`.trim()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* User Filter (Admin/Manager only) */}
+                {isManagerOrAdmin && (
+                  <div className="space-y-2">
+                    <Label htmlFor="dashboard-user-filter">User Assignment</Label>
+                    <Select value={dashboardUserFilter} onValueChange={setDashboardUserFilter}>
+                      <SelectTrigger id="dashboard-user-filter" data-testid="select-dashboard-user">
+                        <SelectValue placeholder="All Users" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Users</SelectItem>
+                        {(users || []).map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {`${user.firstName || ''} ${user.lastName || ''}`.trim()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Current filters will be saved with this dashboard. Modify filters using the Filters button before creating the dashboard.
-                  </p>
-                </CardContent>
-              </Card>
+                )}
+
+                {/* Date Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-date-filter">Due Date</Label>
+                  <Select value={dashboardDynamicDateFilter} onValueChange={(v: any) => setDashboardDynamicDateFilter(v)}>
+                    <SelectTrigger id="dashboard-date-filter" data-testid="select-dashboard-date">
+                      <SelectValue placeholder="All Dates" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Dates</SelectItem>
+                      <SelectItem value="overdue">Overdue</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="next7days">Next 7 Days</SelectItem>
+                      <SelectItem value="next14days">Next 14 Days</SelectItem>
+                      <SelectItem value="next30days">Next 30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Archived Projects */}
+                <div className="flex items-center space-x-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="dashboard-archived"
+                    checked={dashboardShowArchived}
+                    onChange={(e) => setDashboardShowArchived(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300"
+                    data-testid="checkbox-dashboard-archived"
+                  />
+                  <Label htmlFor="dashboard-archived" className="cursor-pointer">
+                    Show Archived Projects
+                  </Label>
+                </div>
+              </div>
             </div>
 
             {/* Widgets Section */}
