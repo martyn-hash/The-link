@@ -150,6 +150,9 @@ export default function Projects() {
   const [deleteDashboardDialogOpen, setDeleteDashboardDialogOpen] = useState(false);
   const [dashboardToDelete, setDashboardToDelete] = useState<Dashboard | null>(null);
 
+  // Dashboard selector menu state
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
+
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
     enabled: isAuthenticated && !!user,
@@ -263,6 +266,9 @@ export default function Projects() {
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
       }
+      
+      // Close the dashboard selector menu
+      setDashboardMenuOpen(false);
       
       toast({
         title: "Dashboard Loaded",
@@ -717,9 +723,9 @@ export default function Projects() {
                 // Dashboard View: Show dashboards mega-menu and create button
                 <>
                   {dashboards.length > 0 && (
-                    <NavigationMenu>
+                    <NavigationMenu value={dashboardMenuOpen ? "dashboards" : ""} onValueChange={(value) => setDashboardMenuOpen(value === "dashboards")}>
                       <NavigationMenuList>
-                        <NavigationMenuItem>
+                        <NavigationMenuItem value="dashboards">
                           <NavigationMenuTrigger data-testid="button-dashboard-selector">
                             Select Dashboard
                           </NavigationMenuTrigger>

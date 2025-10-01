@@ -196,7 +196,7 @@ function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActiv
       return apiRequest("POST", "/api/analytics", {
         filters: {
           serviceFilter: filters.serviceFilter !== "all" ? filters.serviceFilter : undefined,
-          showArchived: filters.showArchived,
+          showArchived: filters.showArchived, // Send the actual boolean value
           taskAssigneeFilter: filters.taskAssigneeFilter !== "all" ? filters.taskAssigneeFilter : undefined,
           serviceOwnerFilter: filters.serviceOwnerFilter !== "all" ? filters.serviceOwnerFilter : undefined,
           userFilter: filters.userFilter !== "all" ? filters.userFilter : undefined,
@@ -335,6 +335,7 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters.serviceFilter !== "all") params.append("serviceId", filters.serviceFilter);
+      // Always send showArchived parameter
       params.append("showArchived", filters.showArchived.toString());
       if (filters.taskAssigneeFilter !== "all") params.append("assigneeId", filters.taskAssigneeFilter);
       if (filters.serviceOwnerFilter !== "all") params.append("serviceOwnerId", filters.serviceOwnerFilter);
@@ -493,6 +494,7 @@ function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredData
   const queryParams = useMemo(() => {
     const params: Record<string, any> = {};
     if (filters.serviceFilter !== "all") params.serviceId = filters.serviceFilter;
+    // Always send showArchived as string for query params
     params.showArchived = filters.showArchived;
     if (filters.taskAssigneeFilter !== "all") params.assigneeId = filters.taskAssigneeFilter;
     if (filters.serviceOwnerFilter !== "all") params.serviceOwnerId = filters.serviceOwnerFilter;
