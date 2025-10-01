@@ -29,6 +29,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Columns3, List, Filter, BarChart3, Plus, Trash2, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -108,6 +124,12 @@ export default function Projects() {
     from: undefined,
     to: undefined,
   });
+
+  // Delete confirmation state
+  const [deleteViewDialogOpen, setDeleteViewDialogOpen] = useState(false);
+  const [viewToDelete, setViewToDelete] = useState<any | null>(null);
+  const [deleteDashboardDialogOpen, setDeleteDashboardDialogOpen] = useState(false);
+  const [dashboardToDelete, setDashboardToDelete] = useState<Dashboard | null>(null);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
@@ -278,6 +300,59 @@ export default function Projects() {
       toast({
         title: "Error",
         description: "Failed to save dashboard",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete view mutation
+  const deleteViewMutation = useMutation({
+    mutationFn: async (viewId: string) => {
+      return apiRequest("DELETE", `/api/project-views/${viewId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+      toast({
+        title: "Success",
+        description: "View deleted successfully",
+      });
+      setDeleteViewDialogOpen(false);
+      setViewToDelete(null);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete view",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete dashboard mutation
+  const deleteDashboardMutation = useMutation({
+    mutationFn: async (dashboardId: string) => {
+      return apiRequest("DELETE", `/api/dashboards/${dashboardId}`);
+    },
+    onSuccess: (_, dashboardId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+      
+      // Clear current dashboard if it's the one being deleted
+      if (currentDashboard?.id === dashboardId) {
+        setCurrentDashboard(null);
+        setDashboardWidgets([]);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Dashboard deleted successfully",
+      });
+      setDeleteDashboardDialogOpen(false);
+      setDashboardToDelete(null);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete dashboard",
         variant: "destructive",
       });
     },
@@ -568,41 +643,87 @@ export default function Projects() {
               {viewMode === "list" ? (
                 // List View: Show saved views dropdown
                 savedViews.length > 0 && (
-                  <Select onValueChange={(value) => {
-                    const view = savedViews.find(v => String(v.id) === value);
-                    if (view) handleLoadSavedView(view);
-                  }}>
-                    <SelectTrigger className="w-[200px]" data-testid="select-load-view">
-                      <SelectValue placeholder="Load saved view..." />
-                    </SelectTrigger>
-                    <SelectContent>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-[200px]" data-testid="select-load-view">
+                        Load saved view...
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[250px]">
                       {savedViews.map(view => (
-                        <SelectItem key={view.id} value={String(view.id)}>
-                          {view.name}
-                        </SelectItem>
+                        <DropdownMenuItem
+                          key={view.id}
+                          className="flex items-center justify-between cursor-pointer"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                          }}
+                        >
+                          <span
+                            className="flex-1 cursor-pointer"
+                            onClick={() => handleLoadSavedView(view)}
+                          >
+                            {view.name}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 ml-2 hover:bg-destructive hover:text-destructive-foreground"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewToDelete(view);
+                              setDeleteViewDialogOpen(true);
+                            }}
+                            data-testid={`button-delete-view-${view.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )
               ) : viewMode === "dashboard" ? (
                 // Dashboard View: Show dashboards dropdown and create button
                 <>
                   {dashboards.length > 0 && (
-                    <Select onValueChange={(value) => {
-                      const dashboard = dashboards.find(d => d.id === value);
-                      if (dashboard) handleLoadDashboard(dashboard);
-                    }}>
-                      <SelectTrigger className="w-[200px]" data-testid="select-load-dashboard">
-                        <SelectValue placeholder="Load saved dashboard..." />
-                      </SelectTrigger>
-                      <SelectContent>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-[200px]" data-testid="select-load-dashboard">
+                          Load saved dashboard...
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[250px]">
                         {dashboards.map(dashboard => (
-                          <SelectItem key={dashboard.id} value={dashboard.id}>
-                            {dashboard.name}
-                          </SelectItem>
+                          <DropdownMenuItem
+                            key={dashboard.id}
+                            className="flex items-center justify-between cursor-pointer"
+                            onSelect={(e) => {
+                              e.preventDefault();
+                            }}
+                          >
+                            <span
+                              className="flex-1 cursor-pointer"
+                              onClick={() => handleLoadDashboard(dashboard)}
+                            >
+                              {dashboard.name}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 ml-2 hover:bg-destructive hover:text-destructive-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDashboardToDelete(dashboard);
+                                setDeleteDashboardDialogOpen(true);
+                              }}
+                              data-testid={`button-delete-dashboard-${dashboard.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuItem>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                   
                   {/* Create Dashboard button always visible */}
@@ -1083,6 +1204,58 @@ export default function Projects() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete View Confirmation Dialog */}
+      <AlertDialog open={deleteViewDialogOpen} onOpenChange={setDeleteViewDialogOpen}>
+        <AlertDialogContent data-testid="alert-delete-view">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete View</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this view? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-view">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (viewToDelete) {
+                  deleteViewMutation.mutate(viewToDelete.id);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-view"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Dashboard Confirmation Dialog */}
+      <AlertDialog open={deleteDashboardDialogOpen} onOpenChange={setDeleteDashboardDialogOpen}>
+        <AlertDialogContent data-testid="alert-delete-dashboard">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Dashboard</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this dashboard? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-dashboard">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (dashboardToDelete) {
+                  deleteDashboardMutation.mutate(dashboardToDelete.id);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-dashboard"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
