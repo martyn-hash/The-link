@@ -11,6 +11,13 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Columns3, List, Filter, BarChart3 } from "lucide-react";
 
 type ViewMode = "kanban" | "list" | "dashboard";
@@ -55,6 +62,42 @@ export default function Projects() {
     enabled: isAuthenticated && Boolean(user?.isAdmin || user?.canSeeAdminMenu),
     retry: false,
   });
+
+  // Fetch saved project views
+  const { data: savedViews = [] } = useQuery<any[]>({
+    queryKey: ["/api/project-views"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+  });
+
+  // Handler to load a saved view
+  const handleLoadSavedView = (view: any) => {
+    try {
+      const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
+      
+      setServiceFilter(filters.serviceFilter || "all");
+      setTaskAssigneeFilter(filters.taskAssigneeFilter || "all");
+      setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
+      setUserFilter(filters.userFilter || "all");
+      setShowArchived(filters.showArchived || false);
+      setDynamicDateFilter(filters.dynamicDateFilter || "all");
+      setCustomDateRange({
+        from: filters.customDateRange?.from ? new Date(filters.customDateRange.from) : undefined,
+        to: filters.customDateRange?.to ? new Date(filters.customDateRange.to) : undefined,
+      });
+      
+      toast({
+        title: "View Loaded",
+        description: `Applied filters from "${view.name}"`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load saved view",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -237,6 +280,25 @@ export default function Projects() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Saved Views Dropdown */}
+              {savedViews.length > 0 && (
+                <Select onValueChange={(value) => {
+                  const view = savedViews.find(v => v.id === value);
+                  if (view) handleLoadSavedView(view);
+                }}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-load-view">
+                    <SelectValue placeholder="Load saved view..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedViews.map(view => (
+                      <SelectItem key={view.id} value={view.id}>
+                        {view.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
               {/* View Mode Toggle */}
               {isManagerOrAdmin && (
                 <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
