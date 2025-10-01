@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -18,9 +18,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Columns3, List, Filter, BarChart3 } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type ViewMode = "kanban" | "list" | "dashboard";
+
+interface Widget {
+  id: string;
+  type: "bar" | "pie" | "number" | "line";
+  title: string;
+  groupBy: "projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue";
+  metric?: string;
+}
+
+interface Dashboard {
+  id: string;
+  userId: string;
+  name: string;
+  filters: any;
+  widgets: Widget[];
+  visibility: "private" | "shared";
+  createdAt: string;
+  updatedAt: string;
+}
 
 // Note: Using shared month normalization utility for consistent filtering
 
@@ -51,6 +71,12 @@ export default function Projects() {
   // Filter panel state
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
+  // Dashboard state
+  const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
+  const [dashboardWidgets, setDashboardWidgets] = useState<Widget[]>([]);
+  const [dashboardEditMode, setDashboardEditMode] = useState(false);
+  const [createDashboardModalOpen, setCreateDashboardModalOpen] = useState(false);
+
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
     enabled: isAuthenticated && !!user,
@@ -66,6 +92,13 @@ export default function Projects() {
   // Fetch saved project views
   const { data: savedViews = [] } = useQuery<any[]>({
     queryKey: ["/api/project-views"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+  });
+
+  // Fetch saved dashboards
+  const { data: dashboards = [] } = useQuery<Dashboard[]>({
+    queryKey: ["/api/dashboards"],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -94,6 +127,44 @@ export default function Projects() {
       toast({
         title: "Error",
         description: "Failed to load saved view",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handler to load a saved dashboard
+  const handleLoadDashboard = (dashboard: Dashboard) => {
+    try {
+      setCurrentDashboard(dashboard);
+      setDashboardWidgets(dashboard.widgets || []);
+      setDashboardEditMode(false);
+      
+      // Parse and apply filters from dashboard
+      if (dashboard.filters) {
+        const parsedFilters = typeof dashboard.filters === 'string' 
+          ? JSON.parse(dashboard.filters) 
+          : dashboard.filters;
+        
+        setServiceFilter(parsedFilters.serviceFilter || "all");
+        setTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
+        setServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
+        setUserFilter(parsedFilters.userFilter || "all");
+        setShowArchived(parsedFilters.showArchived || false);
+        setDynamicDateFilter(parsedFilters.dynamicDateFilter || "all");
+        setCustomDateRange({
+          from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+          to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
+        });
+      }
+      
+      toast({
+        title: "Dashboard Loaded",
+        description: `Loaded dashboard "${dashboard.name}"`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard",
         variant: "destructive",
       });
     }
@@ -280,24 +351,57 @@ export default function Projects() {
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* Saved Views Dropdown */}
-              {savedViews.length > 0 && (
-                <Select onValueChange={(value) => {
-                  const view = savedViews.find(v => String(v.id) === value);
-                  if (view) handleLoadSavedView(view);
-                }}>
-                  <SelectTrigger className="w-[180px]" data-testid="select-load-view">
-                    <SelectValue placeholder="Load saved view..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {savedViews.map(view => (
-                      <SelectItem key={view.id} value={String(view.id)}>
-                        {view.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {/* Conditionally show dropdowns based on view mode */}
+              {viewMode === "list" ? (
+                // List View: Show saved views dropdown
+                savedViews.length > 0 && (
+                  <Select onValueChange={(value) => {
+                    const view = savedViews.find(v => String(v.id) === value);
+                    if (view) handleLoadSavedView(view);
+                  }}>
+                    <SelectTrigger className="w-[200px]" data-testid="select-load-view">
+                      <SelectValue placeholder="Load saved view..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedViews.map(view => (
+                        <SelectItem key={view.id} value={String(view.id)}>
+                          {view.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
+              ) : viewMode === "dashboard" ? (
+                // Dashboard View: Show dashboards dropdown and create button
+                <>
+                  {dashboards.length > 0 && (
+                    <Select onValueChange={(value) => {
+                      const dashboard = dashboards.find(d => d.id === value);
+                      if (dashboard) handleLoadDashboard(dashboard);
+                    }}>
+                      <SelectTrigger className="w-[200px]" data-testid="select-load-dashboard">
+                        <SelectValue placeholder="Load saved dashboard..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dashboards.map(dashboard => (
+                          <SelectItem key={dashboard.id} value={dashboard.id}>
+                            {dashboard.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setCreateDashboardModalOpen(true)}
+                    data-testid="button-create-dashboard"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create New Dashboard
+                  </Button>
+                </>
+              ) : null}
 
               {/* View Mode Toggle */}
               {isManagerOrAdmin && (
