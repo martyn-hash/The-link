@@ -175,15 +175,18 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
       return;
     }
 
+    // Stringify filters as the database expects a JSON string
+    const filtersToSave = {
+      ...filters,
+      customDateRange: {
+        from: filters.customDateRange.from ? filters.customDateRange.from.toISOString() : undefined,
+        to: filters.customDateRange.to ? filters.customDateRange.to.toISOString() : undefined,
+      },
+    };
+
     saveDashboardMutation.mutate({
       name: dashboardName,
-      filters: {
-        ...filters,
-        customDateRange: {
-          from: filters.customDateRange.from ? filters.customDateRange.from.toISOString() : undefined,
-          to: filters.customDateRange.to ? filters.customDateRange.to.toISOString() : undefined,
-        },
-      },
+      filters: JSON.stringify(filtersToSave),
       widgets,
       visibility: "private",
     });
@@ -195,18 +198,22 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
     setDashboardName(dashboard.name);
     setEditMode(false);
     
-    // Apply saved filters if available
+    // Parse filters from JSON string
     if (dashboard.filters && onApplyFilters) {
+      const parsedFilters = typeof dashboard.filters === 'string' 
+        ? JSON.parse(dashboard.filters) 
+        : dashboard.filters;
+      
       onApplyFilters({
-        serviceFilter: dashboard.filters.serviceFilter || "all",
-        taskAssigneeFilter: dashboard.filters.taskAssigneeFilter || "all",
-        serviceOwnerFilter: dashboard.filters.serviceOwnerFilter || "all",
-        userFilter: dashboard.filters.userFilter || "all",
-        showArchived: dashboard.filters.showArchived || false,
-        dynamicDateFilter: dashboard.filters.dynamicDateFilter || "all",
+        serviceFilter: parsedFilters.serviceFilter || "all",
+        taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
+        serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
+        userFilter: parsedFilters.userFilter || "all",
+        showArchived: parsedFilters.showArchived || false,
+        dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
         customDateRange: {
-          from: dashboard.filters.customDateRange?.from ? new Date(dashboard.filters.customDateRange.from) : undefined,
-          to: dashboard.filters.customDateRange?.to ? new Date(dashboard.filters.customDateRange.to) : undefined,
+          from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+          to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         },
       });
       
