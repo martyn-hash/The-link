@@ -11,6 +11,9 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -18,7 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Columns3, List, Filter, BarChart3, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type ViewMode = "kanban" | "list" | "dashboard";
@@ -76,6 +87,15 @@ export default function Projects() {
   const [dashboardWidgets, setDashboardWidgets] = useState<Widget[]>([]);
   const [dashboardEditMode, setDashboardEditMode] = useState(false);
   const [createDashboardModalOpen, setCreateDashboardModalOpen] = useState(false);
+  const [isCreatingDashboard, setIsCreatingDashboard] = useState(false);
+
+  // Create dashboard modal state
+  const [newDashboardName, setNewDashboardName] = useState("");
+  const [newDashboardWidgets, setNewDashboardWidgets] = useState<Widget[]>([]);
+  const [newWidgetDialogOpen, setNewWidgetDialogOpen] = useState(false);
+  const [newWidgetType, setNewWidgetType] = useState<"bar" | "pie" | "number" | "line">("bar");
+  const [newWidgetTitle, setNewWidgetTitle] = useState("");
+  const [newWidgetGroupBy, setNewWidgetGroupBy] = useState<"projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue">("projectType");
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
@@ -168,6 +188,115 @@ export default function Projects() {
         variant: "destructive",
       });
     }
+  };
+
+  // Save dashboard mutation
+  const saveDashboardMutation = useMutation({
+    mutationFn: async (data: { name: string; filters: any; widgets: Widget[]; visibility: "private" | "shared"; isCreating?: boolean }) => {
+      if (data.isCreating || !currentDashboard) {
+        return apiRequest("POST", "/api/dashboards", data);
+      } else {
+        return apiRequest("PATCH", `/api/dashboards/${currentDashboard.id}`, data);
+      }
+    },
+    onSuccess: (savedDashboard: Dashboard) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+      setCurrentDashboard(savedDashboard);
+      setDashboardWidgets(savedDashboard.widgets);
+      toast({
+        title: "Success",
+        description: "Dashboard saved successfully",
+      });
+      setCreateDashboardModalOpen(false);
+      setIsCreatingDashboard(false);
+      setNewDashboardName("");
+      setNewDashboardWidgets([]);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save dashboard",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handler to add widget to new dashboard
+  const handleAddWidgetToNewDashboard = () => {
+    if (!newWidgetTitle.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a widget title",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const widget: Widget = {
+      id: `widget-${Date.now()}`,
+      type: newWidgetType,
+      title: newWidgetTitle,
+      groupBy: newWidgetGroupBy,
+    };
+
+    setNewDashboardWidgets([...newDashboardWidgets, widget]);
+    setNewWidgetDialogOpen(false);
+    setNewWidgetTitle("");
+    setNewWidgetType("bar");
+    setNewWidgetGroupBy("projectType");
+    
+    toast({
+      title: "Widget Added",
+      description: "Widget added to dashboard",
+    });
+  };
+
+  // Handler to remove widget from new dashboard
+  const handleRemoveWidgetFromNewDashboard = (widgetId: string) => {
+    setNewDashboardWidgets(newDashboardWidgets.filter(w => w.id !== widgetId));
+  };
+
+  // Handler to save new dashboard
+  const handleSaveNewDashboard = () => {
+    if (!newDashboardName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a dashboard name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newDashboardWidgets.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one widget",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Save current filters with the dashboard
+    const filtersToSave = {
+      serviceFilter,
+      taskAssigneeFilter,
+      serviceOwnerFilter,
+      userFilter,
+      showArchived,
+      dynamicDateFilter,
+      customDateRange: {
+        from: customDateRange.from ? customDateRange.from.toISOString() : undefined,
+        to: customDateRange.to ? customDateRange.to.toISOString() : undefined,
+      },
+    };
+
+    saveDashboardMutation.mutate({
+      name: newDashboardName,
+      filters: JSON.stringify(filtersToSave),
+      widgets: newDashboardWidgets,
+      visibility: "private",
+      isCreating: isCreatingDashboard,
+    });
   };
 
   // Redirect to login if not authenticated
@@ -394,7 +523,13 @@ export default function Projects() {
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => setCreateDashboardModalOpen(true)}
+                    onClick={() => {
+                      setIsCreatingDashboard(true);
+                      setCurrentDashboard(null);
+                      setNewDashboardName("");
+                      setNewDashboardWidgets([]);
+                      setCreateDashboardModalOpen(true);
+                    }}
                     data-testid="button-create-dashboard"
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -472,7 +607,13 @@ export default function Projects() {
               }}
               widgets={dashboardWidgets}
               editMode={dashboardEditMode}
-              onAddWidget={() => setCreateDashboardModalOpen(true)}
+              onAddWidget={() => {
+                setIsCreatingDashboard(true);
+                setCurrentDashboard(null);
+                setNewDashboardName("");
+                setNewDashboardWidgets([]);
+                setCreateDashboardModalOpen(true);
+              }}
               onRemoveWidget={(widgetId) => {
                 setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
               }}
@@ -521,6 +662,230 @@ export default function Projects() {
         serviceOwners={serviceOwners}
         isManagerOrAdmin={isManagerOrAdmin}
       />
+
+      {/* Create Dashboard Modal */}
+      <Dialog open={createDashboardModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsCreatingDashboard(false);
+          setNewDashboardName("");
+          setNewDashboardWidgets([]);
+          setNewWidgetTitle("");
+          setNewWidgetType("bar");
+          setNewWidgetGroupBy("projectType");
+          setNewWidgetDialogOpen(false);
+        }
+        setCreateDashboardModalOpen(open);
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-create-dashboard">
+          <DialogHeader>
+            <DialogTitle>Create New Dashboard</DialogTitle>
+            <DialogDescription>
+              Configure filters, add widgets, and save your custom dashboard
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Dashboard Name Section */}
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-name">Dashboard Name</Label>
+              <Input
+                id="dashboard-name"
+                placeholder="e.g., Project Overview"
+                value={newDashboardName}
+                onChange={(e) => setNewDashboardName(e.target.value)}
+                data-testid="input-new-dashboard-name"
+              />
+            </div>
+
+            {/* Current Filters Section */}
+            <div className="space-y-2">
+              <Label>Applied Filters</Label>
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    {serviceFilter !== "all" && (
+                      <Badge variant="secondary">Service: {serviceFilter}</Badge>
+                    )}
+                    {taskAssigneeFilter !== "all" && (
+                      <Badge variant="secondary">Assignee: {(() => {
+                        const assignee = taskAssignees.find(a => a.id === taskAssigneeFilter);
+                        return assignee ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() : taskAssigneeFilter;
+                      })()}</Badge>
+                    )}
+                    {serviceOwnerFilter !== "all" && (
+                      <Badge variant="secondary">Owner: {(() => {
+                        const owner = serviceOwners.find(o => o.id === serviceOwnerFilter);
+                        return owner ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim() : serviceOwnerFilter;
+                      })()}</Badge>
+                    )}
+                    {userFilter !== "all" && isManagerOrAdmin && (
+                      <Badge variant="secondary">User: {(() => {
+                        const selectedUser = (users || []).find(u => u.id === userFilter);
+                        return selectedUser ? `${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim() : userFilter;
+                      })()}</Badge>
+                    )}
+                    {showArchived && (
+                      <Badge variant="secondary">Archived: Yes</Badge>
+                    )}
+                    {dynamicDateFilter === "custom" && customDateRange.from && customDateRange.to ? (
+                      <Badge variant="secondary">Date: {customDateRange.from.toLocaleDateString()} - {customDateRange.to.toLocaleDateString()}</Badge>
+                    ) : dynamicDateFilter !== "all" && (
+                      <Badge variant="secondary">Date: {dynamicDateFilter}</Badge>
+                    )}
+                    {(serviceFilter === "all" && taskAssigneeFilter === "all" && serviceOwnerFilter === "all" && userFilter === "all" && !showArchived && dynamicDateFilter === "all") && (
+                      <p className="text-sm text-muted-foreground">No filters applied - showing all data</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Current filters will be saved with this dashboard. Modify filters using the Filters button before creating the dashboard.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Widgets Section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Dashboard Widgets</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewWidgetDialogOpen(true)}
+                  data-testid="button-add-widget-to-dashboard"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Widget
+                </Button>
+              </div>
+
+              {newDashboardWidgets.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">No widgets added yet</p>
+                      <p className="text-xs text-muted-foreground">Click "Add Widget" to get started</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {newDashboardWidgets.map((widget) => (
+                    <Card key={widget.id} data-testid={`new-widget-card-${widget.id}`}>
+                      <CardHeader className="relative pb-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 h-6 w-6"
+                          onClick={() => handleRemoveWidgetFromNewDashboard(widget.id)}
+                          data-testid={`button-remove-new-widget-${widget.id}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                        <CardTitle className="text-sm">{widget.title}</CardTitle>
+                        <CardDescription className="text-xs">
+                          {widget.type === "bar" && "Bar Chart"}
+                          {widget.type === "pie" && "Pie Chart"}
+                          {widget.type === "line" && "Line Chart"}
+                          {widget.type === "number" && "Number Card"}
+                          {" • "}
+                          {widget.groupBy === "projectType" && "By Project Type"}
+                          {widget.groupBy === "status" && "By Status"}
+                          {widget.groupBy === "assignee" && "By Assignee"}
+                          {widget.groupBy === "serviceOwner" && "By Service Owner"}
+                          {widget.groupBy === "daysOverdue" && "By Days Overdue"}
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setCreateDashboardModalOpen(false);
+              setNewDashboardName("");
+              setNewDashboardWidgets([]);
+            }} data-testid="button-cancel-create-dashboard">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveNewDashboard} 
+              disabled={saveDashboardMutation.isPending}
+              data-testid="button-save-new-dashboard"
+            >
+              {saveDashboardMutation.isPending ? "Saving..." : "Create Dashboard"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Widget Dialog */}
+      <Dialog open={newWidgetDialogOpen} onOpenChange={setNewWidgetDialogOpen}>
+        <DialogContent data-testid="dialog-add-widget-to-dashboard">
+          <DialogHeader>
+            <DialogTitle>Add Widget</DialogTitle>
+            <DialogDescription>
+              Configure a chart or metric to visualize project data
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-widget-title">Widget Title</Label>
+              <Input
+                id="new-widget-title"
+                placeholder="e.g., Projects by Type"
+                value={newWidgetTitle}
+                onChange={(e) => setNewWidgetTitle(e.target.value)}
+                data-testid="input-new-widget-title"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-widget-type">Chart Type</Label>
+              <Select value={newWidgetType} onValueChange={(v: any) => setNewWidgetType(v)}>
+                <SelectTrigger id="new-widget-type" data-testid="select-new-widget-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bar">Bar Chart</SelectItem>
+                  <SelectItem value="pie">Pie Chart</SelectItem>
+                  <SelectItem value="line">Line Chart</SelectItem>
+                  <SelectItem value="number">Number Card</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-widget-groupby">Group By</Label>
+              <Select value={newWidgetGroupBy} onValueChange={(v: any) => setNewWidgetGroupBy(v)}>
+                <SelectTrigger id="new-widget-groupby" data-testid="select-new-widget-groupby">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="projectType">Project Type</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                  <SelectItem value="assignee">Assignee</SelectItem>
+                  <SelectItem value="serviceOwner">Service Owner</SelectItem>
+                  <SelectItem value="daysOverdue">Days Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewWidgetDialogOpen(false)} data-testid="button-cancel-new-widget">
+              Cancel
+            </Button>
+            <Button onClick={handleAddWidgetToNewDashboard} data-testid="button-confirm-add-new-widget">
+              Add Widget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
