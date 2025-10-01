@@ -168,6 +168,21 @@ export const userColumnPreferences = pgTable("user_column_preferences", {
   index("idx_user_column_preferences_user_id").on(table.userId),
 ]);
 
+// Dashboards table - Stores saved dashboard configurations with visualizations
+export const dashboards = pgTable("dashboards", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  filters: text("filters").notNull(), // JSON string of filter state (same format as project views)
+  widgets: jsonb("widgets").notNull(), // Array of widget configurations: [{id, type, metric, groupBy, options}]
+  visibility: varchar("visibility").notNull().default("private"), // 'private' or 'shared'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_dashboards_user_id").on(table.userId),
+  index("idx_dashboards_visibility").on(table.visibility),
+]);
+
 // Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1170,6 +1185,14 @@ export const insertUserColumnPreferencesSchema = createInsertSchema(userColumnPr
 
 export const updateUserColumnPreferencesSchema = insertUserColumnPreferencesSchema.partial().omit({ userId: true });
 
+export const insertDashboardSchema = createInsertSchema(dashboards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateDashboardSchema = insertDashboardSchema.partial().omit({ userId: true });
+
 // UDF definition schema
 export const udfDefinitionSchema = z.object({
   id: z.string(),
@@ -1529,6 +1552,9 @@ export type InsertProjectView = z.infer<typeof insertProjectViewSchema>;
 export type UserColumnPreferences = typeof userColumnPreferences.$inferSelect;
 export type InsertUserColumnPreferences = z.infer<typeof insertUserColumnPreferencesSchema>;
 export type UpdateUserColumnPreferences = z.infer<typeof updateUserColumnPreferencesSchema>;
+export type Dashboard = typeof dashboards.$inferSelect;
+export type InsertDashboard = z.infer<typeof insertDashboardSchema>;
+export type UpdateDashboard = z.infer<typeof updateDashboardSchema>;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;
