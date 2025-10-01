@@ -399,6 +399,8 @@ export interface IStorage {
   getDashboardById(id: string): Promise<Dashboard | undefined>;
   updateDashboard(id: string, dashboard: UpdateDashboard): Promise<Dashboard>;
   deleteDashboard(id: string): Promise<void>;
+  getHomescreenDashboard(userId: string): Promise<Dashboard | undefined>;
+  clearHomescreenDashboards(userId: string): Promise<void>;
   
   // Analytics operations
   getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]>;
@@ -915,6 +917,24 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(dashboards)
       .where(eq(dashboards.id, id));
+  }
+
+  async getHomescreenDashboard(userId: string): Promise<Dashboard | undefined> {
+    const [dashboard] = await db
+      .select()
+      .from(dashboards)
+      .where(and(
+        eq(dashboards.userId, userId),
+        eq(dashboards.isHomescreenDashboard, true)
+      ));
+    return dashboard;
+  }
+
+  async clearHomescreenDashboards(userId: string): Promise<void> {
+    await db
+      .update(dashboards)
+      .set({ isHomescreenDashboard: false })
+      .where(eq(dashboards.userId, userId));
   }
 
   // Analytics operations

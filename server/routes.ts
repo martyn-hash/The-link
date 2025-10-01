@@ -2178,6 +2178,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/dashboards/homescreen", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const dashboard = await storage.getHomescreenDashboard(effectiveUserId);
+      
+      if (!dashboard) {
+        return res.status(404).json({ message: "No homescreen dashboard found" });
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error fetching homescreen dashboard:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch homescreen dashboard" });
+    }
+  });
+
   app.get("/api/dashboards/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
@@ -2216,6 +2236,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: effectiveUserId, // Security: Always use authenticated user ID
       });
 
+      // If setting this as homescreen dashboard, clear other homescreen dashboards first
+      if (validDashboardData.isHomescreenDashboard) {
+        await storage.clearHomescreenDashboards(effectiveUserId);
+      }
+
       const newDashboard = await storage.createDashboard(validDashboardData);
       res.status(201).json(newDashboard);
     } catch (error) {
@@ -2244,6 +2269,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validDashboardData = updateDashboardSchema.parse(req.body);
+      
+      // If setting this as homescreen dashboard, clear other homescreen dashboards first
+      if (validDashboardData.isHomescreenDashboard) {
+        await storage.clearHomescreenDashboards(effectiveUserId);
+      }
+      
       const updated = await storage.updateDashboard(req.params.id, validDashboardData);
       
       res.json(updated);
