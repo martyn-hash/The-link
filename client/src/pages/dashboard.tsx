@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 // Navigation handled via window.location.href for reliability
 import { useAuth } from "@/hooks/useAuth";
@@ -88,6 +88,28 @@ export default function Dashboard() {
     enabled: isAuthenticated && !!user,
     retry: false,
   });
+
+  // Memoize homescreen dashboard filters to prevent unnecessary re-renders
+  const homescreenFilters = useMemo(() => {
+    if (!homescreenDashboard) return null;
+    
+    const parsedFilters = typeof homescreenDashboard.filters === 'string'
+      ? JSON.parse(homescreenDashboard.filters)
+      : homescreenDashboard.filters;
+    
+    return {
+      serviceFilter: parsedFilters.serviceFilter || "all",
+      taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
+      serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
+      userFilter: parsedFilters.userFilter || "all",
+      showArchived: parsedFilters.showArchived || false,
+      dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
+      customDateRange: {
+        from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+        to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
+      },
+    };
+  }, [homescreenDashboard]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -211,29 +233,14 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground">- {homescreenDashboard.description}</p>
                   )}
                 </div>
-                <DashboardBuilder
-                  filters={(() => {
-                    const parsedFilters = typeof homescreenDashboard.filters === 'string'
-                      ? JSON.parse(homescreenDashboard.filters)
-                      : homescreenDashboard.filters;
-                    
-                    return {
-                      serviceFilter: parsedFilters.serviceFilter || "all",
-                      taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
-                      serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
-                      userFilter: parsedFilters.userFilter || "all",
-                      showArchived: parsedFilters.showArchived || false,
-                      dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
-                      customDateRange: {
-                        from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
-                        to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
-                      },
-                    };
-                  })()}
-                  widgets={homescreenDashboard.widgets || []}
-                  editMode={false}
-                  currentDashboard={homescreenDashboard}
-                />
+                {homescreenFilters && (
+                  <DashboardBuilder
+                    filters={homescreenFilters}
+                    widgets={homescreenDashboard.widgets || []}
+                    editMode={false}
+                    currentDashboard={homescreenDashboard}
+                  />
+                )}
               </div>
             ) : (
               <Card>
