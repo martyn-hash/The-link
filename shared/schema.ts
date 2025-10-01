@@ -173,14 +173,17 @@ export const dashboards = pgTable("dashboards", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  description: text("description"), // Optional description of what the dashboard shows
   filters: text("filters").notNull(), // JSON string of filter state (same format as project views)
   widgets: jsonb("widgets").notNull(), // Array of widget configurations: [{id, type, metric, groupBy, options}]
   visibility: varchar("visibility").notNull().default("private"), // 'private' or 'shared'
+  isHomescreenDashboard: boolean("is_homescreen_dashboard").default(false), // Mark as homescreen dashboard (one per user)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_dashboards_user_id").on(table.userId),
   index("idx_dashboards_visibility").on(table.visibility),
+  index("idx_dashboards_homescreen").on(table.userId, table.isHomescreenDashboard),
 ]);
 
 // Clients table - Companies House integration (matches existing database schema)
