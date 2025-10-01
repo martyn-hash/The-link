@@ -38,6 +38,7 @@ import {
   userIntegrations,
   userOauthAccounts,
   userActivityTracking,
+  pushSubscriptions,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -120,6 +121,8 @@ import {
   type InsertUserIntegration,
   type UserActivityTracking,
   type InsertUserActivityTracking,
+  type PushSubscription,
+  type InsertPushSubscription,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -552,6 +555,12 @@ export interface IStorage {
   createUserOauthAccount(account: InsertUserOauthAccount): Promise<UserOauthAccount>;
   updateUserOauthAccount(id: string, account: Partial<InsertUserOauthAccount>): Promise<UserOauthAccount>;
   deleteUserOauthAccount(userId: string, provider: string): Promise<void>;
+  
+  // Push subscription operations
+  createPushSubscription(subscription: InsertPushSubscription): Promise<PushSubscription>;
+  getPushSubscriptionsByUserId(userId: string): Promise<PushSubscription[]>;
+  deletePushSubscription(endpoint: string): Promise<void>;
+  deletePushSubscriptionsByUserId(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7086,6 +7095,39 @@ export class DatabaseStorage implements IStorage {
       eq(userOauthAccounts.userId, userId),
       eq(userOauthAccounts.provider, provider)
     ));
+  }
+
+  // Push subscription operations
+  async createPushSubscription(subscription: InsertPushSubscription): Promise<PushSubscription> {
+    const [newSubscription] = await db
+      .insert(pushSubscriptions)
+      .values(subscription)
+      .onConflictDoUpdate({
+        target: pushSubscriptions.endpoint,
+        set: {
+          userId: subscription.userId,
+          keys: subscription.keys,
+          userAgent: subscription.userAgent,
+          updatedAt: new Date(),
+        }
+      })
+      .returning();
+    return newSubscription;
+  }
+
+  async getPushSubscriptionsByUserId(userId: string): Promise<PushSubscription[]> {
+    return await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId));
+  }
+
+  async deletePushSubscription(endpoint: string): Promise<void> {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
+  async deletePushSubscriptionsByUserId(userId: string): Promise<void> {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
   }
 }
 

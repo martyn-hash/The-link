@@ -28,6 +28,12 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request)
@@ -67,8 +73,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'The Link';
   const options = {
     body: data.body || 'You have a new notification',
-    icon: data.icon || '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
+    icon: data.icon || '/pwa-192x192.svg',
+    badge: '/pwa-192x192.svg',
     tag: data.tag || 'default-notification',
     data: {
       url: data.url || '/',

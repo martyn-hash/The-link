@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { sendTaskAssignmentEmail } from "./emailService";
+import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "./push-service";
 import fetch from 'node-fetch';
 import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "./utils/userOutlookClient";
 import { companiesHouseService } from "./companies-house-service";
@@ -62,6 +63,30 @@ const sendEmailSchema = z.object({
   body: z.string().min(1, "Email body is required"),
   cc: z.string().email().optional(),
   bcc: z.string().email().optional(),
+});
+
+// Push notification schemas
+const pushSubscribeSchema = z.object({
+  endpoint: z.string().url("Invalid endpoint URL"),
+  keys: z.object({
+    p256dh: z.string().min(1, "p256dh key is required"),
+    auth: z.string().min(1, "auth key is required"),
+  }),
+  userAgent: z.string().optional(),
+});
+
+const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url("Invalid endpoint URL"),
+});
+
+const pushSendSchema = z.object({
+  userIds: z.array(z.string()).min(1, "At least one user ID is required"),
+  title: z.string().min(1, "Title is required"),
+  body: z.string().min(1, "Body is required"),
+  url: z.string().optional(),
+  icon: z.string().optional(),
+  tag: z.string().optional(),
+  requireInteraction: z.boolean().optional(),
 });
 
 // Analytics query schema
@@ -6767,6 +6792,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting user integration:", error);
       res.status(500).json({ message: "Failed to delete user integration" });
+    }
+  });
+
+  // ==================================================
+  // PUSH NOTIFICATION API ROUTES
+  // ==================================================
+
+  // GET /api/push/vapid-public-key - Get VAPID public key for push subscriptions
+  app.get("/api/push/vapid-public-key", (req: any, res: any) => {
+    const publicKey = getVapidPublicKey();
+    if (!publicKey) {
+      return res.status(500).json({ message: "Push notifications not configured" });
+    }
+    res.json({ publicKey });
+  });
+
+  // POST /api/push/subscribe - Subscribe to push notifications
+  app.post("/api/push/subscribe", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      const validationResult = pushSubscribeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid subscription data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const { endpoint, keys, userAgent } = validationResult.data;
+
+      const subscription = await storage.createPushSubscription({
+        userId: effectiveUserId,
+        endpoint,
+        keys,
+        userAgent: userAgent || req.headers['user-agent'] || null
+      });
+
+      res.status(201).json(subscription);
+    } catch (error) {
+      console.error("Error subscribing to push notifications:", error);
+      res.status(500).json({ message: "Failed to subscribe to push notifications" });
+    }
+  });
+
+  // DELETE /api/push/unsubscribe - Unsubscribe from push notifications
+  app.delete("/api/push/unsubscribe", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const validationResult = pushUnsubscribeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid unsubscribe data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const { endpoint } = validationResult.data;
+      await storage.deletePushSubscription(endpoint);
+      res.json({ message: "Unsubscribed successfully" });
+    } catch (error) {
+      console.error("Error unsubscribing from push notifications:", error);
+      res.status(500).json({ message: "Failed to unsubscribe" });
+    }
+  });
+
+  // GET /api/push/subscriptions - Get user's push subscriptions
+  app.get("/api/push/subscriptions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const subscriptions = await storage.getPushSubscriptionsByUserId(effectiveUserId);
+      res.json(subscriptions);
+    } catch (error) {
+      console.error("Error fetching push subscriptions:", error);
+      res.status(500).json({ message: "Failed to fetch subscriptions" });
+    }
+  });
+
+  // POST /api/push/send - Send push notifications (admin only)
+  app.post("/api/push/send", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validationResult = pushSendSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid push notification data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const { userIds, title, body, url, icon, tag, requireInteraction } = validationResult.data;
+
+      const payload: PushNotificationPayload = {
+        title,
+        body,
+        url,
+        icon,
+        tag,
+        requireInteraction
+      };
+
+      let allSubscriptions: any[] = [];
+      for (const userId of userIds) {
+        const subs = await storage.getPushSubscriptionsByUserId(userId);
+        allSubscriptions = allSubscriptions.concat(subs);
+      }
+
+      if (allSubscriptions.length === 0) {
+        return res.status(404).json({ message: "No subscriptions found for specified users" });
+      }
+
+      const result = await sendPushNotificationToMultiple(
+        allSubscriptions.map(sub => ({
+          endpoint: sub.endpoint,
+          keys: sub.keys as { p256dh: string; auth: string }
+        })),
+        payload
+      );
+
+      if (result.expiredSubscriptions.length > 0) {
+        for (const endpoint of result.expiredSubscriptions) {
+          await storage.deletePushSubscription(endpoint);
+        }
+      }
+
+      res.json({
+        message: "Notifications sent",
+        successful: result.successful,
+        failed: result.failed,
+        expiredRemoved: result.expiredSubscriptions.length
+      });
+    } catch (error) {
+      console.error("Error sending push notifications:", error);
+      res.status(500).json({ message: "Failed to send push notifications" });
     }
   });
 
