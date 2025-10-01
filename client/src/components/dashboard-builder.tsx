@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { 
   BarChart3, 
@@ -44,16 +43,11 @@ interface DashboardBuilderProps {
     dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
     customDateRange: { from: Date | undefined; to: Date | undefined };
   };
-  onApplyFilters?: (filters: {
-    serviceFilter: string;
-    taskAssigneeFilter: string;
-    serviceOwnerFilter: string;
-    userFilter: string;
-    showArchived: boolean;
-    dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
-    customDateRange: { from: Date | undefined; to: Date | undefined };
-  }) => void;
-  onSwitchToList: () => void;
+  widgets: Widget[];
+  editMode?: boolean;
+  onAddWidget?: () => void;
+  onRemoveWidget?: (widgetId: string) => void;
+  currentDashboard?: Dashboard | null;
 }
 
 interface Widget {
@@ -82,229 +76,17 @@ interface AnalyticsDataPoint {
 
 const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
 
-export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToList }: DashboardBuilderProps) {
-  const { toast } = useToast();
-  const [editMode, setEditMode] = useState(false);
-  const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
-  const [widgets, setWidgets] = useState<Widget[]>([]);
-  const [addWidgetDialogOpen, setAddWidgetDialogOpen] = useState(false);
-  const [saveDashboardDialogOpen, setSaveDashboardDialogOpen] = useState(false);
-  const [dashboardName, setDashboardName] = useState("");
-  
-  // New widget form state
-  const [newWidgetType, setNewWidgetType] = useState<"bar" | "pie" | "number" | "line">("bar");
-  const [newWidgetTitle, setNewWidgetTitle] = useState("");
-  const [newWidgetGroupBy, setNewWidgetGroupBy] = useState<"projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue">("projectType");
-
-  // Fetch saved dashboards
-  const { data: dashboards = [] } = useQuery<Dashboard[]>({
-    queryKey: ["/api/dashboards"],
-  });
-
-  // Save dashboard mutation
-  const saveDashboardMutation = useMutation({
-    mutationFn: async (data: { name: string; filters: any; widgets: Widget[]; visibility: "private" | "shared" }) => {
-      if (currentDashboard) {
-        return apiRequest("PATCH", `/api/dashboards/${currentDashboard.id}`, data);
-      } else {
-        return apiRequest("POST", "/api/dashboards", data);
-      }
-    },
-    onSuccess: (savedDashboard: Dashboard) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
-      setCurrentDashboard(savedDashboard);
-      setDashboardName(savedDashboard.name);
-      toast({
-        title: "Success",
-        description: "Dashboard saved successfully",
-      });
-      setSaveDashboardDialogOpen(false);
-      setEditMode(false);
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to save dashboard",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleAddWidget = () => {
-    if (!newWidgetTitle.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a widget title",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newWidget: Widget = {
-      id: `widget-${Date.now()}`,
-      type: newWidgetType,
-      title: newWidgetTitle,
-      groupBy: newWidgetGroupBy,
-    };
-
-    setWidgets([...widgets, newWidget]);
-    setAddWidgetDialogOpen(false);
-    
-    // Reset form
-    setNewWidgetTitle("");
-    setNewWidgetType("bar");
-    setNewWidgetGroupBy("projectType");
-    
-    toast({
-      title: "Success",
-      description: "Widget added to dashboard",
-    });
-  };
-
-  const handleRemoveWidget = (widgetId: string) => {
-    setWidgets(widgets.filter(w => w.id !== widgetId));
-  };
-
-  const handleSaveDashboard = () => {
-    if (!dashboardName.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a dashboard name",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Stringify filters as the database expects a JSON string
-    const filtersToSave = {
-      ...filters,
-      customDateRange: {
-        from: filters.customDateRange.from ? filters.customDateRange.from.toISOString() : undefined,
-        to: filters.customDateRange.to ? filters.customDateRange.to.toISOString() : undefined,
-      },
-    };
-
-    saveDashboardMutation.mutate({
-      name: dashboardName,
-      filters: JSON.stringify(filtersToSave),
-      widgets,
-      visibility: "private",
-    });
-  };
-
-  const handleLoadDashboard = (dashboard: Dashboard) => {
-    setCurrentDashboard(dashboard);
-    setWidgets(dashboard.widgets);
-    setDashboardName(dashboard.name);
-    setEditMode(false);
-    
-    // Parse filters from JSON string
-    if (dashboard.filters && onApplyFilters) {
-      const parsedFilters = typeof dashboard.filters === 'string' 
-        ? JSON.parse(dashboard.filters) 
-        : dashboard.filters;
-      
-      onApplyFilters({
-        serviceFilter: parsedFilters.serviceFilter || "all",
-        taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
-        serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
-        userFilter: parsedFilters.userFilter || "all",
-        showArchived: parsedFilters.showArchived || false,
-        dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
-        customDateRange: {
-          from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
-          to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
-        },
-      });
-      
-      toast({
-        title: "Dashboard Loaded",
-        description: "Dashboard and filters have been applied",
-      });
-    }
-  };
+export default function DashboardBuilder({ 
+  filters, 
+  widgets, 
+  editMode = false, 
+  onAddWidget, 
+  onRemoveWidget,
+  currentDashboard 
+}: DashboardBuilderProps) {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onSwitchToList}
-              data-testid="button-switch-to-list"
-            >
-              <List className="w-4 h-4 mr-2" />
-              Back to List
-            </Button>
-            
-            <div className="h-6 w-px bg-border" />
-            
-            <h3 className="text-lg font-semibold text-foreground">
-              {currentDashboard ? currentDashboard.name : "Dashboard Builder"}
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Load Dashboard Dropdown */}
-            {dashboards.length > 0 && (
-              <Select onValueChange={(value) => {
-                const dashboard = dashboards.find(d => d.id === value);
-                if (dashboard) handleLoadDashboard(dashboard);
-              }}>
-                <SelectTrigger className="w-[200px]" data-testid="select-load-dashboard">
-                  <SelectValue placeholder="Load dashboard..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {dashboards.map(dashboard => (
-                    <SelectItem key={dashboard.id} value={dashboard.id}>
-                      {dashboard.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <Button
-              variant={editMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setEditMode(!editMode)}
-              data-testid="button-toggle-edit-mode"
-            >
-              <Layout className="w-4 h-4 mr-2" />
-              {editMode ? "View Mode" : "Edit Mode"}
-            </Button>
-
-            {editMode && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAddWidgetDialogOpen(true)}
-                  data-testid="button-add-widget"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Widget
-                </Button>
-                
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setSaveDashboardDialogOpen(true)}
-                  disabled={widgets.length === 0}
-                  data-testid="button-save-dashboard"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Dashboard
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Dashboard Content */}
       <div className="flex-1 overflow-auto p-6">
         {widgets.length === 0 ? (
@@ -321,10 +103,7 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
               </CardHeader>
               <CardContent className="flex justify-center">
                 <Button
-                  onClick={() => {
-                    setEditMode(true);
-                    setAddWidgetDialogOpen(true);
-                  }}
+                  onClick={onAddWidget}
                   data-testid="button-add-first-widget"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -341,7 +120,7 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
                 widget={widget}
                 filters={filters}
                 editMode={editMode}
-                onRemove={handleRemoveWidget}
+                onRemove={onRemoveWidget}
               />
             ))}
           </div>
@@ -354,105 +133,6 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
           </div>
         )}
       </div>
-
-      {/* Add Widget Dialog */}
-      <Dialog open={addWidgetDialogOpen} onOpenChange={setAddWidgetDialogOpen}>
-        <DialogContent data-testid="dialog-add-widget">
-          <DialogHeader>
-            <DialogTitle>Add New Widget</DialogTitle>
-            <DialogDescription>
-              Configure your chart or metric to visualize project data
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="widget-title">Widget Title</Label>
-              <Input
-                id="widget-title"
-                placeholder="e.g., Projects by Type"
-                value={newWidgetTitle}
-                onChange={(e) => setNewWidgetTitle(e.target.value)}
-                data-testid="input-widget-title"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="widget-type">Chart Type</Label>
-              <Select value={newWidgetType} onValueChange={(v: any) => setNewWidgetType(v)}>
-                <SelectTrigger id="widget-type" data-testid="select-widget-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bar">Bar Chart</SelectItem>
-                  <SelectItem value="pie">Pie Chart</SelectItem>
-                  <SelectItem value="line">Line Chart</SelectItem>
-                  <SelectItem value="number">Number Card</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="widget-groupby">Group By</Label>
-              <Select value={newWidgetGroupBy} onValueChange={(v: any) => setNewWidgetGroupBy(v)}>
-                <SelectTrigger id="widget-groupby" data-testid="select-widget-groupby">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="projectType">Project Type</SelectItem>
-                  <SelectItem value="status">Status</SelectItem>
-                  <SelectItem value="assignee">Assignee</SelectItem>
-                  <SelectItem value="serviceOwner">Service Owner</SelectItem>
-                  <SelectItem value="daysOverdue">Days Overdue</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddWidgetDialogOpen(false)} data-testid="button-cancel-widget">
-              Cancel
-            </Button>
-            <Button onClick={handleAddWidget} data-testid="button-confirm-add-widget">
-              Add Widget
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Save Dashboard Dialog */}
-      <Dialog open={saveDashboardDialogOpen} onOpenChange={setSaveDashboardDialogOpen}>
-        <DialogContent data-testid="dialog-save-dashboard">
-          <DialogHeader>
-            <DialogTitle>Save Dashboard</DialogTitle>
-            <DialogDescription>
-              Give your dashboard a name to save it for later use
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-name">Dashboard Name</Label>
-              <Input
-                id="dashboard-name"
-                placeholder="e.g., Project Overview"
-                value={dashboardName}
-                onChange={(e) => setDashboardName(e.target.value)}
-                data-testid="input-dashboard-name"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDashboardDialogOpen(false)} data-testid="button-cancel-save">
-              Cancel
-            </Button>
-            <Button onClick={handleSaveDashboard} disabled={saveDashboardMutation.isPending} data-testid="button-confirm-save">
-              {saveDashboardMutation.isPending ? "Saving..." : "Save Dashboard"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -462,7 +142,7 @@ interface WidgetCardProps {
   widget: Widget;
   filters: any;
   editMode: boolean;
-  onRemove: (id: string) => void;
+  onRemove?: (id: string) => void;
 }
 
 function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
@@ -492,7 +172,7 @@ function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
 
   return (
     <Card className="relative" data-testid={`widget-card-${widget.id}`}>
-      {editMode && (
+      {editMode && onRemove && (
         <Button
           variant="ghost"
           size="icon"
@@ -684,7 +364,7 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
                         style={{ backgroundColor: stage.color || "#6b7280" }}
                       />
                       <span className="font-medium text-sm">
-                        {stage.name.split('_').map(word => 
+                        {stage.name.split('_').map((word: string) => 
                           word.charAt(0).toUpperCase() + word.slice(1)
                         ).join(' ')}
                       </span>
@@ -696,7 +376,7 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
 
                   {/* Mini Project Cards */}
                   <div className="space-y-2">
-                    {stageProjects.slice(0, 5).map((project) => (
+                    {stageProjects.slice(0, 5).map((project: any) => (
                       <Card
                         key={project.id}
                         className="p-2 hover:shadow-md transition-shadow cursor-pointer"

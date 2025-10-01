@@ -470,16 +470,13 @@ export default function Projects() {
                 dynamicDateFilter,
                 customDateRange,
               }}
-              onApplyFilters={(newFilters) => {
-                setServiceFilter(newFilters.serviceFilter);
-                setTaskAssigneeFilter(newFilters.taskAssigneeFilter);
-                setServiceOwnerFilter(newFilters.serviceOwnerFilter);
-                setUserFilter(newFilters.userFilter);
-                setShowArchived(newFilters.showArchived);
-                setDynamicDateFilter(newFilters.dynamicDateFilter);
-                setCustomDateRange(newFilters.customDateRange);
+              widgets={dashboardWidgets}
+              editMode={dashboardEditMode}
+              onAddWidget={() => setCreateDashboardModalOpen(true)}
+              onRemoveWidget={(widgetId) => {
+                setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
               }}
-              onSwitchToList={() => setViewMode("list")}
+              currentDashboard={currentDashboard}
             />
           ) : viewMode === "kanban" ? (
             <KanbanBoard 
