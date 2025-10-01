@@ -51,6 +51,11 @@ function Router() {
       {/* Home route - conditional based on auth */}
       <Route path="/" component={isAuthenticated ? Dashboard : Landing} />
       
+      {/* Redirect /dashboard to root */}
+      <Route path="/dashboard">
+        <Redirect to="/" />
+      </Route>
+      
       {/* Protected routes - render regardless of auth state, let components handle auth */}
       <Route path="/projects" component={Projects} />
       <Route path="/projects/:id" component={ProjectDetail} />
