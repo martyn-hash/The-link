@@ -171,7 +171,7 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt, or, ilike, isNull, ne } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, ne } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -235,9 +235,9 @@ export interface IStorage {
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
-  getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]>;
-  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]>;
-  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]>;
+  getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
@@ -2231,19 +2231,36 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAllProjects(filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
     if (filters?.month) {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
+    // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    } else if (filters?.showArchived === false) {
+      // When showArchived is false, exclude archived projects
+      whereConditions.push(eq(projects.archived, false));
     }
+    // When showArchived is true or undefined, don't filter by archived status (include all)
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+    
+    if (filters?.assigneeId) {
+      whereConditions.push(eq(projects.currentAssigneeId, filters.assigneeId));
+    }
+    
+    if (filters?.serviceOwnerId) {
+      whereConditions.push(eq(projects.projectOwnerId, filters.serviceOwnerId));
+    }
+    
+    if (filters?.userId) {
+      whereConditions.push(eq(projects.clientManagerId, filters.userId));
     }
 
     // Filter by service if provided - need to join with projectTypes
@@ -2261,6 +2278,72 @@ export class DatabaseStorage implements IStorage {
       } else {
         // No project types found for this service, return empty result
         return [];
+      }
+    }
+    
+    // Dynamic date filtering
+    if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (filters.dynamicDateFilter) {
+        case 'overdue':
+          whereConditions.push(lt(projects.dueDate, today.toISOString()));
+          break;
+        case 'today':
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lt(projects.dueDate, tomorrow.toISOString())
+            )!
+          );
+          break;
+        case 'next7days':
+          const next7 = new Date(today);
+          next7.setDate(next7.getDate() + 7);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next7.toISOString())
+            )!
+          );
+          break;
+        case 'next14days':
+          const next14 = new Date(today);
+          next14.setDate(next14.getDate() + 14);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next14.toISOString())
+            )!
+          );
+          break;
+        case 'next30days':
+          const next30 = new Date(today);
+          next30.setDate(next30.getDate() + 30);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next30.toISOString())
+            )!
+          );
+          break;
+        case 'custom':
+          if (filters.dateFrom && filters.dateTo) {
+            whereConditions.push(
+              and(
+                gte(projects.dueDate, filters.dateFrom),
+                lte(projects.dueDate, filters.dateTo)
+              )!
+            );
+          } else if (filters.dateFrom) {
+            whereConditions.push(gte(projects.dueDate, filters.dateFrom));
+          } else if (filters.dateTo) {
+            whereConditions.push(lte(projects.dueDate, filters.dateTo));
+          }
+          break;
       }
     }
     
@@ -2312,7 +2395,7 @@ export class DatabaseStorage implements IStorage {
     return projectsWithAssignees;
   }
 
-  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
+  async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
     let userWhereCondition;
     
     switch (role) {
@@ -2337,12 +2420,27 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
+    // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    } else if (filters?.showArchived === false) {
+      whereConditions.push(eq(projects.archived, false));
     }
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+    
+    if (filters?.assigneeId) {
+      whereConditions.push(eq(projects.currentAssigneeId, filters.assigneeId));
+    }
+    
+    if (filters?.serviceOwnerId) {
+      whereConditions.push(eq(projects.projectOwnerId, filters.serviceOwnerId));
+    }
+    
+    if (filters?.userId) {
+      whereConditions.push(eq(projects.clientManagerId, filters.userId));
     }
 
     // Filter by service if provided - need to join with projectTypes
@@ -2360,6 +2458,72 @@ export class DatabaseStorage implements IStorage {
       } else {
         // No project types found for this service, return empty result
         return [];
+      }
+    }
+    
+    // Dynamic date filtering
+    if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (filters.dynamicDateFilter) {
+        case 'overdue':
+          whereConditions.push(lt(projects.dueDate, today.toISOString()));
+          break;
+        case 'today':
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lt(projects.dueDate, tomorrow.toISOString())
+            )!
+          );
+          break;
+        case 'next7days':
+          const next7 = new Date(today);
+          next7.setDate(next7.getDate() + 7);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next7.toISOString())
+            )!
+          );
+          break;
+        case 'next14days':
+          const next14 = new Date(today);
+          next14.setDate(next14.getDate() + 14);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next14.toISOString())
+            )!
+          );
+          break;
+        case 'next30days':
+          const next30 = new Date(today);
+          next30.setDate(next30.getDate() + 30);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next30.toISOString())
+            )!
+          );
+          break;
+        case 'custom':
+          if (filters.dateFrom && filters.dateTo) {
+            whereConditions.push(
+              and(
+                gte(projects.dueDate, filters.dateFrom),
+                lte(projects.dueDate, filters.dateTo)
+              )!
+            );
+          } else if (filters.dateFrom) {
+            whereConditions.push(gte(projects.dueDate, filters.dateFrom));
+          } else if (filters.dateTo) {
+            whereConditions.push(lte(projects.dueDate, filters.dateTo));
+          }
+          break;
       }
     }
     
@@ -2411,19 +2575,34 @@ export class DatabaseStorage implements IStorage {
     return projectsWithAssignees;
   }
 
-  async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; inactive?: boolean; serviceId?: string }): Promise<ProjectWithRelations[]> {
+  async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [eq(projects.clientId, clientId)];
     
     if (filters?.month) {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
+    // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    } else if (filters?.showArchived === false) {
+      whereConditions.push(eq(projects.archived, false));
     }
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    }
+    
+    if (filters?.assigneeId) {
+      whereConditions.push(eq(projects.currentAssigneeId, filters.assigneeId));
+    }
+    
+    if (filters?.serviceOwnerId) {
+      whereConditions.push(eq(projects.projectOwnerId, filters.serviceOwnerId));
+    }
+    
+    if (filters?.userId) {
+      whereConditions.push(eq(projects.clientManagerId, filters.userId));
     }
 
     // Filter by service if provided - need to join with projectTypes
@@ -2441,6 +2620,72 @@ export class DatabaseStorage implements IStorage {
       } else {
         // No project types found for this service, return empty result
         return [];
+      }
+    }
+    
+    // Dynamic date filtering
+    if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (filters.dynamicDateFilter) {
+        case 'overdue':
+          whereConditions.push(lt(projects.dueDate, today.toISOString()));
+          break;
+        case 'today':
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lt(projects.dueDate, tomorrow.toISOString())
+            )!
+          );
+          break;
+        case 'next7days':
+          const next7 = new Date(today);
+          next7.setDate(next7.getDate() + 7);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next7.toISOString())
+            )!
+          );
+          break;
+        case 'next14days':
+          const next14 = new Date(today);
+          next14.setDate(next14.getDate() + 14);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next14.toISOString())
+            )!
+          );
+          break;
+        case 'next30days':
+          const next30 = new Date(today);
+          next30.setDate(next30.getDate() + 30);
+          whereConditions.push(
+            and(
+              gte(projects.dueDate, today.toISOString()),
+              lte(projects.dueDate, next30.toISOString())
+            )!
+          );
+          break;
+        case 'custom':
+          if (filters.dateFrom && filters.dateTo) {
+            whereConditions.push(
+              and(
+                gte(projects.dueDate, filters.dateFrom),
+                lte(projects.dueDate, filters.dateTo)
+              )!
+            );
+          } else if (filters.dateFrom) {
+            whereConditions.push(gte(projects.dueDate, filters.dateFrom));
+          } else if (filters.dateTo) {
+            whereConditions.push(lte(projects.dueDate, filters.dateTo));
+          }
+          break;
       }
     }
     

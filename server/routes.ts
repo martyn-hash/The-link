@@ -2598,12 +2598,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Helper to normalize filter values (treat 'all' and empty strings as undefined)
+      const normalize = (v: any) => (v && v !== 'all' ? v : undefined);
+      
       // Extract query parameters for filtering
       const filters = {
-        month: req.query.month as string | undefined,
+        month: normalize(req.query.month),
         archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
+        showArchived: req.query.showArchived === 'true' ? true : req.query.showArchived === 'false' ? false : undefined,
         inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
-        serviceId: req.query.serviceId as string | undefined,
+        serviceId: normalize(req.query.serviceId),
+        assigneeId: normalize(req.query.assigneeId),
+        serviceOwnerId: normalize(req.query.serviceOwnerId),
+        userId: normalize(req.query.userId),
+        dynamicDateFilter: normalize(req.query.dynamicDateFilter),
+        dateFrom: normalize(req.query.dateFrom),
+        dateTo: normalize(req.query.dateTo),
       };
 
       const projects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', filters);
