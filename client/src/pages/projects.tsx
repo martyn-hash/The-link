@@ -121,6 +121,14 @@ export default function Projects() {
     retry: false,
   });
 
+  // Fetch all services (for dropdown population)
+  const { data: allServices = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/services"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    select: (data: any[]) => data.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
+  });
+
   // Fetch saved project views
   const { data: savedViews = [] } = useQuery<any[]>({
     queryKey: ["/api/project-views"],
@@ -134,6 +142,25 @@ export default function Projects() {
     enabled: isAuthenticated && !!user,
     retry: false,
   });
+
+  // Normalize dashboard service filter when allServices loads
+  // This handles race condition where dashboard is loaded before services are available
+  useEffect(() => {
+    if (allServices.length > 0 && dashboardServiceFilter && dashboardServiceFilter !== "all") {
+      // Check if current filter is a name (legacy) instead of UUID
+      if (!dashboardServiceFilter.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        const matchingService = allServices.find(s => s.name === dashboardServiceFilter);
+        if (matchingService) {
+          // Convert legacy name to ID
+          setDashboardServiceFilter(matchingService.id);
+        } else {
+          // Service name not found - set to "all" to avoid passing invalid names to queries
+          console.warn(`Service "${dashboardServiceFilter}" not found in available services, resetting to "all"`);
+          setDashboardServiceFilter("all");
+        }
+      }
+    }
+  }, [allServices, dashboardServiceFilter]);
 
   // Handler to load a saved view
   const handleLoadSavedView = (view: any) => {
@@ -177,14 +204,8 @@ export default function Projects() {
           ? JSON.parse(dashboard.filters) 
           : dashboard.filters;
         
-        // Legacy compatibility: if serviceFilter is a name (not UUID), convert to ID
-        let serviceFilterValue = parsedFilters.serviceFilter || "all";
-        if (serviceFilterValue !== "all" && !serviceFilterValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          // It's a service name, try to find the matching service ID
-          const matchingService = services.find(s => s.name === serviceFilterValue);
-          serviceFilterValue = matchingService ? matchingService.id : "all";
-        }
-        
+        // Set service filter - preserve legacy names for normalization effect to handle
+        const serviceFilterValue = parsedFilters.serviceFilter || "all";
         setDashboardServiceFilter(serviceFilterValue);
         setDashboardTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
         setDashboardServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
@@ -230,7 +251,9 @@ export default function Projects() {
           ? JSON.parse(savedDashboard.filters) 
           : savedDashboard.filters;
         
-        setDashboardServiceFilter(parsedFilters.serviceFilter || "all");
+        // Set service filter - preserve legacy names for normalization effect to handle
+        const serviceFilterValue = parsedFilters.serviceFilter || "all";
+        setDashboardServiceFilter(serviceFilterValue);
         setDashboardTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
         setDashboardServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
         setDashboardUserFilter(parsedFilters.userFilter || "all");
@@ -408,17 +431,9 @@ export default function Projects() {
 
   const isManagerOrAdmin = Boolean(user.isAdmin || user.canSeeAdminMenu);
 
-  // Prepare data for FilterPanel - extract unique services with ID and name
-  const servicesMap = new Map<string, { id: string; name: string }>();
-  (projects || []).forEach((p: ProjectWithRelations) => {
-    if (p.projectType?.service?.id && p.projectType?.service?.name) {
-      servicesMap.set(p.projectType.service.id, {
-        id: p.projectType.service.id,
-        name: p.projectType.service.name
-      });
-    }
-  });
-  const services = Array.from(servicesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  // Use allServices from backend query instead of extracting from projects
+  // This ensures services are always available for dropdowns, even when filtered
+  const services = allServices;
 
   const taskAssignees = Array.from(
     new Map(
@@ -451,10 +466,10 @@ export default function Projects() {
   };
 
   const filteredProjects = (projects || []).filter((project: ProjectWithRelations) => {
-    // Service filter using projectType and service data
+    // Service filter using projectType and service data (compare by ID)
     let serviceMatch = true;
     if (serviceFilter !== "all") {
-      serviceMatch = project.projectType?.service?.name === serviceFilter;
+      serviceMatch = project.projectType?.service?.id === serviceFilter;
     }
 
     // Task Assignee filter (using stageRoleAssignee)
