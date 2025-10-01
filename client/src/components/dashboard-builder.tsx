@@ -340,6 +340,10 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
       if (filters.serviceOwnerFilter !== "all") params.append("serviceOwnerId", filters.serviceOwnerFilter);
       if (filters.userFilter !== "all") params.append("userId", filters.userFilter);
       if (filters.dynamicDateFilter !== "all") params.append("dynamicDateFilter", filters.dynamicDateFilter);
+      if (filters.dynamicDateFilter === "custom" && filters.customDateRange) {
+        if (filters.customDateRange.from) params.append("dateFrom", filters.customDateRange.from.toISOString());
+        if (filters.customDateRange.to) params.append("dateTo", filters.customDateRange.to.toISOString());
+      }
       
       return fetch(`/api/projects?${params.toString()}`).then(r => r.json());
     },
