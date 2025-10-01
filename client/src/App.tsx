@@ -26,6 +26,7 @@ import ScheduledServices from "@/pages/scheduled-services";
 import ChChanges from "@/pages/ch-changes";
 import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
+import PushDiagnostics from "@/pages/push-diagnostics";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -71,6 +72,7 @@ function Router() {
       <Route path="/tags" component={Tags} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
+      <Route path="/push-diagnostics" component={PushDiagnostics} />
       
       {/* Catch-all NotFound route */}
       <Route component={NotFound} />

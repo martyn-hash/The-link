@@ -39,11 +39,25 @@ export async function sendPushNotification(
   payload: PushNotificationPayload
 ): Promise<void> {
   try {
+    console.log('[Push Service] Sending notification:', {
+      endpoint: subscription.endpoint.substring(0, 50) + '...',
+      title: payload.title,
+      hasKeys: !!subscription.keys
+    });
+    
     await webpush.sendNotification(
       subscription,
       JSON.stringify(payload)
     );
+    
+    console.log('[Push Service] Notification sent successfully');
   } catch (error: any) {
+    console.error('[Push Service] Failed to send notification:', {
+      error: error.message,
+      statusCode: error.statusCode,
+      endpoint: subscription.endpoint.substring(0, 50) + '...',
+    });
+    
     if (error.statusCode === 410 || error.statusCode === 404) {
       throw new Error('SUBSCRIPTION_EXPIRED');
     }

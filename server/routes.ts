@@ -6938,6 +6938,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/push/test - Test push notification to self (authenticated user)
+  app.post("/api/push/test", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const subscriptions = await storage.getPushSubscriptionsByUserId(effectiveUserId);
+
+      if (subscriptions.length === 0) {
+        return res.status(404).json({ 
+          message: "No push subscriptions found for your account",
+          hint: "Please enable push notifications from your settings first"
+        });
+      }
+
+      console.log(`[Push Test] Sending test notification to user ${effectiveUserId}, ${subscriptions.length} subscription(s)`);
+
+      const payload: PushNotificationPayload = {
+        title: "Test Notification",
+        body: "This is a test notification from The Link. If you see this, push notifications are working!",
+        icon: "/pwa-192x192.svg",
+        tag: "test-notification",
+        url: "/push-diagnostics"
+      };
+
+      const result = await sendPushNotificationToMultiple(
+        subscriptions.map(sub => ({
+          endpoint: sub.endpoint,
+          keys: sub.keys as { p256dh: string; auth: string }
+        })),
+        payload
+      );
+
+      if (result.expiredSubscriptions.length > 0) {
+        for (const endpoint of result.expiredSubscriptions) {
+          await storage.deletePushSubscription(endpoint);
+        }
+      }
+
+      console.log(`[Push Test] Test complete - ${result.successful} successful, ${result.failed} failed`);
+
+      res.json({
+        message: result.successful > 0 
+          ? "Test notification sent successfully! Check your device." 
+          : "Failed to send test notification",
+        successful: result.successful,
+        failed: result.failed,
+        expiredRemoved: result.expiredSubscriptions.length,
+        subscriptionsFound: subscriptions.length
+      });
+    } catch (error) {
+      console.error("[Push Test] Error sending test notification:", error);
+      res.status(500).json({ message: "Failed to send test notification" });
+    }
+  });
+
   // GET /api/dashboard - Get personalized dashboard data
   app.get("/api/dashboard", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
