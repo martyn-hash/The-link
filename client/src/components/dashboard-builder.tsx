@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,11 @@ interface AnalyticsDataPoint {
 
 const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
 
+interface TableFilter {
+  groupBy: "projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue";
+  value: string;
+}
+
 export default function DashboardBuilder({ 
   filters, 
   widgets, 
@@ -94,6 +100,19 @@ export default function DashboardBuilder({
   onRemoveWidget,
   currentDashboard 
 }: DashboardBuilderProps) {
+  const [tableFilter, setTableFilter] = useState<TableFilter | null>(null);
+
+  const handleChartClick = (groupBy: string, value: string) => {
+    // Toggle filter: if clicking the same value, clear the filter
+    if (tableFilter && tableFilter.groupBy === groupBy && tableFilter.value === value) {
+      setTableFilter(null);
+    } else {
+      setTableFilter({ 
+        groupBy: groupBy as TableFilter["groupBy"], 
+        value 
+      });
+    }
+  };
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -131,6 +150,8 @@ export default function DashboardBuilder({
                 filters={filters}
                 editMode={editMode}
                 onRemove={onRemoveWidget}
+                onChartClick={handleChartClick}
+                isActive={tableFilter?.groupBy === widget.groupBy}
               />
             ))}
           </div>
@@ -146,7 +167,11 @@ export default function DashboardBuilder({
         {/* Data Table - Show underlying filtered data */}
         {widgets.length > 0 && (
           <div className="mt-6">
-            <FilteredDataTable filters={filters} />
+            <FilteredDataTable 
+              filters={filters} 
+              tableFilter={tableFilter}
+              onClearFilter={() => setTableFilter(null)}
+            />
           </div>
         )}
       </div>
@@ -160,9 +185,11 @@ interface WidgetCardProps {
   filters: any;
   editMode: boolean;
   onRemove?: (id: string) => void;
+  onChartClick: (groupBy: string, value: string) => void;
+  isActive: boolean;
 }
 
-function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
+function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActive }: WidgetCardProps) {
   const { data: analyticsData, isLoading } = useQuery<{ series: AnalyticsDataPoint[]; meta: any }>({
     queryKey: ["/api/analytics", { filters, groupBy: widget.groupBy }],
     queryFn: async () => {
@@ -235,17 +262,32 @@ function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
               <XAxis dataKey="label" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="value" fill="#3b82f6" />
+              <Bar 
+                dataKey="value" 
+                fill="#3b82f6" 
+                onClick={({ payload }) => onChartClick(widget.groupBy, payload.label)}
+                cursor="pointer"
+              />
             </BarChart>
           </ResponsiveContainer>
         ) : widget.type === "line" ? (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
+            <LineChart data={chartData} onClick={(e) => {
+              if (e && e.activeLabel) {
+                onChartClick(widget.groupBy, e.activeLabel);
+              }
+            }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="label" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} />
+              <Line 
+                type="monotone" 
+                dataKey="value" 
+                stroke="#8b5cf6" 
+                strokeWidth={2}
+                cursor="pointer"
+              />
             </LineChart>
           </ResponsiveContainer>
         ) : (
@@ -255,14 +297,20 @@ function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
                 data={chartData}
                 cx="50%"
                 cy="50%"
+                nameKey="label"
                 labelLine={false}
                 label={(entry) => `${entry.label}: ${entry.value}`}
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
+                onClick={(data) => onChartClick(widget.groupBy, data.name)}
+                cursor="pointer"
               >
                 {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  />
                 ))}
               </Pie>
               <Tooltip />
@@ -432,9 +480,11 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
 // Filtered Data Table Component
 interface FilteredDataTableProps {
   filters: any;
+  tableFilter: TableFilter | null;
+  onClearFilter: () => void;
 }
 
-function FilteredDataTable({ filters }: FilteredDataTableProps) {
+function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredDataTableProps) {
   // Build query params from filters
   const queryParams: Record<string, any> = {};
   if (filters.serviceFilter !== "all") queryParams.serviceId = filters.serviceFilter;
@@ -449,20 +499,74 @@ function FilteredDataTable({ filters }: FilteredDataTableProps) {
   }
 
   // Fetch projects with applied filters using default fetcher
-  const { data: projects = [], isLoading } = useQuery<ProjectWithRelations[]>({
+  const { data: allProjects = [], isLoading } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", queryParams],
   });
+
+  // Apply table filter client-side
+  const projects = tableFilter ? allProjects.filter(project => {
+    switch (tableFilter.groupBy) {
+      case "projectType":
+        return project.projectType?.name === tableFilter.value;
+      case "status":
+        return project.currentStatus === tableFilter.value;
+      case "assignee":
+        const assigneeName = project.currentAssignee ? 
+          `${project.currentAssignee.firstName || ''} ${project.currentAssignee.lastName || ''}`.trim() 
+          : 'Unassigned';
+        return assigneeName === tableFilter.value;
+      case "serviceOwner":
+        const ownerName = project.projectOwner ? 
+          `${project.projectOwner.firstName || ''} ${project.projectOwner.lastName || ''}`.trim() 
+          : 'N/A';
+        return ownerName === tableFilter.value;
+      case "daysOverdue":
+        // Simplified overdue logic - you may need to adjust this based on your business logic
+        if (!project.dueDate) return tableFilter.value === "No Due Date";
+        const today = new Date();
+        const dueDate = new Date(project.dueDate);
+        const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (tableFilter.value === "On Time") return daysOverdue <= 0;
+        if (tableFilter.value === "1-7 Days") return daysOverdue >= 1 && daysOverdue <= 7;
+        if (tableFilter.value === "8-14 Days") return daysOverdue >= 8 && daysOverdue <= 14;
+        if (tableFilter.value === "15-30 Days") return daysOverdue >= 15 && daysOverdue <= 30;
+        if (tableFilter.value === "30+ Days") return daysOverdue > 30;
+        return false;
+      default:
+        return true;
+    }
+  }) : allProjects;
 
   return (
     <Card data-testid="filtered-data-table">
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <TableIcon className="w-5 h-5" />
-          Filtered Project Data
-        </CardTitle>
-        <CardDescription>
-          {projects.length} project{projects.length !== 1 ? 's' : ''} matching current filters
-        </CardDescription>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TableIcon className="w-5 h-5" />
+              Filtered Project Data
+            </CardTitle>
+            <CardDescription>
+              {projects.length} project{projects.length !== 1 ? 's' : ''} matching current filters
+              {tableFilter && (
+                <span className="ml-2">
+                  • Filtered by {tableFilter.groupBy}: <strong>{tableFilter.value}</strong>
+                </span>
+              )}
+            </CardDescription>
+          </div>
+          {tableFilter && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClearFilter}
+              data-testid="button-clear-table-filter"
+            >
+              Clear Filter
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
