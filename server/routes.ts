@@ -6956,7 +6956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload: PushNotificationPayload = {
         title: "Test Notification",
         body: "This is a test notification from The Link. If you see this, push notifications are working!",
-        icon: "/pwa-192x192.svg",
+        icon: "/pwa-icon-192.png",
         tag: "test-notification",
         url: "/push-diagnostics"
       };

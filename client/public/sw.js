@@ -170,8 +170,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'The Link';
   const options = {
     body: data.body || 'You have a new notification',
-    icon: data.icon || '/pwa-192x192.svg',
-    badge: '/pwa-192x192.svg',
+    icon: data.icon || '/pwa-icon-192.png',
+    badge: '/pwa-icon-192.png',
     tag: data.tag || 'default-notification',
     data: {
       url: data.url || '/',

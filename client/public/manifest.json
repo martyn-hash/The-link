@@ -1,7 +1,7 @@
 {
-  "name": "The Link - Bookkeeping Workflow Management",
+  "name": "The Link",
   "short_name": "The Link",
-  "description": "Comprehensive bookkeeping project workflow management system",
+  "description": "Bookkeeping workflow management",
   "theme_color": "#0c7cba",
   "background_color": "#ffffff",
   "display": "standalone",
@@ -10,21 +10,21 @@
   "start_url": "/",
   "icons": [
     {
-      "src": "/pwa-192x192.svg",
+      "src": "/pwa-icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.svg",
+      "src": "/pwa-icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.svg",
+      "src": "/pwa-icon-maskable-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]
