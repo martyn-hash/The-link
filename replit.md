@@ -60,6 +60,23 @@ The projects page features a comprehensive filtering system with saved view func
 - **Active Filter Indication**: Badge on Filters button displays count of currently active filters
 - **Backend Persistence**: Saved views stored per user in PostgreSQL with filters as JSON strings
 
+## Column Customization System
+The projects page features comprehensive column customization capabilities allowing users to personalize their task list view:
+
+- **Column Visibility Toggle**: Dialog-based interface to show/hide individual columns via checkboxes, providing a cleaner view focused on relevant data
+- **Drag-and-Drop Reordering**: Table headers are draggable using @dnd-kit library, allowing users to rearrange columns in their preferred order
+- **Column Width Resizing**: Resize handles on column headers enable precise width adjustments for optimal data visibility
+- **Per-User Persistence**: All customization preferences (visibility, order, widths) are stored per user in the `user_column_preferences` database table
+- **Six New Optional Columns**: In addition to default columns (Project, Client, Service, Time in Stage, Due Date, Status), users can enable:
+  - **Created Date**: When the project was initially created
+  - **Last Updated**: Most recent modification timestamp
+  - **Days Until Due**: Calculated countdown to due date (or negative for overdue)
+  - **Overdue Indicator**: Visual icon for projects past their due date
+  - **Project Month**: Month designation for the project
+  - **Current Stage**: The current kanban stage name
+- **Automatic Synchronization**: Changes are immediately saved via API and persist across browser sessions and page reloads
+- **RESTful API**: GET/POST endpoints at `/api/column-preferences` handle loading and saving preferences with proper authentication
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.

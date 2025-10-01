@@ -2081,7 +2081,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/column-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
-      console.log("📊 [DEBUG] Saving column preferences for user:", effectiveUserId);
       if (!effectiveUserId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -2092,13 +2091,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: effectiveUserId, // Security: Always use authenticated user ID
       });
       
-      console.log("📊 [DEBUG] Valid preferences data:", JSON.stringify(validPreferencesData, null, 2));
       const savedPreferences = await storage.upsertUserColumnPreferences(validPreferencesData);
-      console.log("📊 [DEBUG] Saved preferences result:", JSON.stringify(savedPreferences, null, 2));
       res.json(savedPreferences);
     } catch (error) {
-      console.error("❌ [ERROR] Error saving column preferences:", error instanceof Error ? error.message : error);
-      console.error("❌ [ERROR] Full error:", error);
+      console.error("Error saving column preferences:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to save column preferences" });
     }
   });
