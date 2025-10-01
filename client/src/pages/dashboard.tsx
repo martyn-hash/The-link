@@ -380,7 +380,7 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-6 gap-3">
           {combinedItems.map((item, index) => {
             if (item.type === 'client') {
               const client = item.data as Client & { activeProjects: number; lastViewed: Date };
@@ -391,13 +391,10 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                   onClick={() => window.location.href = `/clients/${client.id}`}
                   data-testid={`recent-client-${client.id}`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-medium">{client.name}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{client.activeProjects} active projects</span>
-                    <span>{new Date(client.lastViewed).toLocaleDateString()}</span>
+                  <div className="flex flex-col gap-2">
+                    <Building2 className="w-5 h-5 text-blue-500" />
+                    <span className="text-sm font-medium line-clamp-2">{client.name}</span>
+                    <span className="text-xs text-muted-foreground">{client.activeProjects} projects</span>
                   </div>
                 </div>
               );
@@ -410,22 +407,19 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                   onClick={() => window.location.href = `/projects/${project.id}`}
                   data-testid={`recent-project-${project.id}`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <FolderOpen className="w-4 h-4 text-violet-500" />
-                    <span className="text-sm font-medium">{project.client?.name}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{(project as any).projectType?.name || "Unknown Project Type"}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {project.currentStatus?.replace(/_/g, ' ')}
-                    </Badge>
+                  <div className="flex flex-col gap-2">
+                    <FolderOpen className="w-5 h-5 text-violet-500" />
+                    <span className="text-sm font-medium line-clamp-2">{project.client?.name}</span>
+                    <span className="text-xs text-muted-foreground line-clamp-1">{(project as any).projectType?.name || "Unknown"}</span>
                   </div>
                 </div>
               );
             }
           })}
           {combinedItems.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+            <div className="col-span-6">
+              <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+            </div>
           )}
         </div>
       </CardContent>
