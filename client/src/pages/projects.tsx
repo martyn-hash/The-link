@@ -177,7 +177,15 @@ export default function Projects() {
           ? JSON.parse(dashboard.filters) 
           : dashboard.filters;
         
-        setDashboardServiceFilter(parsedFilters.serviceFilter || "all");
+        // Legacy compatibility: if serviceFilter is a name (not UUID), convert to ID
+        let serviceFilterValue = parsedFilters.serviceFilter || "all";
+        if (serviceFilterValue !== "all" && !serviceFilterValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // It's a service name, try to find the matching service ID
+          const matchingService = services.find(s => s.name === serviceFilterValue);
+          serviceFilterValue = matchingService ? matchingService.id : "all";
+        }
+        
+        setDashboardServiceFilter(serviceFilterValue);
         setDashboardTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
         setDashboardServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
         setDashboardUserFilter(parsedFilters.userFilter || "all");
@@ -400,14 +408,17 @@ export default function Projects() {
 
   const isManagerOrAdmin = Boolean(user.isAdmin || user.canSeeAdminMenu);
 
-  // Prepare data for FilterPanel
-  const services = Array.from(
-    new Set(
-      (projects || [])
-        .map((p: ProjectWithRelations) => p.projectType?.service?.name)
-        .filter((s): s is string => Boolean(s))
-    )
-  );
+  // Prepare data for FilterPanel - extract unique services with ID and name
+  const servicesMap = new Map<string, { id: string; name: string }>();
+  (projects || []).forEach((p: ProjectWithRelations) => {
+    if (p.projectType?.service?.id && p.projectType?.service?.name) {
+      servicesMap.set(p.projectType.service.id, {
+        id: p.projectType.service.id,
+        name: p.projectType.service.name
+      });
+    }
+  });
+  const services = Array.from(servicesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   const taskAssignees = Array.from(
     new Map(
@@ -815,8 +826,8 @@ export default function Projects() {
                     <SelectContent>
                       <SelectItem value="all">All Services</SelectItem>
                       {services.map((service) => (
-                        <SelectItem key={service} value={service}>
-                          {service}
+                        <SelectItem key={service.id} value={service.id}>
+                          {service.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

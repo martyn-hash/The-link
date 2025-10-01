@@ -74,7 +74,7 @@ interface FilterPanelProps {
   setViewMode: (value: "kanban" | "list" | "dashboard") => void;
   
   // Data for dropdowns
-  services: string[];
+  services: { id: string; name: string }[];
   users: User[];
   taskAssignees: User[];
   serviceOwners: User[];
@@ -361,8 +361,8 @@ export default function FilterPanel({
                 <SelectContent>
                   <SelectItem value="all">All Services</SelectItem>
                   {services.map((service) => (
-                    <SelectItem key={service} value={service}>
-                      {service}
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -335,7 +335,7 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters.serviceFilter !== "all") params.append("serviceId", filters.serviceFilter);
-      if (filters.showArchived) params.append("showArchived", "true");
+      params.append("showArchived", filters.showArchived.toString());
       if (filters.taskAssigneeFilter !== "all") params.append("assigneeId", filters.taskAssigneeFilter);
       if (filters.serviceOwnerFilter !== "all") params.append("serviceOwnerId", filters.serviceOwnerFilter);
       if (filters.userFilter !== "all") params.append("userId", filters.userFilter);
@@ -492,7 +492,7 @@ function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredData
   // Build query params from filters
   const queryParams: Record<string, any> = {};
   if (filters.serviceFilter !== "all") queryParams.serviceId = filters.serviceFilter;
-  if (filters.showArchived) queryParams.showArchived = true;
+  queryParams.showArchived = filters.showArchived;
   if (filters.taskAssigneeFilter !== "all") queryParams.assigneeId = filters.taskAssigneeFilter;
   if (filters.serviceOwnerFilter !== "all") queryParams.serviceOwnerId = filters.serviceOwnerFilter;
   if (filters.userFilter !== "all") queryParams.userId = filters.userFilter;
