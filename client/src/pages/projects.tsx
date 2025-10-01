@@ -579,8 +579,33 @@ export default function Projects() {
                     </Select>
                   )}
                   
-                  {/* Show Save/Edit buttons when dashboard is loaded, Create button otherwise */}
-                  {currentDashboard ? (
+                  {/* Create Dashboard button always visible */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsCreatingDashboard(true);
+                      setCurrentDashboard(null);
+                      setNewDashboardName("");
+                      setNewDashboardWidgets([]);
+                      // Reset dashboard filters to default
+                      setDashboardServiceFilter("all");
+                      setDashboardTaskAssigneeFilter("all");
+                      setDashboardServiceOwnerFilter("all");
+                      setDashboardUserFilter("all");
+                      setDashboardShowArchived(false);
+                      setDashboardDynamicDateFilter("all");
+                      setDashboardCustomDateRange({ from: undefined, to: undefined });
+                      setCreateDashboardModalOpen(true);
+                    }}
+                    data-testid="button-create-dashboard"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create New Dashboard
+                  </Button>
+                  
+                  {/* Show Save/Edit buttons when dashboard is loaded */}
+                  {currentDashboard && (
                     <>
                       <Button
                         variant="outline"
@@ -605,30 +630,6 @@ export default function Projects() {
                         Save Dashboard
                       </Button>
                     </>
-                  ) : (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => {
-                        setIsCreatingDashboard(true);
-                        setCurrentDashboard(null);
-                        setNewDashboardName("");
-                        setNewDashboardWidgets([]);
-                        // Reset dashboard filters to default
-                        setDashboardServiceFilter("all");
-                        setDashboardTaskAssigneeFilter("all");
-                        setDashboardServiceOwnerFilter("all");
-                        setDashboardUserFilter("all");
-                        setDashboardShowArchived(false);
-                        setDashboardDynamicDateFilter("all");
-                        setDashboardCustomDateRange({ from: undefined, to: undefined });
-                        setCreateDashboardModalOpen(true);
-                      }}
-                      data-testid="button-create-dashboard"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create New Dashboard
-                    </Button>
                   )}
                 </>
               ) : null}
