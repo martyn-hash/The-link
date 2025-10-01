@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -62,9 +64,11 @@ interface Dashboard {
   id: string;
   userId: string;
   name: string;
+  description?: string | null;
   filters: any;
   widgets: Widget[];
   visibility: "private" | "shared";
+  isHomescreenDashboard?: boolean | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,11 +111,17 @@ export default function Projects() {
 
   // Create dashboard modal state
   const [newDashboardName, setNewDashboardName] = useState("");
+  const [newDashboardDescription, setNewDashboardDescription] = useState("");
+  const [newDashboardIsHomescreen, setNewDashboardIsHomescreen] = useState(false);
   const [newDashboardWidgets, setNewDashboardWidgets] = useState<Widget[]>([]);
   const [newWidgetDialogOpen, setNewWidgetDialogOpen] = useState(false);
   const [newWidgetType, setNewWidgetType] = useState<"bar" | "pie" | "number" | "line">("bar");
   const [newWidgetTitle, setNewWidgetTitle] = useState("");
   const [newWidgetGroupBy, setNewWidgetGroupBy] = useState<"projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue">("projectType");
+
+  // Edit dashboard state
+  const [dashboardDescription, setDashboardDescription] = useState("");
+  const [dashboardIsHomescreen, setDashboardIsHomescreen] = useState(false);
 
   // Dashboard-specific filter state (independent from list view filters)
   const [dashboardServiceFilter, setDashboardServiceFilter] = useState("all");
@@ -220,6 +230,10 @@ export default function Projects() {
       setDashboardWidgets(dashboard.widgets || []);
       setDashboardEditMode(false);
       
+      // Set description and homescreen dashboard states
+      setDashboardDescription(dashboard.description || "");
+      setDashboardIsHomescreen(dashboard.isHomescreenDashboard || false);
+      
       // Parse and apply filters to dashboard-specific state (not list view)
       if (dashboard.filters) {
         const parsedFilters = typeof dashboard.filters === 'string' 
@@ -255,7 +269,7 @@ export default function Projects() {
 
   // Save dashboard mutation
   const saveDashboardMutation = useMutation({
-    mutationFn: async (data: { name: string; filters: any; widgets: Widget[]; visibility: "private" | "shared"; isCreating?: boolean }) => {
+    mutationFn: async (data: { name: string; description?: string; filters: any; widgets: Widget[]; visibility: "private" | "shared"; isHomescreenDashboard?: boolean; isCreating?: boolean }) => {
       if (data.isCreating || !currentDashboard) {
         return apiRequest("POST", "/api/dashboards", data);
       } else {
@@ -294,6 +308,8 @@ export default function Projects() {
       setCreateDashboardModalOpen(false);
       setIsCreatingDashboard(false);
       setNewDashboardName("");
+      setNewDashboardDescription("");
+      setNewDashboardIsHomescreen(false);
       setNewDashboardWidgets([]);
     },
     onError: () => {
@@ -429,9 +445,11 @@ export default function Projects() {
 
     saveDashboardMutation.mutate({
       name: newDashboardName,
+      description: newDashboardDescription.trim() || undefined,
       filters: JSON.stringify(filtersToSave),
       widgets: newDashboardWidgets,
       visibility: "private",
+      isHomescreenDashboard: newDashboardIsHomescreen,
       isCreating: isCreatingDashboard,
     });
   };
@@ -456,9 +474,11 @@ export default function Projects() {
 
     saveDashboardMutation.mutate({
       name: currentDashboard.name,
+      description: dashboardDescription.trim() || undefined,
       filters: JSON.stringify(filtersToSave),
       widgets: dashboardWidgets,
       visibility: currentDashboard.visibility,
+      isHomescreenDashboard: dashboardIsHomescreen,
       isCreating: false,
     });
   };
@@ -734,6 +754,8 @@ export default function Projects() {
                       setIsCreatingDashboard(true);
                       setCurrentDashboard(null);
                       setNewDashboardName("");
+                      setNewDashboardDescription("");
+                      setNewDashboardIsHomescreen(false);
                       setNewDashboardWidgets([]);
                       // Reset dashboard filters to default
                       setDashboardServiceFilter("all");
@@ -758,9 +780,11 @@ export default function Projects() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          // Edit current dashboard
+                          // Edit current dashboard - populate all fields
                           setIsCreatingDashboard(false);
                           setNewDashboardName(currentDashboard.name);
+                          setNewDashboardDescription(dashboardDescription);
+                          setNewDashboardIsHomescreen(dashboardIsHomescreen);
                           setNewDashboardWidgets(dashboardWidgets);
                           setCreateDashboardModalOpen(true);
                         }}
@@ -913,6 +937,8 @@ export default function Projects() {
         if (!open) {
           setIsCreatingDashboard(false);
           setNewDashboardName("");
+          setNewDashboardDescription("");
+          setNewDashboardIsHomescreen(false);
           setNewDashboardWidgets([]);
           setNewWidgetTitle("");
           setNewWidgetType("bar");
@@ -939,6 +965,19 @@ export default function Projects() {
                 value={newDashboardName}
                 onChange={(e) => setNewDashboardName(e.target.value)}
                 data-testid="input-new-dashboard-name"
+              />
+            </div>
+
+            {/* Dashboard Description Section */}
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-description">Description (optional)</Label>
+              <Textarea
+                id="dashboard-description"
+                placeholder="Briefly describe what this dashboard shows..."
+                value={newDashboardDescription}
+                onChange={(e) => setNewDashboardDescription(e.target.value)}
+                data-testid="textarea-dashboard-description"
+                rows={3}
               />
             </div>
 
@@ -1061,6 +1100,31 @@ export default function Projects() {
               </div>
             </div>
 
+            {/* Homescreen Dashboard Toggle */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="dashboard-homescreen"
+                  checked={newDashboardIsHomescreen}
+                  onCheckedChange={(checked) => setNewDashboardIsHomescreen(checked === true)}
+                  data-testid="checkbox-homescreen-dashboard"
+                />
+                <div className="space-y-1 leading-none">
+                  <Label htmlFor="dashboard-homescreen" className="cursor-pointer font-medium">
+                    Set as homescreen dashboard
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    This dashboard will appear on your home screen when you log in
+                  </p>
+                </div>
+              </div>
+              {newDashboardIsHomescreen && dashboards.some(d => d.isHomescreenDashboard) && (
+                <p className="text-xs text-amber-600 dark:text-amber-500 pl-7">
+                  Note: This will replace your current homescreen dashboard
+                </p>
+              )}
+            </div>
+
             {/* Widgets Section */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1125,6 +1189,8 @@ export default function Projects() {
             <Button variant="outline" onClick={() => {
               setCreateDashboardModalOpen(false);
               setNewDashboardName("");
+              setNewDashboardDescription("");
+              setNewDashboardIsHomescreen(false);
               setNewDashboardWidgets([]);
             }} data-testid="button-cancel-create-dashboard">
               Cancel
