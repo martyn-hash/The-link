@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertUserSchema, updateUserNotificationPreferencesSchema } from "@shared/schema";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 // Components
 import TopNavigation from "@/components/top-navigation";
@@ -60,6 +61,130 @@ type ProfileUpdateData = z.infer<typeof profileUpdateSchema>;
 type PasswordChangeData = z.infer<typeof passwordChangeSchema>;
 type EmailSignatureUpdateData = z.infer<typeof emailSignatureUpdateSchema>;
 type NotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
+
+// Push Notifications Management Card
+function PushNotificationsCard() {
+  const { isSupported, isSubscribed, permission, isLoading, subscribe, unsubscribe } = usePushNotifications();
+  const { toast } = useToast();
+
+  const handleSubscribe = async () => {
+    const success = await subscribe();
+    if (success) {
+      toast({
+        title: 'Push notifications enabled',
+        description: 'You will receive push notifications for important updates.',
+      });
+    } else {
+      toast({
+        title: 'Failed to enable push notifications',
+        description: 'Please check your browser permissions.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUnsubscribe = async () => {
+    const success = await unsubscribe();
+    if (success) {
+      toast({
+        title: 'Push notifications disabled',
+        description: 'You will no longer receive push notifications.',
+      });
+    } else {
+      toast({
+        title: 'Failed to disable push notifications',
+        description: 'Please try again later.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (!isSupported) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Push Notifications</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3 p-4 bg-muted rounded-lg" data-testid="alert-push-not-supported">
+            <AlertCircle className="w-5 h-5 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              Push notifications are not supported in your browser.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Push Notifications</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Enable push notifications to receive real-time alerts about project updates, even when you're not using the app.
+        </p>
+
+        <div className="flex items-center justify-between p-4 border rounded-lg" data-testid="container-push-status">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              isSubscribed ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'
+            }`}>
+              <Bell className={`w-5 h-5 ${
+                isSubscribed ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'
+              }`} />
+            </div>
+            <div>
+              <p className="font-medium" data-testid="text-push-status">
+                {isSubscribed ? 'Enabled' : permission === 'denied' ? 'Blocked' : 'Disabled'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isSubscribed 
+                  ? 'You are receiving push notifications' 
+                  : permission === 'denied'
+                  ? 'Please enable notifications in your browser settings'
+                  : 'Enable notifications to stay updated'}
+              </p>
+            </div>
+          </div>
+
+          {permission !== 'denied' && (
+            <Button
+              onClick={isSubscribed ? handleUnsubscribe : handleSubscribe}
+              disabled={isLoading}
+              variant={isSubscribed ? 'outline' : 'default'}
+              data-testid={isSubscribed ? 'button-unsubscribe-push' : 'button-subscribe-push'}
+            >
+              {isLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+              ) : isSubscribed ? (
+                'Disable'
+              ) : (
+                'Enable'
+              )}
+            </Button>
+          )}
+        </div>
+
+        {permission === 'denied' && (
+          <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 rounded-lg" data-testid="alert-push-blocked">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-900 dark:text-red-100">
+                Notifications Blocked
+              </p>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                You have blocked notifications for this site. To enable them, please update your browser settings.
+              </p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Profile() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -660,6 +785,9 @@ export default function Profile() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Push Notifications Card */}
+            <PushNotificationsCard />
           </TabsContent>
 
           {/* Integrations Tab */}
