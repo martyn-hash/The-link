@@ -35,6 +35,7 @@ import {
   insertUserNotificationPreferencesSchema,
   updateUserNotificationPreferencesSchema,
   insertProjectViewSchema,
+  insertUserColumnPreferencesSchema,
   insertServiceSchema,
   updateServiceSchema,
   insertWorkRoleSchema,
@@ -2056,6 +2057,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project view:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to delete project view" });
+    }
+  });
+
+  // User column preferences routes
+  app.get("/api/column-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const preferences = await storage.getUserColumnPreferences(effectiveUserId);
+      
+      // Return null if no preferences exist yet (first time user)
+      res.json(preferences || null);
+    } catch (error) {
+      console.error("Error fetching column preferences:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch column preferences" });
+    }
+  });
+
+  app.post("/api/column-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate and sanitize input - ensure userId comes from auth, not body
+      const validPreferencesData = insertUserColumnPreferencesSchema.parse({
+        ...req.body,
+        userId: effectiveUserId, // Security: Always use authenticated user ID
+      });
+      
+      const savedPreferences = await storage.upsertUserColumnPreferences(validPreferencesData);
+      res.json(savedPreferences);
+    } catch (error) {
+      console.error("Error saving column preferences:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to save column preferences" });
     }
   });
 
