@@ -72,6 +72,11 @@ const analyticsQuerySchema = z.object({
     taskAssigneeFilter: z.string().optional(),
     serviceOwnerFilter: z.string().optional(),
     userFilter: z.string().optional(),
+    dynamicDateFilter: z.enum(['all', 'overdue', 'today', 'next7days', 'next14days', 'next30days', 'custom']).optional(),
+    customDateRange: z.object({
+      from: z.string().optional(),
+      to: z.string().optional(),
+    }).optional(),
   }).optional(),
   groupBy: z.enum(['projectType', 'status', 'assignee'], {
     required_error: "groupBy must be one of: projectType, status, assignee",

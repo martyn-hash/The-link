@@ -70,8 +70,8 @@ interface FilterPanelProps {
   setDynamicDateFilter: (value: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom") => void;
   customDateRange: { from: Date | undefined; to: Date | undefined };
   setCustomDateRange: (value: { from: Date | undefined; to: Date | undefined }) => void;
-  viewMode: "kanban" | "list";
-  setViewMode: (value: "kanban" | "list") => void;
+  viewMode: "kanban" | "list" | "dashboard";
+  setViewMode: (value: "kanban" | "list" | "dashboard") => void;
   
   // Data for dropdowns
   services: string[];

@@ -910,12 +910,9 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]> {
-    // This is a simplified implementation - we'll build a more sophisticated one
-    // when we implement the frontend that needs specific analytics
-    
     const conditions: any[] = [];
     
-    // Apply filters (similar to getAllProjects logic)
+    // Apply service filter
     if (filters.serviceFilter && filters.serviceFilter !== 'all') {
       const [service] = await db
         .select()
@@ -928,8 +925,66 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
+    // Apply archived filter
     if (filters.showArchived === false) {
       conditions.push(eq(projects.archived, false));
+    }
+    
+    // Apply task assignee filter
+    if (filters.taskAssigneeFilter && filters.taskAssigneeFilter !== 'all') {
+      conditions.push(eq(projects.currentAssigneeId, filters.taskAssigneeFilter));
+    }
+    
+    // Apply service owner filter
+    if (filters.serviceOwnerFilter && filters.serviceOwnerFilter !== 'all') {
+      conditions.push(eq(projects.projectOwnerId, filters.serviceOwnerFilter));
+    }
+    
+    // Apply user filter
+    if (filters.userFilter && filters.userFilter !== 'all') {
+      conditions.push(
+        or(
+          eq(projects.bookkeeperId, filters.userFilter),
+          eq(projects.clientManagerId, filters.userFilter),
+          eq(projects.currentAssigneeId, filters.userFilter)
+        )
+      );
+    }
+    
+    // Apply date filters
+    if (filters.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (filters.dynamicDateFilter === 'overdue') {
+        conditions.push(sql`${projects.dueDate} < ${today}`);
+      } else if (filters.dynamicDateFilter === 'today') {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        conditions.push(sql`${projects.dueDate} >= ${today} AND ${projects.dueDate} < ${tomorrow}`);
+      } else if (filters.dynamicDateFilter === 'next7days') {
+        const next7 = new Date(today);
+        next7.setDate(next7.getDate() + 7);
+        conditions.push(sql`${projects.dueDate} >= ${today} AND ${projects.dueDate} < ${next7}`);
+      } else if (filters.dynamicDateFilter === 'next14days') {
+        const next14 = new Date(today);
+        next14.setDate(next14.getDate() + 14);
+        conditions.push(sql`${projects.dueDate} >= ${today} AND ${projects.dueDate} < ${next14}`);
+      } else if (filters.dynamicDateFilter === 'next30days') {
+        const next30 = new Date(today);
+        next30.setDate(next30.getDate() + 30);
+        conditions.push(sql`${projects.dueDate} >= ${today} AND ${projects.dueDate} < ${next30}`);
+      } else if (filters.dynamicDateFilter === 'custom' && filters.customDateRange) {
+        const { from, to } = filters.customDateRange;
+        if (from) {
+          const fromDate = new Date(from);
+          conditions.push(sql`${projects.dueDate} >= ${fromDate}`);
+        }
+        if (to) {
+          const toDate = new Date(to);
+          conditions.push(sql`${projects.dueDate} <= ${toDate}`);
+        }
+      }
     }
     
     // Group by logic

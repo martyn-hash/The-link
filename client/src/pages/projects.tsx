@@ -7,12 +7,13 @@ import { type ProjectWithRelations, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
+import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Columns3, List, Filter } from "lucide-react";
+import { Columns3, List, Filter, BarChart3 } from "lucide-react";
 
-type ViewMode = "kanban" | "list";
+type ViewMode = "kanban" | "list" | "dashboard";
 
 // Note: Using shared month normalization utility for consistent filtering
 
@@ -96,7 +97,7 @@ export default function Projects() {
     );
   }
 
-  const isManagerOrAdmin = user.isAdmin || user.canSeeAdminMenu;
+  const isManagerOrAdmin = Boolean(user.isAdmin || user.canSeeAdminMenu);
 
   // Prepare data for FilterPanel
   const services = Array.from(
@@ -236,6 +237,30 @@ export default function Projects() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* View Mode Toggle */}
+              {isManagerOrAdmin && (
+                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
+                  <Button
+                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    data-testid="button-view-list"
+                  >
+                    <List className="w-4 h-4 mr-2" />
+                    List
+                  </Button>
+                  <Button
+                    variant={viewMode === "dashboard" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("dashboard")}
+                    data-testid="button-view-dashboard"
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </Button>
+                </div>
+              )}
+              
               {/* Filters Button */}
               <Button
                 variant="outline"
@@ -268,6 +293,28 @@ export default function Projects() {
                 <p className="text-muted-foreground">Loading projects...</p>
               </div>
             </div>
+          ) : viewMode === "dashboard" ? (
+            <DashboardBuilder
+              filters={{
+                serviceFilter,
+                taskAssigneeFilter,
+                serviceOwnerFilter,
+                userFilter,
+                showArchived,
+                dynamicDateFilter,
+                customDateRange,
+              }}
+              onApplyFilters={(newFilters) => {
+                setServiceFilter(newFilters.serviceFilter);
+                setTaskAssigneeFilter(newFilters.taskAssigneeFilter);
+                setServiceOwnerFilter(newFilters.serviceOwnerFilter);
+                setUserFilter(newFilters.userFilter);
+                setShowArchived(newFilters.showArchived);
+                setDynamicDateFilter(newFilters.dynamicDateFilter);
+                setCustomDateRange(newFilters.customDateRange);
+              }}
+              onSwitchToList={() => setViewMode("list")}
+            />
           ) : viewMode === "kanban" ? (
             <KanbanBoard 
               projects={filteredProjects} 
