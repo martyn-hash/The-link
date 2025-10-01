@@ -78,8 +78,8 @@ const analyticsQuerySchema = z.object({
       to: z.string().optional(),
     }).optional(),
   }).optional(),
-  groupBy: z.enum(['projectType', 'status', 'assignee'], {
-    required_error: "groupBy must be one of: projectType, status, assignee",
+  groupBy: z.enum(['projectType', 'status', 'assignee', 'serviceOwner', 'daysOverdue'], {
+    required_error: "groupBy must be one of: projectType, status, assignee, serviceOwner, daysOverdue",
   }),
   metric: z.string().optional(),
 });

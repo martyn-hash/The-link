@@ -1054,6 +1054,81 @@ export class DatabaseStorage implements IStorage {
           value: g.count,
         }));
       }
+    } else if (groupBy === 'serviceOwner') {
+      // Join with client_services to get service owners
+      const grouped = await db
+        .select({
+          serviceOwnerId: clientServices.serviceOwner,
+          count: sql<number>`cast(count(distinct ${projects.id}) as integer)`,
+        })
+        .from(projects)
+        .leftJoin(clientServices, eq(projects.clientServiceId, clientServices.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(clientServices.serviceOwner);
+      
+      // Get user names for service owners
+      const ownerIds = grouped.map(g => g.serviceOwnerId).filter(Boolean) as string[];
+      let ownerMap = new Map<string, string>();
+      
+      if (ownerIds.length > 0) {
+        const owners = await db
+          .select()
+          .from(users)
+          .where(inArray(users.id, ownerIds));
+        
+        ownerMap = new Map(owners.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+      }
+      
+      // Always construct results from grouped, even when ownerIds is empty
+      results = grouped.map(g => ({
+        label: g.serviceOwnerId ? (ownerMap.get(g.serviceOwnerId) || 'Unknown') : 'No Owner',
+        value: g.count,
+      }));
+    } else if (groupBy === 'daysOverdue') {
+      // Calculate days overdue buckets
+      const allProjects = await db
+        .select({
+          id: projects.id,
+          dueDate: projects.dueDate,
+        })
+        .from(projects)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+      
+      const now = new Date();
+      const buckets = {
+        '1-9 days': 0,
+        '10-31 days': 0,
+        '32-60 days': 0,
+        '60+ days': 0,
+        'Not Overdue': 0,
+      };
+      
+      for (const project of allProjects) {
+        if (!project.dueDate) {
+          buckets['Not Overdue']++;
+        } else {
+          const dueDate = new Date(project.dueDate);
+          const diffTime = now.getTime() - dueDate.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays < 0) {
+            buckets['Not Overdue']++;
+          } else if (diffDays >= 1 && diffDays <= 9) {
+            buckets['1-9 days']++;
+          } else if (diffDays >= 10 && diffDays <= 31) {
+            buckets['10-31 days']++;
+          } else if (diffDays >= 32 && diffDays <= 60) {
+            buckets['32-60 days']++;
+          } else {
+            buckets['60+ days']++;
+          }
+        }
+      }
+      
+      results = Object.entries(buckets).map(([label, value]) => ({
+        label,
+        value,
+      })).filter(item => item.value > 0); // Only show non-empty buckets
     }
     
     return results;

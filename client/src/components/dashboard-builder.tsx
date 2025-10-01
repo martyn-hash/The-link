@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from "recharts";
 
 interface DashboardBuilderProps {
   filters: {
@@ -58,9 +58,9 @@ interface DashboardBuilderProps {
 
 interface Widget {
   id: string;
-  type: "bar" | "pie" | "number";
+  type: "bar" | "pie" | "number" | "line";
   title: string;
-  groupBy: "projectType" | "status" | "assignee";
+  groupBy: "projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue";
   metric?: string;
 }
 
@@ -92,9 +92,9 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
   const [dashboardName, setDashboardName] = useState("");
   
   // New widget form state
-  const [newWidgetType, setNewWidgetType] = useState<"bar" | "pie" | "number">("bar");
+  const [newWidgetType, setNewWidgetType] = useState<"bar" | "pie" | "number" | "line">("bar");
   const [newWidgetTitle, setNewWidgetTitle] = useState("");
-  const [newWidgetGroupBy, setNewWidgetGroupBy] = useState<"projectType" | "status" | "assignee">("projectType");
+  const [newWidgetGroupBy, setNewWidgetGroupBy] = useState<"projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue">("projectType");
 
   // Fetch saved dashboards
   const { data: dashboards = [] } = useQuery<Dashboard[]>({
@@ -346,6 +346,13 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
             ))}
           </div>
         )}
+
+        {/* Mini Kanban Board - Show when service filter is active */}
+        {filters.serviceFilter !== "all" && (
+          <div className="mt-6">
+            <MiniKanbanBoard serviceId={filters.serviceFilter} filters={filters} />
+          </div>
+        )}
       </div>
 
       {/* Add Widget Dialog */}
@@ -379,6 +386,7 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
                 <SelectContent>
                   <SelectItem value="bar">Bar Chart</SelectItem>
                   <SelectItem value="pie">Pie Chart</SelectItem>
+                  <SelectItem value="line">Line Chart</SelectItem>
                   <SelectItem value="number">Number Card</SelectItem>
                 </SelectContent>
               </Select>
@@ -394,6 +402,8 @@ export default function DashboardBuilder({ filters, onApplyFilters, onSwitchToLi
                   <SelectItem value="projectType">Project Type</SelectItem>
                   <SelectItem value="status">Status</SelectItem>
                   <SelectItem value="assignee">Assignee</SelectItem>
+                  <SelectItem value="serviceOwner">Service Owner</SelectItem>
+                  <SelectItem value="daysOverdue">Days Overdue</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -500,6 +510,8 @@ function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
           {widget.groupBy === "projectType" && "Grouped by Project Type"}
           {widget.groupBy === "status" && "Grouped by Status"}
           {widget.groupBy === "assignee" && "Grouped by Assignee"}
+          {widget.groupBy === "serviceOwner" && "Grouped by Service Owner"}
+          {widget.groupBy === "daysOverdue" && "Grouped by Days Overdue"}
         </CardDescription>
       </CardHeader>
       
@@ -529,6 +541,16 @@ function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
               <Bar dataKey="value" fill="#3b82f6" />
             </BarChart>
           </ResponsiveContainer>
+        ) : widget.type === "line" ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <RechartsPieChart>
@@ -550,6 +572,161 @@ function WidgetCard({ widget, filters, editMode, onRemove }: WidgetCardProps) {
             </RechartsPieChart>
           </ResponsiveContainer>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Mini Kanban Board Component - Compact view for dashboard
+interface MiniKanbanBoardProps {
+  serviceId: string;
+  filters: any;
+}
+
+function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
+  // Fetch projects filtered by service and other filters
+  const { data: projects = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/projects", { serviceId, filters }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.serviceFilter !== "all") params.append("serviceId", filters.serviceFilter);
+      if (filters.showArchived) params.append("showArchived", "true");
+      if (filters.taskAssigneeFilter !== "all") params.append("assigneeId", filters.taskAssigneeFilter);
+      if (filters.serviceOwnerFilter !== "all") params.append("serviceOwnerId", filters.serviceOwnerFilter);
+      if (filters.userFilter !== "all") params.append("userId", filters.userFilter);
+      if (filters.dynamicDateFilter !== "all") params.append("dynamicDateFilter", filters.dynamicDateFilter);
+      
+      return fetch(`/api/projects?${params.toString()}`).then(r => r.json());
+    },
+  });
+
+  // Get the project type from the first project to fetch stages
+  const projectTypeId = projects[0]?.projectTypeId;
+
+  // Fetch stages for the project type
+  const { data: stages = [] } = useQuery<any[]>({
+    queryKey: ['/api/config/project-types', projectTypeId, 'stages'],
+    enabled: !!projectTypeId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Group projects by stage
+  const projectsByStage = stages.reduce((acc, stage) => {
+    acc[stage.name] = projects.filter(p => p.currentStatus === stage.name);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Layout className="w-5 h-5" />
+            Service Kanban Board
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Layout className="w-5 h-5" />
+            Service Kanban Board
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            No projects found for the selected filters
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card data-testid="mini-kanban-board">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Layout className="w-5 h-5" />
+          Service Kanban Board
+        </CardTitle>
+        <CardDescription>
+          {projects.length} project{projects.length !== 1 ? 's' : ''} across {stages.length} stage{stages.length !== 1 ? 's' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {stages
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map((stage) => {
+              const stageProjects = projectsByStage[stage.name] || [];
+              
+              return (
+                <div
+                  key={stage.id}
+                  className="flex-shrink-0 w-64 bg-muted/50 rounded-lg p-3"
+                  data-testid={`mini-kanban-column-${stage.name}`}
+                >
+                  {/* Stage Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: stage.color || "#6b7280" }}
+                      />
+                      <span className="font-medium text-sm">
+                        {stage.name.split('_').map(word => 
+                          word.charAt(0).toUpperCase() + word.slice(1)
+                        ).join(' ')}
+                      </span>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {stageProjects.length}
+                    </Badge>
+                  </div>
+
+                  {/* Mini Project Cards */}
+                  <div className="space-y-2">
+                    {stageProjects.slice(0, 5).map((project) => (
+                      <Card
+                        key={project.id}
+                        className="p-2 hover:shadow-md transition-shadow cursor-pointer"
+                        data-testid={`mini-project-card-${project.id}`}
+                      >
+                        <div className="space-y-1">
+                          <div className="font-medium text-xs truncate">
+                            {project.client?.name || 'Unknown Client'}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {project.projectType?.name || 'Unknown Type'}
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                    {stageProjects.length > 5 && (
+                      <div className="text-xs text-muted-foreground text-center py-1">
+                        +{stageProjects.length - 5} more
+                      </div>
+                    )}
+                    {stageProjects.length === 0 && (
+                      <div className="text-xs text-muted-foreground text-center py-4">
+                        No projects
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
       </CardContent>
     </Card>
   );
