@@ -1729,6 +1729,22 @@ export const userActivityTracking = pgTable("user_activity_tracking", {
   uniqueUserEntityView: unique("unique_user_entity_view").on(table.userId, table.entityType, table.entityId),
 }));
 
+// Push subscriptions table - stores browser push notification subscriptions
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  keys: jsonb("keys").notNull(), // {p256dh: string, auth: string}
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for efficient user subscription lookups
+  userIdIdx: index("push_subscriptions_user_id_idx").on(table.userId),
+  // Unique constraint to prevent duplicate subscriptions for same endpoint
+  uniqueEndpoint: unique("unique_push_subscription_endpoint").on(table.endpoint),
+}));
+
 // Zod schemas for communications
 export const insertCommunicationSchema = createInsertSchema(communications).omit({
   id: true,
@@ -1748,6 +1764,12 @@ export const insertUserActivityTrackingSchema = createInsertSchema(userActivityT
   viewedAt: true,
 });
 
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
@@ -1757,6 +1779,8 @@ export type UserActivityTracking = typeof userActivityTracking.$inferSelect;
 export type InsertUserActivityTracking = z.infer<typeof insertUserActivityTrackingSchema>;
 export type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
 export type InsertUserOauthAccount = z.infer<typeof insertUserOauthAccountSchema>;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
