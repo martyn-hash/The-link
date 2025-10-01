@@ -18,6 +18,7 @@ import {
   magicLinkTokens,
   userNotificationPreferences,
   projectViews,
+  userColumnPreferences,
   services,
   workRoles,
   serviceRoles,
@@ -76,6 +77,9 @@ import {
   type UpdateUserNotificationPreferences,
   type ProjectView,
   type InsertProjectView,
+  type UserColumnPreferences,
+  type InsertUserColumnPreferences,
+  type UpdateUserColumnPreferences,
   type Service,
   type InsertService,
   type WorkRole,
@@ -375,6 +379,11 @@ export interface IStorage {
   createProjectView(view: InsertProjectView): Promise<ProjectView>;
   getProjectViewsByUserId(userId: string): Promise<ProjectView[]>;
   deleteProjectView(id: string): Promise<void>;
+  
+  // User column preferences operations
+  getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined>;
+  upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences>;
+  updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;
   
   // Bulk project notification handling
   sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void>;
@@ -778,6 +787,52 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(projectViews)
       .where(eq(projectViews.id, id));
+  }
+
+  // User column preferences operations
+  async getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined> {
+    const [preferences] = await db
+      .select()
+      .from(userColumnPreferences)
+      .where(eq(userColumnPreferences.userId, userId));
+    return preferences;
+  }
+
+  async upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences> {
+    const [result] = await db
+      .insert(userColumnPreferences)
+      .values(preferences)
+      .onConflictDoUpdate({
+        target: userColumnPreferences.userId,
+        set: {
+          columnOrder: preferences.columnOrder,
+          visibleColumns: preferences.visibleColumns,
+          columnWidths: preferences.columnWidths,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences> {
+    // Security: Explicitly omit userId from updates to prevent cross-user preference takeover
+    const { userId: _omit, ...safePreferences } = preferences;
+    
+    const [updated] = await db
+      .update(userColumnPreferences)
+      .set({
+        ...safePreferences,
+        updatedAt: new Date(),
+      })
+      .where(eq(userColumnPreferences.userId, userId))
+      .returning();
+    
+    if (!updated) {
+      throw new Error(`Column preferences not found for user ${userId}`);
+    }
+    
+    return updated;
   }
 
   async sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void> {

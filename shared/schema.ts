@@ -155,6 +155,19 @@ export const projectViews = pgTable("project_views", {
   index("idx_project_views_user_id").on(table.userId),
 ]);
 
+// User column preferences table - Stores column visibility, order, and width settings for project list view
+export const userColumnPreferences = pgTable("user_column_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  columnOrder: text("column_order").array().notNull(), // Array of column IDs in desired order
+  visibleColumns: text("visible_columns").array().notNull(), // Array of visible column IDs
+  columnWidths: jsonb("column_widths"), // JSON object mapping column ID to width in pixels
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_user_column_preferences_user_id").on(table.userId),
+]);
+
 // Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1149,6 +1162,14 @@ export const insertProjectViewSchema = createInsertSchema(projectViews).omit({
   createdAt: true,
 });
 
+export const insertUserColumnPreferencesSchema = createInsertSchema(userColumnPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateUserColumnPreferencesSchema = insertUserColumnPreferencesSchema.partial().omit({ userId: true });
+
 // UDF definition schema
 export const udfDefinitionSchema = z.object({
   id: z.string(),
@@ -1505,6 +1526,9 @@ export type UserNotificationPreferences = typeof userNotificationPreferences.$in
 
 export type ProjectView = typeof projectViews.$inferSelect;
 export type InsertProjectView = z.infer<typeof insertProjectViewSchema>;
+export type UserColumnPreferences = typeof userColumnPreferences.$inferSelect;
+export type InsertUserColumnPreferences = z.infer<typeof insertUserColumnPreferencesSchema>;
+export type UpdateUserColumnPreferences = z.infer<typeof updateUserColumnPreferencesSchema>;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;
