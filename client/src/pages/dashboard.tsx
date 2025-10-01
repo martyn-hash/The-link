@@ -185,30 +185,13 @@ export default function Dashboard() {
         
         {/* Main Dashboard Content */}
         <main className="flex-1 overflow-auto p-6">
-          <div className="grid grid-cols-12 gap-6 h-full">
-            
-            {/* Left Column: My Tasks & Overdue */}
-            <div className="col-span-4 space-y-6">
-              <MyTasksPanel data={dashboardData} user={user} />
-              <OverdueProjectsPanel data={dashboardData} />
-            </div>
-            
-            {/* Center Column: Recently Viewed & My Projects */}
-            <div className="col-span-4 space-y-6">
-              <RecentlyViewedPanel data={dashboardData} />
-              <MyProjectsPanel data={dashboardData} />
-            </div>
-            
-            {/* Right Column: Behind Schedule */}
-            <div className="col-span-4 space-y-6">
-              <BehindSchedulePanel data={dashboardData} />
-            </div>
-            
-          </div>
+          <div className="space-y-6">
+            {/* Recently Viewed */}
+            <RecentlyViewedPanel data={dashboardData} />
 
-          {/* Homescreen Dashboard Section */}
-          <div className="mt-6" data-testid="homescreen-dashboard-section">
-            {homescreenLoading ? (
+            {/* Homescreen Dashboard Section */}
+            <div data-testid="homescreen-dashboard-section">
+              {homescreenLoading ? (
               <Card>
                 <CardContent className="py-12">
                   <div className="flex flex-col items-center justify-center">
@@ -273,6 +256,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             )}
+            </div>
           </div>
         </main>
       </div>
@@ -374,6 +358,12 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
   const recentClients = data?.recentClients || [];
   const recentProjects = data?.recentProjects || [];
 
+  // Combine and limit to 6 items total
+  const combinedItems = [
+    ...recentClients.map((client) => ({ type: 'client' as const, data: client })),
+    ...recentProjects.map((project) => ({ type: 'project' as const, data: project }))
+  ].slice(0, 6);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -383,14 +373,17 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          
-          {/* Recent Clients */}
-          <div>
-            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Recent Clients</h4>
-            <div className="space-y-3">
-              {recentClients.slice(0, 3).map((client) => (
-                <div key={client.id} className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors">
+        <div className="grid grid-cols-1 gap-3">
+          {combinedItems.map((item, index) => {
+            if (item.type === 'client') {
+              const client = item.data as Client & { activeProjects: number; lastViewed: Date };
+              return (
+                <div 
+                  key={`client-${client.id}`} 
+                  className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+                  onClick={() => window.location.href = `/clients/${client.id}`}
+                  data-testid={`recent-client-${client.id}`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <Building2 className="w-4 h-4 text-blue-500" />
                     <span className="text-sm font-medium">{client.name}</span>
@@ -400,16 +393,16 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                     <span>{new Date(client.lastViewed).toLocaleDateString()}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Projects */}
-          <div>
-            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Recent Projects</h4>
-            <div className="space-y-3">
-              {recentProjects.slice(0, 3).map((project) => (
-                <div key={project.id} className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors">
+              );
+            } else {
+              const project = item.data as ProjectWithRelations;
+              return (
+                <div 
+                  key={`project-${project.id}`} 
+                  className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+                  onClick={() => window.location.href = `/projects/${project.id}`}
+                  data-testid={`recent-project-${project.id}`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <FolderOpen className="w-4 h-4 text-violet-500" />
                     <span className="text-sm font-medium">{project.client?.name}</span>
@@ -421,10 +414,12 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                     </Badge>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
+              );
+            }
+          })}
+          {combinedItems.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+          )}
         </div>
       </CardContent>
     </Card>
