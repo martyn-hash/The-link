@@ -79,17 +79,25 @@ function Router() {
 }
 
 function App() {
-  const { isAuthenticated } = useAuth();
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Router />
-        <PWAUpdatePrompt />
-        {isAuthenticated && <PushNotificationPrompt />}
+        <AppContent />
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function AppContent() {
+  const { isAuthenticated } = useAuth();
+
+  return (
+    <>
+      <Toaster />
+      <Router />
+      <PWAUpdatePrompt />
+      {isAuthenticated && <PushNotificationPrompt />}
+    </>
   );
 }
 
