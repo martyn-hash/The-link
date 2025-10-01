@@ -235,6 +235,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // Cache-Control middleware for API endpoints
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      // Dynamic API endpoints should not be cached
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    next();
+  });
+
   // Middleware to resolve effective user (for impersonation)
   const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {

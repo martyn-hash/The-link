@@ -1,14 +1,16 @@
-const CACHE_NAME = 'the-link-v1';
-const urlsToCache = [
+const STATIC_CACHE = 'the-link-static-v2';
+const API_CACHE = 'the-link-api-v2';
+const NETWORK_TIMEOUT = 3000; // 3 seconds
+
+const staticAssets = [
   '/',
-  '/src/main.tsx',
-  '/src/index.css'
+  '/index.html'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+    caches.open(STATIC_CACHE)
+      .then((cache) => cache.addAll(staticAssets))
   );
   self.skipWaiting();
 });
@@ -18,7 +20,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== STATIC_CACHE && cacheName !== API_CACHE) {
             return caches.delete(cacheName);
           }
         })
@@ -34,26 +36,121 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// Helper: Check if request is for API
+function isApiRequest(url) {
+  return url.pathname.startsWith('/api/');
+}
+
+// Helper: Check if request should bypass cache
+function shouldBypassCache(request) {
+  // Never cache mutations
+  if (request.method !== 'GET') {
+    return true;
+  }
+  
+  // Never cache auth-sensitive endpoints
+  if (request.url.includes('/auth/') || request.url.includes('/login')) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Helper: Check if response should be cached
+function shouldCacheResponse(response) {
+  // Don't cache if not successful
+  if (!response || response.status !== 200) {
+    return false;
+  }
+  
+  // Respect Cache-Control headers
+  const cacheControl = response.headers.get('Cache-Control');
+  if (cacheControl && (cacheControl.includes('no-store') || cacheControl.includes('private'))) {
+    return false;
+  }
+  
+  // Don't cache responses with Set-Cookie
+  if (response.headers.has('Set-Cookie')) {
+    return false;
+  }
+  
+  return true;
+}
+
+// Network-first strategy with timeout for API requests
+async function networkFirstWithTimeout(request, timeout = NETWORK_TIMEOUT) {
+  const cacheName = API_CACHE;
+  
+  try {
+    // Race between network request and timeout
+    const networkPromise = fetch(request);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Network timeout')), timeout)
+    );
+    
+    const response = await Promise.race([networkPromise, timeoutPromise]);
+    
+    // Update cache with fresh response if cacheable
+    if (shouldCacheResponse(response)) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
+    }
+    
+    return response;
+  } catch (error) {
+    // Network failed or timed out - try cache
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      // Add header to indicate stale data
+      const headers = new Headers(cachedResponse.headers);
+      headers.set('X-From-Cache', 'true');
+      
+      return new Response(cachedResponse.body, {
+        status: cachedResponse.status,
+        statusText: cachedResponse.statusText,
+        headers: headers
+      });
+    }
+    
+    // No cache available - return error
+    throw error;
+  }
+}
+
+// Cache-first strategy for static assets
+async function cacheFirst(request) {
+  const cachedResponse = await caches.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+  
+  const response = await fetch(request);
+  
+  if (shouldCacheResponse(response)) {
+    const cache = await caches.open(STATIC_CACHE);
+    cache.put(request, response.clone());
+  }
+  
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request).then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          return response;
-        });
-      })
-  );
+  const url = new URL(event.request.url);
+  
+  // Skip caching for certain requests
+  if (shouldBypassCache(event.request)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // API requests: network-first with offline fallback
+  if (isApiRequest(url)) {
+    event.respondWith(networkFirstWithTimeout(event.request));
+    return;
+  }
+  
+  // Static assets: cache-first
+  event.respondWith(cacheFirst(event.request));
 });
 
 self.addEventListener('push', (event) => {
