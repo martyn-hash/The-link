@@ -77,6 +77,41 @@ The projects page features comprehensive column customization capabilities allow
 - **Automatic Synchronization**: Changes are immediately saved via API and persist across browser sessions and page reloads
 - **RESTful API**: GET/POST endpoints at `/api/column-preferences` handle loading and saving preferences with proper authentication
 
+## Dashboard Builder & Analytics
+The projects page features a comprehensive dashboard builder for data visualization and analytics:
+
+- **Multiple Visualization Types**: Supports four chart types - bar charts, pie charts, line charts, and number cards
+- **Analytics Engine**: Backend analytics endpoint (`/api/analytics`) aggregates project data by various dimensions (projectType, status, assignee, serviceOwner, daysOverdue)
+- **Interactive Widget Management**: Drag-and-drop widget creation with customizable chart types and groupBy options in edit mode
+- **Saved Dashboards**: Persistent dashboard configurations stored per user in PostgreSQL with widget layouts and filter settings
+- **Live Filter Integration**: Dashboard charts automatically update when filters change through React Query cache invalidation
+  - Query keys include filter values: `['/api/analytics', { groupBy, filters: {...} }]`
+  - Changing any filter (service, assignee, owner, date) triggers immediate chart refresh
+  - Mini kanban board visibility tied to service filter state
+- **Days Overdue Analysis**: Special groupBy option that buckets projects into ranges:
+  - 1-9 days overdue
+  - 10-31 days overdue  
+  - 32-60 days overdue
+  - 60+ days overdue
+  - Not Overdue (due in future or on time)
+- **Service Owner Grouping**: Analytics correctly groups by `projects.projectOwnerId` field for service owner visualizations
+- **Service Filtering**: Properly joins with `projectTypes` table since projects don't have direct `serviceId` field
+- **Mini Kanban Integration**: When a service filter is active, displays compact kanban board showing up to 5 projects per stage
+- **Saved Views Integration**: Dropdown in header allows loading saved project views, which updates both filters and dashboard data
+
+### Dashboard Filter Behavior
+The dashboard builder implements a reactive filter system where all visualizations respond to filter changes in real-time:
+
+1. **Filter State Management**: Filters are stored in parent component (projects.tsx) and passed to DashboardBuilder as props
+2. **Query Key Integration**: React Query keys include all filter values to ensure cache invalidation on filter changes
+3. **Analytics API**: Backend `/api/analytics` endpoint accepts filters object and applies them before data aggregation
+4. **Automatic Refresh**: When filters change:
+   - All chart queries re-fetch with new filter parameters
+   - Number cards recalculate based on filtered dataset
+   - Mini kanban board shows/hides based on service filter presence
+5. **Filter Persistence**: Dashboard saves include current filter state as JSON, allowing complete dashboard restoration
+6. **Cross-View Consistency**: Same filter state applies to list view, dashboard view, and kanban view for consistent data
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.

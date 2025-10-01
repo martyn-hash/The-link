@@ -283,7 +283,7 @@ export default function Projects() {
               {/* Saved Views Dropdown */}
               {savedViews.length > 0 && (
                 <Select onValueChange={(value) => {
-                  const view = savedViews.find(v => v.id === value);
+                  const view = savedViews.find(v => String(v.id) === value);
                   if (view) handleLoadSavedView(view);
                 }}>
                   <SelectTrigger className="w-[180px]" data-testid="select-load-view">
@@ -291,7 +291,7 @@ export default function Projects() {
                   </SelectTrigger>
                   <SelectContent>
                     {savedViews.map(view => (
-                      <SelectItem key={view.id} value={view.id}>
+                      <SelectItem key={view.id} value={String(view.id)}>
                         {view.name}
                       </SelectItem>
                     ))}
