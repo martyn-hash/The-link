@@ -114,6 +114,22 @@ export default function DashboardBuilder({
     }
   };
 
+  // Check if service filter is a legacy name (not a UUID) that needs normalization
+  const isServiceFilterNormalizing = filters.serviceFilter !== "all" && 
+    !filters.serviceFilter.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
+  // If service filter is being normalized, show loading state
+  if (isServiceFilterNormalizing) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Preparing dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Dashboard Content */}

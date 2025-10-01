@@ -253,8 +253,21 @@ export default function Projects() {
           ? JSON.parse(dashboard.filters) 
           : dashboard.filters;
         
-        // Set service filter - preserve legacy names for normalization effect to handle
-        const serviceFilterValue = parsedFilters.serviceFilter || "all";
+        // Set service filter - normalize legacy names to IDs immediately
+        let serviceFilterValue = parsedFilters.serviceFilter || "all";
+        
+        // If service filter is a legacy name (not a UUID), convert it to ID
+        // Only proceed if services are loaded to avoid race condition
+        if (allServices.length > 0 && serviceFilterValue !== "all" && !serviceFilterValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          const matchingService = allServices.find(s => s.name === serviceFilterValue);
+          if (matchingService) {
+            serviceFilterValue = matchingService.id;
+          } else {
+            console.warn(`Service "${serviceFilterValue}" not found in available services, resetting to "all"`);
+            serviceFilterValue = "all";
+          }
+        }
+        
         setDashboardServiceFilter(serviceFilterValue);
         setDashboardTaskAssigneeFilter(parsedFilters.taskAssigneeFilter || "all");
         setDashboardServiceOwnerFilter(parsedFilters.serviceOwnerFilter || "all");
