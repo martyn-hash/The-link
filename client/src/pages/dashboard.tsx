@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import DashboardBuilder from "@/components/dashboard-builder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,9 @@ import {
   TrendingUp,
   AlertCircle,
   Bell,
-  Filter
+  Filter,
+  BarChart3,
+  Home
 } from "lucide-react";
 
 // Dashboard data interfaces
@@ -46,17 +49,42 @@ interface DashboardStats {
   upcomingRenewals: any[];
 }
 
+interface Widget {
+  id: string;
+  type: "bar" | "pie" | "number" | "line";
+  title: string;
+  groupBy: "projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue";
+  metric?: string;
+}
+
+interface Dashboard {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string | null;
+  filters: any;
+  widgets: Widget[];
+  visibility: "private" | "shared";
+  isHomescreenDashboard?: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function Dashboard() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
-  const [selectedServiceId, setSelectedServiceId] = useState<string>(() => {
-    return localStorage.getItem('dashboard_kanban_service') || '';
-  });
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+  });
+
+  // Fetch homescreen dashboard
+  const { data: homescreenDashboard, isLoading: homescreenLoading, error: homescreenError } = useQuery<Dashboard>({
+    queryKey: ["/api/dashboards/homescreen"],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -178,15 +206,73 @@ export default function Dashboard() {
             
           </div>
 
-          {/* Kanban Board Section */}
-          <div className="mt-6">
-            <ServiceKanbanBoard 
-              selectedServiceId={selectedServiceId}
-              onServiceChange={(serviceId) => {
-                setSelectedServiceId(serviceId);
-                localStorage.setItem('dashboard_kanban_service', serviceId);
-              }}
-            />
+          {/* Homescreen Dashboard Section */}
+          <div className="mt-6" data-testid="homescreen-dashboard-section">
+            {homescreenLoading ? (
+              <Card>
+                <CardContent className="py-12">
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                    <p className="text-muted-foreground">Loading homescreen dashboard...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : homescreenDashboard ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Home className="w-6 h-6 text-primary" />
+                  <h3 className="text-xl font-semibold" data-testid="text-homescreen-dashboard-name">
+                    {homescreenDashboard.name}
+                  </h3>
+                  {homescreenDashboard.description && (
+                    <p className="text-sm text-muted-foreground">- {homescreenDashboard.description}</p>
+                  )}
+                </div>
+                <DashboardBuilder
+                  filters={(() => {
+                    const parsedFilters = typeof homescreenDashboard.filters === 'string'
+                      ? JSON.parse(homescreenDashboard.filters)
+                      : homescreenDashboard.filters;
+                    
+                    return {
+                      serviceFilter: parsedFilters.serviceFilter || "all",
+                      taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
+                      serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
+                      userFilter: parsedFilters.userFilter || "all",
+                      showArchived: parsedFilters.showArchived || false,
+                      dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
+                      customDateRange: {
+                        from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+                        to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
+                      },
+                    };
+                  })()}
+                  widgets={homescreenDashboard.widgets || []}
+                  editMode={false}
+                  currentDashboard={homescreenDashboard}
+                />
+              </div>
+            ) : (
+              <Card>
+                <CardHeader className="text-center">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <BarChart3 className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <CardTitle data-testid="text-no-homescreen">No homescreen dashboard set</CardTitle>
+                  <CardDescription>
+                    Set a dashboard as your homescreen in the Projects page
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center">
+                  <Button
+                    onClick={() => window.location.href = '/projects'}
+                    data-testid="button-go-to-projects"
+                  >
+                    Go to Projects
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </main>
       </div>
@@ -438,133 +524,3 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
     </Card>
   );
 }
-
-function ServiceKanbanBoard({ selectedServiceId, onServiceChange }: { selectedServiceId: string; onServiceChange: (serviceId: string) => void }) {
-  const { data: services, isLoading: servicesLoading } = useQuery<Service[]>({
-    queryKey: ["/api/services/with-active-clients"],
-  });
-
-  const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/projects", { serviceId: selectedServiceId }],
-    enabled: !!selectedServiceId,
-  });
-
-  const { data: kanbanStages, isLoading: stagesLoading, refetch: refetchStages } = useQuery<KanbanStage[]>({
-    queryKey: [`/api/services/${selectedServiceId}/kanban-stages`],
-    enabled: !!selectedServiceId,
-    staleTime: 0,
-    refetchOnMount: 'always',
-  });
-
-  // Force refetch when service changes
-  useEffect(() => {
-    if (selectedServiceId) {
-      refetchStages();
-    }
-  }, [selectedServiceId, refetchStages]);
-
-  // Create columns from kanban stages (ordered by stage order)
-  const statusColumns = kanbanStages?.map((stage, index) => ({
-    id: stage.name,
-    label: stage.name,
-    color: [
-      "bg-slate-100 dark:bg-slate-900",
-      "bg-blue-100 dark:bg-blue-900",
-      "bg-yellow-100 dark:bg-yellow-900",
-      "bg-orange-100 dark:bg-orange-900",
-      "bg-green-100 dark:bg-green-900"
-    ][index % 5]
-  })) || [];
-
-  const projectsByStatus = statusColumns.reduce((acc, column) => {
-    acc[column.id] = projects?.filter(p => p.currentStatus === column.id) || [];
-    return acc;
-  }, {} as Record<string, ProjectWithRelations[]>);
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="w-5 h-5 text-purple-500" />
-              Service Kanban Board
-            </CardTitle>
-            <CardDescription>View projects by service and status</CardDescription>
-          </div>
-          <div className="w-64">
-            <Select value={selectedServiceId} onValueChange={onServiceChange}>
-              <SelectTrigger data-testid="select-service-filter">
-                <SelectValue placeholder="Select a service" />
-              </SelectTrigger>
-              <SelectContent>
-                {servicesLoading && (
-                  <SelectItem value="loading" disabled>Loading services...</SelectItem>
-                )}
-                {services?.map((service) => (
-                  <SelectItem key={service.id} value={service.id} data-testid={`service-option-${service.id}`}>
-                    {service.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {!selectedServiceId ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Filter className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">No service selected</p>
-            <p className="text-sm">Select a service from the dropdown above to view projects</p>
-          </div>
-        ) : projectsLoading || stagesLoading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading...</p>
-          </div>
-        ) : (
-          <div className={`grid gap-4 ${
-            statusColumns.length === 1 ? 'grid-cols-1' :
-            statusColumns.length === 2 ? 'grid-cols-2' :
-            statusColumns.length === 3 ? 'grid-cols-3' :
-            statusColumns.length === 4 ? 'grid-cols-4' :
-            'grid-cols-5'
-          }`}>
-            {statusColumns.map((column) => (
-              <div key={column.id} className="space-y-3" data-testid={`kanban-column-${column.id}`}>
-                <div className={`${column.color} p-3 rounded-lg`}>
-                  <h3 className="font-semibold text-sm">{column.label}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {projectsByStatus[column.id]?.length || 0} project{projectsByStatus[column.id]?.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  {projectsByStatus[column.id]?.map((project) => (
-                    <div
-                      key={project.id}
-                      className="p-3 bg-card border rounded-lg hover:shadow-md cursor-pointer transition-all"
-                      onClick={() => window.location.href = `/projects/${project.id}`}
-                      data-testid={`kanban-project-${project.id}`}
-                    >
-                      <p className="font-medium text-sm truncate">{project.client?.name}</p>
-                      <p className="text-xs text-muted-foreground truncate mt-1">
-                        {(project as any).projectType?.name || "Unknown Type"}
-                      </p>
-                      {project.dueDate && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Due: {new Date(project.dueDate).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
