@@ -36,6 +36,8 @@ import {
   updateUserNotificationPreferencesSchema,
   insertProjectViewSchema,
   insertUserColumnPreferencesSchema,
+  insertDashboardSchema,
+  updateDashboardSchema,
   insertServiceSchema,
   updateServiceSchema,
   insertWorkRoleSchema,
@@ -60,6 +62,21 @@ const sendEmailSchema = z.object({
   body: z.string().min(1, "Email body is required"),
   cc: z.string().email().optional(),
   bcc: z.string().email().optional(),
+});
+
+// Analytics query schema
+const analyticsQuerySchema = z.object({
+  filters: z.object({
+    serviceFilter: z.string().optional(),
+    showArchived: z.boolean().optional(),
+    taskAssigneeFilter: z.string().optional(),
+    serviceOwnerFilter: z.string().optional(),
+    userFilter: z.string().optional(),
+  }).optional(),
+  groupBy: z.enum(['projectType', 'status', 'assignee'], {
+    required_error: "groupBy must be one of: projectType, status, assignee",
+  }),
+  metric: z.string().optional(),
 });
 
 // Resource-specific parameter validation schemas for consistent error responses
@@ -2096,6 +2113,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error saving column preferences:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to save column preferences" });
+    }
+  });
+
+  // Dashboard CRUD routes
+  app.get("/api/dashboards", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const userDashboards = await storage.getDashboardsByUserId(effectiveUserId);
+      const sharedDashboards = await storage.getSharedDashboards();
+      
+      // Combine user dashboards and shared dashboards
+      const allDashboards = [...userDashboards, ...sharedDashboards.filter(d => d.userId !== effectiveUserId)];
+      
+      res.json(allDashboards);
+    } catch (error) {
+      console.error("Error fetching dashboards:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch dashboards" });
+    }
+  });
+
+  app.get("/api/dashboards/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const dashboard = await storage.getDashboardById(req.params.id);
+      
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      // Check authorization - user can access their own dashboards or shared ones
+      if (dashboard.userId !== effectiveUserId && dashboard.visibility !== 'shared') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error fetching dashboard:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch dashboard" });
+    }
+  });
+
+  app.post("/api/dashboards", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate and sanitize input - ensure userId comes from auth, not body
+      const validDashboardData = insertDashboardSchema.parse({
+        ...req.body,
+        userId: effectiveUserId, // Security: Always use authenticated user ID
+      });
+
+      const newDashboard = await storage.createDashboard(validDashboardData);
+      res.status(201).json(newDashboard);
+    } catch (error) {
+      console.error("Error creating dashboard:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to create dashboard" });
+    }
+  });
+
+  app.patch("/api/dashboards/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const dashboard = await storage.getDashboardById(req.params.id);
+      
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      // Only dashboard owner can edit (or admins for shared dashboards)
+      const isAdmin = req.user?.isAdmin || req.user?.canSeeAdminMenu;
+      if (dashboard.userId !== effectiveUserId && !(isAdmin && dashboard.visibility === 'shared')) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const validDashboardData = updateDashboardSchema.parse(req.body);
+      const updated = await storage.updateDashboard(req.params.id, validDashboardData);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating dashboard:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to update dashboard" });
+    }
+  });
+
+  app.delete("/api/dashboards/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const dashboard = await storage.getDashboardById(req.params.id);
+      
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      // Only dashboard owner can delete
+      if (dashboard.userId !== effectiveUserId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      await storage.deleteDashboard(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting dashboard:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to delete dashboard" });
+    }
+  });
+
+  // Analytics endpoint
+  app.post("/api/analytics", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate request body
+      const validatedQuery = analyticsQuerySchema.parse(req.body);
+      const { filters, groupBy, metric } = validatedQuery;
+
+      const analyticsData = await storage.getProjectAnalytics(filters || {}, groupBy, metric);
+      
+      res.json({
+        series: analyticsData,
+        meta: {
+          groupBy,
+          metric,
+          filters,
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid request parameters",
+          errors: error.errors 
+        });
+      }
+      console.error("Error fetching analytics:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch analytics data" });
     }
   });
 

@@ -345,7 +345,16 @@ export default function FilterPanel({
                 <Briefcase className="w-4 h-4" />
                 Service
               </Label>
-              <Select value={serviceFilter} onValueChange={setServiceFilter}>
+              <Select 
+                value={serviceFilter} 
+                onValueChange={(value) => {
+                  setServiceFilter(value);
+                  // Auto-switch to list view when "All Services" is selected
+                  if (value === "all" && viewMode === "kanban") {
+                    setViewMode("list");
+                  }
+                }}
+              >
                 <SelectTrigger data-testid="select-service-filter">
                   <SelectValue placeholder="All Services" />
                 </SelectTrigger>
@@ -359,6 +368,22 @@ export default function FilterPanel({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Kanban View Toggle - Only show when a specific service is selected */}
+            {serviceFilter !== "all" && (
+              <div className="flex items-center justify-between pt-2">
+                <Label htmlFor="kanban-view-toggle" className="flex items-center gap-2 cursor-pointer text-sm">
+                  <Folder className="w-4 h-4" />
+                  Show as Kanban Board
+                </Label>
+                <Switch
+                  id="kanban-view-toggle"
+                  checked={viewMode === "kanban"}
+                  onCheckedChange={(checked) => setViewMode(checked ? "kanban" : "list")}
+                  data-testid="switch-kanban-view"
+                />
+              </div>
+            )}
 
             <Separator />
 

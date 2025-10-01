@@ -19,6 +19,7 @@ import {
   userNotificationPreferences,
   projectViews,
   userColumnPreferences,
+  dashboards,
   services,
   workRoles,
   serviceRoles,
@@ -80,6 +81,9 @@ import {
   type UserColumnPreferences,
   type InsertUserColumnPreferences,
   type UpdateUserColumnPreferences,
+  type Dashboard,
+  type InsertDashboard,
+  type UpdateDashboard,
   type Service,
   type InsertService,
   type WorkRole,
@@ -384,6 +388,17 @@ export interface IStorage {
   getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined>;
   upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences>;
   updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;
+  
+  // Dashboard operations
+  createDashboard(dashboard: InsertDashboard): Promise<Dashboard>;
+  getDashboardsByUserId(userId: string): Promise<Dashboard[]>;
+  getSharedDashboards(): Promise<Dashboard[]>;
+  getDashboardById(id: string): Promise<Dashboard | undefined>;
+  updateDashboard(id: string, dashboard: UpdateDashboard): Promise<Dashboard>;
+  deleteDashboard(id: string): Promise<void>;
+  
+  // Analytics operations
+  getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]>;
   
   // Bulk project notification handling
   sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void>;
@@ -833,6 +848,160 @@ export class DatabaseStorage implements IStorage {
     }
     
     return updated;
+  }
+
+  // Dashboard operations
+  async createDashboard(dashboard: InsertDashboard): Promise<Dashboard> {
+    const [newDashboard] = await db
+      .insert(dashboards)
+      .values(dashboard)
+      .returning();
+    return newDashboard;
+  }
+
+  async getDashboardsByUserId(userId: string): Promise<Dashboard[]> {
+    const userDashboards = await db
+      .select()
+      .from(dashboards)
+      .where(eq(dashboards.userId, userId))
+      .orderBy(desc(dashboards.createdAt));
+    return userDashboards;
+  }
+
+  async getSharedDashboards(): Promise<Dashboard[]> {
+    const shared = await db
+      .select()
+      .from(dashboards)
+      .where(eq(dashboards.visibility, 'shared'))
+      .orderBy(desc(dashboards.createdAt));
+    return shared;
+  }
+
+  async getDashboardById(id: string): Promise<Dashboard | undefined> {
+    const [dashboard] = await db
+      .select()
+      .from(dashboards)
+      .where(eq(dashboards.id, id));
+    return dashboard;
+  }
+
+  async updateDashboard(id: string, dashboard: UpdateDashboard): Promise<Dashboard> {
+    const [updated] = await db
+      .update(dashboards)
+      .set({
+        ...dashboard,
+        updatedAt: new Date(),
+      })
+      .where(eq(dashboards.id, id))
+      .returning();
+    
+    if (!updated) {
+      throw new Error(`Dashboard not found with id ${id}`);
+    }
+    
+    return updated;
+  }
+
+  async deleteDashboard(id: string): Promise<void> {
+    await db
+      .delete(dashboards)
+      .where(eq(dashboards.id, id));
+  }
+
+  // Analytics operations
+  async getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]> {
+    // This is a simplified implementation - we'll build a more sophisticated one
+    // when we implement the frontend that needs specific analytics
+    
+    const conditions: any[] = [];
+    
+    // Apply filters (similar to getAllProjects logic)
+    if (filters.serviceFilter && filters.serviceFilter !== 'all') {
+      const [service] = await db
+        .select()
+        .from(services)
+        .where(eq(services.name, filters.serviceFilter))
+        .limit(1);
+      
+      if (service) {
+        conditions.push(eq(projects.serviceId, service.id));
+      }
+    }
+    
+    if (filters.showArchived === false) {
+      conditions.push(eq(projects.archived, false));
+    }
+    
+    // Group by logic
+    let results: { label: string; value: number }[] = [];
+    
+    if (groupBy === 'projectType') {
+      const grouped = await db
+        .select({
+          projectTypeId: projects.projectTypeId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(projects)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(projects.projectTypeId);
+      
+      // Get project type names
+      const projectTypeIds = grouped.map(g => g.projectTypeId).filter(Boolean) as string[];
+      if (projectTypeIds.length > 0) {
+        const types = await db
+          .select()
+          .from(projectTypes)
+          .where(inArray(projectTypes.id, projectTypeIds));
+        
+        const typeMap = new Map(types.map(t => [t.id, t.name]));
+        
+        results = grouped.map(g => ({
+          label: g.projectTypeId ? (typeMap.get(g.projectTypeId) || 'Unknown') : 'Unknown',
+          value: g.count,
+        }));
+      }
+    } else if (groupBy === 'status') {
+      const grouped = await db
+        .select({
+          status: projects.currentStatus,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(projects)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(projects.currentStatus);
+      
+      results = grouped.map(g => ({
+        label: g.status || 'Unknown',
+        value: g.count,
+      }));
+    } else if (groupBy === 'assignee') {
+      const grouped = await db
+        .select({
+          assigneeId: projects.currentAssigneeId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(projects)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(projects.currentAssigneeId);
+      
+      // Get user names
+      const assigneeIds = grouped.map(g => g.assigneeId).filter(Boolean) as string[];
+      if (assigneeIds.length > 0) {
+        const assignees = await db
+          .select()
+          .from(users)
+          .where(inArray(users.id, assigneeIds));
+        
+        const userMap = new Map(assignees.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+        
+        results = grouped.map(g => ({
+          label: g.assigneeId ? (userMap.get(g.assigneeId) || 'Unknown') : 'Unassigned',
+          value: g.count,
+        }));
+      }
+    }
+    
+    return results;
   }
 
   async sendBulkProjectAssignmentNotifications(createdProjects: Project[]): Promise<void> {
