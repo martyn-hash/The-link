@@ -912,16 +912,20 @@ export class DatabaseStorage implements IStorage {
   async getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]> {
     const conditions: any[] = [];
     
-    // Apply service filter
+    // Apply service filter (projects are linked to services through projectTypes)
     if (filters.serviceFilter && filters.serviceFilter !== 'all') {
-      const [service] = await db
-        .select()
-        .from(services)
-        .where(eq(services.name, filters.serviceFilter))
-        .limit(1);
+      // Get project types for the selected service
+      const projectTypesForService = await db
+        .select({ id: projectTypes.id })
+        .from(projectTypes)
+        .where(eq(projectTypes.serviceId, filters.serviceFilter));
       
-      if (service) {
-        conditions.push(eq(projects.serviceId, service.id));
+      if (projectTypesForService.length > 0) {
+        const projectTypeIds = projectTypesForService.map(pt => pt.id);
+        conditions.push(inArray(projects.projectTypeId, projectTypeIds));
+      } else {
+        // No project types for this service, return empty results
+        return [];
       }
     }
     
@@ -1055,19 +1059,18 @@ export class DatabaseStorage implements IStorage {
         }));
       }
     } else if (groupBy === 'serviceOwner') {
-      // Join with client_services to get service owners
+      // Group by project owner (which is the service owner)
       const grouped = await db
         .select({
-          serviceOwnerId: clientServices.serviceOwner,
-          count: sql<number>`cast(count(distinct ${projects.id}) as integer)`,
+          projectOwnerId: projects.projectOwnerId,
+          count: sql<number>`cast(count(*) as integer)`,
         })
         .from(projects)
-        .leftJoin(clientServices, eq(projects.clientServiceId, clientServices.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .groupBy(clientServices.serviceOwner);
+        .groupBy(projects.projectOwnerId);
       
       // Get user names for service owners
-      const ownerIds = grouped.map(g => g.serviceOwnerId).filter(Boolean) as string[];
+      const ownerIds = grouped.map(g => g.projectOwnerId).filter(Boolean) as string[];
       let ownerMap = new Map<string, string>();
       
       if (ownerIds.length > 0) {
@@ -1081,7 +1084,7 @@ export class DatabaseStorage implements IStorage {
       
       // Always construct results from grouped, even when ownerIds is empty
       results = grouped.map(g => ({
-        label: g.serviceOwnerId ? (ownerMap.get(g.serviceOwnerId) || 'Unknown') : 'No Owner',
+        label: g.projectOwnerId ? (ownerMap.get(g.projectOwnerId) || 'Unknown') : 'No Owner',
         value: g.count,
       }));
     } else if (groupBy === 'daysOverdue') {
