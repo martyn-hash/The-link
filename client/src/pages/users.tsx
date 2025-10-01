@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings, RefreshCw, Send, Bell } from "lucide-react";
 import type { User } from "@shared/schema";
 
 const createUserFormSchema = z.object({
@@ -124,6 +124,12 @@ export default function UserManagement() {
   }, [user, toast, setLocation]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
+  
+  // Push notification state
+  const [selectedPushUserId, setSelectedPushUserId] = useState<string>("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -275,6 +281,28 @@ export default function UserManagement() {
     },
   });
 
+  const sendPushNotificationMutation = useMutation({
+    mutationFn: async (data: { userIds: string[]; title: string; body: string }) => {
+      return await apiRequest("POST", "/api/push/send", data);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Success",
+        description: `Notification sent successfully! ${data.successful} successful, ${data.failed} failed`,
+      });
+      setSelectedPushUserId("");
+      setPushTitle("");
+      setPushBody("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send push notification",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (data: UserFormData) => {
     if (selectedUser) {
       updateUserMutation.mutate(data);
@@ -327,6 +355,61 @@ export default function UserManagement() {
     }
 
     setFallbackUserMutation.mutate(selectedFallbackUserId);
+  };
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdates(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.update();
+        
+        toast({
+          title: "Update Check Complete",
+          description: "Checked for latest version. If an update is available, you'll see a notification.",
+        });
+      } else {
+        toast({
+          title: "Not Supported",
+          description: "Service workers are not supported in this browser.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to check for updates",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
+
+  const handleSendPushNotification = () => {
+    if (!selectedPushUserId) {
+      toast({
+        title: "Error",
+        description: "Please select a user to send notification to",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!pushTitle || !pushBody) {
+      toast({
+        title: "Error",
+        description: "Please enter both title and message",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    sendPushNotificationMutation.mutate({
+      userIds: [selectedPushUserId],
+      title: pushTitle,
+      body: pushBody,
+    });
   };
 
   const getRoleDisplay = (user: any) => {
@@ -506,6 +589,123 @@ export default function UserManagement() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Testing Tools */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            {/* Check for Updates Card */}
+            <Card data-testid="card-check-updates">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5" />
+                  PWA Updates
+                </CardTitle>
+                <CardDescription>
+                  Check for the latest version of the Progressive Web App
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={handleCheckForUpdates}
+                  disabled={isCheckingUpdates}
+                  className="w-full"
+                  data-testid="button-check-updates"
+                >
+                  {isCheckingUpdates ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Check for Updates
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Send Push Notification Card */}
+            <Card data-testid="card-send-push">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="w-5 h-5" />
+                  Test Push Notification
+                </CardTitle>
+                <CardDescription>
+                  Send a test push notification to a user
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label htmlFor="push-user-select" className="text-sm font-medium mb-2 block">
+                    Select User
+                  </label>
+                  <Select 
+                    value={selectedPushUserId} 
+                    onValueChange={setSelectedPushUserId}
+                    data-testid="select-push-user"
+                  >
+                    <SelectTrigger id="push-user-select">
+                      <SelectValue placeholder="Select a user with push enabled" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users?.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.firstName} {user.lastName} ({user.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label htmlFor="push-title" className="text-sm font-medium mb-2 block">
+                    Notification Title
+                  </label>
+                  <Input
+                    id="push-title"
+                    value={pushTitle}
+                    onChange={(e) => setPushTitle(e.target.value)}
+                    placeholder="Enter notification title"
+                    data-testid="input-push-title"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="push-body" className="text-sm font-medium mb-2 block">
+                    Notification Message
+                  </label>
+                  <Input
+                    id="push-body"
+                    value={pushBody}
+                    onChange={(e) => setPushBody(e.target.value)}
+                    placeholder="Enter notification message"
+                    data-testid="input-push-body"
+                  />
+                </div>
+                
+                <Button
+                  onClick={handleSendPushNotification}
+                  disabled={sendPushNotificationMutation.isPending || !selectedPushUserId || !pushTitle || !pushBody}
+                  className="w-full"
+                  data-testid="button-send-push"
+                >
+                  {sendPushNotificationMutation.isPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Send Push Notification
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
 
           <div className="flex gap-6">
             {/* User List */}
