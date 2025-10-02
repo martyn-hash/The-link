@@ -555,7 +555,7 @@ export interface IStorage {
   
   // User integrations operations  
   getUserIntegrations(userId: string): Promise<UserIntegration[]>;
-  getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms'): Promise<UserIntegration | undefined>;
+  getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms' | 'ringcentral'): Promise<UserIntegration | undefined>;
   createUserIntegration(integration: InsertUserIntegration): Promise<UserIntegration>;
   updateUserIntegration(id: string, integration: Partial<InsertUserIntegration>): Promise<UserIntegration>;
   deleteUserIntegration(id: string): Promise<void>;
@@ -7414,7 +7414,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(userIntegrations.createdAt);
   }
 
-  async getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms'): Promise<UserIntegration | undefined> {
+  async getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms' | 'ringcentral'): Promise<UserIntegration | undefined> {
     const [integration] = await db
       .select()
       .from(userIntegrations)

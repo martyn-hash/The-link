@@ -10,6 +10,14 @@ import { sendTaskAssignmentEmail } from "./emailService";
 import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "./push-service";
 import fetch from 'node-fetch';
 import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "./utils/userOutlookClient";
+import { 
+  storeRingCentralTokens, 
+  getSIPProvisionCredentials, 
+  getCallLog,
+  getCallRecordingUrl,
+  requestCallTranscription,
+  getTranscriptionResult
+} from "./utils/userRingCentralClient";
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, buildSchedulingPreview, type SchedulingRunResult } from "./project-scheduler";
@@ -112,6 +120,28 @@ const analyticsQuerySchema = z.object({
     required_error: "groupBy must be one of: projectType, status, assignee, serviceOwner, daysOverdue",
   }),
   metric: z.string().optional(),
+});
+
+// RingCentral validation schemas
+const ringCentralAuthenticateSchema = z.object({
+  accessToken: z.string().min(1, "Access token is required"),
+  refreshToken: z.string().optional(),
+  expiresIn: z.number().positive("Expiration time must be positive"),
+});
+
+const ringCentralLogCallSchema = z.object({
+  clientId: z.string().min(1, "Client ID is required"),
+  personId: z.string().optional(),
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  direction: z.enum(['inbound', 'outbound']),
+  duration: z.number().optional(),
+  sessionId: z.string().min(1, "Session ID is required"),
+  recordingId: z.string().optional(),
+});
+
+const ringCentralRequestTranscriptSchema = z.object({
+  communicationId: z.string().min(1, "Communication ID is required"),
+  recordingId: z.string().min(1, "Recording ID is required"),
 });
 
 // Resource-specific parameter validation schemas for consistent error responses
@@ -7469,6 +7499,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
       res.status(500).json({ message: "Failed to fetch dashboard data" });
+    }
+  });
+
+  // ==================================================
+  // RINGCENTRAL API ROUTES
+  // ==================================================
+
+  // POST /api/ringcentral/authenticate - Store RingCentral tokens
+  app.post("/api/ringcentral/authenticate", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      const validation = ringCentralAuthenticateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid authentication data",
+          errors: validation.error.issues 
+        });
+      }
+
+      const { accessToken, refreshToken, expiresIn } = validation.data;
+      await storeRingCentralTokens(effectiveUserId, accessToken, refreshToken, expiresIn);
+      
+      res.json({ message: "RingCentral authenticated successfully" });
+    } catch (error) {
+      console.error("Error authenticating RingCentral:", error);
+      res.status(500).json({ message: "Failed to authenticate RingCentral" });
+    }
+  });
+
+  // GET /api/ringcentral/status - Check if user has RingCentral connected
+  app.get("/api/ringcentral/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const integration = await storage.getUserIntegrationByType(effectiveUserId, 'ringcentral');
+      
+      res.json({
+        connected: !!integration && integration.isActive,
+        hasTokens: !!(integration?.accessToken)
+      });
+    } catch (error) {
+      console.error("Error checking RingCentral status:", error);
+      res.status(500).json({ message: "Failed to check RingCentral status" });
+    }
+  });
+
+  // POST /api/ringcentral/sip-provision - Get SIP provisioning credentials for WebRTC
+  app.post("/api/ringcentral/sip-provision", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      const sipProvision = await getSIPProvisionCredentials(effectiveUserId);
+      res.json(sipProvision);
+    } catch (error) {
+      console.error("Error getting SIP provision:", error);
+      if (error instanceof Error && error.message.includes('not connected')) {
+        return res.status(401).json({ message: "RingCentral account not connected. Please authenticate first." });
+      }
+      res.status(500).json({ message: "Failed to get SIP provision credentials" });
+    }
+  });
+
+  // POST /api/ringcentral/log-call - Log a call to communications
+  app.post("/api/ringcentral/log-call", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      const validation = ringCentralLogCallSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid call log data",
+          errors: validation.error.issues 
+        });
+      }
+
+      const { clientId, personId, phoneNumber, direction, duration, sessionId, recordingId } = validation.data;
+
+      // Create communication entry
+      const communication = await storage.createCommunication({
+        clientId,
+        personId: personId || null,
+        userId: effectiveUserId,
+        type: 'phone_call',
+        content: `${direction === 'outbound' ? 'Outbound' : 'Inbound'} call to ${phoneNumber}. Duration: ${duration || 0}s`,
+        subject: `Phone Call - ${phoneNumber}`,
+        actualContactTime: new Date(),
+        metadata: {
+          integration: 'ringcentral',
+          sessionId,
+          recordingId,
+          direction,
+          duration,
+          phoneNumber,
+          transcriptionStatus: recordingId ? 'pending' : 'not_available'
+        }
+      });
+
+      res.json(communication);
+    } catch (error) {
+      console.error("Error logging call:", error);
+      res.status(500).json({ message: "Failed to log call" });
+    }
+  });
+
+  // POST /api/ringcentral/request-transcript - Request transcription for a call
+  app.post("/api/ringcentral/request-transcript", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      const validation = ringCentralRequestTranscriptSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid transcription request data",
+          errors: validation.error.issues 
+        });
+      }
+
+      const { communicationId, recordingId } = validation.data;
+
+      // Get recording URL
+      const recordingUrl = await getCallRecordingUrl(effectiveUserId, recordingId);
+      
+      // Request transcription
+      const transcriptionResult = await requestCallTranscription(effectiveUserId, recordingUrl);
+      
+      // Update communication with transcription job ID
+      await storage.updateCommunication(communicationId, {
+        metadata: {
+          transcriptionJobId: transcriptionResult.jobId,
+          transcriptionStatus: 'processing',
+          recordingUrl
+        }
+      });
+
+      res.json({ 
+        message: "Transcription requested",
+        jobId: transcriptionResult.jobId
+      });
+    } catch (error) {
+      console.error("Error requesting transcription:", error);
+      if (error instanceof Error && error.message.includes('not connected')) {
+        return res.status(401).json({ message: "RingCentral account not connected. Please authenticate first." });
+      }
+      res.status(500).json({ message: "Failed to request transcription" });
+    }
+  });
+
+  // GET /api/ringcentral/transcript/:jobId - Get transcription result
+  app.get("/api/ringcentral/transcript/:jobId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const { jobId } = req.params;
+      
+      if (!jobId) {
+        return res.status(400).json({ message: "Job ID is required" });
+      }
+
+      const transcriptionResult = await getTranscriptionResult(effectiveUserId, jobId);
+      res.json(transcriptionResult);
+    } catch (error) {
+      console.error("Error getting transcription:", error);
+      res.status(500).json({ message: "Failed to get transcription" });
     }
   });
 
