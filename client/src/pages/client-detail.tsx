@@ -5399,6 +5399,32 @@ export default function ClientDetail() {
     c => c.clientType === 'company' && c.id !== id && !connectedCompanyIds.includes(c.id)
   ) || [];
 
+  // Documents query and mutation
+  const { data: documents, isLoading: documentsLoading } = useQuery<Document[]>({
+    queryKey: ['/api/clients', id, 'documents'],
+    enabled: !!id,
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      return await apiRequest('DELETE', `/api/documents/${documentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'documents'] });
+      toast({
+        title: 'Success',
+        description: 'Document deleted successfully',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete document',
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -6901,62 +6927,30 @@ export default function ClientDetail() {
                 </div>
               </CardHeader>
               <CardContent>
-                {(() => {
-                  const { data: documents, isLoading: documentsLoading } = useQuery<Document[]>({
-                    queryKey: ['/api/clients', id, 'documents'],
-                    enabled: !!id,
-                  });
+                {documentsLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : !documents || documents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground">No documents have been uploaded yet.</p>
+                  </div>
+                ) : (
+                  (() => {
+                    // Group documents by upload name and uploaded date
+                    const groupedDocs = documents.reduce((groups: Record<string, Document[]>, doc) => {
+                      const key = `${doc.uploadName}_${doc.uploadedAt}`;
+                      if (!groups[key]) {
+                        groups[key] = [];
+                      }
+                      groups[key].push(doc);
+                      return groups;
+                    }, {});
 
-                  const deleteDocumentMutation = useMutation({
-                    mutationFn: async (documentId: string) => {
-                      return await apiRequest('DELETE', `/api/documents/${documentId}`);
-                    },
-                    onSuccess: () => {
-                      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'documents'] });
-                      toast({
-                        title: 'Success',
-                        description: 'Document deleted successfully',
-                      });
-                    },
-                    onError: () => {
-                      toast({
-                        title: 'Error',
-                        description: 'Failed to delete document',
-                        variant: 'destructive',
-                      });
-                    },
-                  });
-
-                  if (documentsLoading) {
                     return (
-                      <div className="space-y-3">
-                        <Skeleton className="h-16 w-full" />
-                        <Skeleton className="h-16 w-full" />
-                        <Skeleton className="h-16 w-full" />
-                      </div>
-                    );
-                  }
-
-                  if (!documents || documents.length === 0) {
-                    return (
-                      <div className="text-center py-8">
-                        <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-                        <p className="text-muted-foreground">No documents have been uploaded yet.</p>
-                      </div>
-                    );
-                  }
-
-                  // Group documents by upload name and uploaded date
-                  const groupedDocs = documents.reduce((groups: Record<string, Document[]>, doc) => {
-                    const key = `${doc.uploadName}_${doc.uploadedAt}`;
-                    if (!groups[key]) {
-                      groups[key] = [];
-                    }
-                    groups[key].push(doc);
-                    return groups;
-                  }, {});
-
-                  return (
                     <div className="space-y-4">
                       {Object.entries(groupedDocs).map(([key, docs]) => {
                         const firstDoc = docs[0];
@@ -7044,8 +7038,9 @@ export default function ClientDetail() {
                         );
                       })}
                     </div>
-                  );
-                })()}
+                    );
+                  })()
+                )}
               </CardContent>
             </Card>
           </TabsContent>
