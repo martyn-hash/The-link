@@ -76,8 +76,8 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       console.log('SIP provisioning successful, initializing WebPhone...');
       console.log('First sipInfo:', sipProvision.sipInfo[0]);
 
-      // Initialize WebPhone with version 2.x API - pass the entire provision response
-      const webPhone = new RingCentralWebPhone(sipProvision);
+      // Initialize WebPhone with version 2.x API - pass object with sipInfo property
+      const webPhone = new RingCentralWebPhone({ sipInfo: sipProvision.sipInfo });
       console.log('WebPhone instance created:', webPhone);
 
       // Start the WebPhone (connects and registers)
