@@ -26,6 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -968,6 +969,36 @@ export default function ProjectTypeDetail() {
   const handleActiveToggle = (checked: boolean) => {
     updateProjectTypeActiveMutation.mutate(checked);
   };
+
+  // Project Type Single Project Per Client Mutation
+  const updateProjectTypeSingleProjectMutation = useMutation({
+    mutationFn: async (singleProjectPerClient: boolean) => {
+      if (!projectTypeId) throw new Error("No project type ID");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, {
+        singleProjectPerClient
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Project type setting updated successfully",
+      });
+      // Invalidate queries to refresh the project type data
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update project type setting",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSingleProjectToggle = (checked: boolean) => {
+    updateProjectTypeSingleProjectMutation.mutate(checked);
+  };
   
   // Stage approval field mutations
   const createApprovalFieldMutation = useMutation({
@@ -1197,21 +1228,53 @@ export default function ProjectTypeDetail() {
                     <Settings className="w-6 h-6 mr-3 text-primary" />
                     {projectType.name}
                   </h1>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="active-toggle"
-                      checked={projectType.active !== false}
-                      onCheckedChange={handleActiveToggle}
-                      disabled={updateProjectTypeActiveMutation.isPending}
-                      data-testid="switch-active-project-type"
-                    />
-                    <Label 
-                      htmlFor="active-toggle" 
-                      className="text-sm font-medium cursor-pointer"
-                      data-testid="label-active-project-type"
-                    >
-                      {projectType.active !== false ? "Active" : "Inactive"}
-                    </Label>
+                  <div className="flex items-center space-x-6">
+                    {/* Active/Inactive Toggle */}
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="active-toggle"
+                        checked={projectType.active !== false}
+                        onCheckedChange={handleActiveToggle}
+                        disabled={updateProjectTypeActiveMutation.isPending}
+                        data-testid="switch-active-project-type"
+                      />
+                      <Label 
+                        htmlFor="active-toggle" 
+                        className="text-sm font-medium cursor-pointer"
+                        data-testid="label-active-project-type"
+                      >
+                        {projectType.active !== false ? "Active" : "Inactive"}
+                      </Label>
+                    </div>
+                    
+                    {/* Single Project Per Client Toggle */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center space-x-2" data-testid="tooltip-trigger-single-project">
+                            <Switch
+                              id="single-project-toggle"
+                              checked={projectType.singleProjectPerClient === true}
+                              onCheckedChange={handleSingleProjectToggle}
+                              disabled={updateProjectTypeSingleProjectMutation.isPending}
+                              data-testid="switch-single-project-per-client"
+                            />
+                            <Label 
+                              htmlFor="single-project-toggle" 
+                              className="text-sm font-medium cursor-pointer"
+                              data-testid="label-single-project-per-client"
+                            >
+                              Single Project Per Client
+                            </Label>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent data-testid="tooltip-content-single-project">
+                          <p className="max-w-xs">
+                            When enabled, scheduling a new project will automatically archive any active projects of this type for the same client as unsuccessfully completed.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </div>
                 {projectType.description && (
