@@ -1,18 +1,29 @@
 import { useParams, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, AlertCircle, User as UserIcon } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import TopNavigation from "@/components/top-navigation";
 import ProjectInfo from "@/components/project-info";
 import StatusChangeForm from "@/components/status-change-form";
 import ProjectChronology from "@/components/project-chronology";
 import type { ProjectWithRelations, User } from "@shared/schema";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface RoleAssigneeResponse {
   user: User | null;
@@ -26,6 +37,8 @@ export default function ProjectDetail() {
   const [, setLocation] = useLocation();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [completionType, setCompletionType] = useState<'completed_successfully' | 'completed_unsuccessfully' | null>(null);
 
   // Fetch single project data
   const { 
@@ -49,6 +62,34 @@ export default function ProjectDetail() {
     },
     enabled: isAuthenticated && !!user && !!projectId && !!project,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Mutation to complete project
+  const completeMutation = useMutation({
+    mutationFn: async (status: 'completed_successfully' | 'completed_unsuccessfully') => {
+      return await apiRequest(`/api/projects/${projectId}/complete`, {
+        method: 'PATCH',
+        body: JSON.stringify({ completionStatus: status }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      toast({
+        title: "Project completed",
+        description: `Project has been marked as ${variables === 'completed_successfully' ? 'successfully' : 'unsuccessfully'} completed and archived.`,
+      });
+      setShowCompleteDialog(false);
+      setCompletionType(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to complete project",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   // Redirect to login if not authenticated
@@ -104,6 +145,24 @@ export default function ProjectDetail() {
     // Refetch project data when status is updated
     refetch();
   };
+
+  const handleCompleteClick = (type: 'completed_successfully' | 'completed_unsuccessfully') => {
+    setCompletionType(type);
+    setShowCompleteDialog(true);
+  };
+
+  const handleConfirmComplete = () => {
+    if (completionType) {
+      completeMutation.mutate(completionType);
+    }
+  };
+
+  const canComplete = project && !project.completionStatus && (
+    user?.isAdmin ||
+    project.currentAssigneeId === user?.id ||
+    project.clientManagerId === user?.id ||
+    project.bookkeeperId === user?.id
+  );
 
   // Loading state
   if (authLoading || !user) {
@@ -262,9 +321,38 @@ export default function ProjectDetail() {
             </Button>
           </div>
           
-          <h1 className="text-3xl font-bold text-foreground" data-testid="text-project-title">
-            {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-          </h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl font-bold text-foreground" data-testid="text-project-title">
+              {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+            </h1>
+            
+            {/* Complete Project Buttons */}
+            {canComplete && (
+              <div className="flex gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleCompleteClick('completed_successfully')}
+                  disabled={completeMutation.isPending}
+                  data-testid="button-complete-success"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Mark as Successfully Completed
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleCompleteClick('completed_unsuccessfully')}
+                  disabled={completeMutation.isPending}
+                  data-testid="button-complete-fail"
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Mark as Unsuccessfully Completed
+                </Button>
+              </div>
+            )}
+          </div>
           
           {/* Current Stage Assignee Display */}
           <Alert className="mt-4 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900" data-testid="alert-current-assignee">
@@ -309,6 +397,45 @@ export default function ProjectDetail() {
           </div>
         </div>
       </div>
+
+      {/* Completion Confirmation Dialog */}
+      <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+        <AlertDialogContent data-testid="dialog-complete-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {completionType === 'completed_successfully' 
+                ? 'Mark Project as Successfully Completed?' 
+                : 'Mark Project as Unsuccessfully Completed?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {completionType === 'completed_successfully' 
+                ? 'This will mark the project as successfully completed and archive it. The project will no longer appear in active project lists.'
+                : 'This will mark the project as unsuccessfully completed and archive it. The project will no longer appear in active project lists.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowCompleteDialog(false);
+                setCompletionType(null);
+              }}
+              data-testid="button-cancel-complete"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmComplete}
+              disabled={completeMutation.isPending}
+              data-testid="button-confirm-complete"
+              className={completionType === 'completed_successfully' 
+                ? 'bg-green-600 hover:bg-green-700' 
+                : 'bg-destructive hover:bg-destructive/90'}
+            >
+              {completeMutation.isPending ? 'Processing...' : 'Confirm'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
