@@ -2,6 +2,11 @@
 
 The Link is a comprehensive bookkeeping project workflow management system designed to streamline collaboration between client managers, bookkeepers, and administrative staff. It features role-based access control (Admin, Manager, Client Manager, Bookkeeper) and a kanban-style workflow to track projects through five stages. The system supports project assignment, task tracking, status updates with mandatory change reasons, and automated email notifications. Key capabilities include bulk client data uploads, kanban board and task list views, project chronology tracking, time governance for SLA compliance, enhanced service management, advanced project filtering with saved views, a column customization system, and a dashboard builder for analytics. The application is also configured as a Progressive Web App (PWA) with push notification support.
 
+# When You Need Permission
+
+The scheduling aspects of this system - ie how projects are created and how client and person services have their next start dates and next due dates set is the foundation of this this and any changes can cause the system as a whole to not work properly. 
+Therefore before you make any changes to code that could impact on how the scheduling works, you must seeks prior approval from the user before doing so. 
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
