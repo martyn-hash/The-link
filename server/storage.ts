@@ -241,6 +241,7 @@ export interface IStorage {
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
+  getActiveProjectsByClientAndType(clientId: string, projectTypeId: string): Promise<Project[]>;
   
   // Chronology operations
   createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology>;
@@ -2819,6 +2820,23 @@ export class DatabaseStorage implements IStorage {
     }
 
     return updatedProject;
+  }
+
+  async getActiveProjectsByClientAndType(clientId: string, projectTypeId: string): Promise<Project[]> {
+    const activeProjects = await db
+      .select()
+      .from(projects)
+      .where(
+        and(
+          eq(projects.clientId, clientId),
+          eq(projects.projectTypeId, projectTypeId),
+          eq(projects.archived, false),
+          eq(projects.inactive, false),
+          isNull(projects.completionStatus) // Only include projects that are truly active (not completed)
+        )
+      );
+
+    return activeProjects;
   }
 
   async updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project> {
