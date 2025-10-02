@@ -4098,6 +4098,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/services/project-type-assignable - Get services that can be mapped to project types (excludes personal and static services)
+  app.get("/api/services/project-type-assignable", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const services = await storage.getProjectTypeAssignableServices();
+      res.json(services);
+    } catch (error) {
+      console.error("Error fetching project-type-assignable services:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch project-type-assignable services" });
+    }
+  });
+
   // GET /api/scheduled-services - Get all scheduled services (admin only)
   app.get("/api/scheduled-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {

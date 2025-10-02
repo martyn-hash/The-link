@@ -420,6 +420,7 @@ export interface IStorage {
   getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServicesWithActiveClients(): Promise<Service[]>;
   getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
+  getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
   getScheduledServices(): Promise<ScheduledServiceView[]>;
   createService(service: InsertService): Promise<Service>;
@@ -4945,6 +4946,58 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+    // Get services that are NOT personal services AND NOT static services (for project type mapping)
+    const servicesData = await db
+      .select({
+        service: services,
+        projectType: projectTypes,
+      })
+      .from(services)
+      .leftJoin(projectTypes, eq(services.id, projectTypes.serviceId))
+      .where(
+        and(
+          or(eq(services.isPersonalService, false), isNull(services.isPersonalService)),
+          or(eq(services.isStaticService, false), isNull(services.isStaticService))
+        )
+      );
+
+    // Get all service roles in one query
+    const allServiceRoles = await db
+      .select({
+        serviceId: serviceRoles.serviceId,
+        role: workRoles,
+      })
+      .from(serviceRoles)
+      .leftJoin(workRoles, eq(serviceRoles.roleId, workRoles.id));
+
+    // Group roles by service ID
+    const rolesByServiceId = allServiceRoles.reduce((acc, item) => {
+      if (!acc[item.serviceId]) {
+        acc[item.serviceId] = [];
+      }
+      if (item.role) {
+        acc[item.serviceId].push(item.role);
+      }
+      return acc;
+    }, {} as Record<string, WorkRole[]>);
+
+    // Combine services with their roles and project types
+    return servicesData.map((row) => ({
+      ...row.service,
+      projectType: row.projectType || {
+        id: '',
+        name: '',
+        description: null,
+        serviceId: null,
+        active: true,
+        order: 0,
+        createdAt: null,
+      },
+      roles: rolesByServiceId[row.service.id] || [],
+    }));
+  }
+
   async getServiceById(id: string): Promise<Service | undefined> {
     const [service] = await db.select().from(services).where(eq(services.id, id));
     return service;
@@ -5597,6 +5650,12 @@ export class DatabaseStorage implements IStorage {
               description: service.description,
               projectTypeId: service.projectTypeId,
               udfDefinitions: service.udfDefinitions,
+              isActive: service.isActive,
+              isPersonalService: service.isPersonalService,
+              isStaticService: service.isStaticService,
+              isCompaniesHouseConnected: service.isCompaniesHouseConnected,
+              chStartDateField: service.chStartDateField,
+              chDueDateField: service.chDueDateField,
               createdAt: service.createdAt,
               projectType,
             },

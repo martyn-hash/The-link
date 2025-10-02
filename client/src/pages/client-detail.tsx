@@ -5979,9 +5979,26 @@ export default function ClientDetail() {
                                       {/* Column 1: Service Name and Description */}
                                       <div className="space-y-2">
                                         <div>
-                                          <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
-                                            {clientService.service?.name || 'Service'}
-                                          </h4>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
+                                              {clientService.service?.name || 'Service'}
+                                            </h4>
+                                            {clientService.service?.isStaticService && (
+                                              <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`static-status-${clientService.id}`}>
+                                                Static
+                                              </Badge>
+                                            )}
+                                            {clientService.service?.isPersonalService && (
+                                              <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`personal-status-${clientService.id}`}>
+                                                Personal
+                                              </Badge>
+                                            )}
+                                            {clientService.service?.isCompaniesHouseConnected && (
+                                              <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`ch-status-${clientService.id}`}>
+                                                CH
+                                              </Badge>
+                                            )}
+                                          </div>
                                           {clientService.service?.description && (
                                             <p className="text-sm text-muted-foreground mt-1">
                                               {clientService.service.description}
@@ -6175,9 +6192,26 @@ export default function ClientDetail() {
                                           {/* Column 1: Service Name and Description */}
                                           <div className="space-y-2">
                                             <div>
-                                              <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
-                                                {clientService.service?.name || 'Service'} <span className="text-xs text-red-500">(Inactive)</span>
-                                              </h4>
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
+                                                  {clientService.service?.name || 'Service'} <span className="text-xs text-red-500">(Inactive)</span>
+                                                </h4>
+                                                {clientService.service?.isStaticService && (
+                                                  <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`static-status-${clientService.id}`}>
+                                                    Static
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isPersonalService && (
+                                                  <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`personal-status-${clientService.id}`}>
+                                                    Personal
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isCompaniesHouseConnected && (
+                                                  <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`ch-status-${clientService.id}`}>
+                                                    CH
+                                                  </Badge>
+                                                )}
+                                              </div>
                                               {clientService.service?.description && (
                                                 <p className="text-sm text-muted-foreground mt-1">
                                                   {clientService.service.description}

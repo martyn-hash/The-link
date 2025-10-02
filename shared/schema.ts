@@ -516,6 +516,7 @@ export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(),
   description: text("description"),
+  projectTypeId: varchar("project_type_id").references(() => projectTypes.id),
   udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`), // Array of UDF definitions
   // Companies House connection fields
   isCompaniesHouseConnected: boolean("is_companies_house_connected").default(false),
@@ -523,6 +524,9 @@ export const services = pgTable("services", {
   chDueDateField: varchar("ch_due_date_field"), // Maps to client field for due date (e.g., 'next_accounts_due')
   // Personal service flag - if true, this service is for individuals, not clients/companies
   isPersonalService: boolean("is_personal_service").default(false),
+  // Static service flag - if true, this service is for display only and cannot be mapped to project types
+  isStaticService: boolean("is_static_service").default(false),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1217,6 +1221,7 @@ export const baseInsertServiceSchema = createInsertSchema(services).omit({
   chStartDateField: z.string().optional(),
   chDueDateField: z.string().optional(),
   isPersonalService: z.boolean().optional().default(false),
+  isStaticService: z.boolean().optional().default(false),
 });
 
 // Services schema with validation

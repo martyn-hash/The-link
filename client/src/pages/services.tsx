@@ -565,6 +565,8 @@ export default function Services() {
       isCompaniesHouseConnected: service.isCompaniesHouseConnected ?? false,
       chStartDateField: service.chStartDateField ?? "",
       chDueDateField: service.chDueDateField ?? "",
+      isPersonalService: service.isPersonalService ?? false,
+      isStaticService: service.isStaticService ?? false,
     });
     setViewMode('edit-service');
   };
@@ -768,6 +770,24 @@ export default function Services() {
                                       CH
                                     </Badge>
                                   )}
+                                  {service.isPersonalService && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="bg-purple-500 text-white"
+                                      data-testid={`personal-status-${service.id}`}
+                                    >
+                                      Personal
+                                    </Badge>
+                                  )}
+                                  {service.isStaticService && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="bg-gray-500 text-white"
+                                      data-testid={`static-status-${service.id}`}
+                                    >
+                                      Static
+                                    </Badge>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell data-testid={`project-type-${service.id}`}>
@@ -899,6 +919,31 @@ export default function Services() {
                                     onCheckedChange={field.onChange}
                                     data-testid="switch-personal-service"
                                     aria-describedby="personal-service-description"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Static Service Section */}
+                          <FormField
+                            control={serviceForm.control}
+                            name="isStaticService"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                  <FormLabel htmlFor="static-service-switch">Static Service</FormLabel>
+                                  <div className="text-sm text-muted-foreground">
+                                    Mark this service as static (display only, cannot be mapped to project types)
+                                  </div>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    id="static-service-switch"
+                                    checked={field.value || false}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-static-service"
+                                    aria-describedby="static-service-description"
                                   />
                                 </FormControl>
                               </FormItem>
@@ -1126,6 +1171,31 @@ export default function Services() {
                                     onCheckedChange={field.onChange}
                                     data-testid="switch-personal-service"
                                     aria-describedby="personal-service-description"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Static Service Section */}
+                          <FormField
+                            control={serviceForm.control}
+                            name="isStaticService"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                  <FormLabel htmlFor="static-service-switch">Static Service</FormLabel>
+                                  <div className="text-sm text-muted-foreground">
+                                    Mark this service as static (display only, cannot be mapped to project types)
+                                  </div>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    id="static-service-switch"
+                                    checked={field.value || false}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-static-service"
+                                    aria-describedby="static-service-description"
                                   />
                                 </FormControl>
                               </FormItem>
