@@ -47,8 +47,8 @@ export function DocumentUploadDialog({ clientId, source = "direct upload", folde
   };
 
   const handleSaveDocuments = async () => {
-    // Validate upload name (only required if creating a new folder)
-    if (!folderId && !uploadName.trim()) {
+    // Validate upload name - always required
+    if (!uploadName.trim()) {
       setUploadNameError("Please enter an upload name before saving");
       return;
     }
@@ -96,7 +96,7 @@ export function DocumentUploadDialog({ clientId, source = "direct upload", folde
           
           await apiRequest('POST', `/api/clients/${clientId}/documents`, {
             folderId: targetFolderId,
-            uploadName: uploadName.trim() || 'Upload',
+            uploadName: uploadName.trim(),
             source,
             fileName: file.name,
             fileSize: file.size,
@@ -220,36 +220,37 @@ export function DocumentUploadDialog({ clientId, source = "direct upload", folde
             </Alert>
           )}
 
-          {/* Upload Name Section - only show when creating a new folder */}
-          {!folderId && (
-            <div className="space-y-3">
-              <Label htmlFor="upload-name" className="text-base font-semibold">
-                Upload Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="upload-name"
-                placeholder="e.g., ID Documents, Bank Statements, etc."
-                value={uploadName}
-                onChange={(e) => {
-                  setUploadName(e.target.value);
-                  if (uploadNameError) setUploadNameError("");
-                }}
-                data-testid="input-upload-name"
-                disabled={isSaving}
-                className={uploadNameError ? "border-red-500" : ""}
-              />
-              {uploadNameError ? (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{uploadNameError}</AlertDescription>
-                </Alert>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Give this batch a name to help identify these documents later
-                </p>
-              )}
-            </div>
-          )}
+          {/* Upload Name Section */}
+          <div className="space-y-3">
+            <Label htmlFor="upload-name" className="text-base font-semibold">
+              Upload Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="upload-name"
+              placeholder="e.g., Passport 2024, Bank Statements Jan-Mar, etc."
+              value={uploadName}
+              onChange={(e) => {
+                setUploadName(e.target.value);
+                if (uploadNameError) setUploadNameError("");
+              }}
+              data-testid="input-upload-name"
+              disabled={isSaving}
+              className={uploadNameError ? "border-red-500" : ""}
+            />
+            {uploadNameError ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{uploadNameError}</AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {folderId 
+                  ? "Name this batch of documents for easy reference"
+                  : "This will create a new folder and name this batch of documents"
+                }
+              </p>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-2">
