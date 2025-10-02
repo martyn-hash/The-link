@@ -1277,7 +1277,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
         frequency: data.frequency,
         nextStartDate: data.nextStartDate && data.nextStartDate.trim() ? new Date(data.nextStartDate).toISOString() : null,
         nextDueDate: data.nextDueDate && data.nextDueDate.trim() ? new Date(data.nextDueDate).toISOString() : null,
-        serviceOwnerId: data.serviceOwnerId,
+        serviceOwnerId: data.serviceOwnerId && data.serviceOwnerId.trim() ? data.serviceOwnerId : null,
       });
       
       // Step 2: Create role assignments if any roles are assigned
