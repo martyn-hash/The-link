@@ -4,13 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-
-// Import RingCentral Web Phone (will be initialized dynamically)
-declare global {
-  interface Window {
-    RingCentral: any;
-  }
-}
+// @ts-ignore - RingCentral Web Phone types
+import RingCentralWebPhone from 'ringcentral-web-phone';
 
 interface CallState {
   sessionId: string | null;
@@ -79,21 +74,6 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         throw new Error('RingCentral Client ID not configured. Please contact support.');
       }
 
-      // Load RingCentral Web Phone SDK if not already loaded
-      if (!window.RingCentral) {
-        console.log('Loading RingCentral Web Phone SDK...');
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/ringcentral-web-phone@latest/dist/ringcentral-web-phone.js';
-        script.async = true;
-        
-        await new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-        console.log('RingCentral Web Phone SDK loaded');
-      }
-
       // Get SIP provisioning credentials
       console.log('Requesting SIP provisioning...');
       const sipProvision = await apiRequest('POST', '/api/ringcentral/sip-provision');
@@ -106,7 +86,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       console.log('SIP provisioning successful, initializing WebPhone...');
 
       // Initialize WebPhone
-      const webPhone = new window.RingCentral.WebPhone(sipProvision, {
+      const webPhone = new RingCentralWebPhone(sipProvision, {
         appKey: clientId,
         appName: 'CRM Phone',
         appVersion: '1.0.0',
