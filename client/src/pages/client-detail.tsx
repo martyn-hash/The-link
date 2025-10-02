@@ -1160,8 +1160,15 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
     setRoleAssignments({});
     setSelectedPersonId("");
     
+    // Clear fields for static services (they don't need frequency, dates, or owner)
+    if (service.isStaticService) {
+      form.setValue('frequency', undefined as any);
+      form.setValue('nextStartDate', '');
+      form.setValue('nextDueDate', '');
+      form.setValue('serviceOwnerId', '');
+    }
     // Auto-populate Companies House fields if service is CH-connected
-    if (service.isCompaniesHouseConnected && client) {
+    else if (service.isCompaniesHouseConnected && client) {
       // Force annual frequency
       form.setValue('frequency', 'annually');
       
@@ -1481,20 +1488,20 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel 
-                        fieldState={isPersonalService ? 'optional' : getFieldState('frequency', !isPersonalService)}
+                        fieldState={isPersonalService || isStaticService ? 'optional' : getFieldState('frequency', !isPersonalService && !isStaticService)}
                       >
                         Frequency
                       </FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value}
-                        disabled={isFieldDisabled('frequency')}
+                        disabled={isFieldDisabled('frequency') || isStaticService}
                       >
                         <FormControl>
                           <SelectTrigger 
                             data-testid="select-frequency"
-                            fieldState={isFieldDisabled('frequency') ? undefined : (isPersonalService ? 'optional' : getFieldState('frequency', !isPersonalService))}
-                            className={isFieldDisabled('frequency') ? 'bg-muted text-muted-foreground' : ''}
+                            fieldState={isFieldDisabled('frequency') || isStaticService ? undefined : (isPersonalService ? 'optional' : getFieldState('frequency', !isPersonalService))}
+                            className={isFieldDisabled('frequency') || isStaticService ? 'bg-muted text-muted-foreground pointer-events-none' : ''}
                           >
                             <SelectValue />
                           </SelectTrigger>
@@ -1523,7 +1530,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel 
-                        fieldState={isPersonalService ? 'optional' : getFieldState('nextStartDate', !isPersonalService)}
+                        fieldState={isPersonalService || isStaticService ? 'optional' : getFieldState('nextStartDate', !isPersonalService && !isStaticService)}
                       >
                         Next Start Date
                       </FormLabel>
@@ -1532,9 +1539,9 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                           type="date" 
                           {...field} 
                           data-testid="input-next-start-date"
-                          fieldState={isFieldDisabled('nextStartDate') ? undefined : (isPersonalService ? 'optional' : getFieldState('nextStartDate', !isPersonalService))}
-                          disabled={isFieldDisabled('nextStartDate')}
-                          className={isFieldDisabled('nextStartDate') ? 'bg-muted text-muted-foreground' : ''}
+                          fieldState={isFieldDisabled('nextStartDate') || isStaticService ? undefined : (isPersonalService ? 'optional' : getFieldState('nextStartDate', !isPersonalService))}
+                          disabled={isFieldDisabled('nextStartDate') || isStaticService}
+                          className={isFieldDisabled('nextStartDate') || isStaticService ? 'bg-muted text-muted-foreground pointer-events-none' : ''}
                         />
                       </FormControl>
                       {isCompaniesHouseService && (
@@ -1553,7 +1560,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel 
-                        fieldState={isPersonalService ? 'optional' : getFieldState('nextDueDate', !isPersonalService)}
+                        fieldState={isPersonalService || isStaticService ? 'optional' : getFieldState('nextDueDate', !isPersonalService && !isStaticService)}
                       >
                         Next Due Date
                       </FormLabel>
@@ -1562,9 +1569,9 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                           type="date" 
                           {...field} 
                           data-testid="input-next-due-date"
-                          fieldState={isFieldDisabled('nextDueDate') ? undefined : (isPersonalService ? 'optional' : getFieldState('nextDueDate', !isPersonalService))}
-                          disabled={isFieldDisabled('nextDueDate')}
-                          className={isFieldDisabled('nextDueDate') ? 'bg-muted text-muted-foreground' : ''}
+                          fieldState={isFieldDisabled('nextDueDate') || isStaticService ? undefined : (isPersonalService ? 'optional' : getFieldState('nextDueDate', !isPersonalService))}
+                          disabled={isFieldDisabled('nextDueDate') || isStaticService}
+                          className={isFieldDisabled('nextDueDate') || isStaticService ? 'bg-muted text-muted-foreground pointer-events-none' : ''}
                         />
                       </FormControl>
                       {isCompaniesHouseService && (
@@ -1583,22 +1590,36 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
               <div className="space-y-4">
                 <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Owner & Team</h3>
                 
+                {/* Wrapper for Service Owner that should be grayed out for static services */}
+                <div className="relative">
+                  {/* Overlay for static services */}
+                  {isStaticService && (
+                    <div className="absolute inset-0 bg-blue-100/80 dark:bg-blue-950/80 rounded-lg z-10 flex items-center justify-center backdrop-blur-sm">
+                      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg border border-blue-200 dark:border-blue-700 max-w-sm">
+                        <p className="text-sm text-blue-900 dark:text-blue-100 text-center font-medium">
+                          No owner assignment needed
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                 <FormField
                   control={form.control}
                   name="serviceOwnerId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel 
-                        required={!isPersonalService} 
-                        fieldState={isPersonalService ? 'optional' : getFieldState('serviceOwnerId', !isPersonalService)}
+                        required={!isPersonalService && !isStaticService} 
+                        fieldState={isPersonalService || isStaticService ? 'optional' : getFieldState('serviceOwnerId', !isPersonalService && !isStaticService)}
                       >
                         Service Owner
                       </FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isStaticService}>
                         <FormControl>
                           <SelectTrigger 
                             data-testid="select-service-owner"
-                            fieldState={isPersonalService ? 'optional' : getFieldState('serviceOwnerId', !isPersonalService)}
+                            fieldState={isPersonalService || isStaticService ? 'optional' : getFieldState('serviceOwnerId', !isPersonalService && !isStaticService)}
+                            className={isStaticService ? 'bg-muted text-muted-foreground pointer-events-none' : ''}
                           >
                             <SelectValue placeholder="Select service owner" />
                           </SelectTrigger>
@@ -1621,6 +1642,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                     </FormItem>
                   )}
                 />
+                </div>
 
                 {/* Person Selection - Only shown for personal services */}
                 {isPersonalService && (
