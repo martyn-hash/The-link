@@ -4527,7 +4527,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let finalClientServiceData = { ...clientServiceData };
       
-      if (service.isCompaniesHouseConnected) {
+      // Handle static services - these are for display/tracking only and don't need frequency or dates
+      if (service.isStaticService) {
+        // Static services don't require frequency or dates - leave them null if not provided
+        // This allows static services to be assigned without scheduling information
+      } else if (service.isCompaniesHouseConnected) {
         // Force annual frequency for CH services (always set for consistency)
         finalClientServiceData.frequency = 'annually' as const;
         
@@ -4582,6 +4586,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           nextStartDate: startDate.toISOString(),
           nextDueDate: dueDate.toISOString(),
         };
+      } else {
+        // Normal services (not static, not CH) require frequency with default
+        if (!finalClientServiceData.frequency) {
+          finalClientServiceData.frequency = 'monthly' as const;
+        }
       }
       
       // Convert ISO string dates to Date objects for database insertion
