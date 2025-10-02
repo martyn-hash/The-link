@@ -7,6 +7,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import DashboardBuilder from "@/components/dashboard-builder";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
   const isMobile = useIsMobile();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
@@ -276,7 +278,15 @@ export default function Dashboard() {
       </div>
       
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav />}
+      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+
+      {/* Mobile Search Modal */}
+      {isMobile && (
+        <SuperSearch
+          isOpen={mobileSearchOpen}
+          onOpenChange={setMobileSearchOpen}
+        />
+      )}
     </div>
   );
 }

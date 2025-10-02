@@ -5,6 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type ProjectWithRelations, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
+import { useIsMobile } from "@/hooks/use-mobile";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import DashboardBuilder from "@/components/dashboard-builder";
@@ -78,6 +81,8 @@ interface Dashboard {
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
@@ -673,15 +678,15 @@ export default function Projects() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
+        <header className="bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl md:text-2xl font-semibold text-foreground truncate" data-testid="text-page-title">
                 {getPageTitle()}
               </h2>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
               {/* Conditionally show dropdowns based on view mode */}
               {viewMode === "list" ? (
                 // List View: Show saved views dropdown
@@ -899,18 +904,20 @@ export default function Projects() {
                     size="sm"
                     onClick={() => setViewMode("list")}
                     data-testid="button-view-list"
+                    className="h-8 px-2 md:px-3"
                   >
-                    <List className="w-4 h-4 mr-2" />
-                    List
+                    <List className="w-4 h-4" />
+                    <span className="hidden md:inline ml-2">List</span>
                   </Button>
                   <Button
                     variant={viewMode === "dashboard" ? "secondary" : "ghost"}
                     size="sm"
                     onClick={() => setViewMode("dashboard")}
                     data-testid="button-view-dashboard"
+                    className="h-8 px-2 md:px-3"
                   >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    Dashboard
+                    <BarChart3 className="w-4 h-4" />
+                    <span className="hidden md:inline ml-2">Dashboard</span>
                   </Button>
                 </div>
               )}
@@ -920,15 +927,15 @@ export default function Projects() {
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
-                  className="relative"
+                  className="relative h-8 px-2 md:px-4"
                   data-testid="button-open-filters"
                 >
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filters
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden md:inline ml-2">Filters</span>
                   {activeFilterCount() > 0 && (
                     <Badge 
                       variant="secondary" 
-                      className="ml-2 rounded-full px-2"
+                      className="ml-1 md:ml-2 rounded-full px-1.5 md:px-2 text-xs"
                       data-testid="badge-active-filters-count"
                     >
                       {activeFilterCount()}
@@ -941,7 +948,7 @@ export default function Projects() {
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden pb-0 md:pb-0" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
           {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -990,6 +997,17 @@ export default function Projects() {
           )}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+
+      {/* Mobile Search Modal */}
+      {isMobile && (
+        <SuperSearch
+          isOpen={mobileSearchOpen}
+          onOpenChange={setMobileSearchOpen}
+        />
+      )}
 
       {/* Filter Panel */}
       <FilterPanel
