@@ -6766,7 +6766,7 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ProjectsList 
-                  projects={clientProjects?.filter(p => p.currentStatus !== 'completed')} 
+                  projects={clientProjects?.filter(p => !p.completionStatus)} 
                   isLoading={projectsLoading}
                   clientId={id}
                 />
@@ -6783,7 +6783,7 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ProjectsList 
-                  projects={clientProjects?.filter(p => p.currentStatus === 'completed')} 
+                  projects={clientProjects?.filter(p => p.completionStatus)} 
                   isLoading={projectsLoading}
                   clientId={id}
                 />
