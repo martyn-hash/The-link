@@ -66,47 +66,69 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
     let successCount = 0;
     let errorCount = 0;
 
-    for (const file of uploadedFiles) {
-      try {
-        if (!file.objectPath) {
-          console.error('No object path found for file:', file.name);
-          errorCount++;
-          continue;
-        }
-        
-        await apiRequest('POST', `/api/clients/${clientId}/documents`, {
-          uploadName: uploadName.trim(),
-          source,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          objectPath: file.objectPath,
-        });
-        
-        successCount++;
-      } catch (error) {
-        console.error('Error saving document metadata:', error);
-        errorCount++;
-      }
-    }
-
-    setIsSaving(false);
-    queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'documents'] });
-
-    if (successCount > 0) {
-      toast({
-        title: 'Success',
-        description: `${successCount} document${successCount > 1 ? 's' : ''} uploaded successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`,
+    try {
+      // First, create a folder for this upload batch
+      const folder = await apiRequest('POST', `/api/clients/${clientId}/folders`, {
+        name: uploadName.trim(),
+        source,
       });
-      setIsOpen(false);
-      setUploadName("");
-      setUploadedFiles([]);
-      setUploadNameError("");
-      fileObjectPathsRef.current.clear();
-    } else {
+
+      console.log('Folder created successfully:', folder);
+
+      // Then, create all documents and associate them with the folder
+      for (const file of uploadedFiles) {
+        try {
+          if (!file.objectPath) {
+            console.error('No object path found for file:', file.name);
+            errorCount++;
+            continue;
+          }
+          
+          await apiRequest('POST', `/api/clients/${clientId}/documents`, {
+            folderId: folder.id,
+            uploadName: uploadName.trim(),
+            source,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            objectPath: file.objectPath,
+          });
+          
+          successCount++;
+        } catch (error) {
+          console.error('Error saving document metadata:', error);
+          errorCount++;
+        }
+      }
+
+      setIsSaving(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'folders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'documents'] });
+
+      if (successCount > 0) {
+        toast({
+          title: 'Success',
+          description: `${successCount} document${successCount > 1 ? 's' : ''} uploaded successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`,
+        });
+        setIsOpen(false);
+        setUploadName("");
+        setUploadedFiles([]);
+        setUploadNameError("");
+        fileObjectPathsRef.current.clear();
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to save document metadata',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create document folder';
+      setIsSaving(false);
       toast({
         title: 'Error',
-        description: 'Failed to save document metadata',
+        description: errorMessage,
         variant: 'destructive',
       });
     }

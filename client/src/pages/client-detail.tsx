@@ -31,6 +31,7 @@ import ClientChronology from "@/components/client-chronology";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
 import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
+import DocumentFolderView from "@/components/DocumentFolderView";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6928,146 +6929,7 @@ export default function ClientDetail() {
                 </div>
               </CardHeader>
               <CardContent>
-                {documentsLoading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : !documents || documents.length === 0 ? (
-                  <div className="text-center py-8">
-                    <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-                    <p className="text-muted-foreground">No documents have been uploaded yet.</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>File Name</TableHead>
-                        <TableHead>Upload Name</TableHead>
-                        <TableHead>Date Uploaded</TableHead>
-                        <TableHead>Uploaded By</TableHead>
-                        <TableHead>File Size</TableHead>
-                        <TableHead>Source</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {documents.map((doc: any) => (
-                        <TableRow key={doc.id} data-testid={`document-row-${doc.id}`}>
-                          <TableCell data-testid={`cell-filename-${doc.id}`}>
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                                <FileText className="w-4 h-4 text-muted-foreground" />
-                              </div>
-                              <span className="text-sm font-medium" data-testid={`text-document-name-${doc.id}`}>
-                                {doc.fileName}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell data-testid={`cell-upload-name-${doc.id}`}>
-                            <span className="text-sm" data-testid={`text-upload-name-${doc.id}`}>
-                              {doc.uploadName}
-                            </span>
-                          </TableCell>
-                          <TableCell data-testid={`cell-date-${doc.id}`}>
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-sm" data-testid={`text-date-${doc.id}`}>
-                                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'No date'}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell data-testid={`cell-uploaded-by-${doc.id}`}>
-                            <div className="flex items-center gap-2">
-                              <UserIcon className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-sm" data-testid={`text-uploaded-by-${doc.id}`}>
-                                {doc.user ? `${doc.user.firstName} ${doc.user.lastName}` : 'Unknown'}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell data-testid={`cell-size-${doc.id}`}>
-                            <span className="text-sm" data-testid={`text-size-${doc.id}`}>
-                              {(doc.fileSize / 1024).toFixed(1)} KB
-                            </span>
-                          </TableCell>
-                          <TableCell data-testid={`cell-source-${doc.id}`}>
-                            <Badge variant="secondary" data-testid={`badge-source-${doc.id}`}>
-                              {doc.source}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {/* Preview button for images and PDFs */}
-                              {(doc.fileType.toLowerCase().includes('image') || 
-                                doc.fileType.toLowerCase().includes('pdf')) && (
-                                <DocumentPreviewDialog
-                                  document={doc}
-                                  trigger={
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                    >
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      Preview
-                                    </Button>
-                                  }
-                                />
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={async () => {
-                                  try {
-                                    const response = await fetch(`/api/documents/${doc.id}/download`, {
-                                      credentials: 'include',
-                                    });
-                                    if (!response.ok) {
-                                      throw new Error('Failed to download document');
-                                    }
-                                    const blob = await response.blob();
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = doc.fileName;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    window.URL.revokeObjectURL(url);
-                                    document.body.removeChild(a);
-                                  } catch (error) {
-                                    toast({
-                                      title: 'Error',
-                                      description: 'Failed to download document',
-                                      variant: 'destructive',
-                                    });
-                                  }
-                                }}
-                                data-testid={`button-download-${doc.id}`}
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                Download
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  if (confirm('Are you sure you want to delete this document?')) {
-                                    deleteDocumentMutation.mutate(doc.id);
-                                  }
-                                }}
-                                disabled={deleteDocumentMutation.isPending}
-                                data-testid={`button-delete-${doc.id}`}
-                              >
-                                <Trash className="h-4 w-4 mr-2" />
-                                Delete
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
+                <DocumentFolderView clientId={id} />
               </CardContent>
             </Card>
           </TabsContent>

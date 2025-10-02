@@ -57,6 +57,7 @@ import {
   insertCommunicationSchema,
   insertUserIntegrationSchema,
   insertDocumentSchema,
+  insertDocumentFolderSchema,
   type User,
 } from "@shared/schema";
 
@@ -2683,6 +2684,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "documentURL or objectPath is required" });
       }
 
+      // Validate folderId belongs to the same client if provided
+      if (req.body.folderId) {
+        const folder = await storage.getDocumentFolderById(req.body.folderId);
+        if (!folder) {
+          return res.status(404).json({ message: "Folder not found" });
+        }
+        if (folder.clientId !== clientId) {
+          return res.status(403).json({ message: "Folder does not belong to this client" });
+        }
+      }
+
       const objectStorageService = new ObjectStorageService();
       const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
         documentURL,
@@ -2695,6 +2707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create document record in database
       const documentData = insertDocumentSchema.parse({
         clientId,
+        folderId: req.body.folderId || null,
         uploadedBy: userId,
         uploadName: req.body.uploadName || 'Untitled Upload',
         source: req.body.source || 'direct upload',
@@ -2763,6 +2776,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting document:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
+  // Document folder routes
+  app.post("/api/clients/:clientId/folders", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const clientIdSchema = z.object({ clientId: z.string() });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = paramValidation.data;
+      const userId = req.user?.id;
+
+      const folderData = insertDocumentFolderSchema.parse({
+        clientId,
+        name: req.body.name,
+        createdBy: userId,
+        source: req.body.source || 'manual',
+      });
+
+      const folder = await storage.createDocumentFolder(folderData);
+      res.status(201).json(folder);
+    } catch (error) {
+      console.error("Error creating folder:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to create folder" });
+    }
+  });
+
+  app.get("/api/clients/:clientId/folders", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const clientIdSchema = z.object({ clientId: z.string() });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = paramValidation.data;
+      const folders = await storage.getDocumentFoldersByClientId(clientId);
+      res.json(folders);
+    } catch (error) {
+      console.error("Error fetching folders:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch folders" });
+    }
+  });
+
+  app.get("/api/folders/:folderId/documents", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const folderIdSchema = z.object({ folderId: z.string().uuid() });
+      const paramValidation = validateParams(folderIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid folder ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { folderId } = paramValidation.data;
+      const documents = await storage.getDocumentsByFolderId(folderId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching folder documents:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  app.delete("/api/folders/:id", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const folderIdSchema = z.object({ id: z.string().uuid() });
+      const paramValidation = validateParams(folderIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid folder ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { id } = paramValidation.data;
+      
+      // Get folder to check it exists
+      const folder = await storage.getDocumentFolderById(id);
+      if (!folder) {
+        return res.status(404).json({ message: "Folder not found" });
+      }
+
+      // Delete folder (CASCADE will delete associated documents)
+      await storage.deleteDocumentFolder(id);
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting folder:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to delete folder" });
     }
   });
 
