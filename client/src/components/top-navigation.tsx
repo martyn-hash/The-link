@@ -10,19 +10,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
 import AdminDropdown from "@/components/admin-dropdown";
 import ImpersonationPanel from "@/components/impersonation-panel";
+import MobileMenu from "@/components/mobile-menu";
 import type { User } from "@shared/schema";
 import logoPath from "@assets/resized_logo_1758262615320.png";
 
 interface TopNavigationProps {
   user?: User;
+  onMobileSearchClick?: () => void;
 }
 
-export default function TopNavigation({ user }: TopNavigationProps) {
+export default function TopNavigation({ user, onMobileSearchClick }: TopNavigationProps) {
   const [location] = useLocation();
   const { isImpersonating } = useAuth();
+  const isMobile = useIsMobile();
 
   const getUserInitials = () => {
     if (!user) return "U";
@@ -71,22 +75,29 @@ export default function TopNavigation({ user }: TopNavigationProps) {
       )}
       
       {/* Main Navigation */}
-      <div className="px-6 py-4">
+      <div className="px-4 md:px-6 py-3 md:py-4">
         <div className="flex items-center justify-between">
-          {/* Left Section: Logo Dropdown */}
-          <div className="flex items-center space-x-6">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <div className="flex items-center space-x-3 cursor-pointer hover:bg-accent/50 transition-colors px-3 py-2 rounded-md" data-testid="dropdown-logo-menu">
-                  <img 
-                    src={logoPath} 
-                    alt="Growth Accountants Logo" 
-                    className="h-8 w-auto"
-                    data-testid="img-navigation-logo"
-                  />
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                </div>
-              </DropdownMenuTrigger>
+          {/* Left Section: Mobile Menu + Logo */}
+          <div className="flex items-center gap-2 md:gap-6">
+            {/* Mobile Menu - Only on Mobile */}
+            {isMobile && user && (
+              <MobileMenu user={user} />
+            )}
+
+            {/* Logo Dropdown - Desktop Only */}
+            {!isMobile && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div className="flex items-center space-x-3 cursor-pointer hover:bg-accent/50 transition-colors px-3 py-2 rounded-md" data-testid="dropdown-logo-menu">
+                    <img 
+                      src={logoPath} 
+                      alt="Growth Accountants Logo" 
+                      className="h-8 w-auto"
+                      data-testid="img-navigation-logo"
+                    />
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-80 p-0">
                 <div className="bg-card rounded-lg border border-border shadow-lg">
                   {/* Header */}
@@ -204,22 +215,48 @@ export default function TopNavigation({ user }: TopNavigationProps) {
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
+
+            {/* Logo Only - Mobile */}
+            {isMobile && (
+              <img 
+                src={logoPath} 
+                alt="Growth Accountants Logo" 
+                className="h-7 w-auto"
+                data-testid="img-navigation-logo-mobile"
+              />
+            )}
           </div>
 
-          {/* Center Section: Search and Admin */}
-          <div className="flex items-center space-x-6">
-            {/* Global Super Search */}
-            <SuperSearch 
-              placeholder="Search clients, people, projects..." 
-              className="w-80"
-            />
+          {/* Center Section: Search and Admin - Desktop Only */}
+          {!isMobile && (
+            <div className="flex items-center space-x-6">
+              {/* Global Super Search */}
+              <SuperSearch 
+                placeholder="Search clients, people, projects..." 
+                className="w-80"
+              />
 
-            {/* Admin Dropdown */}
-            {user && <AdminDropdown user={user} />}
+              {/* Admin Dropdown */}
+              {user && <AdminDropdown user={user} />}
+            </div>
+          )}
+
+          {/* Right Section: Empty for desktop, Profile icon for mobile */}
+          <div className="flex items-center">
+            {isMobile && user && (
+              <Link href="/profile">
+                <Button variant="ghost" size="icon" className="h-10 w-10" data-testid="button-mobile-profile">
+                  <Avatar className="w-7 h-7">
+                    <AvatarImage src={user?.profileImageUrl || ""} />
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </Link>
+            )}
           </div>
-
-          {/* Right Section: Empty (Sign Out moved to profile page) */}
-          <div></div>
         </div>
       </div>
 
