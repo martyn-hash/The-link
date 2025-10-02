@@ -55,7 +55,15 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
         }
 
         const blob = await response.blob();
+        console.log('Blob created:', { 
+          type: blob.type, 
+          size: blob.size,
+          fileName: document.fileName,
+          expectedType: document.fileType 
+        });
+        
         const url = URL.createObjectURL(blob);
+        console.log('Blob URL created:', url);
         setBlobUrl(url);
       } catch (err) {
         console.error('Error loading preview:', err);
@@ -136,12 +144,19 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
 
     if (fileType.includes('image')) {
       return (
-        <div className="flex items-center justify-center bg-muted rounded-lg p-4">
+        <div className="flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg p-4 min-h-[400px]">
           <img
             src={blobUrl}
             alt={document.fileName}
-            className="max-w-full max-h-[70vh] object-contain"
+            className="max-w-full max-h-[70vh] object-contain rounded"
             data-testid="preview-image"
+            onError={(e) => {
+              console.error('Image failed to load:', e);
+              setError('Failed to load image preview');
+            }}
+            onLoad={() => {
+              console.log('Image loaded successfully:', blobUrl);
+            }}
           />
         </div>
       );

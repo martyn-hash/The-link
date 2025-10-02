@@ -569,10 +569,17 @@ export interface IStorage {
   deletePushSubscription(endpoint: string): Promise<void>;
   deletePushSubscriptionsByUserId(userId: string): Promise<void>;
 
+  // Document folder operations
+  createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
+  getDocumentFolderById(id: string): Promise<DocumentFolder | undefined>;
+  getDocumentFoldersByClientId(clientId: string): Promise<any[]>;
+  deleteDocumentFolder(id: string): Promise<void>;
+  
   // Document operations
   createDocument(document: InsertDocument): Promise<Document>;
   getDocumentById(id: string): Promise<Document | undefined>;
   getDocumentsByClientId(clientId: string): Promise<Document[]>;
+  getDocumentsByFolderId(folderId: string): Promise<any[]>;
   deleteDocument(id: string): Promise<void>;
 }
 
@@ -7513,6 +7520,55 @@ export class DatabaseStorage implements IStorage {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
   }
 
+  // Document folder operations
+  async createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder> {
+    const [newFolder] = await db
+      .insert(documentFolders)
+      .values(folder)
+      .returning();
+    return newFolder;
+  }
+
+  async getDocumentFolderById(id: string): Promise<DocumentFolder | undefined> {
+    const result = await db
+      .select()
+      .from(documentFolders)
+      .where(eq(documentFolders.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getDocumentFoldersByClientId(clientId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        id: documentFolders.id,
+        clientId: documentFolders.clientId,
+        name: documentFolders.name,
+        createdBy: documentFolders.createdBy,
+        source: documentFolders.source,
+        createdAt: documentFolders.createdAt,
+        updatedAt: documentFolders.updatedAt,
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+        documentCount: sql<number>`cast(count(${documents.id}) as int)`,
+      })
+      .from(documentFolders)
+      .leftJoin(users, eq(documentFolders.createdBy, users.id))
+      .leftJoin(documents, eq(documents.folderId, documentFolders.id))
+      .where(eq(documentFolders.clientId, clientId))
+      .groupBy(documentFolders.id, users.id)
+      .orderBy(desc(documentFolders.createdAt));
+    return results;
+  }
+
+  async deleteDocumentFolder(id: string): Promise<void> {
+    await db.delete(documentFolders).where(eq(documentFolders.id, id));
+  }
+
   // Document operations
   async createDocument(document: InsertDocument): Promise<Document> {
     const [newDocument] = await db
@@ -7536,6 +7592,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: documents.id,
         clientId: documents.clientId,
+        folderId: documents.folderId,
         uploadedBy: documents.uploadedBy,
         uploadName: documents.uploadName,
         source: documents.source,
@@ -7554,6 +7611,32 @@ export class DatabaseStorage implements IStorage {
       .from(documents)
       .leftJoin(users, eq(documents.uploadedBy, users.id))
       .where(eq(documents.clientId, clientId))
+      .orderBy(desc(documents.uploadedAt));
+    return results;
+  }
+
+  async getDocumentsByFolderId(folderId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        id: documents.id,
+        clientId: documents.clientId,
+        folderId: documents.folderId,
+        uploadedBy: documents.uploadedBy,
+        fileName: documents.fileName,
+        fileSize: documents.fileSize,
+        fileType: documents.fileType,
+        objectPath: documents.objectPath,
+        uploadedAt: documents.uploadedAt,
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(documents)
+      .leftJoin(users, eq(documents.uploadedBy, users.id))
+      .where(eq(documents.folderId, folderId))
       .orderBy(desc(documents.uploadedAt));
     return results;
   }
