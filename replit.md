@@ -27,7 +27,7 @@ Security is multi-layered with role-based access control. Replit OpenID Connect 
 
 ## Key Features & Design
 - **SuperSearch System**: Mega-menu style interface with cross-entity search (clients, people, projects, communications, services), smart categorization, enhanced context (related people with clients), and intelligent navigation.
-- **Service Management**: Accordion-style interface displaying service overview, detailed information, and editing capabilities. Includes Companies House integration for date management and role assignment management.
+- **Service Management**: Accordion-style interface displaying service overview, detailed information, and editing capabilities. Includes Companies House integration for date management and role assignment management. Supports static services for informational/tracking purposes (e.g., "Registered Office Service", "QuickBooks License Provided") that don't require workflows - marked with gray "Static" badge and excluded from project type mappings.
 - **Time Governance**: Configurable "Max Instance Time" and "Max Total Time" limits per kanban stage for SLA monitoring, calculated using business hours.
 - **Service Kanban Board**: Dynamic kanban board on the dashboard, filterable by active services, displaying all configured stages with project counts, adapting grid layout, and persistent service selection via localStorage.
 - **Advanced Project Filtering & Saved Views**: Collapsible filter panel with date-based, multi-dimensional filtering (service, assignee, owner, archived status). Users can save, load, and manage custom filter configurations.
