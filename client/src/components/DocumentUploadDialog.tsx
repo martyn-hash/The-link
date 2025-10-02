@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
   const [isOpen, setIsOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const fileObjectPathsRef = useRef<Map<string, string>>(new Map());
   const { toast } = useToast();
 
   const handleUploadComplete = async (result: any) => {
@@ -36,8 +37,13 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
 
       for (const file of result.successful) {
         try {
-          const uploadData = file.response?.uploadURL;
-          const objectPath = uploadData ? new URL(uploadData).pathname : '';
+          const objectPath = fileObjectPathsRef.current.get(file.id) || '';
+          
+          if (!objectPath) {
+            console.error('No object path found for file:', file.name);
+            errorCount++;
+            continue;
+          }
           
           await apiRequest('POST', `/api/clients/${clientId}/documents`, {
             uploadName: uploadName.trim(),
@@ -65,6 +71,7 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
         });
         setIsOpen(false);
         setUploadName("");
+        fileObjectPathsRef.current.clear();
       } else {
         toast({
           title: 'Error',
@@ -110,17 +117,21 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
             <ObjectUploader
               maxNumberOfFiles={10}
               maxFileSize={10485760}
-              onGetUploadParameters={async () => {
+              onGetUploadParameters={async (file) => {
                 const response = await fetch('/api/objects/upload', {
+                  method: 'POST',
                   credentials: 'include',
                 });
                 if (!response.ok) {
                   throw new Error('Failed to get upload URL');
                 }
                 const data = await response.json();
+                
+                fileObjectPathsRef.current.set(file.id, data.objectPath);
+                
                 return {
                   method: 'PUT' as const,
-                  url: data.url,
+                  url: data.uploadURL,
                 };
               }}
               onComplete={handleUploadComplete}
