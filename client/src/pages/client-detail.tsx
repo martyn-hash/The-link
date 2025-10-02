@@ -6945,13 +6945,14 @@ export default function ClientDetail() {
                         <TableHead>File Name</TableHead>
                         <TableHead>Upload Name</TableHead>
                         <TableHead>Date Uploaded</TableHead>
+                        <TableHead>Uploaded By</TableHead>
                         <TableHead>File Size</TableHead>
                         <TableHead>Source</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {documents.map((doc) => (
+                      {documents.map((doc: any) => (
                         <TableRow key={doc.id} data-testid={`document-row-${doc.id}`}>
                           <TableCell data-testid={`cell-filename-${doc.id}`}>
                             <div className="flex items-center gap-2">
@@ -6973,6 +6974,14 @@ export default function ClientDetail() {
                               <Clock className="w-4 h-4 text-muted-foreground" />
                               <span className="text-sm" data-testid={`text-date-${doc.id}`}>
                                 {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'No date'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell data-testid={`cell-uploaded-by-${doc.id}`}>
+                            <div className="flex items-center gap-2">
+                              <UserIcon className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-sm" data-testid={`text-uploaded-by-${doc.id}`}>
+                                {doc.user ? `${doc.user.firstName} ${doc.user.lastName}` : 'Unknown'}
                               </span>
                             </div>
                           </TableCell>

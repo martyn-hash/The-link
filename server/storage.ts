@@ -7531,12 +7531,31 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async getDocumentsByClientId(clientId: string): Promise<Document[]> {
-    return await db
-      .select()
+  async getDocumentsByClientId(clientId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        id: documents.id,
+        clientId: documents.clientId,
+        uploadedBy: documents.uploadedBy,
+        uploadName: documents.uploadName,
+        source: documents.source,
+        fileName: documents.fileName,
+        fileSize: documents.fileSize,
+        fileType: documents.fileType,
+        objectPath: documents.objectPath,
+        uploadedAt: documents.uploadedAt,
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
       .from(documents)
+      .leftJoin(users, eq(documents.uploadedBy, users.id))
       .where(eq(documents.clientId, clientId))
       .orderBy(desc(documents.uploadedAt));
+    return results;
   }
 
   async deleteDocument(id: string): Promise<void> {
