@@ -2678,13 +2678,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { clientId } = paramValidation.data;
       const userId = req.user?.id;
 
-      if (!req.body.documentURL) {
-        return res.status(400).json({ error: "documentURL is required" });
+      const documentURL = req.body.documentURL || req.body.objectPath;
+      if (!documentURL) {
+        return res.status(400).json({ error: "documentURL or objectPath is required" });
       }
 
       const objectStorageService = new ObjectStorageService();
       const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.documentURL,
+        documentURL,
         {
           owner: userId,
           visibility: "private",
@@ -2695,6 +2696,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const documentData = insertDocumentSchema.parse({
         clientId,
         uploadedBy: userId,
+        uploadName: req.body.uploadName || 'Untitled Upload',
+        source: req.body.source || 'direct upload',
         fileName: req.body.fileName,
         fileSize: req.body.fileSize,
         fileType: req.body.fileType,
