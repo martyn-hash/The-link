@@ -424,6 +424,20 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     setPendingStatusChange(null);
   };
 
+  // Check if project is completed (read-only mode)
+  if (project.completionStatus) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h4 className="font-semibold text-foreground mb-4">Change Status</h4>
+          <div className="text-sm text-muted-foreground p-4 bg-muted rounded" data-testid="text-project-completed">
+            This project has been marked as {project.completionStatus === 'completed_successfully' ? 'successfully completed' : 'unsuccessfully completed'} and can no longer be modified.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!canUpdateStatus()) {
     return (
       <div className="space-y-6">
