@@ -1761,6 +1761,21 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   uniqueEndpoint: unique("unique_push_subscription_endpoint").on(table.endpoint),
 }));
 
+// Documents table - stores metadata for files uploaded to object storage
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  fileName: varchar("file_name").notNull(),
+  fileSize: integer("file_size").notNull(), // in bytes
+  fileType: varchar("file_type").notNull(), // MIME type
+  objectPath: text("object_path").notNull(), // path in object storage (/objects/...)
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+}, (table) => [
+  index("idx_documents_client_id").on(table.clientId),
+  index("idx_documents_uploaded_at").on(table.uploadedAt),
+]);
+
 // Zod schemas for communications
 export const insertCommunicationSchema = createInsertSchema(communications).omit({
   id: true,
@@ -1786,6 +1801,11 @@ export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions
   updatedAt: true,
 });
 
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
@@ -1797,6 +1817,8 @@ export type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
 export type InsertUserOauthAccount = z.infer<typeof insertUserOauthAccountSchema>;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {

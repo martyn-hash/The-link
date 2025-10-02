@@ -4,6 +4,8 @@ import multer from "multer";
 import Papa from "papaparse";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 import { sendTaskAssignmentEmail } from "./emailService";
 import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "./push-service";
 import fetch from 'node-fetch';
@@ -54,6 +56,7 @@ import {
   insertPeopleServiceSchema,
   insertCommunicationSchema,
   insertUserIntegrationSchema,
+  insertDocumentSchema,
   type User,
 } from "@shared/schema";
 
@@ -2617,6 +2620,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error unassigning person tag:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to unassign person tag" });
+    }
+  });
+
+  // Document/Object Storage routes
+  // Referenced from blueprint:javascript_object_storage
+  // Get presigned URL for uploading documents
+  app.post("/api/objects/upload", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error generating upload URL:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Serve/download private documents (with ACL check)
+  app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res: any) => {
+    const userId = req.user?.id;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        req.path,
+      );
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: userId,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // Create document metadata after upload
+  app.post("/api/clients/:clientId/documents", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const clientIdSchema = z.object({ clientId: z.string() });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = paramValidation.data;
+      const userId = req.user?.id;
+
+      if (!req.body.documentURL) {
+        return res.status(400).json({ error: "documentURL is required" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.documentURL,
+        {
+          owner: userId,
+          visibility: "private",
+        },
+      );
+
+      // Create document record in database
+      const documentData = insertDocumentSchema.parse({
+        clientId,
+        uploadedBy: userId,
+        fileName: req.body.fileName,
+        fileSize: req.body.fileSize,
+        fileType: req.body.fileType,
+        objectPath,
+      });
+
+      const document = await storage.createDocument(documentData);
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Error creating document:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to create document" });
+    }
+  });
+
+  // Get documents for a client
+  app.get("/api/clients/:clientId/documents", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const clientIdSchema = z.object({ clientId: z.string() });
+      const paramValidation = validateParams(clientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid client ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = paramValidation.data;
+      const documents = await storage.getDocumentsByClientId(clientId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  // Delete a document
+  app.delete("/api/documents/:id", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const documentIdSchema = z.object({ id: z.string().uuid() });
+      const paramValidation = validateParams(documentIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid document ID", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { id } = paramValidation.data;
+      
+      // Get document to check it exists and get object path
+      const document = await storage.getDocumentById(id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Delete from database
+      await storage.deleteDocument(id);
+      
+      // Note: We're not deleting from object storage to maintain audit trail
+      // If needed, add object storage deletion here
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting document:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to delete document" });
     }
   });
 

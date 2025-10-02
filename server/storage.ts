@@ -39,6 +39,7 @@ import {
   userOauthAccounts,
   userActivityTracking,
   pushSubscriptions,
+  documents,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -123,6 +124,8 @@ import {
   type InsertUserActivityTracking,
   type PushSubscription,
   type InsertPushSubscription,
+  type Document,
+  type InsertDocument,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -565,6 +568,12 @@ export interface IStorage {
   getPushSubscriptionsByUserId(userId: string): Promise<PushSubscription[]>;
   deletePushSubscription(endpoint: string): Promise<void>;
   deletePushSubscriptionsByUserId(userId: string): Promise<void>;
+
+  // Document operations
+  createDocument(document: InsertDocument): Promise<Document>;
+  getDocumentById(id: string): Promise<Document | undefined>;
+  getDocumentsByClientId(clientId: string): Promise<Document[]>;
+  deleteDocument(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7502,6 +7511,36 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionsByUserId(userId: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  }
+
+  // Document operations
+  async createDocument(document: InsertDocument): Promise<Document> {
+    const [newDocument] = await db
+      .insert(documents)
+      .values(document)
+      .returning();
+    return newDocument;
+  }
+
+  async getDocumentById(id: string): Promise<Document | undefined> {
+    const result = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getDocumentsByClientId(clientId: string): Promise<Document[]> {
+    return await db
+      .select()
+      .from(documents)
+      .where(eq(documents.clientId, clientId))
+      .orderBy(desc(documents.uploadedAt));
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    await db.delete(documents).where(eq(documents.id, id));
   }
 }
 
