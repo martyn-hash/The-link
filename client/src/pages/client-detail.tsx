@@ -6,6 +6,9 @@ import 'react-quill/dist/quill.snow.css';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -5179,6 +5182,8 @@ export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const { trackClientView } = useActivityTracker();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
   const [expandedClientServiceId, setExpandedClientServiceId] = useState<string | null>(null);
@@ -5590,16 +5595,16 @@ export default function ClientDetail() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {user && <TopNavigation user={user} />}
-      <div className="flex-1">
+      <div className="flex-1" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
         {/* Header */}
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground" data-testid="text-client-name">
+        <div className="container mx-auto px-4 md:px-6 py-3 md:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl md:text-2xl font-bold text-foreground truncate" data-testid="text-client-name">
                 {client.name}
               </h1>
-              <p className="text-muted-foreground flex items-center mt-1">
+              <p className="text-sm text-muted-foreground flex items-center mt-1 flex-wrap gap-x-2">
                 {client.companyNumber && (
                   <>
                     <Building2 className="w-4 h-4 mr-1" />
@@ -5630,22 +5635,24 @@ export default function ClientDetail() {
       </div>
 
         {/* Main Content */}
-        <div className="container mx-auto p-6">
+        <div className="container mx-auto p-4 md:p-6">
         <Tabs 
           defaultValue="overview" 
           value={activeTab} 
           onValueChange={setActiveTab}
           className="flex flex-col"
         >
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
-            <TabsTrigger value="projects" data-testid="tab-projects">Project / Tasks</TabsTrigger>
-            <TabsTrigger value="communications" data-testid="tab-communications">Communications</TabsTrigger>
-            <TabsTrigger value="chronology" data-testid="tab-chronology">Chronology</TabsTrigger>
-            <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
-            <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+            <TabsList className="inline-flex md:grid w-auto md:w-full md:grid-cols-7 gap-1 h-auto">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs md:text-sm py-2 whitespace-nowrap">Overview</TabsTrigger>
+              <TabsTrigger value="services" data-testid="tab-services" className="text-xs md:text-sm py-2 whitespace-nowrap">Services</TabsTrigger>
+              <TabsTrigger value="projects" data-testid="tab-projects" className="text-xs md:text-sm py-2 whitespace-nowrap">Projects</TabsTrigger>
+              <TabsTrigger value="communications" data-testid="tab-communications" className="text-xs md:text-sm py-2 whitespace-nowrap">Comms</TabsTrigger>
+              <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-xs md:text-sm py-2 whitespace-nowrap">History</TabsTrigger>
+              <TabsTrigger value="documents" data-testid="tab-documents" className="text-xs md:text-sm py-2 whitespace-nowrap">Docs</TabsTrigger>
+              <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-xs md:text-sm py-2 whitespace-nowrap">Tasks</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
             {/* Company Details */}
@@ -7100,6 +7107,17 @@ export default function ClientDetail() {
         }}
         isSaving={createPersonMutation.isPending}
       />
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+
+      {/* Mobile Search Modal */}
+      {isMobile && (
+        <SuperSearch
+          isOpen={mobileSearchOpen}
+          onOpenChange={setMobileSearchOpen}
+        />
+      )}
     </div>
   );
 }
