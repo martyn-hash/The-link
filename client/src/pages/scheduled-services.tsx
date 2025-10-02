@@ -4,6 +4,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +51,8 @@ interface ScheduledServiceView {
 export default function ScheduledServices() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
   const [selectedService, setSelectedService] = useState<string>("all");
 
@@ -217,12 +222,12 @@ export default function ScheduledServices() {
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
       
-      <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="heading-scheduled-services">
+      <div className="container mx-auto px-4 md:px-6 py-6 md:py-8" style={{ paddingBottom: isMobile ? '5rem' : undefined }}>
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight" data-testid="heading-scheduled-services">
             Scheduled Services
           </h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-sm md:text-base text-muted-foreground mt-2">
             Manage and monitor all scheduled services for clients and people
           </p>
         </div>
@@ -230,13 +235,13 @@ export default function ScheduledServices() {
         {/* Filters and Controls */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Calendar className="w-5 h-5" />
+            <CardTitle className="flex items-center space-x-2 text-base md:text-lg">
+              <Calendar className="w-4 h-4 md:w-5 md:h-5" />
               <span>Filters & Controls</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-4 md:gap-6">
               {/* Date Filter Toggle */}
               <div className="flex items-center space-x-2">
                 <Switch
@@ -245,16 +250,16 @@ export default function ScheduledServices() {
                   onCheckedChange={setShowAllServices}
                   data-testid="switch-show-all-services"
                 />
-                <Label htmlFor="show-all-services">
+                <Label htmlFor="show-all-services" className="text-sm md:text-base">
                   {showAllServices ? "Show All Services" : "Today's Services Only"}
                 </Label>
               </div>
 
               {/* Service Filter */}
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="service-filter">Service:</Label>
+              <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-2 flex-1 md:flex-none">
+                <Label htmlFor="service-filter" className="text-sm md:text-base">Service:</Label>
                 <Select value={selectedService} onValueChange={setSelectedService}>
-                  <SelectTrigger className="w-48" data-testid="select-service-filter">
+                  <SelectTrigger className="w-full md:w-48" data-testid="select-service-filter">
                     <SelectValue placeholder="Select service" />
                   </SelectTrigger>
                   <SelectContent>
@@ -271,7 +276,7 @@ export default function ScheduledServices() {
               {/* Create Projects Button */}
               <Button 
                 onClick={handleCreateProjects}
-                className="flex items-center space-x-2"
+                className="flex items-center justify-center space-x-2 w-full md:w-auto"
                 data-testid="button-create-projects"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -303,97 +308,196 @@ export default function ScheduledServices() {
                 </p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Service Name</TableHead>
-                    <TableHead>Client / Person Name</TableHead>
-                    <TableHead>Service Dates (Next)</TableHead>
-                    <TableHead>Current Project Dates</TableHead>
-                    <TableHead>Project Type</TableHead>
-                    <TableHead>Project Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Service Name</TableHead>
+                        <TableHead>Client / Person Name</TableHead>
+                        <TableHead>Service Dates (Next)</TableHead>
+                        <TableHead>Current Project Dates</TableHead>
+                        <TableHead>Project Type</TableHead>
+                        <TableHead>Project Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredServices.map((service) => (
+                        <TableRow key={service.id} data-testid={`row-service-${service.id}`}>
+                          <TableCell className="font-medium">{service.serviceName}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <span>{service.clientOrPersonName}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {service.clientOrPersonType}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              {service.nextStartDate && safeFormatDate(service.nextStartDate) && (
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-muted-foreground">Start:</span>
+                                  <span className="text-sm">{safeFormatDate(service.nextStartDate)}</span>
+                                  {service.nextStartDate && new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
+                                    <Badge variant="default" className="text-xs">Today</Badge>
+                                  )}
+                                </div>
+                              )}
+                              {service.nextDueDate && safeFormatDate(service.nextDueDate) && (
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-muted-foreground">Due:</span>
+                                  <span className="text-sm">{safeFormatDate(service.nextDueDate)}</span>
+                                </div>
+                              )}
+                              {!service.nextStartDate && !service.nextDueDate && (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate) ? (
+                              <div className="space-y-1">
+                                {service.currentProjectStartDate && safeFormatDate(service.currentProjectStartDate) && (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-xs text-muted-foreground">Started:</span>
+                                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                      {safeFormatDate(service.currentProjectStartDate)}
+                                    </span>
+                                  </div>
+                                )}
+                                {service.currentProjectDueDate && safeFormatDate(service.currentProjectDueDate) && (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-xs text-muted-foreground">Due:</span>
+                                    <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                      {safeFormatDate(service.currentProjectDueDate)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{service.projectTypeName}</TableCell>
+                          <TableCell>
+                            {service.hasActiveProject ? (
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                  Active Project
+                                </Badge>
+                              </div>
+                            ) : (
+                              <Badge variant="secondary" className="text-muted-foreground">
+                                No Active Project
+                              </Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
                   {filteredServices.map((service) => (
-                    <TableRow key={service.id} data-testid={`row-service-${service.id}`}>
-                      <TableCell className="font-medium">{service.serviceName}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <span>{service.clientOrPersonName}</span>
+                    <Card key={service.id} data-testid={`card-service-${service.id}`} className="border-l-4" style={{ borderLeftColor: service.hasActiveProject ? 'rgb(34 197 94)' : 'rgb(156 163 175)' }}>
+                      <CardContent className="p-4 space-y-3">
+                        {/* Service Name and Status */}
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-base">{service.serviceName}</h3>
+                          {service.hasActiveProject ? (
+                            <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs whitespace-nowrap">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-muted-foreground text-xs whitespace-nowrap">
+                              No Project
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Client/Person */}
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">Client:</span>
+                          <span className="font-medium">{service.clientOrPersonName}</span>
                           <Badge variant="outline" className="text-xs">
                             {service.clientOrPersonType}
                           </Badge>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          {service.nextStartDate && safeFormatDate(service.nextStartDate) && (
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs text-muted-foreground">Start:</span>
-                              <span className="text-sm">{safeFormatDate(service.nextStartDate)}</span>
-                              {service.nextStartDate && new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
-                                <Badge variant="default" className="text-xs">Today</Badge>
-                              )}
-                            </div>
-                          )}
-                          {service.nextDueDate && safeFormatDate(service.nextDueDate) && (
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs text-muted-foreground">Due:</span>
-                              <span className="text-sm">{safeFormatDate(service.nextDueDate)}</span>
-                            </div>
-                          )}
-                          {!service.nextStartDate && !service.nextDueDate && (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          )}
+
+                        {/* Project Type */}
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">Type:</span>
+                          <span>{service.projectTypeName}</span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate) ? (
-                          <div className="space-y-1">
+
+                        {/* Next Service Dates */}
+                        {(service.nextStartDate || service.nextDueDate) && (
+                          <div className="space-y-1 pt-2 border-t">
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Next Service</div>
+                            {service.nextStartDate && safeFormatDate(service.nextStartDate) && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-muted-foreground">Start:</span>
+                                <span>{safeFormatDate(service.nextStartDate)}</span>
+                                {new Date(service.nextStartDate).toDateString() === new Date().toDateString() && (
+                                  <Badge variant="default" className="text-xs">Today</Badge>
+                                )}
+                              </div>
+                            )}
+                            {service.nextDueDate && safeFormatDate(service.nextDueDate) && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-muted-foreground">Due:</span>
+                                <span>{safeFormatDate(service.nextDueDate)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Current Project Dates */}
+                        {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate) && (
+                          <div className="space-y-1 pt-2 border-t">
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Current Project</div>
                             {service.currentProjectStartDate && safeFormatDate(service.currentProjectStartDate) && (
-                              <div className="flex items-center space-x-2">
-                                <span className="text-xs text-muted-foreground">Started:</span>
-                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-muted-foreground">Started:</span>
+                                <span className="font-medium text-blue-700 dark:text-blue-300">
                                   {safeFormatDate(service.currentProjectStartDate)}
                                 </span>
                               </div>
                             )}
                             {service.currentProjectDueDate && safeFormatDate(service.currentProjectDueDate) && (
-                              <div className="flex items-center space-x-2">
-                                <span className="text-xs text-muted-foreground">Due:</span>
-                                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-muted-foreground">Due:</span>
+                                <span className="font-medium text-orange-700 dark:text-orange-300">
                                   {safeFormatDate(service.currentProjectDueDate)}
                                 </span>
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
                         )}
-                      </TableCell>
-                      <TableCell>{service.projectTypeName}</TableCell>
-                      <TableCell>
-                        {service.hasActiveProject ? (
-                          <div className="flex items-center space-x-2">
-                            <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              Active Project
-                            </Badge>
-                          </div>
-                        ) : (
-                          <Badge variant="secondary" className="text-muted-foreground">
-                            No Active Project
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                      </CardContent>
+                    </Card>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+
+      {/* Mobile Search Modal */}
+      {isMobile && (
+        <SuperSearch
+          isOpen={mobileSearchOpen}
+          onOpenChange={setMobileSearchOpen}
+        />
+      )}
     </div>
   );
 }
