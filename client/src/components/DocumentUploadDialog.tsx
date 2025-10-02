@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface DocumentUploadDialogProps {
   clientId: string;
   source?: string;
+  folderId?: string | null;
 }
 
 interface UploadedFile {
@@ -22,7 +23,7 @@ interface UploadedFile {
   objectPath: string;
 }
 
-export function DocumentUploadDialog({ clientId, source = "direct upload" }: DocumentUploadDialogProps) {
+export function DocumentUploadDialog({ clientId, source = "direct upload", folderId = null }: DocumentUploadDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -46,8 +47,8 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
   };
 
   const handleSaveDocuments = async () => {
-    // Validate upload name
-    if (!uploadName.trim()) {
+    // Validate upload name (only required if creating a new folder)
+    if (!folderId && !uploadName.trim()) {
       setUploadNameError("Please enter an upload name before saving");
       return;
     }
@@ -67,15 +68,24 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
     let errorCount = 0;
 
     try {
-      // First, create a folder for this upload batch
-      const folder = await apiRequest('POST', `/api/clients/${clientId}/folders`, {
-        name: uploadName.trim(),
-        source,
-      });
+      let targetFolderId = folderId;
+      
+      // Only create a folder if one wasn't provided
+      if (!folderId) {
+        const folder = await apiRequest('POST', `/api/clients/${clientId}/folders`, {
+          name: uploadName.trim(),
+          source,
+        });
+        console.log('Folder created successfully:', folder);
+        targetFolderId = folder.id;
+      }
 
-      console.log('Folder created successfully:', folder);
+      // Validate we have a valid folder ID before proceeding
+      if (!targetFolderId) {
+        throw new Error('Failed to get folder ID for document upload');
+      }
 
-      // Then, create all documents and associate them with the folder
+      // Create all documents and associate them with the folder
       for (const file of uploadedFiles) {
         try {
           if (!file.objectPath) {
@@ -85,8 +95,8 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
           }
           
           await apiRequest('POST', `/api/clients/${clientId}/documents`, {
-            folderId: folder.id,
-            uploadName: uploadName.trim(),
+            folderId: targetFolderId,
+            uploadName: uploadName.trim() || 'Upload',
             source,
             fileName: file.name,
             fileSize: file.size,
@@ -104,6 +114,9 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
       setIsSaving(false);
       queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'folders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'documents'] });
+      if (targetFolderId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/folders', targetFolderId, 'documents'] });
+      }
 
       if (successCount > 0) {
         toast({
@@ -123,8 +136,8 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
         });
       }
     } catch (error) {
-      console.error('Error creating folder:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create document folder';
+      console.error('Error saving documents:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save documents';
       setIsSaving(false);
       toast({
         title: 'Error',
@@ -207,34 +220,36 @@ export function DocumentUploadDialog({ clientId, source = "direct upload" }: Doc
             </Alert>
           )}
 
-          {/* Upload Name Section */}
-          <div className="space-y-3">
-            <Label htmlFor="upload-name" className="text-base font-semibold">
-              Upload Name <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="upload-name"
-              placeholder="e.g., ID Documents, Bank Statements, etc."
-              value={uploadName}
-              onChange={(e) => {
-                setUploadName(e.target.value);
-                if (uploadNameError) setUploadNameError("");
-              }}
-              data-testid="input-upload-name"
-              disabled={isSaving}
-              className={uploadNameError ? "border-red-500" : ""}
-            />
-            {uploadNameError ? (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{uploadNameError}</AlertDescription>
-              </Alert>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Give this batch a name to help identify these documents later
-              </p>
-            )}
-          </div>
+          {/* Upload Name Section - only show when creating a new folder */}
+          {!folderId && (
+            <div className="space-y-3">
+              <Label htmlFor="upload-name" className="text-base font-semibold">
+                Upload Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="upload-name"
+                placeholder="e.g., ID Documents, Bank Statements, etc."
+                value={uploadName}
+                onChange={(e) => {
+                  setUploadName(e.target.value);
+                  if (uploadNameError) setUploadNameError("");
+                }}
+                data-testid="input-upload-name"
+                disabled={isSaving}
+                className={uploadNameError ? "border-red-500" : ""}
+              />
+              {uploadNameError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{uploadNameError}</AlertDescription>
+                </Alert>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Give this batch a name to help identify these documents later
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-2">

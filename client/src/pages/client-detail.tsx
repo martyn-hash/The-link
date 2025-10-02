@@ -32,6 +32,7 @@ import { ObjectUploader } from "@/components/ObjectUploader";
 import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
 import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
 import DocumentFolderView from "@/components/DocumentFolderView";
+import { CreateFolderDialog } from "@/components/CreateFolderDialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6920,16 +6921,21 @@ export default function ClientDetail() {
           <TabsContent value="documents" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Documents
-                  </CardTitle>
-                  <DocumentUploadDialog clientId={id} source="direct upload" />
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Documents
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <DocumentFolderView clientId={id} />
+                <DocumentFolderView 
+                  clientId={id} 
+                  renderActions={(currentFolderId) => (
+                    <>
+                      <CreateFolderDialog clientId={id} />
+                      <DocumentUploadDialog clientId={id} source="direct upload" folderId={currentFolderId} />
+                    </>
+                  )}
+                />
               </CardContent>
             </Card>
           </TabsContent>

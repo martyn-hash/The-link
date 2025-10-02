@@ -11,6 +11,7 @@ interface DocumentPreviewDialogProps {
     fileName: string;
     fileType: string;
     fileSize: number;
+    objectPath: string;
   };
   trigger: React.ReactNode;
 }
@@ -46,7 +47,7 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
       setError(null);
 
       try {
-        const response = await fetch(`/api/documents/${document.id}/download`, {
+        const response = await fetch(document.objectPath, {
           credentials: 'include',
         });
 
@@ -88,7 +89,7 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(`/api/documents/${document.id}/download`, {
+      const response = await fetch(document.objectPath, {
         credentials: 'include',
       });
       if (!response.ok) {

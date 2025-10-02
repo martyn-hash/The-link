@@ -18,9 +18,10 @@ import { DocumentPreviewDialog } from "./DocumentPreviewDialog";
 
 interface DocumentFolderViewProps {
   clientId: string;
+  renderActions?: (currentFolderId: string | null) => React.ReactNode;
 }
 
-export default function DocumentFolderView({ clientId }: DocumentFolderViewProps) {
+export default function DocumentFolderView({ clientId, renderActions }: DocumentFolderViewProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [currentFolderName, setCurrentFolderName] = useState<string>("");
   const { toast } = useToast();
@@ -86,9 +87,9 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
     },
   });
 
-  const handleDownload = async (documentId: string, fileName: string) => {
+  const handleDownload = async (doc: any) => {
     try {
-      const response = await fetch(`/api/documents/${documentId}/download`, {
+      const response = await fetch(doc.objectPath, {
         credentials: 'include',
       });
 
@@ -100,7 +101,7 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = doc.fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -183,7 +184,10 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
 
     return (
       <div className="space-y-6">
-        {renderBreadcrumb()}
+        <div className="flex items-center justify-between">
+          {renderBreadcrumb()}
+          {renderActions && <div className="flex gap-2">{renderActions(null)}</div>}
+        </div>
         
         {/* Folders Table */}
         {folders && folders.length > 0 && (
@@ -325,7 +329,7 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDownload(doc.id, doc.fileName)}
+                          onClick={() => handleDownload(doc)}
                           data-testid={`button-download-${doc.id}`}
                         >
                           <Download className="w-4 h-4" />
@@ -368,7 +372,10 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
 
   return (
     <div className="space-y-4">
-      {renderBreadcrumb()}
+      <div className="flex items-center justify-between">
+        {renderBreadcrumb()}
+        {renderActions && <div className="flex gap-2">{renderActions(currentFolderId)}</div>}
+      </div>
       
       {!documents || documents.length === 0 ? (
         <div className="text-center py-8">
@@ -429,7 +436,7 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDownload(doc.id, doc.fileName)}
+                      onClick={() => handleDownload(doc)}
                       data-testid={`button-download-${doc.id}`}
                     >
                       <Download className="w-4 h-4" />
