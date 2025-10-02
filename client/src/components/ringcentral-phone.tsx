@@ -71,8 +71,17 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     try {
       setIsInitializing(true);
 
+      // Check if Client ID is available
+      const clientId = import.meta.env.VITE_RINGCENTRAL_CLIENT_ID;
+      console.log('RingCentral Client ID available:', !!clientId);
+      
+      if (!clientId) {
+        throw new Error('RingCentral Client ID not configured. Please contact support.');
+      }
+
       // Load RingCentral Web Phone SDK if not already loaded
       if (!window.RingCentral) {
+        console.log('Loading RingCentral Web Phone SDK...');
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/ringcentral-web-phone@latest/dist/ringcentral-web-phone.js';
         script.async = true;
@@ -82,9 +91,11 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
           script.onerror = reject;
           document.head.appendChild(script);
         });
+        console.log('RingCentral Web Phone SDK loaded');
       }
 
       // Get SIP provisioning credentials
+      console.log('Requesting SIP provisioning...');
       const sipProvision = await apiRequest('POST', '/api/ringcentral/sip-provision');
 
       if (!sipProvision || !sipProvision.sipInfo || sipProvision.sipInfo.length === 0) {
@@ -92,10 +103,11 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       }
 
       const sipInfo = sipProvision.sipInfo[0];
+      console.log('SIP provisioning successful, initializing WebPhone...');
 
       // Initialize WebPhone
       const webPhone = new window.RingCentral.WebPhone(sipProvision, {
-        appKey: import.meta.env.VITE_RINGCENTRAL_CLIENT_ID || '',
+        appKey: clientId,
         appName: 'CRM Phone',
         appVersion: '1.0.0',
         media: {
@@ -104,6 +116,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         },
         logLevel: 1,
       });
+      console.log('WebPhone instance created');
 
       // WebPhone event listeners
       webPhone.userAgent.on('registered', () => {

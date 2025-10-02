@@ -1,0 +1,260 @@
+chunk-RPCDYKBN.js?v=0cbb71d0:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+main.tsx:9 Service Worker registered: ServiceWorkerRegistration
+client-detail.tsx:5221 🔍 TAB DEBUG [TAB_VALUE_CHANGE]: {
+  "timestamp": 1759437269049,
+  "eventType": "TAB_VALUE_CHANGE",
+  "tabValue": "overview",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "windowSize": {
+    "width": 1710,
+    "height": 985
+  },
+  "documentSize": {
+    "clientHeight": 985
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1710,
+    "height": 1030,
+    "top": 0,
+    "right": 1710,
+    "bottom": 1030,
+    "left": 0
+  }
+}
+client-detail.tsx:5221 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_RAF]: {
+  "timestamp": 1759437269061,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_RAF",
+  "tabValue": "overview",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "windowSize": {
+    "width": 1710,
+    "height": 985
+  },
+  "documentSize": {
+    "clientHeight": 985
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1710,
+    "height": 1030,
+    "top": 0,
+    "right": 1710,
+    "bottom": 1030,
+    "left": 0
+  }
+}
+client-detail.tsx:5221 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_TIMEOUT]: {
+  "timestamp": 1759437269062,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_TIMEOUT",
+  "tabValue": "overview",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "windowSize": {
+    "width": 1710,
+    "height": 985
+  },
+  "documentSize": {
+    "clientHeight": 985
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1710,
+    "height": 1030,
+    "top": 0,
+    "right": 1710,
+    "bottom": 1030,
+    "left": 0
+  }
+}
+client-detail.tsx:5249 ⚡ LAYOUT SHIFT: value=0.0005852149917446073, hadRecentInput=false, activeTab=overview, scrollY=0
+client-detail.tsx:5249 ⚡ LAYOUT SHIFT: value=0.001642530644597661, hadRecentInput=false, activeTab=overview, scrollY=0
+client-detail.tsx:5221 🔍 TAB DEBUG [TAB_VALUE_CHANGE]: {
+  "timestamp": 1759437271675,
+  "eventType": "TAB_VALUE_CHANGE",
+  "tabValue": "communications",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "tabsList": {
+    "x": 111,
+    "y": 243,
+    "width": 1488,
+    "height": 40,
+    "top": 243,
+    "right": 1599,
+    "bottom": 283,
+    "left": 111
+  },
+  "activeTabPanel": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+  },
+  "windowSize": {
+    "width": 1710,
+    "height": 985
+  },
+  "documentSize": {
+    "clientHeight": 985
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1710,
+    "height": 1454,
+    "top": 0,
+    "right": 1710,
+    "bottom": 1454,
+    "left": 0
+  }
+}
+client-detail.tsx:5291 🖱️ TAB CLICK: tab=communications, scrollY=0, timestamp=1759437271680
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm, relatedTarget=null, activeTab=communications, scrollY=0
+client-detail.tsx:5221 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_RAF]: {
+  "timestamp": 1759437271681,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_RAF",
+  "tabValue": "communications",
+  "scrollY": 0,
+  "activeElement": "BUTTON.inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+  "hash": "",
+  "tabsList": {
+    "x": 111,
+    "y": 243,
+    "width": 1488,
+    "height": 40,
+    "top": 243,
+    "right": 1599,
+    "bottom": 283,
+    "left": 111
+  },
+  "activeTabPanel": {
+    "x": 111,
+    "y": 307,
+    "width": 1488,
+    "height": 250,
+    "top": 307,
+    "right": 1599,
+    "bottom": 557,
+    "left": 111
+  },
+  "windowSize": {
+    "width": 1710,
+    "height": 985
+  },
+  "documentSize": {
+    "clientHeight": 985
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1710,
+    "height": 1030,
+    "top": 0,
+    "right": 1710,
+    "bottom": 1030,
+    "left": 0
+  }
+}
+client-detail.tsx:5221 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_TIMEOUT]: {
+  "timestamp": 1759437271683,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_TIMEOUT",
+  "tabValue": "communications",
+  "scrollY": 0,
+  "activeElement": "BUTTON.inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+  "hash": "",
+  "tabsList": {
+    "x": 111,
+    "y": 243,
+    "width": 1488,
+    "height": 40,
+    "top": 243,
+    "right": 1599,
+    "bottom": 283,
+    "left": 111
+  },
+  "activeTabPanel": {
+    "x": 111,
+    "y": 307,
+    "width": 1488,
+    "height": 250,
+    "top": 307,
+    "right": 1599,
+    "bottom": 557,
+    "left": 111
+  },
+  "windowSize": {
+    "width": 1710,
+    "height": 985
+  },
+  "documentSize": {
+    "clientHeight": 985
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1710,
+    "height": 1030,
+    "top": 0,
+    "right": 1710,
+    "bottom": 1030,
+    "left": 0
+  }
+}
+client-detail.tsx:5249 ⚡ LAYOUT SHIFT: value=0.0037456481468461722, hadRecentInput=false, activeTab=communications, scrollY=0
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+chunk-E3FU32CY.js?v=0cbb71d0:339 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-E3FU32CY.js?v=0cbb71d0:339
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.flex h-10 w-full items-center justify-between rounded-md px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 transition-all duration-200 border border-input bg-background focus:ring-ring data-[placeholder]:text-muted-foreground, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:229 Error initializing WebPhone: Event
+initializeWebPhone @ ringcentral-phone.tsx:229
+client-detail.tsx:5249 ⚡ LAYOUT SHIFT: value=0.000017794839841388134, hadRecentInput=true, activeTab=communications, scrollY=0
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.flex h-10 w-full items-center justify-between rounded-md px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 transition-all duration-200 border border-input bg-background focus:ring-ring data-[placeholder]:text-muted-foreground, relatedTarget=null, activeTab=communications, scrollY=0
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+client-detail.tsx:5249 ⚡ LAYOUT SHIFT: value=0.40823510223779225, hadRecentInput=true, activeTab=communications, scrollY=0
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3, relatedTarget=null, activeTab=communications, scrollY=0
+chunk-E3FU32CY.js?v=0cbb71d0:339 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-E3FU32CY.js?v=0cbb71d0:339
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=0cbb71d0:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=0cbb71d0:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=0cbb71d0:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=0cbb71d0:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=0cbb71d0:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=0cbb71d0:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=0cbb71d0:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=0cbb71d0:19416
+commitRoot @ chunk-RPCDYKBN.js?v=0cbb71d0:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=0cbb71d0:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=0cbb71d0:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=0cbb71d0:18627
+client-detail.tsx:5265 🎯 FOCUS EVENT: target=BUTTON.flex h-10 w-full items-center justify-between rounded-md px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 transition-all duration-200 border border-input bg-background focus:ring-ring data-[placeholder]:text-muted-foreground, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:229 Error initializing WebPhone: Event {isTrusted: true, type: 'error', target: script, currentTarget: script, eventPhase: 2, …}
+initializeWebPhone @ ringcentral-phone.tsx:229
+await in initializeWebPhone
+(anonymous) @ ringcentral-phone.tsx:453
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=0cbb71d0:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=0cbb71d0:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=0cbb71d0:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=0cbb71d0:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=0cbb71d0:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=0cbb71d0:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=0cbb71d0:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=0cbb71d0:19416
+commitRoot @ chunk-RPCDYKBN.js?v=0cbb71d0:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=0cbb71d0:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=0cbb71d0:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=0cbb71d0:18627
+client-detail.tsx:5249 ⚡ LAYOUT SHIFT: value=0.000040320846542882, hadRecentInput=true, activeTab=communications, scrollY=0
