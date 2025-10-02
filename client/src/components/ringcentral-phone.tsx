@@ -10,29 +10,24 @@ import RingCentralWebPhone from 'ringcentral-web-phone';
 interface CallState {
   sessionId: string | null;
   phoneNumber: string | null;
-  status: 'idle' | 'calling' | 'ringing' | 'connected' | 'disconnected';
+  status: 'idle' | 'ringing' | 'connected' | 'disconnected';
   duration: number;
   isMuted: boolean;
   isOnHold: boolean;
   isInbound: boolean;
-  recordingId?: string;
 }
 
 interface RingCentralPhoneProps {
   clientId?: string;
   personId?: string;
   defaultPhoneNumber?: string;
-  onCallComplete?: (callData: {
-    phoneNumber: string;
-    duration: number;
-    sessionId: string;
-    recordingId?: string;
-  }) => void;
+  onCallComplete?: (duration: number, phoneNumber: string) => void;
 }
 
 export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCallComplete }: RingCentralPhoneProps) {
   const { toast } = useToast();
-  const [callState, setCallState] = useState<CallState>({
+  
+  const initialCallState: CallState = {
     sessionId: null,
     phoneNumber: null,
     status: 'idle',
@@ -40,7 +35,9 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     isMuted: false,
     isOnHold: false,
     isInbound: false,
-  });
+  };
+
+  const [callState, setCallState] = useState<CallState>(initialCallState);
   
   const [phoneNumber, setPhoneNumber] = useState(defaultPhoneNumber || '');
   const [isInitialized, setIsInitialized] = useState(false);
@@ -59,20 +56,12 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Initialize WebPhone
+  // Initialize WebPhone with v2.x API
   const initializeWebPhone = async () => {
     if (isInitializing || isInitialized) return;
 
     try {
       setIsInitializing(true);
-
-      // Check if Client ID is available
-      const clientId = import.meta.env.VITE_RINGCENTRAL_CLIENT_ID;
-      console.log('RingCentral Client ID available:', !!clientId);
-      
-      if (!clientId) {
-        throw new Error('RingCentral Client ID not configured. Please contact support.');
-      }
 
       // Get SIP provisioning credentials
       console.log('Requesting SIP provisioning...');
@@ -82,52 +71,30 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         throw new Error('Failed to get SIP provisioning credentials');
       }
 
-      const sipInfo = sipProvision.sipInfo[0];
       console.log('SIP provisioning successful, initializing WebPhone...');
 
-      // Initialize WebPhone
-      const webPhone = new RingCentralWebPhone(sipProvision, {
-        appKey: clientId,
-        appName: 'CRM Phone',
-        appVersion: '1.0.0',
-        media: {
-          remote: document.getElementById('rc-audio-remote') as HTMLAudioElement,
-          local: document.getElementById('rc-audio-local') as HTMLAudioElement,
-        },
-        logLevel: 1,
-      });
+      // Initialize WebPhone with version 2.x API
+      const webPhone = new RingCentralWebPhone({ sipInfo: sipProvision.sipInfo });
       console.log('WebPhone instance created');
 
-      // WebPhone event listeners
-      webPhone.userAgent.on('registered', () => {
-        console.log('WebPhone registered');
-        setIsInitialized(true);
-        toast({ title: 'Phone Ready', description: 'RingCentral phone is ready to make calls' });
-      });
-
-      webPhone.userAgent.on('unregistered', () => {
-        console.log('WebPhone unregistered');
-        setIsInitialized(false);
-      });
-
-      webPhone.userAgent.on('registrationFailed', (error: any) => {
-        console.error('WebPhone registration failed:', error);
-        setIsInitialized(false);
-        toast({
-          title: 'Phone Registration Failed',
-          description: 'Failed to register with RingCentral. Please reconnect your account.',
-          variant: 'destructive',
-        });
-      });
+      // Start the WebPhone (connects and registers)
+      await webPhone.start();
+      console.log('WebPhone started and registered');
+      
+      webPhoneRef.current = webPhone;
+      setIsInitialized(true);
+      toast({ title: 'Phone Ready', description: 'RingCentral phone is ready to make calls' });
 
       // Handle incoming calls
-      webPhone.userAgent.on('invite', (session: any) => {
-        console.log('Incoming call from:', session.request.from.displayName || session.request.from.uri.user);
+      webPhone.on('inboundCall', async (inboundCallSession: any) => {
+        console.log('Incoming call received');
         
-        const incomingNumber = session.request.from.displayName || session.request.from.uri.user;
-        const incomingSessionId = session.request.callId || `call-${Date.now()}`;
+        const incomingNumber = inboundCallSession.remoteIdentity?.displayName || 
+                               inboundCallSession.remoteIdentity?.uri?.user || 
+                               'Unknown';
+        const incomingSessionId = `call-${Date.now()}`;
         
-        sessionRef.current = session;
+        sessionRef.current = inboundCallSession;
         setCallState({
           sessionId: incomingSessionId,
           phoneNumber: incomingNumber,
@@ -139,13 +106,13 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         });
 
         // Setup session event listeners for inbound call
-        session.on('accepted', () => {
+        inboundCallSession.on('accepted', () => {
           console.log('Inbound call accepted');
           setCallState(prev => ({ ...prev, status: 'connected' }));
           startCallTimer();
         });
 
-        session.on('terminated', async () => {
+        inboundCallSession.on('terminated', async () => {
           console.log('Inbound call terminated');
           stopCallTimer();
           
@@ -178,56 +145,41 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
           // Reset state
           setTimeout(() => {
-            setCallState({
-              sessionId: null,
-              phoneNumber: null,
-              status: 'idle',
-              duration: 0,
-              isMuted: false,
-              isOnHold: false,
-              isInbound: false,
-            });
+            setCallState(initialCallState);
+            sessionRef.current = null;
           }, 2000);
         });
 
-        session.on('failed', (error: any) => {
+        inboundCallSession.on('failed', (error: any) => {
           console.error('Inbound call failed:', error);
           stopCallTimer();
           setCallState(prev => ({ ...prev, status: 'disconnected' }));
         });
 
         // Auto-reject after 30 seconds if not answered
-        autoRejectTimerRef.current = window.setTimeout(() => {
-          // Check if session is still in ringing state
-          if (sessionRef.current === session && session.state === 'Ringing') {
+        autoRejectTimerRef.current = window.setTimeout(async () => {
+          if (sessionRef.current === inboundCallSession) {
             console.log('Auto-rejecting unanswered call');
-            session.reject();
+            try {
+              await inboundCallSession.decline();
+            } catch (error) {
+              console.error('Error declining call:', error);
+            }
             sessionRef.current = null;
-            setCallState({
-              sessionId: null,
-              phoneNumber: null,
-              status: 'idle',
-              duration: 0,
-              isMuted: false,
-              isOnHold: false,
-              isInbound: false,
-            });
+            setCallState(initialCallState);
           }
-          autoRejectTimerRef.current = null;
         }, 30000);
       });
 
-      webPhoneRef.current = webPhone;
-    } catch (error) {
+      setIsInitializing(false);
+    } catch (error: any) {
       console.error('Error initializing WebPhone:', error);
+      setIsInitializing(false);
       toast({
         title: 'Initialization Error',
-        description: error instanceof Error ? error.message : 'Failed to initialize phone',
+        description: error.message || 'Failed to initialize phone',
         variant: 'destructive',
       });
-      setIsInitialized(false);
-    } finally {
-      setIsInitializing(false);
     }
   };
 
@@ -251,75 +203,66 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     callStartTimeRef.current = null;
   };
 
-  // Make a call
+  // Make outbound call
   const makeCall = async (number: string) => {
-    if (!isInitialized || !webPhoneRef.current) {
+    if (!webPhoneRef.current || !isInitialized) {
       toast({
         title: 'Phone Not Ready',
-        description: 'Please wait for the phone to initialize',
+        description: 'Please initialize the phone first',
         variant: 'destructive',
       });
       return;
     }
 
     try {
-      const session = webPhoneRef.current.userAgent.invite(number, {
-        media: {
-          render: {
-            remote: document.getElementById('rc-audio-remote') as HTMLAudioElement,
-            local: document.getElementById('rc-audio-local') as HTMLAudioElement,
-          },
-        },
-      });
-
-      sessionRef.current = session;
-      
-      const sessionId = session.request.callId || `call-${Date.now()}`;
+      console.log('Making call to:', number);
+      const sessionId = `call-${Date.now()}`;
       
       setCallState({
         sessionId,
         phoneNumber: number,
-        status: 'calling',
+        status: 'ringing',
         duration: 0,
         isMuted: false,
         isOnHold: false,
         isInbound: false,
       });
 
-      // Session event listeners
-      session.on('progress', () => {
-        console.log('Call progress');
-        setCallState(prev => ({ ...prev, status: 'ringing' }));
+      // Make call with v2.x API
+      const session = await webPhoneRef.current.call({
+        toNumber: number,
       });
+      
+      console.log('Call session created');
+      sessionRef.current = session;
 
+      // Setup session event listeners for outbound call
       session.on('accepted', () => {
-        console.log('Call accepted');
+        console.log('Outbound call accepted');
         setCallState(prev => ({ ...prev, status: 'connected' }));
         startCallTimer();
       });
 
       session.on('terminated', async () => {
-        console.log('Call terminated');
+        console.log('Outbound call terminated');
         stopCallTimer();
         
-        // Use functional update to get fresh duration
         let finalDuration = 0;
         setCallState(prev => {
           finalDuration = prev.duration;
           return { ...prev, status: 'disconnected' };
         });
 
-        // Log the call
+        // Log the outbound call
         if (clientId && sessionId) {
           try {
-            const communication = await apiRequest('POST', '/api/ringcentral/log-call', {
+            await apiRequest('POST', '/api/ringcentral/log-call', {
               clientId,
               personId: personId || undefined,
               phoneNumber: number,
               direction: 'outbound',
               duration: finalDuration,
               sessionId,
-              recordingId: callState.recordingId,
             });
 
             toast({
@@ -327,271 +270,290 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
               description: 'Call has been logged to communications',
             });
 
-            // Call completion callback
             if (onCallComplete) {
-              onCallComplete({
-                phoneNumber: number,
-                duration: finalDuration,
-                sessionId,
-                recordingId: callState.recordingId,
-              });
+              onCallComplete(finalDuration, number);
             }
           } catch (error) {
-            console.error('Error logging call:', error);
+            console.error('Error logging outbound call:', error);
           }
         }
 
         // Reset state
         setTimeout(() => {
-          setCallState({
-            sessionId: null,
-            phoneNumber: null,
-            status: 'idle',
-            duration: 0,
-            isMuted: false,
-            isOnHold: false,
-            isInbound: false,
-          });
-          setPhoneNumber('');
+          setCallState(initialCallState);
+          sessionRef.current = null;
         }, 2000);
       });
 
       session.on('failed', (error: any) => {
-        console.error('Call failed:', error);
+        console.error('Outbound call failed:', error);
         stopCallTimer();
         setCallState(prev => ({ ...prev, status: 'disconnected' }));
         toast({
           title: 'Call Failed',
-          description: 'Failed to connect the call',
+          description: 'Failed to connect call',
           variant: 'destructive',
         });
       });
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Error making call:', error);
+      setCallState(initialCallState);
       toast({
         title: 'Call Error',
-        description: 'Failed to initiate call',
+        description: error.message || 'Failed to make call',
         variant: 'destructive',
       });
     }
   };
 
-  // Answer incoming call
-  const answerCall = () => {
+  // Hang up call
+  const hangup = async () => {
     if (sessionRef.current) {
-      // Clear auto-reject timer
-      if (autoRejectTimerRef.current) {
-        clearTimeout(autoRejectTimerRef.current);
-        autoRejectTimerRef.current = null;
+      try {
+        console.log('Hanging up call');
+        await sessionRef.current.dispose();
+        sessionRef.current = null;
+      } catch (error) {
+        console.error('Error hanging up:', error);
       }
-      
-      sessionRef.current.accept({
-        media: {
-          render: {
-            remote: document.getElementById('rc-audio-remote') as HTMLAudioElement,
-            local: document.getElementById('rc-audio-local') as HTMLAudioElement,
-          },
-        },
-      });
     }
   };
 
-  // Hangup call
-  const hangup = () => {
-    // Clear auto-reject timer if exists
-    if (autoRejectTimerRef.current) {
-      clearTimeout(autoRejectTimerRef.current);
-      autoRejectTimerRef.current = null;
+  // Answer incoming call
+  const answerCall = async () => {
+    if (sessionRef.current && callState.isInbound) {
+      try {
+        console.log('Answering call');
+        
+        // Clear auto-reject timer
+        if (autoRejectTimerRef.current) {
+          clearTimeout(autoRejectTimerRef.current);
+          autoRejectTimerRef.current = null;
+        }
+
+        await sessionRef.current.answer();
+      } catch (error) {
+        console.error('Error answering call:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to answer call',
+          variant: 'destructive',
+        });
+      }
     }
-    
-    if (sessionRef.current) {
-      sessionRef.current.terminate();
-      sessionRef.current = null;
+  };
+
+  // Decline incoming call
+  const declineCall = async () => {
+    if (sessionRef.current && callState.isInbound) {
+      try {
+        console.log('Declining call');
+        
+        // Clear auto-reject timer
+        if (autoRejectTimerRef.current) {
+          clearTimeout(autoRejectTimerRef.current);
+          autoRejectTimerRef.current = null;
+        }
+
+        await sessionRef.current.decline();
+        sessionRef.current = null;
+        setCallState(initialCallState);
+      } catch (error) {
+        console.error('Error declining call:', error);
+      }
     }
   };
 
   // Toggle mute
-  const toggleMute = () => {
+  const toggleMute = async () => {
     if (sessionRef.current) {
-      if (callState.isMuted) {
-        sessionRef.current.unmute();
-      } else {
-        sessionRef.current.mute();
+      try {
+        if (callState.isMuted) {
+          await sessionRef.current.unmute();
+        } else {
+          await sessionRef.current.mute();
+        }
+        setCallState(prev => ({ ...prev, isMuted: !prev.isMuted }));
+      } catch (error) {
+        console.error('Error toggling mute:', error);
       }
-      setCallState(prev => ({ ...prev, isMuted: !prev.isMuted }));
     }
   };
 
   // Toggle hold
-  const toggleHold = () => {
+  const toggleHold = async () => {
     if (sessionRef.current) {
-      if (callState.isOnHold) {
-        sessionRef.current.unhold();
-      } else {
-        sessionRef.current.hold();
+      try {
+        if (callState.isOnHold) {
+          await sessionRef.current.unhold();
+        } else {
+          await sessionRef.current.hold();
+        }
+        setCallState(prev => ({ ...prev, isOnHold: !prev.isOnHold }));
+      } catch (error) {
+        console.error('Error toggling hold:', error);
       }
-      setCallState(prev => ({ ...prev, isOnHold: !prev.isOnHold }));
     }
   };
 
-  // Sync phone number when defaultPhoneNumber prop changes
+  // Cleanup on unmount
   useEffect(() => {
-    if (defaultPhoneNumber) {
-      setPhoneNumber(defaultPhoneNumber);
-    }
-  }, [defaultPhoneNumber]);
-
-  // Initialize on mount
-  useEffect(() => {
-    initializeWebPhone();
-
     return () => {
-      // Cleanup
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
       if (autoRejectTimerRef.current) {
         clearTimeout(autoRejectTimerRef.current);
       }
-      if (webPhoneRef.current) {
-        webPhoneRef.current.userAgent.stop();
+      if (sessionRef.current) {
+        sessionRef.current.dispose();
       }
-      stopCallTimer();
     };
   }, []);
 
   return (
-    <>
-      {/* Hidden audio elements for WebRTC */}
-      <audio id="rc-audio-remote" hidden />
-      <audio id="rc-audio-local" hidden muted />
-
-      <Card className="w-full max-w-md" data-testid="card-ringcentral-phone">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="w-5 h-5" />
-            RingCentral Phone
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isInitialized ? (
-            <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                {isInitializing ? 'Initializing phone...' : 'Phone not initialized'}
-              </p>
+    <Card className="w-full" data-testid="ringcentral-phone-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Phone className="h-5 w-5" />
+          RingCentral Phone
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!isInitialized ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            {isInitializing ? (
+              <>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" data-testid="phone-initializing-spinner" />
+                <p className="text-sm text-muted-foreground" data-testid="phone-initializing-text">Initializing phone...</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground mb-4" data-testid="phone-not-initialized-text">Phone not initialized</p>
+                <Button 
+                  onClick={initializeWebPhone}
+                  data-testid="button-initialize-phone"
+                >
+                  Initialize Phone
+                </Button>
+              </>
+            )}
+          </div>
+        ) : callState.status === 'idle' ? (
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="phone-number" className="text-sm font-medium mb-2 block">
+                Phone Number
+              </label>
+              <input
+                id="phone-number"
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+1234567890"
+                className="w-full px-3 py-2 border rounded-md"
+                data-testid="input-phone-number"
+              />
             </div>
-          ) : (
-            <>
-              {/* Call Status */}
-              {callState.status !== 'idle' && (
-                <div className="p-4 bg-muted rounded-lg text-center" data-testid="div-call-status">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {callState.status === 'calling' && 'Calling...'}
-                    {callState.status === 'ringing' && 'Ringing...'}
-                    {callState.status === 'connected' && 'Connected'}
-                    {callState.status === 'disconnected' && 'Call Ended'}
-                  </p>
-                  <p className="text-lg font-semibold" data-testid="text-call-number">
-                    {callState.phoneNumber}
-                  </p>
-                  {callState.status === 'connected' && (
-                    <p className="text-2xl font-mono mt-2" data-testid="text-call-duration">
-                      {formatDuration(callState.duration)}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Phone Number Input */}
-              {callState.status === 'idle' && (
-                <div className="space-y-2">
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="Enter phone number"
-                    className="w-full px-3 py-2 border rounded-md"
-                    data-testid="input-phone-number"
-                  />
-                </div>
-              )}
-
-              {/* Call Controls */}
-              <div className="flex items-center justify-center gap-2">
-                {callState.status === 'idle' ? (
-                  <Button
-                    onClick={() => phoneNumber && makeCall(phoneNumber)}
-                    disabled={!phoneNumber}
-                    size="lg"
-                    className="flex items-center gap-2"
-                    data-testid="button-make-call"
-                  >
-                    <Phone className="w-5 h-5" />
-                    Call
-                  </Button>
-                ) : callState.status === 'ringing' && callState.isInbound ? (
-                  // Incoming call - show Answer button
-                  <>
-                    <Button
-                      onClick={answerCall}
-                      variant="default"
-                      size="lg"
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                      data-testid="button-answer-call"
-                    >
-                      <Phone className="w-5 h-5" />
-                      Answer
-                    </Button>
-                    <Button
-                      onClick={hangup}
-                      variant="destructive"
-                      size="lg"
-                      className="flex items-center gap-2"
-                      data-testid="button-reject-call"
-                    >
-                      <PhoneOff className="w-5 h-5" />
-                      Reject
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    {callState.status === 'connected' && (
-                      <>
-                        <Button
-                          onClick={toggleMute}
-                          variant={callState.isMuted ? 'default' : 'outline'}
-                          size="icon"
-                          data-testid="button-toggle-mute"
-                        >
-                          {callState.isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                        </Button>
-                        <Button
-                          onClick={toggleHold}
-                          variant={callState.isOnHold ? 'default' : 'outline'}
-                          size="icon"
-                          data-testid="button-toggle-hold"
-                        >
-                          {callState.isOnHold ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                        </Button>
-                      </>
-                    )}
-                    {callState.status !== 'disconnected' && (
-                      <Button
-                        onClick={hangup}
-                        variant="destructive"
-                        size="lg"
-                        className="flex items-center gap-2"
-                        data-testid="button-hangup"
-                      >
-                        <PhoneOff className="w-5 h-5" />
-                        Hang Up
-                      </Button>
-                    )}
-                  </>
-                )}
+            <Button
+              onClick={() => makeCall(phoneNumber)}
+              disabled={!phoneNumber}
+              className="w-full"
+              data-testid="button-make-call"
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Make Call
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="text-center" data-testid="call-status-container">
+              <div className="text-lg font-semibold" data-testid="text-call-phone-number">{callState.phoneNumber}</div>
+              <div className="text-sm text-muted-foreground" data-testid="text-call-status">
+                {callState.status === 'ringing' && !callState.isInbound && 'Calling...'}
+                {callState.status === 'ringing' && callState.isInbound && 'Incoming Call'}
+                {callState.status === 'connected' && formatDuration(callState.duration)}
+                {callState.status === 'disconnected' && 'Call Ended'}
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </>
+            </div>
+
+            {callState.status === 'ringing' && callState.isInbound ? (
+              <div className="flex gap-2">
+                <Button
+                  onClick={answerCall}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  data-testid="button-answer-call"
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  Answer
+                </Button>
+                <Button
+                  onClick={declineCall}
+                  variant="destructive"
+                  className="flex-1"
+                  data-testid="button-decline-call"
+                >
+                  <PhoneOff className="h-4 w-4 mr-2" />
+                  Decline
+                </Button>
+              </div>
+            ) : callState.status === 'connected' ? (
+              <>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={toggleMute}
+                    variant={callState.isMuted ? 'default' : 'outline'}
+                    className="flex-1"
+                    data-testid="button-toggle-mute"
+                  >
+                    {callState.isMuted ? (
+                      <><MicOff className="h-4 w-4 mr-2" /> Unmute</>
+                    ) : (
+                      <><Mic className="h-4 w-4 mr-2" /> Mute</>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={toggleHold}
+                    variant={callState.isOnHold ? 'default' : 'outline'}
+                    className="flex-1"
+                    data-testid="button-toggle-hold"
+                  >
+                    {callState.isOnHold ? (
+                      <><Play className="h-4 w-4 mr-2" /> Resume</>
+                    ) : (
+                      <><Pause className="h-4 w-4 mr-2" /> Hold</>
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  onClick={hangup}
+                  variant="destructive"
+                  className="w-full"
+                  data-testid="button-hangup"
+                >
+                  <PhoneOff className="h-4 w-4 mr-2" />
+                  Hang Up
+                </Button>
+              </>
+            ) : callState.status === 'ringing' ? (
+              <Button
+                onClick={hangup}
+                variant="destructive"
+                className="w-full"
+                data-testid="button-cancel-call"
+              >
+                <PhoneOff className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            ) : null}
+          </div>
+        )}
+
+        {/* Hidden audio elements for WebRTC */}
+        <audio id="rc-audio-remote" hidden />
+        <audio id="rc-audio-local" hidden muted />
+      </CardContent>
+    </Card>
   );
 }
