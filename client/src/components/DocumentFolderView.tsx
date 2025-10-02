@@ -313,7 +313,14 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {canPreview(doc.fileType) && (
-                          <DocumentPreviewDialog document={doc} />
+                          <DocumentPreviewDialog 
+                            document={doc} 
+                            trigger={
+                              <Button variant="ghost" size="sm" data-testid={`button-preview-${doc.id}`}>
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            }
+                          />
                         )}
                         <Button
                           variant="ghost"
@@ -410,7 +417,14 @@ export default function DocumentFolderView({ clientId }: DocumentFolderViewProps
                 <TableCell>
                   <div className="flex items-center gap-1">
                     {canPreview(doc.fileType) && (
-                      <DocumentPreviewDialog document={doc} />
+                      <DocumentPreviewDialog 
+                        document={doc} 
+                        trigger={
+                          <Button variant="ghost" size="sm" data-testid={`button-preview-${doc.id}`}>
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        }
+                      />
                     )}
                     <Button
                       variant="ghost"
