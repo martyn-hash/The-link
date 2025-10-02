@@ -11,9 +11,11 @@ import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificatio
 import fetch from 'node-fetch';
 import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "./utils/userOutlookClient";
 import { 
-  storeRingCentralTokens, 
-  getSIPProvisionCredentials, 
-  getCallLog,
+  generateUserRingCentralAuthUrl, 
+  exchangeCodeForRingCentralTokens, 
+  disconnectRingCentral,
+  storeRingCentralTokens,
+  getSIPProvisionCredentials,
   getCallRecordingUrl,
   requestCallTranscription,
   getTranscriptionResult
@@ -7661,6 +7663,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting transcription:", error);
       res.status(500).json({ message: "Failed to get transcription" });
+    }
+  });
+
+  // ==================================================
+  // RINGCENTRAL OAUTH ROUTES
+  // ==================================================
+
+  // GET /api/oauth/ringcentral/auth-url - Generate OAuth authorization URL
+  app.get('/api/oauth/ringcentral/auth-url', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const authUrl = await generateUserRingCentralAuthUrl(userId);
+      res.json({ authUrl });
+    } catch (error) {
+      console.error("Error generating RingCentral auth URL:", error instanceof Error ? error.message : error);
+      
+      if (error instanceof Error && error.message.includes('RingCentral OAuth not configured')) {
+        return res.status(400).json({ 
+          message: "RingCentral integration is not configured on this server",
+          configured: false 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to generate auth URL" });
+    }
+  });
+
+  // GET /api/oauth/ringcentral/callback - Handle OAuth callback
+  app.get('/api/oauth/ringcentral/callback', async (req: any, res: any) => {
+    try {
+      const { code, state } = req.query;
+      
+      if (!code || !state) {
+        return res.status(400).send(`
+          <html>
+            <body>
+              <h1>Error</h1>
+              <p>Missing authorization code or state</p>
+              <script>window.close();</script>
+            </body>
+          </html>
+        `);
+      }
+
+      const result = await exchangeCodeForRingCentralTokens(code as string, state as string);
+      
+      // Store tokens
+      await storeRingCentralTokens(
+        result.userId,
+        result.tokens.access_token,
+        result.tokens.refresh_token,
+        result.tokens.expires_in
+      );
+
+      // Return success page
+      res.send(`
+        <html>
+          <head>
+            <title>RingCentral Connected</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f0f2f5;
+              }
+              .container {
+                text-align: center;
+                background: white;
+                padding: 2rem;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              }
+              .success-icon {
+                font-size: 64px;
+                color: #22c55e;
+                margin-bottom: 1rem;
+              }
+              h1 {
+                color: #1a1a1a;
+                margin-bottom: 0.5rem;
+              }
+              p {
+                color: #666;
+                margin-bottom: 1.5rem;
+              }
+              .close-info {
+                color: #999;
+                font-size: 14px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="success-icon">✓</div>
+              <h1>RingCentral Connected Successfully</h1>
+              <p>You can now make calls using RingCentral from the CRM.</p>
+              <p class="close-info">This window will close automatically...</p>
+            </div>
+            <script>
+              setTimeout(() => {
+                window.close();
+                if (!window.closed) {
+                  window.location.href = '/profile?tab=integrations';
+                }
+              }, 2000);
+            </script>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error("Error in RingCentral OAuth callback:", error);
+      res.status(500).send(`
+        <html>
+          <body>
+            <h1>Error</h1>
+            <p>${error instanceof Error ? error.message : 'Failed to connect RingCentral account'}</p>
+            <script>setTimeout(() => window.close(), 3000);</script>
+          </body>
+        </html>
+      `);
+    }
+  });
+
+  // DELETE /api/oauth/ringcentral/disconnect - Disconnect RingCentral
+  app.delete('/api/oauth/ringcentral/disconnect', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      await disconnectRingCentral(userId);
+      res.json({ message: "RingCentral account disconnected successfully" });
+    } catch (error) {
+      console.error("Error disconnecting RingCentral:", error);
+      res.status(500).json({ message: "Failed to disconnect RingCentral account" });
     }
   });
 

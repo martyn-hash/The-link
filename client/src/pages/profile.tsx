@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/form";
 
 // Icons
-import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3 } from "lucide-react";
+import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3, Phone } from "lucide-react";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -235,6 +235,15 @@ export default function Profile() {
     enabled: !!user,
   });
 
+  // Fetch RingCentral connection status
+  const { data: ringcentralStatus, isLoading: ringcentralStatusLoading, refetch: refetchRingCentralStatus } = useQuery<{
+    connected: boolean;
+    hasTokens: boolean;
+  }>({
+    queryKey: ["/api/ringcentral/status"],
+    enabled: !!user,
+  });
+
   // Profile update mutation
   const updateProfileMutation = useMutation({
     mutationFn: async (data: ProfileUpdateData) => {
@@ -328,6 +337,24 @@ export default function Profile() {
     },
   });
 
+  // RingCentral disconnect mutation
+  const disconnectRingCentralMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", "/api/oauth/ringcentral/disconnect");
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "RingCentral account disconnected successfully" });
+      refetchRingCentralStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to disconnect RingCentral account",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handle profile form submission
   const onProfileSubmit = (data: ProfileUpdateData) => {
     updateProfileMutation.mutate(data);
@@ -374,6 +401,34 @@ export default function Profile() {
   // Handle Outlook disconnect
   const handleOutlookDisconnect = () => {
     disconnectOutlookMutation.mutate();
+  };
+
+  // Handle RingCentral connection
+  const handleRingCentralConnect = async () => {
+    try {
+      const response = await fetch('/api/oauth/ringcentral/auth-url');
+      const data = await response.json();
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to generate authentication URL",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to connect to RingCentral",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle RingCentral disconnect
+  const handleRingCentralDisconnect = () => {
+    disconnectRingCentralMutation.mutate();
   };
 
   // Handle logout
@@ -862,6 +917,72 @@ export default function Profile() {
                           Connect
                         </Button>
                       </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* RingCentral Integration */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Phone Integration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center">
+                      <Phone className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold" data-testid="text-ringcentral-title">
+                        RingCentral
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Connect your RingCentral account to make calls with automatic transcription
+                      </p>
+                      {ringcentralStatus?.connected && (
+                        <p className="text-sm text-green-600 dark:text-green-400 mt-1" data-testid="text-ringcentral-connected">
+                          Connected and ready to make calls
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    {ringcentralStatusLoading ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                    ) : ringcentralStatus?.connected ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1">
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                          <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-ringcentral-connected">
+                            Connected
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRingCentralDisconnect}
+                          disabled={disconnectRingCentralMutation.isPending}
+                          data-testid="button-disconnect-ringcentral"
+                        >
+                          {disconnectRingCentralMutation.isPending ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+                          ) : (
+                            "Disconnect"
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={handleRingCentralConnect}
+                        size="sm"
+                        data-testid="button-connect-ringcentral"
+                        className="flex items-center gap-2"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Connect
+                      </Button>
                     )}
                   </div>
                 </div>

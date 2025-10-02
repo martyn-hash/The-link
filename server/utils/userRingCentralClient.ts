@@ -1,6 +1,7 @@
 import { SDK } from '@ringcentral/sdk';
 import { storage } from '../storage';
 import { decryptTokenFromStorage, encryptTokenForStorage } from './tokenEncryption';
+import { nanoid } from 'nanoid';
 
 interface RingCentralTokens {
   access_token: string;
@@ -8,6 +9,46 @@ interface RingCentralTokens {
   expires_in: number;
   token_type: string;
 }
+
+// RingCentral OAuth configuration
+const CLIENT_ID = process.env.RINGCENTRAL_CLIENT_ID;
+const CLIENT_SECRET = process.env.RINGCENTRAL_CLIENT_SECRET;
+const SERVER_URL = process.env.RINGCENTRAL_SERVER_URL || SDK.server.production;
+
+// Auto-detect the correct redirect URI based on environment
+const getRedirectUri = () => {
+  if (process.env.RINGCENTRAL_REDIRECT_URI) {
+    return process.env.RINGCENTRAL_REDIRECT_URI;
+  }
+  
+  // Replit environment - use REPLIT_DEV_DOMAIN
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}/api/oauth/ringcentral/callback`;
+  }
+  
+  // Default fallback for local development
+  return 'http://localhost:5000/api/oauth/ringcentral/callback';
+};
+
+const REDIRECT_URI = getRedirectUri();
+
+// Check if OAuth is properly configured
+const isOAuthConfigured = () => {
+  return !!CLIENT_ID && !!CLIENT_SECRET;
+};
+
+// Store for OAuth state verification (in production, use Redis or database)
+const oauthStates = new Map<string, { userId: string; timestamp: number }>();
+
+// Clean up expired states (older than 10 minutes)
+setInterval(() => {
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  for (const [state, data] of oauthStates.entries()) {
+    if (data.timestamp < tenMinutesAgo) {
+      oauthStates.delete(state);
+    }
+  }
+}, 5 * 60 * 1000); // Run cleanup every 5 minutes
 
 interface SIPProvision {
   sipInfo: Array<{
@@ -219,6 +260,83 @@ export async function getTranscriptionResult(userId: string, jobId: string) {
   } catch (error) {
     console.error('Error getting transcription result:', error);
     throw error;
+  }
+}
+
+// Generate RingCentral OAuth authorization URL
+export async function generateUserRingCentralAuthUrl(userId: string): Promise<string> {
+  if (!isOAuthConfigured()) {
+    throw new Error('RingCentral OAuth not configured - please set RINGCENTRAL_CLIENT_ID and RINGCENTRAL_CLIENT_SECRET environment variables');
+  }
+
+  const state = nanoid(32);
+  
+  // Store the state with user ID for verification
+  oauthStates.set(state, { userId, timestamp: Date.now() });
+
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID!,
+    response_type: 'code',
+    redirect_uri: REDIRECT_URI,
+    state,
+  });
+
+  return `${SERVER_URL}/restapi/oauth/authorize?${params.toString()}`;
+}
+
+// Exchange authorization code for tokens
+export async function exchangeCodeForRingCentralTokens(code: string, state: string): Promise<{ userId: string; tokens: RingCentralTokens }> {
+  if (!isOAuthConfigured()) {
+    throw new Error('RingCentral OAuth not configured');
+  }
+
+  // Verify state
+  const stateData = oauthStates.get(state);
+  if (!stateData) {
+    throw new Error('Invalid or expired OAuth state');
+  }
+
+  // Remove state after use
+  oauthStates.delete(state);
+
+  // Create SDK instance for token exchange
+  const rcsdk = new SDK({
+    server: SERVER_URL,
+    clientId: CLIENT_ID!,
+    clientSecret: CLIENT_SECRET!
+  });
+
+  const platform = rcsdk.platform();
+
+  // Exchange code for tokens
+  await platform.login({
+    code,
+    redirect_uri: REDIRECT_URI
+  });
+
+  const authData = await platform.auth().data();
+
+  return {
+    userId: stateData.userId,
+    tokens: {
+      access_token: authData.access_token!,
+      refresh_token: authData.refresh_token,
+      expires_in: authData.expires_in || 3600,
+      token_type: authData.token_type || 'Bearer'
+    }
+  };
+}
+
+// Disconnect RingCentral integration
+export async function disconnectRingCentral(userId: string): Promise<void> {
+  const integration = await storage.getUserIntegrationByType(userId, 'ringcentral');
+  if (integration) {
+    await storage.updateUserIntegration(integration.id, {
+      isActive: false,
+      accessToken: null,
+      refreshToken: null,
+      tokenExpiry: null,
+    });
   }
 }
 
