@@ -67,10 +67,8 @@ export default function ProjectDetail() {
   // Mutation to complete project
   const completeMutation = useMutation({
     mutationFn: async (status: 'completed_successfully' | 'completed_unsuccessfully') => {
-      return await apiRequest(`/api/projects/${projectId}/complete`, {
-        method: 'PATCH',
-        body: JSON.stringify({ completionStatus: status }),
-        headers: { 'Content-Type': 'application/json' }
+      return await apiRequest('PATCH', `/api/projects/${projectId}/complete`, {
+        completionStatus: status
       });
     },
     onSuccess: (_data, variables) => {
