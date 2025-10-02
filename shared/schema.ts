@@ -1273,8 +1273,8 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   createdAt: true,
 }).extend({
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).optional(),
-  nextStartDate: z.string().datetime().optional(),
-  nextDueDate: z.string().datetime().optional(),
+  nextStartDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
+  nextDueDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
 });
 
 export const updateClientServiceSchema = insertClientServiceSchema.partial();
