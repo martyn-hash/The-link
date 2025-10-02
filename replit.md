@@ -35,12 +35,15 @@ Security is multi-layered with role-based access control. Replit OpenID Connect 
 - **Dashboard Builder & Analytics**: Reorganized with independent list and dashboard views as peer entities. Dashboard view features independent filter system (separate from list view filters) configured within the dashboard creation modal. Supports bar, pie, line charts, and number cards. Users can create, save, edit, and load dashboards with custom filter configurations and widget layouts. Backend analytics endpoint (`/api/analytics`) aggregates data by various dimensions. Features Save/Edit dashboard buttons when dashboard is loaded, interactive widget management, clickable charts for data table filtering, and mini kanban board integration when a service filter is active. Dashboard filters are properly persisted and loaded to ensure widgets fetch data correctly. Service filters use service IDs (UUIDs) internally for accurate filtering, with legacy compatibility for dashboards created with service names. The `showArchived` filter is always transmitted to the backend to ensure consistent filtering behavior.
 - **Progressive Web App (PWA) & Push Notifications**: PWA installation support via manifest and service worker. Integrates Web Push API for real-time notifications using VAPID keys, with user subscription management and admin-only send capabilities.
 - **Project Completion System**: Manual project completion with "Mark as Successfully/Unsuccessfully Completed" buttons on project detail pages. Completed projects are archived with full chronology audit trail and separated in client views. Optional single-project-per-client constraint at project type level auto-archives existing active projects when scheduling new ones. Completed projects are read-only with backend safeguards preventing further status updates.
+- **Document Management System**: Cloud-based document storage for client onboarding with upload, download, and delete capabilities. Uses Replit Object Storage with an abstraction layer designed for future AWS S3 migration. Documents tab in client detail pages features Uppy-based drag-and-drop upload (max 10MB per file), document metadata tracking in PostgreSQL (filename, size, type, upload date), ACL-based access control for secure downloads, and real-time UI updates via React Query. Backend provides presigned upload URLs, streaming downloads, and cascading deletes when clients are removed.
 
 # External Dependencies
 
 - **Database**: Neon serverless PostgreSQL
 - **Authentication**: Replit OpenID Connect service
 - **Email Service**: SendGrid API
+- **Object Storage**: Replit Object Storage (with abstraction layer for AWS S3 migration)
+- **File Upload**: Uppy (@uppy/core, @uppy/react, @uppy/dashboard, @uppy/aws-s3)
 - **UI Components**: shadcn/ui (built on Radix UI)
 - **Development Tools**: Vite, TypeScript
 - **File Processing**: Papa Parse (for CSV)
