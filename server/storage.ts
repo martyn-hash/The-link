@@ -4826,20 +4826,28 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles and project types
-    return servicesData.map((row) => ({
-      ...row.service,
-      projectType: row.projectType || {
-        id: '',
-        name: '',
-        description: null,
-        serviceId: null,
-        active: true,
-        order: 0,
-        createdAt: null,
-      },
-      roles: rolesByServiceId[row.service.id] || [],
-    }));
+    // Deduplicate services using a Map (services can have multiple project types)
+    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    
+    servicesData.forEach((row) => {
+      if (!servicesMap.has(row.service.id)) {
+        servicesMap.set(row.service.id, {
+          ...row.service,
+          projectType: row.projectType || {
+            id: '',
+            name: '',
+            description: null,
+            serviceId: null,
+            active: true,
+            order: 0,
+            createdAt: null,
+          },
+          roles: rolesByServiceId[row.service.id] || [],
+        });
+      }
+    });
+
+    return Array.from(servicesMap.values());
   }
 
   async getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
@@ -4872,20 +4880,28 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles and project types
-    return servicesData.map((row) => ({
-      ...row.service,
-      projectType: row.projectType || {
-        id: '',
-        name: '',
-        description: null,
-        serviceId: null,
-        active: true,
-        order: 0,
-        createdAt: null,
-      },
-      roles: rolesByServiceId[row.service.id] || [],
-    }));
+    // Deduplicate services using a Map (services can have multiple project types)
+    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    
+    servicesData.forEach((row) => {
+      if (!servicesMap.has(row.service.id)) {
+        servicesMap.set(row.service.id, {
+          ...row.service,
+          projectType: row.projectType || {
+            id: '',
+            name: '',
+            description: null,
+            serviceId: null,
+            active: true,
+            order: 0,
+            createdAt: null,
+          },
+          roles: rolesByServiceId[row.service.id] || [],
+        });
+      }
+    });
+
+    return Array.from(servicesMap.values());
   }
 
   async getServicesWithActiveClients(): Promise<Service[]> {
@@ -4930,20 +4946,28 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles and project types
-    return servicesData.map((row) => ({
-      ...row.service,
-      projectType: row.projectType || {
-        id: '',
-        name: '',
-        description: null,
-        serviceId: null,
-        active: true,
-        order: 0,
-        createdAt: null,
-      },
-      roles: rolesByServiceId[row.service.id] || [],
-    }));
+    // Deduplicate services using a Map (services can have multiple project types)
+    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    
+    servicesData.forEach((row) => {
+      if (!servicesMap.has(row.service.id)) {
+        servicesMap.set(row.service.id, {
+          ...row.service,
+          projectType: row.projectType || {
+            id: '',
+            name: '',
+            description: null,
+            serviceId: null,
+            active: true,
+            order: 0,
+            createdAt: null,
+          },
+          roles: rolesByServiceId[row.service.id] || [],
+        });
+      }
+    });
+
+    return Array.from(servicesMap.values());
   }
 
   async getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
@@ -4982,20 +5006,28 @@ export class DatabaseStorage implements IStorage {
       return acc;
     }, {} as Record<string, WorkRole[]>);
 
-    // Combine services with their roles and project types
-    return servicesData.map((row) => ({
-      ...row.service,
-      projectType: row.projectType || {
-        id: '',
-        name: '',
-        description: null,
-        serviceId: null,
-        active: true,
-        order: 0,
-        createdAt: null,
-      },
-      roles: rolesByServiceId[row.service.id] || [],
-    }));
+    // Deduplicate services using a Map (services can have multiple project types)
+    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    
+    servicesData.forEach((row) => {
+      if (!servicesMap.has(row.service.id)) {
+        servicesMap.set(row.service.id, {
+          ...row.service,
+          projectType: row.projectType || {
+            id: '',
+            name: '',
+            description: null,
+            serviceId: null,
+            active: true,
+            order: 0,
+            createdAt: null,
+          },
+          roles: rolesByServiceId[row.service.id] || [],
+        });
+      }
+    });
+
+    return Array.from(servicesMap.values());
   }
 
   async getServiceById(id: string): Promise<Service | undefined> {
