@@ -6939,107 +6939,108 @@ export default function ClientDetail() {
                     <p className="text-muted-foreground">No documents have been uploaded yet.</p>
                   </div>
                 ) : (
-                  (() => {
-                    // Group documents by upload name and uploaded date
-                    const groupedDocs = documents.reduce((groups: Record<string, Document[]>, doc) => {
-                      const key = `${doc.uploadName}_${doc.uploadedAt}`;
-                      if (!groups[key]) {
-                        groups[key] = [];
-                      }
-                      groups[key].push(doc);
-                      return groups;
-                    }, {});
-
-                    return (
-                    <div className="space-y-4">
-                      {Object.entries(groupedDocs).map(([key, docs]) => {
-                        const firstDoc = docs[0];
-                        return (
-                          <div key={key} className="border rounded-lg p-4 space-y-3" data-testid={`upload-group-${firstDoc.uploadName}`}>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h3 className="font-semibold text-lg" data-testid={`text-upload-name-${key}`}>
-                                  {firstDoc.uploadName}
-                                </h3>
-                                <p className="text-sm text-muted-foreground">
-                                  {docs.length} file{docs.length > 1 ? 's' : ''} • {formatDate(firstDoc.uploadedAt)} • Source: {firstDoc.source}
-                                </p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>File Name</TableHead>
+                        <TableHead>Upload Name</TableHead>
+                        <TableHead>Date Uploaded</TableHead>
+                        <TableHead>File Size</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {documents.map((doc) => (
+                        <TableRow key={doc.id} data-testid={`document-row-${doc.id}`}>
+                          <TableCell data-testid={`cell-filename-${doc.id}`}>
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                                <FileText className="w-4 h-4 text-muted-foreground" />
                               </div>
+                              <span className="text-sm font-medium" data-testid={`text-document-name-${doc.id}`}>
+                                {doc.fileName}
+                              </span>
                             </div>
-                            <div className="space-y-2">
-                              {docs.map((doc) => (
-                                <div
-                                  key={doc.id}
-                                  className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/50 transition-colors"
-                                  data-testid={`document-row-${doc.id}`}
-                                >
-                                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                    <div className="min-w-0 flex-1">
-                                      <p className="font-medium truncate text-sm" data-testid={`text-document-name-${doc.id}`}>
-                                        {doc.fileName}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {(doc.fileSize / 1024).toFixed(1)} KB
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={async () => {
-                                        try {
-                                          const response = await fetch(`/api/documents/${doc.id}/download`, {
-                                            credentials: 'include',
-                                          });
-                                          if (!response.ok) {
-                                            throw new Error('Failed to download document');
-                                          }
-                                          const blob = await response.blob();
-                                          const url = window.URL.createObjectURL(blob);
-                                          const a = document.createElement('a');
-                                          a.href = url;
-                                          a.download = doc.fileName;
-                                          document.body.appendChild(a);
-                                          a.click();
-                                          window.URL.revokeObjectURL(url);
-                                          document.body.removeChild(a);
-                                        } catch (error) {
-                                          toast({
-                                            title: 'Error',
-                                            description: 'Failed to download document',
-                                            variant: 'destructive',
-                                          });
-                                        }
-                                      }}
-                                      data-testid={`button-download-${doc.id}`}
-                                    >
-                                      <Download className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        if (confirm('Are you sure you want to delete this document?')) {
-                                          deleteDocumentMutation.mutate(doc.id);
-                                        }
-                                      }}
-                                      disabled={deleteDocumentMutation.isPending}
-                                      data-testid={`button-delete-${doc.id}`}
-                                    >
-                                      <Trash className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
+                          </TableCell>
+                          <TableCell data-testid={`cell-upload-name-${doc.id}`}>
+                            <span className="text-sm" data-testid={`text-upload-name-${doc.id}`}>
+                              {doc.uploadName}
+                            </span>
+                          </TableCell>
+                          <TableCell data-testid={`cell-date-${doc.id}`}>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-sm" data-testid={`text-date-${doc.id}`}>
+                                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'No date'}
+                              </span>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    );
-                  })()
+                          </TableCell>
+                          <TableCell data-testid={`cell-size-${doc.id}`}>
+                            <span className="text-sm" data-testid={`text-size-${doc.id}`}>
+                              {(doc.fileSize / 1024).toFixed(1)} KB
+                            </span>
+                          </TableCell>
+                          <TableCell data-testid={`cell-source-${doc.id}`}>
+                            <Badge variant="secondary" data-testid={`badge-source-${doc.id}`}>
+                              {doc.source}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const response = await fetch(`/api/documents/${doc.id}/download`, {
+                                      credentials: 'include',
+                                    });
+                                    if (!response.ok) {
+                                      throw new Error('Failed to download document');
+                                    }
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = doc.fileName;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+                                  } catch (error) {
+                                    toast({
+                                      title: 'Error',
+                                      description: 'Failed to download document',
+                                      variant: 'destructive',
+                                    });
+                                  }
+                                }}
+                                data-testid={`button-download-${doc.id}`}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this document?')) {
+                                    deleteDocumentMutation.mutate(doc.id);
+                                  }
+                                }}
+                                disabled={deleteDocumentMutation.isPending}
+                                data-testid={`button-delete-${doc.id}`}
+                              >
+                                <Trash className="h-4 w-4 mr-2" />
+                                Delete
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
             </Card>
