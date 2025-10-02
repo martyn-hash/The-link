@@ -1766,6 +1766,8 @@ export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  uploadName: varchar("upload_name").notNull(), // descriptive name for the upload batch (e.g., "ID docs", "Bank Statements")
+  source: varchar("source").notNull().default('direct upload'), // where the upload came from (e.g., "direct upload", "onboarding", "bank statements")
   fileName: varchar("file_name").notNull(),
   fileSize: integer("file_size").notNull(), // in bytes
   fileType: varchar("file_type").notNull(), // MIME type
