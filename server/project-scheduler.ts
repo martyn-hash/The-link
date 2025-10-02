@@ -1158,6 +1158,45 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     throw new Error(`No project type configured for service: ${dueService.service.name}`);
   }
 
+  // NEW: SINGLE PROJECT PER CLIENT CONSTRAINT (opt-in via projectType.singleProjectPerClient flag)
+  // This runs AFTER projectType validation but BEFORE the rest of project creation
+  // If enabled, auto-archives any active projects of this type for this client before creating a new one
+  if (projectType.singleProjectPerClient && dueService.clientId) {
+    console.log(`[Project Scheduler] Checking single-project-per-client constraint for ${projectType.name}`);
+    
+    const activeProjects = await storage.getActiveProjectsByClientAndType(
+      dueService.clientId,
+      projectType.id
+    );
+    
+    if (activeProjects.length > 0) {
+      console.log(`[Project Scheduler] Found ${activeProjects.length} active project(s) for client ${dueService.clientId} and type ${projectType.name} - auto-marking as unsuccessful`);
+      
+      for (const oldProject of activeProjects) {
+        // Mark the old project as completed unsuccessfully and archive it
+        await storage.updateProject(oldProject.id, {
+          completionStatus: 'completed_unsuccessfully',
+          archived: true,
+          inactive: true
+        });
+        
+        // Log this action in project chronology
+        await storage.createChronologyEntry({
+          projectId: oldProject.id,
+          fromStatus: oldProject.currentStatus,
+          toStatus: 'Archived (Auto-closed)',
+          assigneeId: oldProject.currentAssigneeId || undefined,
+          changeReason: 'Automatic closure - new project scheduled',
+          notes: `Automatically archived because new ${projectType.name} project was scheduled for ${dueService.nextStartDate.toISOString().split('T')[0]}`
+        });
+        
+        console.log(`[Project Scheduler] Auto-archived project ${oldProject.id} as unsuccessful due to single-project-per-client constraint`);
+      }
+    } else {
+      console.log(`[Project Scheduler] No active projects found - proceeding with new project creation`);
+    }
+  }
+
   // Get the first kanban stage for this project type
   console.log(`[Project Scheduler] DEBUG: Getting stages for projectType.id="${projectType.id}", projectType.name="${projectType.name}"`);
   console.log(`[Project Scheduler] DEBUG: projectType object:`, JSON.stringify(projectType, null, 2));
