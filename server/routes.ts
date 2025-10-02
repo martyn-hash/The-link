@@ -31,6 +31,7 @@ import {
   updateStageApprovalFieldSchema,
   insertStageApprovalResponseSchema,
   updateProjectStatusSchema,
+  completeProjectSchema,
   updateProjectSchema,
   csvProjectSchema,
   insertUserNotificationPreferencesSchema,
@@ -2871,6 +2872,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Failed to update project" });
+      }
+    }
+  });
+
+  // Project completion route
+  app.patch("/api/projects/:id/complete", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+      
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Validate request body
+      const { completionStatus, notes } = completeProjectSchema.parse(req.body);
+      
+      // Verify project exists
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check authorization
+      const canComplete = 
+        effectiveUser.isAdmin ||
+        project.currentAssigneeId === effectiveUserId ||
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
+
+      if (!canComplete) {
+        return res.status(403).json({ message: "Not authorized to complete this project" });
+      }
+
+      // Update the project: mark as completed, archived, and inactive
+      // Set currentStatus to "Archived" to maintain consistency
+      const updatedProject = await storage.updateProject(req.params.id, {
+        completionStatus,
+        currentStatus: 'Archived',
+        archived: true,
+        inactive: true
+      });
+
+      // Create chronology entry with canonical stage name "Archived"
+      const completionNotes = completionStatus === 'completed_successfully' 
+        ? 'Manual completion - successful'
+        : 'Manual completion - unsuccessful';
+      
+      await storage.createChronologyEntry({
+        projectId: req.params.id,
+        fromStatus: project.currentStatus,
+        toStatus: 'Archived',
+        assigneeId: effectiveUserId,
+        changeReason: completionNotes,
+        notes: notes || `Project manually marked as ${completionStatus === 'completed_successfully' ? 'successfully completed' : 'unsuccessfully completed'} by ${effectiveUser.name}. Completion status: ${completionStatus}`
+      });
+
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error completing project:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        console.error("Validation errors:", (error as any).issues);
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && error.message.includes("not found")) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to complete project" });
       }
     }
   });

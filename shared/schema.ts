@@ -1292,6 +1292,12 @@ export const insertClientServiceRoleAssignmentSchema = createInsertSchema(client
   createdAt: true,
 });
 
+// Project completion schema
+export const completeProjectSchema = z.object({
+  completionStatus: z.enum(['completed_successfully', 'completed_unsuccessfully']),
+  notes: z.string().optional(),
+});
+
 // Project update schema  
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
