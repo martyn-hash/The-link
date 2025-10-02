@@ -1761,13 +1761,28 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   uniqueEndpoint: unique("unique_push_subscription_endpoint").on(table.endpoint),
 }));
 
+// Document folders table - organizes documents into folders (batches)
+export const documentFolders = pgTable("document_folders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(), // folder name (e.g., "ID Documents", "Bank Statements")
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  source: varchar("source").notNull().default('direct upload'), // where the upload came from
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_document_folders_client_id").on(table.clientId),
+  index("idx_document_folders_created_at").on(table.createdAt),
+]);
+
 // Documents table - stores metadata for files uploaded to object storage
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  folderId: varchar("folder_id").references(() => documentFolders.id, { onDelete: "cascade" }), // nullable for migration
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
-  uploadName: varchar("upload_name").notNull(), // descriptive name for the upload batch (e.g., "ID docs", "Bank Statements")
-  source: varchar("source").notNull().default('direct upload'), // where the upload came from (e.g., "direct upload", "onboarding", "bank statements")
+  uploadName: varchar("upload_name"), // kept temporarily for migration
+  source: varchar("source").default('direct upload'), // kept temporarily for migration
   fileName: varchar("file_name").notNull(),
   fileSize: integer("file_size").notNull(), // in bytes
   fileType: varchar("file_type").notNull(), // MIME type
@@ -1775,6 +1790,7 @@ export const documents = pgTable("documents", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 }, (table) => [
   index("idx_documents_client_id").on(table.clientId),
+  index("idx_documents_folder_id").on(table.folderId),
   index("idx_documents_uploaded_at").on(table.uploadedAt),
 ]);
 
@@ -1803,6 +1819,12 @@ export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions
   updatedAt: true,
 });
 
+export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   uploadedAt: true,
@@ -1819,6 +1841,8 @@ export type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
 export type InsertUserOauthAccount = z.infer<typeof insertUserOauthAccountSchema>;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type DocumentFolder = typeof documentFolders.$inferSelect;
+export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 
