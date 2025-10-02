@@ -67,15 +67,18 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       console.log('Requesting SIP provisioning...');
       const sipProvision = await apiRequest('POST', '/api/ringcentral/sip-provision');
 
+      console.log('SIP provision response:', sipProvision);
+
       if (!sipProvision || !sipProvision.sipInfo || sipProvision.sipInfo.length === 0) {
         throw new Error('Failed to get SIP provisioning credentials');
       }
 
       console.log('SIP provisioning successful, initializing WebPhone...');
+      console.log('sipInfo array:', sipProvision.sipInfo);
 
-      // Initialize WebPhone with version 2.x API
+      // Initialize WebPhone with version 2.x API - pass the sipInfo array directly
       const webPhone = new RingCentralWebPhone({ sipInfo: sipProvision.sipInfo });
-      console.log('WebPhone instance created');
+      console.log('WebPhone instance created:', webPhone);
 
       // Start the WebPhone (connects and registers)
       await webPhone.start();
