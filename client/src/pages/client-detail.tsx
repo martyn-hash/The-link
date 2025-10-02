@@ -30,6 +30,7 @@ import TagManager from "@/components/tag-manager";
 import ClientChronology from "@/components/client-chronology";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
+import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6997,6 +6998,22 @@ export default function ClientDetail() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
+                              {/* Preview button for images and PDFs */}
+                              {(doc.fileType.toLowerCase().includes('image') || 
+                                doc.fileType.toLowerCase().includes('pdf')) && (
+                                <DocumentPreviewDialog
+                                  document={doc}
+                                  trigger={
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      Preview
+                                    </Button>
+                                  }
+                                />
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
