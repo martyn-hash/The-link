@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,12 +28,13 @@ import AddressLookup from "@/components/address-lookup";
 import AddressMap from "@/components/address-map";
 import TagManager from "@/components/tag-manager";
 import ClientChronology from "@/components/client-chronology";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useActivityTracker } from "@/lib/activityTracker";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication, Document } from "@shared/schema";
 import { insertPersonSchema, insertCommunicationSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
@@ -6883,6 +6884,185 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ClientChronology clientId={id} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="documents" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Documents
+                  </CardTitle>
+                  <ObjectUploader
+                    maxNumberOfFiles={1}
+                    maxFileSize={10485760}
+                    onGetUploadParameters={async () => {
+                      const response = await fetch('/api/objects/upload', {
+                        credentials: 'include',
+                      });
+                      if (!response.ok) {
+                        throw new Error('Failed to get upload URL');
+                      }
+                      const data = await response.json();
+                      return {
+                        method: 'PUT' as const,
+                        url: data.url,
+                      };
+                    }}
+                    onComplete={async (result) => {
+                      if (result.successful && result.successful.length > 0) {
+                        const file = result.successful[0];
+                        const uploadData = file.response?.uploadURL;
+                        const objectPath = uploadData ? new URL(uploadData).pathname : '';
+                        
+                        try {
+                          await apiRequest('POST', `/api/clients/${id}/documents`, {
+                            fileName: file.name,
+                            fileSize: file.size,
+                            fileType: file.type || 'application/octet-stream',
+                            objectPath,
+                          });
+
+                          queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'documents'] });
+                          toast({
+                            title: 'Success',
+                            description: 'Document uploaded successfully',
+                          });
+                        } catch (error) {
+                          toast({
+                            title: 'Error',
+                            description: 'Failed to save document metadata',
+                            variant: 'destructive',
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Document
+                  </ObjectUploader>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const { data: documents, isLoading: documentsLoading } = useQuery<Document[]>({
+                    queryKey: ['/api/clients', id, 'documents'],
+                    enabled: !!id,
+                  });
+
+                  const deleteDocumentMutation = useMutation({
+                    mutationFn: async (documentId: string) => {
+                      return await apiRequest('DELETE', `/api/documents/${documentId}`);
+                    },
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'documents'] });
+                      toast({
+                        title: 'Success',
+                        description: 'Document deleted successfully',
+                      });
+                    },
+                    onError: () => {
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to delete document',
+                        variant: 'destructive',
+                      });
+                    },
+                  });
+
+                  if (documentsLoading) {
+                    return (
+                      <div className="space-y-3">
+                        <Skeleton className="h-16 w-full" />
+                        <Skeleton className="h-16 w-full" />
+                        <Skeleton className="h-16 w-full" />
+                      </div>
+                    );
+                  }
+
+                  if (!documents || documents.length === 0) {
+                    return (
+                      <div className="text-center py-8">
+                        <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                        <p className="text-muted-foreground">No documents have been uploaded yet.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      {documents.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                          data-testid={`document-row-${doc.id}`}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate" data-testid={`text-document-name-${doc.id}`}>
+                                {doc.fileName}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {(doc.fileSize / 1024).toFixed(1)} KB • {formatDate(doc.uploadedAt)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/documents/${doc.id}/download`, {
+                                    credentials: 'include',
+                                  });
+                                  if (!response.ok) {
+                                    throw new Error('Failed to download document');
+                                  }
+                                  const blob = await response.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = doc.fileName;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                } catch (error) {
+                                  toast({
+                                    title: 'Error',
+                                    description: 'Failed to download document',
+                                    variant: 'destructive',
+                                  });
+                                }
+                              }}
+                              data-testid={`button-download-${doc.id}`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm('Are you sure you want to delete this document?')) {
+                                  deleteDocumentMutation.mutate(doc.id);
+                                }
+                              }}
+                              disabled={deleteDocumentMutation.isPending}
+                              data-testid={`button-delete-${doc.id}`}
+                            >
+                              <Trash className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
