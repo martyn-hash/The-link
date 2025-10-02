@@ -6,7 +6,9 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
 import DashboardBuilder from "@/components/dashboard-builder";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +76,7 @@ export default function Dashboard() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
+  const isMobile = useIsMobile();
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
@@ -172,41 +175,45 @@ export default function Dashboard() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
+        <header className="bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl md:text-2xl font-semibold text-foreground truncate" data-testid="text-page-title">
                 My Dashboard
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs md:text-sm text-muted-foreground hidden md:block">
                 Your personalized view of active work and important updates
               </p>
             </div>
             
-            <div className="flex items-center space-x-4">
-              {/* Quick Actions */}
-              <Button 
-                className="bg-primary hover:bg-primary/90" 
-                data-testid="button-create-project"
-                onClick={() => window.location.href = '/scheduled-services'}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New Project
-              </Button>
+            <div className="flex items-center space-x-2 md:space-x-4">
+              {/* Quick Actions - Desktop Only */}
+              {!isMobile && (
+                <Button 
+                  className="bg-primary hover:bg-primary/90" 
+                  data-testid="button-create-project"
+                  onClick={() => window.location.href = '/scheduled-services'}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Project
+                </Button>
+              )}
               
               {/* Notifications */}
-              <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+              <Button variant="ghost" size="icon" className="relative h-9 w-9" data-testid="button-notifications">
                 <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                  {dashboardData?.deadlineAlerts?.length || 0}
-                </span>
+                {dashboardData?.deadlineAlerts && dashboardData.deadlineAlerts.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                    {dashboardData.deadlineAlerts.length}
+                  </span>
+                )}
               </Button>
             </div>
           </div>
         </header>
         
         {/* Main Dashboard Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
           <div className="space-y-6">
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
@@ -267,6 +274,9 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+      
+      {/* Mobile Bottom Navigation */}
+      {isMobile && <BottomNav />}
     </div>
   );
 }
@@ -380,7 +390,8 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-6 gap-3">
+        {/* Desktop: Grid Layout */}
+        <div className="hidden md:grid grid-cols-6 gap-3">
           {combinedItems.map((item, index) => {
             if (item.type === 'client') {
               const client = item.data as Client & { activeProjects: number; lastViewed: Date };
@@ -421,6 +432,52 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
               <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
             </div>
           )}
+        </div>
+
+        {/* Mobile: Horizontal Scroll */}
+        <div className="md:hidden overflow-x-auto -mx-2 px-2">
+          <div className="flex gap-3 min-w-max pb-2">
+            {combinedItems.map((item, index) => {
+              if (item.type === 'client') {
+                const client = item.data as Client & { activeProjects: number; lastViewed: Date };
+                return (
+                  <div 
+                    key={`client-${client.id}`} 
+                    className="p-3 bg-muted/50 rounded-lg border hover:bg-accent active:bg-accent cursor-pointer transition-colors w-[140px] flex-shrink-0"
+                    onClick={() => window.location.href = `/clients/${client.id}`}
+                    data-testid={`recent-client-${client.id}`}
+                  >
+                    <div className="flex flex-col gap-2">
+                      <Building2 className="w-5 h-5 text-blue-500" />
+                      <span className="text-sm font-medium line-clamp-2">{client.name}</span>
+                      <span className="text-xs text-muted-foreground">{client.activeProjects} projects</span>
+                    </div>
+                  </div>
+                );
+              } else {
+                const project = item.data as ProjectWithRelations;
+                return (
+                  <div 
+                    key={`project-${project.id}`} 
+                    className="p-3 bg-muted/50 rounded-lg border hover:bg-accent active:bg-accent cursor-pointer transition-colors w-[140px] flex-shrink-0"
+                    onClick={() => window.location.href = `/projects/${project.id}`}
+                    data-testid={`recent-project-${project.id}`}
+                  >
+                    <div className="flex flex-col gap-2">
+                      <FolderOpen className="w-5 h-5 text-violet-500" />
+                      <span className="text-sm font-medium line-clamp-2">{project.client?.name}</span>
+                      <span className="text-xs text-muted-foreground line-clamp-1">{(project as any).projectType?.name || "Unknown"}</span>
+                    </div>
+                  </div>
+                );
+              }
+            })}
+            {combinedItems.length === 0 && (
+              <div className="w-full">
+                <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
