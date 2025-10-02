@@ -7553,6 +7553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       
       const sipProvision = await getSIPProvisionCredentials(effectiveUserId);
+      console.log("SIP provision response:", JSON.stringify(sipProvision, null, 2));
       res.json(sipProvision);
     } catch (error) {
       console.error("Error getting SIP provision:", error);
