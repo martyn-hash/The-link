@@ -26,6 +26,7 @@ interface CallState {
 interface RingCentralPhoneProps {
   clientId?: string;
   personId?: string;
+  defaultPhoneNumber?: string;
   onCallComplete?: (callData: {
     phoneNumber: string;
     duration: number;
@@ -34,7 +35,7 @@ interface RingCentralPhoneProps {
   }) => void;
 }
 
-export function RingCentralPhone({ clientId, personId, onCallComplete }: RingCentralPhoneProps) {
+export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCallComplete }: RingCentralPhoneProps) {
   const { toast } = useToast();
   const [callState, setCallState] = useState<CallState>({
     sessionId: null,
@@ -46,7 +47,7 @@ export function RingCentralPhone({ clientId, personId, onCallComplete }: RingCen
     isInbound: false,
   });
   
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(defaultPhoneNumber || '');
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   
@@ -439,6 +440,13 @@ export function RingCentralPhone({ clientId, personId, onCallComplete }: RingCen
       setCallState(prev => ({ ...prev, isOnHold: !prev.isOnHold }));
     }
   };
+
+  // Sync phone number when defaultPhoneNumber prop changes
+  useEffect(() => {
+    if (defaultPhoneNumber) {
+      setPhoneNumber(defaultPhoneNumber);
+    }
+  }, [defaultPhoneNumber]);
 
   // Initialize on mount
   useEffect(() => {

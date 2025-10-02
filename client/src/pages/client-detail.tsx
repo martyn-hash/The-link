@@ -28,6 +28,7 @@ import AddressLookup from "@/components/address-lookup";
 import AddressMap from "@/components/address-map";
 import TagManager from "@/components/tag-manager";
 import ClientChronology from "@/components/client-chronology";
+import { RingCentralPhone } from "@/components/ringcentral-phone";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
 import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
@@ -153,6 +154,9 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [emailContent, setEmailContent] = useState<string>('');
   const [selectedCommunication, setSelectedCommunication] = useState<CommunicationWithRelations | null>(null);
   const [isViewingCommunication, setIsViewingCommunication] = useState(false);
+  const [isCallingPerson, setIsCallingPerson] = useState(false);
+  const [callPersonId, setCallPersonId] = useState<string | undefined>();
+  const [callPhoneNumber, setCallPhoneNumber] = useState<string | undefined>();
   const { toast } = useToast();
 
   // Fetch communications for this client
@@ -408,6 +412,15 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             Communications Timeline
           </CardTitle>
           <div className="flex gap-2">
+            <Button
+              onClick={() => setIsCallingPerson(true)}
+              size="sm"
+              variant="outline"
+              data-testid="button-make-call"
+            >
+              <PhoneCall className="h-4 w-4 mr-2" />
+              Make Call
+            </Button>
             <Button
               onClick={() => setIsSendingSMS(true)}
               size="sm"
@@ -963,7 +976,108 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Call Dialog */}
+      <CallDialog
+        clientId={clientId}
+        personId={callPersonId}
+        phoneNumber={callPhoneNumber}
+        isOpen={isCallingPerson}
+        onClose={() => {
+          setIsCallingPerson(false);
+          setCallPersonId(undefined);
+          setCallPhoneNumber(undefined);
+        }}
+      />
     </Card>
+  );
+}
+
+// Call Dialog Component
+function CallDialog({ 
+  clientId, 
+  personId, 
+  phoneNumber,
+  isOpen,
+  onClose
+}: { 
+  clientId: string; 
+  personId?: string; 
+  phoneNumber?: string;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>(personId);
+  const [selectedPhoneNumber, setSelectedPhoneNumber] = useState<string | undefined>(phoneNumber);
+  
+  // Fetch client people for person selection
+  const { data: clientPeople } = useQuery({
+    queryKey: ['/api/clients', clientId, 'people'],
+    enabled: !!clientId && isOpen,
+  });
+
+  // Update selected person when prop changes
+  useEffect(() => {
+    setSelectedPersonId(personId);
+    setSelectedPhoneNumber(phoneNumber);
+  }, [personId, phoneNumber]);
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Make a Call</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Person Selector */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Person (Optional)</label>
+            <Select
+              value={selectedPersonId || 'none'}
+              onValueChange={(value) => {
+                if (value === 'none') {
+                  setSelectedPersonId(undefined);
+                  setSelectedPhoneNumber(undefined);
+                } else {
+                  setSelectedPersonId(value);
+                  const selected = (clientPeople || []).find((cp: any) => cp.person.id === value);
+                  setSelectedPhoneNumber(selected?.person?.primaryPhone || undefined);
+                }
+              }}
+            >
+              <SelectTrigger data-testid="select-call-person">
+                <SelectValue placeholder="Select a person..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No person selected</SelectItem>
+                {(clientPeople || []).map((cp: any) => (
+                  <SelectItem key={cp.person.id} value={cp.person.id}>
+                    {cp.person.firstName} {cp.person.lastName}
+                    {cp.person.primaryPhone && ` - ${cp.person.primaryPhone}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Ring Central Phone Component */}
+          <RingCentralPhone
+            clientId={clientId}
+            personId={selectedPersonId}
+            defaultPhoneNumber={selectedPhoneNumber}
+            onCallComplete={(data) => {
+              queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+              toast({
+                title: "Call logged",
+                description: "Call has been recorded in communications timeline",
+              });
+              onClose();
+            }}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
