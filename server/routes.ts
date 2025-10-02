@@ -2724,6 +2724,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project not found" });
       }
 
+      // Prevent status updates on completed projects
+      if (project.completionStatus) {
+        return res.status(400).json({ 
+          message: "Cannot update status of a completed project"
+        });
+      }
+
       // Allow any authenticated user to update project status
       // Note: Removed role-based restrictions to allow all users to update project status
 
