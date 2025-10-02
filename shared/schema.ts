@@ -1681,7 +1681,8 @@ export const communicationTypeEnum = pgEnum("communication_type", [
 // Integration type enum
 export const integrationTypeEnum = pgEnum("integration_type", [
   "office365",
-  "voodoo_sms"
+  "voodoo_sms",
+  "ringcentral"
 ]);
 
 // Communications table - central log of all communications
