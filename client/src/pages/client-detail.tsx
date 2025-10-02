@@ -1327,47 +1327,50 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
       }
       createPeopleServiceMutation.mutate(data);
     } else {
-      // Validate required fields for client services
-      if (!data.frequency) {
-        toast({
-          title: "Frequency Required",
-          description: "Please select a frequency for this client service.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!data.nextStartDate) {
-        toast({
-          title: "Start Date Required", 
-          description: "Please select a next start date for this client service.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!data.nextDueDate) {
-        toast({
-          title: "Due Date Required",
-          description: "Please select a next due date for this client service.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!data.serviceOwnerId) {
-        toast({
-          title: "Service Owner Required",
-          description: "Please select a service owner for this client service.",
-          variant: "destructive",
-        });
-        return;
-      }
-      // Validate role assignments for client services
-      if (!areAllRolesAssigned()) {
-        toast({
-          title: "Incomplete Role Assignments",
-          description: "Please assign users to all required roles before saving.",
-          variant: "destructive",
-        });
-        return;
+      // Skip validation for static services (they don't require frequency, dates, or service owner)
+      if (!isStaticService) {
+        // Validate required fields for non-static client services
+        if (!data.frequency) {
+          toast({
+            title: "Frequency Required",
+            description: "Please select a frequency for this client service.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!data.nextStartDate) {
+          toast({
+            title: "Start Date Required", 
+            description: "Please select a next start date for this client service.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!data.nextDueDate) {
+          toast({
+            title: "Due Date Required",
+            description: "Please select a next due date for this client service.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!data.serviceOwnerId) {
+          toast({
+            title: "Service Owner Required",
+            description: "Please select a service owner for this client service.",
+            variant: "destructive",
+          });
+          return;
+        }
+        // Validate role assignments for client services
+        if (!areAllRolesAssigned()) {
+          toast({
+            title: "Incomplete Role Assignments",
+            description: "Please assign users to all required roles before saving.",
+            variant: "destructive",
+          });
+          return;
+        }
       }
       createClientServiceMutation.mutate(data);
     }
@@ -1375,6 +1378,9 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
   
   // Check if Companies House service is selected
   const isCompaniesHouseService = selectedService?.isCompaniesHouseConnected || false;
+  
+  // Check if Static service is selected
+  const isStaticService = selectedService?.isStaticService || false;
   
   // Helper to check if field should be disabled (only if CH service AND data was successfully populated)
   const isFieldDisabled = (fieldName: 'frequency' | 'nextStartDate' | 'nextDueDate') => {
@@ -1441,6 +1447,9 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                                 {service.isPersonalService && (
                                   <Badge variant="secondary" className="ml-2 text-xs">Personal Service</Badge>
                                 )}
+                                {service.isStaticService && (
+                                  <Badge variant="outline" className="ml-2 text-xs text-gray-500 border-gray-300">Static</Badge>
+                                )}
                               </SelectItem>
                             ))
                           ) : (
@@ -1453,6 +1462,18 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                   )}
                 />
 
+                {/* Wrapper for fields that should be grayed out for static services */}
+                <div className="relative">
+                  {/* Overlay for static services */}
+                  {isStaticService && (
+                    <div className="absolute inset-0 bg-blue-100/80 dark:bg-blue-950/80 rounded-lg z-10 flex items-center justify-center backdrop-blur-sm">
+                      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg border border-blue-200 dark:border-blue-700 max-w-sm">
+                        <p className="text-sm text-blue-900 dark:text-blue-100 text-center font-medium">
+                          No details are required for the <span className="font-semibold">{selectedService?.name}</span> service
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                 <FormField
                   control={form.control}
@@ -1555,6 +1576,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                     </FormItem>
                   )}
                 />
+                </div>
               </div>
 
               {/* Column 2: Service Owner & Role Assignments */}
