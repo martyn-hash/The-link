@@ -296,6 +296,7 @@ export const projects = pgTable("projects", {
   dueDate: timestamp("due_date"),
   archived: boolean("archived").default(false), // to hide completed monthly cycles
   inactive: boolean("inactive").default(false), // to mark projects as inactive
+  completionStatus: varchar("completion_status"), // 'completed_successfully', 'completed_unsuccessfully', or null for active projects
   projectMonth: varchar("project_month"), // DD/MM/YYYY format to track which month each project belongs to
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -450,6 +451,7 @@ export const projectTypes = pgTable("project_types", {
   description: text("description"), // optional description of the project type
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }), // Optional reference to service for role inheritance
   active: boolean("active").default(true), // to enable/disable project types
+  singleProjectPerClient: boolean("single_project_per_client").default(false), // if true, only one active project of this type can exist per client
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
 });
