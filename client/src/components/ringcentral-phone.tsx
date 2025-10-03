@@ -275,18 +275,18 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
       console.log('[RingCentral] Call state updated to ringing');
 
-      // Make call with v2.x API - use makeCall instead of call
-      console.log('[RingCentral] Calling webPhone.makeCall() with number:', number);
+      // Make call with v2.x API - use call method
+      console.log('[RingCentral] Calling webPhone.call() with number:', number);
       let session: any;
       try {
-        session = await webPhoneRef.current.makeCall({
+        session = await webPhoneRef.current.call({
           toNumber: number,
         });
         
         console.log('[RingCentral] Call session created successfully:', session);
         sessionRef.current = session;
       } catch (callError: any) {
-        console.error('[RingCentral] ERROR in webPhone.makeCall():', callError);
+        console.error('[RingCentral] ERROR in webPhone.call():', callError);
         console.error('[RingCentral] Call error message:', callError?.message);
         console.error('[RingCentral] Call error stack:', callError?.stack);
         throw callError;
