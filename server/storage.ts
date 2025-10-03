@@ -5711,6 +5711,7 @@ export class DatabaseStorage implements IStorage {
             nextStartDate: cs.nextStartDate,
             nextDueDate: cs.nextDueDate,
             isActive: cs.isActive,
+            udfValues: cs.udfValues,
             createdAt: cs.createdAt,
             service: {
               id: service.id,
