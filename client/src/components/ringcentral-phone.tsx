@@ -49,6 +49,14 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
   const callStartTimeRef = useRef<number | null>(null);
   const autoRejectTimerRef = useRef<number | null>(null);
 
+  // Update phone number when defaultPhoneNumber prop changes
+  useEffect(() => {
+    if (defaultPhoneNumber) {
+      console.log('[RingCentral] Setting phone number from prop:', defaultPhoneNumber);
+      setPhoneNumber(defaultPhoneNumber);
+    }
+  }, [defaultPhoneNumber]);
+
   // Format call duration
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -56,36 +64,52 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Initialize WebPhone with v2.x API (CACHE BUST v2025-10-02-213400)
+  // Initialize WebPhone with v2.x API (CACHE BUST v2025-10-03-071500)
   const initializeWebPhone = async () => {
-    if (isInitializing || isInitialized) return;
+    console.log('[RingCentral] initializeWebPhone called');
+    console.log('[RingCentral] isInitializing:', isInitializing, 'isInitialized:', isInitialized);
+    
+    if (isInitializing || isInitialized) {
+      console.log('[RingCentral] Already initializing or initialized, skipping');
+      return;
+    }
 
     try {
       setIsInitializing(true);
+      console.log('[RingCentral] Starting initialization...');
 
       // Get SIP provisioning credentials
-      console.log('Requesting SIP provisioning...');
+      console.log('[RingCentral] Requesting SIP provisioning from backend...');
       const sipProvision = await apiRequest('POST', '/api/ringcentral/sip-provision');
 
-      console.log('SIP provision response:', sipProvision);
+      console.log('[RingCentral] SIP provision response received:', sipProvision);
 
       if (!sipProvision || !sipProvision.sipInfo || sipProvision.sipInfo.length === 0) {
-        throw new Error('Failed to get SIP provisioning credentials');
+        throw new Error('Failed to get SIP provisioning credentials - no sipInfo in response');
       }
 
-      console.log('SIP provisioning successful, initializing WebPhone...');
-      console.log('First sipInfo:', sipProvision.sipInfo[0]);
+      console.log('[RingCentral] SIP provisioning successful');
+      console.log('[RingCentral] sipInfo details:', {
+        username: sipProvision.sipInfo[0].username,
+        domain: sipProvision.sipInfo[0].domain,
+        outboundProxy: sipProvision.sipInfo[0].outboundProxy,
+        transport: sipProvision.sipInfo[0].transport
+      });
 
       // Initialize WebPhone with version 2.x API - pass single sipInfo object (not array)
+      console.log('[RingCentral] Creating WebPhone instance with sipInfo[0]...');
       const webPhone = new RingCentralWebPhone({ sipInfo: sipProvision.sipInfo[0] });
-      console.log('WebPhone instance created:', webPhone);
+      console.log('[RingCentral] WebPhone instance created:', webPhone);
 
       // Start the WebPhone (connects and registers)
+      console.log('[RingCentral] Starting WebPhone (connecting WebSocket)...');
       await webPhone.start();
-      console.log('WebPhone started and registered');
+      console.log('[RingCentral] WebPhone started and registered successfully');
       
       webPhoneRef.current = webPhone;
       setIsInitialized(true);
+      setIsInitializing(false);
+      
       toast({ title: 'Phone Ready', description: 'RingCentral phone is ready to make calls' });
 
       // Handle incoming calls
@@ -174,10 +198,17 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         }, 30000);
       });
 
-      setIsInitializing(false);
     } catch (error: any) {
-      console.error('Error initializing WebPhone:', error);
+      console.error('[RingCentral] ========== INITIALIZATION ERROR ==========');
+      console.error('[RingCentral] Error initializing WebPhone:', error);
+      console.error('[RingCentral] Error message:', error?.message);
+      console.error('[RingCentral] Error stack:', error?.stack);
+      console.error('[RingCentral] Error details:', JSON.stringify(error, null, 2));
+      console.error('[RingCentral] ==========================================');
+      
       setIsInitializing(false);
+      setIsInitialized(false);
+      
       toast({
         title: 'Initialization Error',
         description: error.message || 'Failed to initialize phone',
@@ -208,7 +239,12 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
   // Make outbound call
   const makeCall = async (number: string) => {
+    console.log('[RingCentral] makeCall called with number:', number);
+    console.log('[RingCentral] webPhoneRef.current:', webPhoneRef.current);
+    console.log('[RingCentral] isInitialized:', isInitialized);
+    
     if (!webPhoneRef.current || !isInitialized) {
+      console.error('[RingCentral] Phone not ready - webPhone:', !!webPhoneRef.current, 'initialized:', isInitialized);
       toast({
         title: 'Phone Not Ready',
         description: 'Please initialize the phone first',
@@ -218,8 +254,9 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     }
 
     try {
-      console.log('Making call to:', number);
+      console.log('[RingCentral] Starting call to:', number);
       const sessionId = `call-${Date.now()}`;
+      console.log('[RingCentral] Generated session ID:', sessionId);
       
       setCallState({
         sessionId,
@@ -230,24 +267,26 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         isOnHold: false,
         isInbound: false,
       });
+      console.log('[RingCentral] Call state updated to ringing');
 
       // Make call with v2.x API
+      console.log('[RingCentral] Calling webPhone.call() with toNumber:', number);
       const session = await webPhoneRef.current.call({
         toNumber: number,
       });
       
-      console.log('Call session created');
+      console.log('[RingCentral] Call session created:', session);
       sessionRef.current = session;
 
       // Setup session event listeners for outbound call
       session.on('accepted', () => {
-        console.log('Outbound call accepted');
+        console.log('[RingCentral] Outbound call accepted - call connected');
         setCallState(prev => ({ ...prev, status: 'connected' }));
         startCallTimer();
       });
 
       session.on('terminated', async () => {
-        console.log('Outbound call terminated');
+        console.log('[RingCentral] Outbound call terminated');
         stopCallTimer();
         
         let finalDuration = 0;
@@ -289,18 +328,21 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
 
       session.on('failed', (error: any) => {
-        console.error('Outbound call failed:', error);
+        console.error('[RingCentral] Outbound call failed:', error);
+        console.error('[RingCentral] Error details:', JSON.stringify(error, null, 2));
         stopCallTimer();
         setCallState(prev => ({ ...prev, status: 'disconnected' }));
         toast({
           title: 'Call Failed',
-          description: 'Failed to connect call',
+          description: error?.message || 'Failed to connect call',
           variant: 'destructive',
         });
       });
 
     } catch (error: any) {
-      console.error('Error making call:', error);
+      console.error('[RingCentral] Error making call:', error);
+      console.error('[RingCentral] Error stack:', error.stack);
+      console.error('[RingCentral] Error details:', JSON.stringify(error, null, 2));
       setCallState(initialCallState);
       toast({
         title: 'Call Error',
@@ -312,14 +354,44 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
   // Hang up call
   const hangup = async () => {
+    console.log('[RingCentral] Hangup called, sessionRef.current:', sessionRef.current);
+    console.log('[RingCentral] Current call state:', callState);
+    
     if (sessionRef.current) {
       try {
-        console.log('Hanging up call');
-        await sessionRef.current.dispose();
+        console.log('[RingCentral] Attempting to hang up call');
+        
+        // Try to terminate the session properly
+        if (typeof sessionRef.current.terminate === 'function') {
+          console.log('[RingCentral] Calling session.terminate()');
+          await sessionRef.current.terminate();
+        } else if (typeof sessionRef.current.dispose === 'function') {
+          console.log('[RingCentral] Calling session.dispose()');
+          await sessionRef.current.dispose();
+        } else if (typeof sessionRef.current.bye === 'function') {
+          console.log('[RingCentral] Calling session.bye()');
+          await sessionRef.current.bye();
+        } else {
+          console.warn('[RingCentral] No terminate/dispose/bye method found on session');
+        }
+        
+        console.log('[RingCentral] Hangup successful, clearing session reference');
         sessionRef.current = null;
+        stopCallTimer();
+        
+        // Reset state immediately
+        setCallState(initialCallState);
       } catch (error) {
-        console.error('Error hanging up:', error);
+        console.error('[RingCentral] Error hanging up:', error);
+        // Reset state even if there was an error
+        sessionRef.current = null;
+        stopCallTimer();
+        setCallState(initialCallState);
       }
+    } else {
+      console.warn('[RingCentral] Hangup called but no active session');
+      // Reset state anyway
+      setCallState(initialCallState);
     }
   };
 
