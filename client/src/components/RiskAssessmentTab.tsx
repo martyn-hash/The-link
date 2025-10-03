@@ -118,7 +118,7 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
       console.log("[RiskAssessment] Creating assessment with data:", data);
       console.log("[RiskAssessment] Client ID:", clientId);
       console.log("[RiskAssessment] API URL:", `/api/clients/${clientId}/risk-assessments`);
-      const result = await apiRequest(`/api/clients/${clientId}/risk-assessments`, "POST", data);
+      const result = await apiRequest("POST", `/api/clients/${clientId}/risk-assessments`, data);
       console.log("[RiskAssessment] API response:", result);
       return result;
     },
@@ -137,7 +137,7 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
 
   const deleteMutation = useMutation({
     mutationFn: async (assessmentId: string) => {
-      return await apiRequest(`/api/risk-assessments/${assessmentId}`, "DELETE");
+      return await apiRequest("DELETE", `/api/risk-assessments/${assessmentId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "risk-assessments"] });
@@ -150,7 +150,7 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
 
   const saveResponsesMutation = useMutation({
     mutationFn: async ({ assessmentId, responses }: { assessmentId: string; responses: any[] }) => {
-      return await apiRequest(`/api/risk-assessments/${assessmentId}/responses`, "POST", { responses });
+      return await apiRequest("POST", `/api/risk-assessments/${assessmentId}/responses`, { responses });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/risk-assessments", selectedAssessmentId] });
