@@ -115,30 +115,19 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
 
   const createMutation = useMutation({
     mutationFn: async (data: z.infer<typeof createRiskAssessmentFormSchema>) => {
-      console.log("[RiskAssessment] Creating assessment with data:", data);
-      console.log("[RiskAssessment] Client ID:", clientId);
-      console.log("[RiskAssessment] API URL:", `/api/clients/${clientId}/risk-assessments`);
-      
-      // Ensure initialDate is a proper Date object
       const payload = {
         ...data,
         initialDate: data.initialDate instanceof Date ? data.initialDate.toISOString() : new Date(data.initialDate).toISOString(),
       };
-      console.log("[RiskAssessment] Payload being sent:", payload);
-      
-      const result = await apiRequest("POST", `/api/clients/${clientId}/risk-assessments`, payload);
-      console.log("[RiskAssessment] API response:", result);
-      return result;
+      return await apiRequest("POST", `/api/clients/${clientId}/risk-assessments`, payload);
     },
-    onSuccess: (data) => {
-      console.log("[RiskAssessment] Successfully created assessment:", data);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "risk-assessments"] });
       toast({ title: "Risk assessment created successfully" });
       setIsCreateDialogOpen(false);
       createForm.reset();
     },
-    onError: (error) => {
-      console.error("[RiskAssessment] Failed to create assessment:", error);
+    onError: () => {
       toast({ title: "Failed to create risk assessment", variant: "destructive" });
     },
   });
