@@ -1706,6 +1706,13 @@ export const integrationTypeEnum = pgEnum("integration_type", [
   "ringcentral"
 ]);
 
+// Thread status enum for message threads
+export const threadStatusEnum = pgEnum("thread_status", [
+  "open",
+  "closed", 
+  "archived"
+]);
+
 // Communications table - central log of all communications
 export const communications = pgTable("communications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1719,6 +1726,7 @@ export const communications = pgTable("communications", {
   loggedAt: timestamp("logged_at").defaultNow(), // When it was logged in system
   metadata: jsonb("metadata"), // Store integration-specific data (SMS IDs, email IDs, etc.)
   isRead: boolean("is_read").default(true), // For tracking inbound messages
+  threadId: varchar("thread_id"), // Optional - link to message thread for unified staff visibility
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -1726,6 +1734,8 @@ export const communications = pgTable("communications", {
   clientIdLoggedAtIdx: index("communications_client_id_logged_at_idx").on(table.clientId, table.loggedAt),
   // Index for efficient person communication lookups  
   personIdLoggedAtIdx: index("communications_person_id_logged_at_idx").on(table.personId, table.loggedAt),
+  // Index for thread lookups
+  threadIdIdx: index("communications_thread_id_idx").on(table.threadId),
 }));
 
 // User integrations table for storing integration credentials
@@ -1743,6 +1753,74 @@ export const userIntegrations = pgTable("user_integrations", {
 }, (table) => ({
   // Unique constraint to prevent multiple integrations of same type per user
   uniqueUserIntegrationType: unique("unique_user_integration_type").on(table.userId, table.integrationType),
+}));
+
+// Client Portal Users - for client authentication and access
+export const clientPortalUsers = pgTable("client_portal_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull(),
+  name: varchar("name"),
+  magicLinkToken: text("magic_link_token"),
+  tokenExpiry: timestamp("token_expiry"),
+  lastLogin: timestamp("last_login"),
+  notificationPreferences: jsonb("notification_preferences"), // Email, SMS preferences
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Unique email per client portal user
+  uniqueEmail: unique("unique_client_portal_email").on(table.email),
+  // Index for client lookups
+  clientIdIdx: index("client_portal_users_client_id_idx").on(table.clientId),
+}));
+
+// Message Threads - conversation threads between clients and staff
+export const messageThreads = pgTable("message_threads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  subject: varchar("subject").notNull(),
+  status: threadStatusEnum("status").notNull().default('open'),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdByClientPortalUserId: varchar("created_by_client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "set null" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }), // Optional link to project
+  serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }), // Optional link to service
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for client thread lookups
+  clientIdLastMessageIdx: index("message_threads_client_id_last_message_idx").on(table.clientId, table.lastMessageAt),
+  // Index for status filtering
+  statusIdx: index("message_threads_status_idx").on(table.status),
+}));
+
+// Messages - individual messages within threads
+export const messages = pgTable("messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => messageThreads.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }), // If sent by staff
+  clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "set null" }), // If sent by client
+  attachments: jsonb("attachments"), // Array of attachment metadata {fileName, fileSize, objectPath}
+  isReadByStaff: boolean("is_read_by_staff").default(false), // Read receipt for staff
+  isReadByClient: boolean("is_read_by_client").default(false), // Read receipt for client
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread message lookups
+  threadIdCreatedAtIdx: index("messages_thread_id_created_at_idx").on(table.threadId, table.createdAt),
+  // Index for unread messages
+  isReadByStaffIdx: index("messages_is_read_by_staff_idx").on(table.isReadByStaff),
+  isReadByClientIdx: index("messages_is_read_by_client_idx").on(table.isReadByClient),
+}));
+
+// Client Portal Sessions - for session management
+export const clientPortalSessions = pgTable("client_portal_sessions", {
+  sid: varchar("sid").primaryKey(),
+  sess: jsonb("sess").notNull(),
+  expire: timestamp("expire").notNull(),
+}, (table) => ({
+  expireIdx: index("client_portal_sessions_expire_idx").on(table.expire),
 }));
 
 // Entity type enum for tracking what type of entity was viewed
@@ -1820,6 +1898,25 @@ export const documents = pgTable("documents", {
 export const insertCommunicationSchema = createInsertSchema(communications).omit({
   id: true,
   loggedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Zod schemas for client portal and messaging
+export const insertClientPortalUserSchema = createInsertSchema(clientPortalUsers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMessageThreadSchema = createInsertSchema(messageThreads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -1932,6 +2029,12 @@ export const insertRiskAssessmentResponseSchema = createInsertSchema(riskAssessm
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
+export type ClientPortalUser = typeof clientPortalUsers.$inferSelect;
+export type InsertClientPortalUser = z.infer<typeof insertClientPortalUserSchema>;
+export type MessageThread = typeof messageThreads.$inferSelect;
+export type InsertMessageThread = z.infer<typeof insertMessageThreadSchema>;
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type UserActivityTracking = typeof userActivityTracking.$inferSelect;
