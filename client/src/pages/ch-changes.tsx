@@ -218,13 +218,13 @@ export default function ChChanges() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Pending Changes by Client</span>
+                <span>Pending Changes - Detailed View</span>
                 <Badge variant="outline" data-testid="text-clients-count">
                   {groupedRequests?.length || 0} Clients with Changes
                 </Badge>
               </CardTitle>
               <CardDescription>
-                Each row shows all pending changes for a client, grouped by type with impact analysis
+                Each row shows a specific field change with old and new values for verification
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -242,105 +242,138 @@ export default function ChChanges() {
                   ))}
                 </div>
               ) : groupedRequests && groupedRequests.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Changes</TableHead>
-                      <TableHead>Affected Services</TableHead>
-                      <TableHead>Active Projects</TableHead>
-                      <TableHead className="w-40">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {groupedRequests.map((group) => {
-                      const totalChanges = group.accountsChanges.length + group.confirmationStatementChanges.length;
-                      
-                      return (
-                        <TableRow key={group.client.id} data-testid={`row-client-${group.client.id}`}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center space-x-2">
-                              <Building className="w-4 h-4 text-muted-foreground" />
-                              <div>
-                                <div>{group.client.name}</div>
-                                {group.client.companyNumber && (
-                                  <div className="text-xs text-muted-foreground">
-                                    {group.client.companyNumber}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <Badge variant="secondary">
-                                  {totalChanges} {totalChanges === 1 ? 'change' : 'changes'}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-56">Client</TableHead>
+                        <TableHead className="w-40">Change Type</TableHead>
+                        <TableHead className="w-56">Field</TableHead>
+                        <TableHead className="w-40">Old Value</TableHead>
+                        <TableHead className="w-40">New Value</TableHead>
+                        <TableHead className="w-48">Affected Services</TableHead>
+                        <TableHead className="w-36">Active Projects</TableHead>
+                        <TableHead className="w-36">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {groupedRequests.map((group) => {
+                        // Flatten all changes into individual rows
+                        const allChanges = [
+                          ...group.accountsChanges.map(c => ({ ...c, changeType: 'Accounts', group })),
+                          ...group.confirmationStatementChanges.map(c => ({ ...c, changeType: 'Confirmation Statement', group }))
+                        ];
+                        
+                        return allChanges.map((change, idx) => {
+                          // Show client info and actions only on first row for this client
+                          const isFirstRow = idx === 0;
+                          const rowSpan = allChanges.length;
+                          
+                          return (
+                            <TableRow key={change.id} data-testid={`row-change-${change.id}`}>
+                              {isFirstRow && (
+                                <>
+                                  <TableCell rowSpan={rowSpan} className="font-medium align-top border-r-2">
+                                    <div className="flex items-center space-x-2">
+                                      <Building className="w-4 h-4 text-muted-foreground" />
+                                      <div>
+                                        <div className="font-semibold">{group.client.name}</div>
+                                        {group.client.companyNumber && (
+                                          <div className="text-xs text-muted-foreground font-mono">
+                                            {group.client.companyNumber}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </>
+                              )}
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {change.changeType}
                                 </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {getChangesSummary(group)}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {group.affectedServices.length > 0 ? (
-                              <div className="space-y-1">
-                                <div className="flex items-center space-x-1">
-                                  <TrendingUp className="w-3 h-3 text-blue-600" />
-                                  <span className="text-sm font-medium">
-                                    {group.affectedServices.length} {group.affectedServices.length === 1 ? 'service' : 'services'}
-                                  </span>
+                              </TableCell>
+                              <TableCell className="font-medium text-sm">
+                                {change.fieldName === 'nextAccountsPeriodEnd' && 'Accounts Period End'}
+                                {change.fieldName === 'nextAccountsDue' && 'Accounts Due Date'}
+                                {change.fieldName === 'confirmationStatementNextDue' && 'CS Due Date'}
+                                {change.fieldName === 'confirmationStatementNextMadeUpTo' && 'CS Made Up To'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="px-2 py-1 bg-red-50 border border-red-200 rounded text-red-700 text-sm font-mono">
+                                  {formatValue(change.oldValue)}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {group.affectedServices.slice(0, 2).join(', ')}
-                                  {group.affectedServices.length > 2 && ` +${group.affectedServices.length - 2} more`}
+                              </TableCell>
+                              <TableCell>
+                                <div className="px-2 py-1 bg-green-50 border border-green-200 rounded text-green-700 text-sm font-mono">
+                                  {formatValue(change.newValue)}
                                 </div>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">None</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {group.affectedProjects > 0 ? (
-                              <div className="flex items-center space-x-1">
-                                <AlertCircle className="w-4 h-4 text-orange-600" />
-                                <span className="font-medium text-orange-600">
-                                  {group.affectedProjects} {group.affectedProjects === 1 ? 'project' : 'projects'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">None</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleViewDetails(group)}
-                                data-testid={`button-view-${group.client.id}`}
-                              >
-                                <Eye className="w-3 h-3 mr-1" />
-                                Details
-                              </Button>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => handleApproveAll(group)}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                                data-testid={`button-approve-all-${group.client.id}`}
-                              >
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Approve All
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                              </TableCell>
+                              {isFirstRow && (
+                                <>
+                                  <TableCell rowSpan={rowSpan} className="align-top">
+                                    {group.affectedServices.length > 0 ? (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center space-x-1">
+                                          <TrendingUp className="w-3 h-3 text-blue-600" />
+                                          <span className="text-sm font-medium">
+                                            {group.affectedServices.length} {group.affectedServices.length === 1 ? 'service' : 'services'}
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {group.affectedServices.slice(0, 2).join(', ')}
+                                          {group.affectedServices.length > 2 && ` +${group.affectedServices.length - 2}`}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">None</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell rowSpan={rowSpan} className="align-top">
+                                    {group.affectedProjects > 0 ? (
+                                      <div className="flex items-center space-x-1">
+                                        <AlertCircle className="w-4 h-4 text-orange-600" />
+                                        <span className="font-medium text-orange-600 text-sm">
+                                          {group.affectedProjects}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">None</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell rowSpan={rowSpan} className="align-top border-l-2">
+                                    <div className="flex flex-col space-y-1">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleViewDetails(group)}
+                                        data-testid={`button-view-${group.client.id}`}
+                                        className="w-full justify-start text-xs"
+                                      >
+                                        <Eye className="w-3 h-3 mr-1" />
+                                        Details
+                                      </Button>
+                                      <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() => handleApproveAll(group)}
+                                        className="bg-green-600 hover:bg-green-700 text-white w-full justify-start text-xs"
+                                        data-testid={`button-approve-all-${group.client.id}`}
+                                      >
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                        Approve All
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          );
+                        });
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : (
                 <div className="text-center py-12">
                   <FileCheck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
