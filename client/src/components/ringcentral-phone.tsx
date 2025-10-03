@@ -246,11 +246,9 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
   // Make outbound call
   const makeCall = async (number: string) => {
     console.log('[RingCentral] makeCall called with number:', number);
-    console.log('[RingCentral] webPhoneRef.current:', webPhoneRef.current);
-    console.log('[RingCentral] isInitialized:', isInitialized);
     
     if (!webPhoneRef.current || !isInitialized) {
-      console.error('[RingCentral] Phone not ready - webPhone:', !!webPhoneRef.current, 'initialized:', isInitialized);
+      console.error('[RingCentral] Phone not ready');
       toast({
         title: 'Phone Not Ready',
         description: 'Please initialize the phone first',
@@ -260,9 +258,37 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     }
 
     try {
-      console.log('[RingCentral] Starting call to:', number);
+      // Request microphone permission explicitly
+      console.log('[RingCentral] Requesting microphone permission...');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('[RingCentral] Microphone permission granted');
+        // Stop the stream immediately - we just needed permission
+        stream.getTracks().forEach(track => track.stop());
+      } catch (permError: any) {
+        console.error('[RingCentral] Microphone permission denied:', permError);
+        toast({
+          title: 'Microphone Access Required',
+          description: 'Please allow microphone access to make calls',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const sessionId = `call-${Date.now()}`;
-      console.log('[RingCentral] Generated session ID:', sessionId);
+      
+      // Format phone number for RingCentral (add +44 for UK numbers if needed)
+      let formattedNumber = number;
+      if (number.startsWith('07')) {
+        formattedNumber = '+44' + number.substring(1);
+        console.log('[RingCentral] Formatted UK mobile:', number, '->', formattedNumber);
+      } else if (number.startsWith('01') || number.startsWith('02')) {
+        formattedNumber = '+44' + number.substring(1);
+        console.log('[RingCentral] Formatted UK landline:', number, '->', formattedNumber);
+      } else if (!number.startsWith('+')) {
+        formattedNumber = '+44' + number;
+        console.log('[RingCentral] Added country code:', number, '->', formattedNumber);
+      }
       
       setCallState({
         sessionId,
@@ -273,57 +299,41 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         isOnHold: false,
         isInbound: false,
       });
-      console.log('[RingCentral] Call state updated to ringing');
 
-      // Format phone number for RingCentral (add +44 for UK numbers if needed)
-      let formattedNumber = number;
-      if (number.startsWith('07')) {
-        // UK mobile number - convert 07XXX to +447XXX
-        formattedNumber = '+44' + number.substring(1);
-        console.log('[RingCentral] Formatted UK mobile:', number, '->', formattedNumber);
-      } else if (number.startsWith('01') || number.startsWith('02')) {
-        // UK landline - convert 01XXX/02XXX to +441XXX/+442XXX
-        formattedNumber = '+44' + number.substring(1);
-        console.log('[RingCentral] Formatted UK landline:', number, '->', formattedNumber);
-      } else if (!number.startsWith('+')) {
-        // No country code, assume UK and add +44
-        formattedNumber = '+44' + number;
-        console.log('[RingCentral] Added country code:', number, '->', formattedNumber);
-      }
-      
       console.log('[RingCentral] Initiating call to:', formattedNumber);
       
-      let session: any;
-      try {
-        // Initiate the call - returns a Promise but session is in webPhone.callSessions
-        webPhoneRef.current.call({
-          toNumber: formattedNumber,
-        });
-        
-        // Get the session from webPhone.callSessions array (created synchronously)
-        const sessions = (webPhoneRef.current as any).callSessions;
-        if (sessions && sessions.length > 0) {
-          session = sessions[sessions.length - 1];
-          console.log('[RingCentral] Session retrieved from callSessions');
-        } else {
-          throw new Error('No session created in callSessions');
-        }
-        
-        sessionRef.current = session;
-      } catch (callError: any) {
-        console.error('[RingCentral] Call failed:', callError?.message || callError);
-        throw callError;
+      // Initiate the call - session created synchronously in webPhone.callSessions
+      const callPromise = webPhoneRef.current.call({
+        toNumber: formattedNumber,
+      });
+      
+      console.log('[RingCentral] call() returned:', callPromise);
+      
+      // Get the session from webPhone.callSessions array (created synchronously)
+      const sessions = (webPhoneRef.current as any).callSessions;
+      if (!sessions || sessions.length === 0) {
+        throw new Error('No session created in callSessions');
       }
+      
+      const session = sessions[sessions.length - 1];
+      sessionRef.current = session;
+      console.log('[RingCentral] Session retrieved:', session);
+      console.log('[RingCentral] Session state:', (session as any).state);
 
-      // Setup session event listeners for outbound call
+      // Setup session event listeners IMMEDIATELY
       session.on('accepted', () => {
-        console.log('[RingCentral] Outbound call accepted - call connected');
+        console.log('[RingCentral] ✅ Outbound call ACCEPTED - call connected!');
         setCallState(prev => ({ ...prev, status: 'connected' }));
         startCallTimer();
       });
 
+      session.on('progress', () => {
+        console.log('[RingCentral] 📞 Call PROGRESS - phone is ringing');
+        setCallState(prev => ({ ...prev, status: 'ringing' }));
+      });
+
       session.on('terminated', async () => {
-        console.log('[RingCentral] Outbound call terminated');
+        console.log('[RingCentral] ❌ Outbound call TERMINATED');
         stopCallTimer();
         
         let finalDuration = 0;
@@ -365,16 +375,22 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
 
       session.on('failed', (error: any) => {
-        console.error('[RingCentral] Outbound call failed:', error);
-        console.error('[RingCentral] Error details:', JSON.stringify(error, null, 2));
+        console.error('[RingCentral] ⚠️ Outbound call FAILED:', error);
+        console.error('[RingCentral] Failure details:', {
+          message: error?.message,
+          statusCode: error?.statusCode,
+          reasonPhrase: error?.reasonPhrase,
+        });
         stopCallTimer();
         setCallState(prev => ({ ...prev, status: 'disconnected' }));
         toast({
           title: 'Call Failed',
-          description: error?.message || 'Failed to connect call',
+          description: error?.message || error?.reasonPhrase || 'Failed to connect call',
           variant: 'destructive',
         });
       });
+
+      console.log('[RingCentral] Event listeners attached, waiting for call to connect...');
 
     } catch (error: any) {
       console.error('[RingCentral] Error making call:', error);
