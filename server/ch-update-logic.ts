@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { db } from "./db";
-import { clients, clientServices, projects } from "../shared/schema";
+import { clients, clientServices, projects, chChangeRequests } from "../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import type { ChChangeRequest } from "../shared/schema";
 
@@ -192,9 +192,17 @@ export async function applyChChanges(
       }
     }
 
-    // Step 4: Mark all requests as approved
+    // Step 4: Mark all requests as approved (using transaction context)
     for (const request of requestsToApprove) {
-      await storage.approveChChangeRequest(request.id, approvedBy, notes);
+      await tx
+        .update(chChangeRequests)
+        .set({
+          status: "approved",
+          approvedBy,
+          approvedAt: sql`now()`,
+          notes,
+        })
+        .where(eq(chChangeRequests.id, request.id));
     }
   });
 
