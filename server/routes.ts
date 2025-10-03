@@ -6027,6 +6027,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/ch-change-requests/client/:clientId/approve-all - Approve all pending CH change requests for a client (admin only)
+  app.post("/api/ch-change-requests/client/:clientId/approve-all", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = req.params;
+      const { notes } = req.body;
+
+      // Get all pending requests for this client
+      const clientRequests = await storage.getChChangeRequestsByClientId(clientId);
+      const pendingRequests = clientRequests.filter(r => r.status === 'pending');
+
+      if (pendingRequests.length === 0) {
+        return res.status(404).json({ message: "No pending change requests found for this client" });
+      }
+
+      // Get current user ID for approvedBy field
+      const currentUser = req.user;
+      if (!currentUser?.id) {
+        return res.status(401).json({ message: "User identification required" });
+      }
+
+      // Apply all CH changes using smart update logic
+      const { applyChChanges } = await import('./ch-update-logic');
+      const requestIds = pendingRequests.map(r => r.id);
+      
+      const result = await applyChChanges(
+        clientId,
+        requestIds,
+        currentUser.id,
+        notes
+      );
+
+      console.log(`[CH Bulk Approve] Applied ${requestIds.length} changes for client ${clientId}: ${result.updatedClients} clients, ${result.updatedServices} services, ${result.updatedProjects} projects`);
+
+      res.json({ 
+        message: `Successfully approved ${requestIds.length} change requests`,
+        approvedCount: requestIds.length,
+        updatedClients: result.updatedClients,
+        updatedServices: result.updatedServices,
+        updatedProjects: result.updatedProjects,
+      });
+    } catch (error) {
+      console.error("Error bulk approving CH change requests:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to bulk approve CH change requests" });
+    }
+  });
+
+  // GET /api/ch-change-requests/grouped - Get pending CH change requests grouped by client with impact analysis (admin only)
+  app.get("/api/ch-change-requests/grouped", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const changeRequests = await storage.getPendingChChangeRequests();
+      
+      // Group change requests by client
+      const groupedByClient = new Map<string, {
+        client: any;
+        accountsChanges: any[];
+        confirmationStatementChanges: any[];
+        affectedServices: string[];
+        affectedProjects: number;
+      }>();
+
+      for (const request of changeRequests) {
+        const clientId = request.client.id;
+        
+        if (!groupedByClient.has(clientId)) {
+          groupedByClient.set(clientId, {
+            client: request.client,
+            accountsChanges: [],
+            confirmationStatementChanges: [],
+            affectedServices: [],
+            affectedProjects: 0,
+          });
+        }
+
+        const group = groupedByClient.get(clientId)!;
+
+        // Categorize the change
+        const fieldName = request.fieldName;
+        if (fieldName === 'nextAccountsPeriodEnd' || fieldName === 'nextAccountsDue') {
+          group.accountsChanges.push(request);
+        } else if (fieldName === 'confirmationStatementNextDue' || fieldName === 'confirmationStatementNextMadeUpTo') {
+          group.confirmationStatementChanges.push(request);
+        }
+      }
+
+      // For each client group, determine impact
+      for (const [clientId, group] of groupedByClient) {
+        // Get client services to determine affected services
+        const clientServices = await storage.getClientServicesByClientId(clientId);
+        
+        const affectedServiceNames = new Set<string>();
+        let totalAffectedProjects = 0;
+
+        // Check which services are affected
+        for (const cs of clientServices) {
+          const service = cs.service;
+          if (!service.isCompaniesHouseConnected) continue;
+
+          // Check if this service maps to changed fields
+          const hasAccountsChanges = group.accountsChanges.length > 0;
+          const hasConfStatementChanges = group.confirmationStatementChanges.length > 0;
+
+          const isAccountsService = service.chStartDateField === 'nextAccountsPeriodEnd' || service.chDueDateField === 'nextAccountsDue';
+          const isConfStatementService = service.chStartDateField === 'confirmationStatementNextMadeUpTo' || service.chDueDateField === 'confirmationStatementNextDue';
+
+          if ((hasAccountsChanges && isAccountsService) || (hasConfStatementChanges && isConfStatementService)) {
+            affectedServiceNames.add(service.name);
+            
+            // Check for active projects
+            if (cs.hasActiveProject) {
+              totalAffectedProjects++;
+            }
+          }
+        }
+
+        group.affectedServices = Array.from(affectedServiceNames);
+        group.affectedProjects = totalAffectedProjects;
+      }
+
+      // Convert map to array
+      const groupedData = Array.from(groupedByClient.values());
+      
+      res.json(groupedData);
+    } catch (error) {
+      console.error("Error fetching grouped CH change requests:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch grouped CH change requests" });
+    }
+  });
+
   // POST /api/ch-sync - Trigger manual Companies House data synchronization (admin only)
   app.post("/api/ch-sync", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
@@ -6044,6 +6181,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error running CH sync:", error instanceof Error ? error.message : error);
       res.status(500).json({ 
         message: "Failed to run Companies House synchronization",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/companies-house/sync/:clientId - Sync a single client's Companies House data (admin only)
+  app.post("/api/companies-house/sync/:clientId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid path parameters", 
+          errors: paramValidation.errors 
+        });
+      }
+
+      const { clientId } = req.params;
+
+      // Get client
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      if (!client.isCompaniesHouseConnected || !client.companyNumber) {
+        return res.status(400).json({ message: "Client does not have Companies House connection" });
+      }
+
+      console.log(`[API] Manual CH sync triggered for client ${client.name} (${client.companyNumber}) by admin: ${req.user?.email}`);
+
+      // Run sync for this single client
+      const result = await runChSync([clientId]);
+      
+      res.json({
+        message: `Companies House synchronization completed for ${client.name}`,
+        processedClients: result.processedClients,
+        createdRequests: result.createdRequests,
+        errors: result.errors,
+      });
+    } catch (error) {
+      console.error("Error syncing client CH data:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        message: "Failed to sync client Companies House data",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

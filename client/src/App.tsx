@@ -24,6 +24,7 @@ import People from "@/pages/people";
 import Services from "@/pages/services";
 import ScheduledServices from "@/pages/scheduled-services";
 import ChChanges from "@/pages/ch-changes";
+import Companies from "@/pages/companies";
 import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
 import PushDiagnostics from "@/pages/push-diagnostics";
@@ -74,6 +75,7 @@ function Router() {
       <Route path="/services" component={Services} />
       <Route path="/scheduled-services" component={ScheduledServices} />
       <Route path="/ch-changes" component={ChChanges} />
+      <Route path="/companies" component={Companies} />
       <Route path="/tags" component={Tags} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />

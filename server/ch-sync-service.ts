@@ -153,15 +153,16 @@ async function syncClientData(client: Client): Promise<number> {
 }
 
 /**
- * Main sync function - processes all clients with CH numbers
+ * Main sync function - processes all clients or specific clients with CH numbers
+ * @param clientIds - Optional array of client IDs to sync. If not provided, syncs all clients.
  */
-export async function runChSync(): Promise<{
+export async function runChSync(clientIds?: string[]): Promise<{
   processedClients: number;
   createdRequests: number;
   errors: string[];
 }> {
   const startTime = Date.now();
-  console.log('[CH Sync] Starting Companies House data synchronization...');
+  console.log(`[CH Sync] Starting Companies House data synchronization${clientIds ? ` for ${clientIds.length} specific client(s)` : ''}...`);
   
   const result = {
     processedClients: 0,
@@ -170,11 +171,21 @@ export async function runChSync(): Promise<{
   };
   
   try {
-    // Get all clients with company numbers
-    const allClients = await storage.getAllClients();
-    const chClients = allClients.filter((client: any) => client.companyNumber);
+    // Get clients to sync
+    let chClients;
+    if (clientIds && clientIds.length > 0) {
+      // Sync specific clients
+      chClients = await Promise.all(
+        clientIds.map(id => storage.getClientById(id))
+      );
+      chClients = chClients.filter((client: any) => client && client.companyNumber);
+    } else {
+      // Sync all clients with company numbers
+      const allClients = await storage.getAllClients();
+      chClients = allClients.filter((client: any) => client.companyNumber);
+    }
     
-    console.log(`[CH Sync] Found ${chClients.length} clients with Companies House numbers`);
+    console.log(`[CH Sync] Found ${chClients.length} clients with Companies House numbers to sync`);
     
     if (chClients.length === 0) {
       console.log('[CH Sync] No clients to process');
