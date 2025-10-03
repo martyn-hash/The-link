@@ -1,0 +1,25 @@
+Client Portal: 
+I want you to help me plan and implement a client portal that is part of the link. 
+The client portal will be a special view of the system that a related person can log in to and view any companies they are connected to. 
+The client portal will be an ‘app first’ offering. Everything should be designed with the app in mind. 
+I will list the core area’s that intend to incorporate, but we’ll be starting with the chat facility. 
+Much of the client portal will involve either the related person sending information to us internally, or the other way around. 
+For example, when it’s time for the client’s VAT, we may send them a request for certain documents. Or, the client may login and want to send us a message asking for some assistance with something. 
+The features will include: 
+-	Instant messaging back and forth. From the clients perspective, in the app they would click on a messages icon, and then have the ability to create a new thread by giving it a topic, like ‘question about VAT’ and then typing out a question / message. On the staff side (the version of the system we have built so far), there should be a ‘communications’ page that brings together the messages that have been sent and received, linked to the client they relate to.
+
+-	Document e-signing. On the staff side, the user should be able to upload a document for digital signature. We push this to the client / person, and they can digitally e-sign. Note: We’d need to follow best practices for this, capturing IP addresses etc. 
+
+-	Organisers. Take a look at this feature from Tax Dome. - https://help.taxdome.com/article/114-custom-organizer-templates - I want to incorporate a similar feature into The Link. There are times when we need structured data back from the client. For example, during an implementation, we might need an organiser to capture their ID, UTR number etc. Then come VAT time we’d want to use another organiser that collects bank statements. This feature will become very important to us later, as we start to take project types and connect stages of a project type together with requesting things from the client, combining push notifications with organisers. These look like a series of UDF’s structured cleanly. 
+
+-	Tasks. Whilst organisers provide a format for structured data, there may be times when a staff member needs to ask a client to do something specific, such as provide a receipt, or confirm whether something carried VAT. 
+
+-	Document upload. This is mainly a subset of the features above, but they’ll all need to support document uploads. 
+
+-	Key dates. I’d like to show all the key dates to the client – days until next quarter starts, days until accounts are due etc. 
+
+-	Ability to book a calendly meeting from within the app
+
+And, the process of managing the logins and access to the app first client portal will need to be thought through. For example, we’ll need somewhere to track who has logged in, and who has granted push permissions. 
+I think we should start by thinking through the overall app first client portal instant messaging – this is effectively a ticketing system. 
+Later, we’ll be connecting up inbound emails from customers (related people) to the system, attaching them to the relevant client profile and creating a ‘ticket’ for staff users to respond to, so instant messaging sits within this broader scope for improving the communications between staff and customers. 
