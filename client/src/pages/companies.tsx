@@ -47,7 +47,7 @@ export default function Companies() {
 
   // Filter clients with Companies House connections
   const companiesHouseClients = allClients?.filter(client => 
-    client.isCompaniesHouseConnected && client.companyNumber
+    client.companyNumber
   ) || [];
 
   // Bulk sync mutation

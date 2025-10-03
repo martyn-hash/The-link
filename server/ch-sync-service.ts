@@ -175,10 +175,12 @@ export async function runChSync(clientIds?: string[]): Promise<{
     let chClients;
     if (clientIds && clientIds.length > 0) {
       // Sync specific clients
-      chClients = await Promise.all(
+      const clientPromises = await Promise.all(
         clientIds.map(id => storage.getClientById(id))
       );
-      chClients = chClients.filter((client: any) => client && client.companyNumber);
+      chClients = clientPromises.filter((client): client is NonNullable<typeof client> => 
+        client !== undefined && client.companyNumber !== null && client.companyNumber !== undefined
+      );
     } else {
       // Sync all clients with company numbers
       const allClients = await storage.getAllClients();
