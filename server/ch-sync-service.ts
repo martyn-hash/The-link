@@ -31,6 +31,14 @@ async function fetchChData(companyNumber: string): Promise<ChApiData | null> {
   try {
     const profile = await companiesHouseService.getCompanyProfile(companyNumber);
     
+    // Log raw API response for debugging data accuracy issues
+    console.log(`[CH Sync] RAW API response for ${companyNumber}:`, JSON.stringify({
+      accounts: profile.accounts,
+      confirmation_statement: profile.confirmation_statement,
+      company_status: profile.company_status,
+      company_status_detail: profile.company_status_detail
+    }, null, 2));
+    
     return {
       companyNumber,
       nextAccountsPeriodEnd: profile.accounts?.next_made_up_to ? new Date(profile.accounts.next_made_up_to) : null,
@@ -69,7 +77,19 @@ function detectChanges(client: Client, chData: ChApiData): Array<{
     const chDateStr = chValue ? 
       (chValue instanceof Date ? chValue.toISOString().split('T')[0] : chValue) : null;
     
-    // Detect changes
+    // Skip if Companies House returns null/empty (field not available in API response)
+    // This prevents false positives where we have a value but CH doesn't provide one
+    if (!chDateStr && clientDateStr) {
+      console.log(`[CH Sync] Skipping ${field}: CH returned null but we have ${clientDateStr}`);
+      continue;
+    }
+    
+    // Skip if both values are null (no change)
+    if (!chDateStr && !clientDateStr) {
+      continue;
+    }
+    
+    // Detect actual changes (both have values but they differ)
     if (clientDateStr !== chDateStr) {
       changes.push({
         fieldName: field,
@@ -101,6 +121,14 @@ async function syncClientData(client: Client): Promise<number> {
       return 0;
     }
     
+    // Log raw CH data for debugging
+    console.log(`[CH Sync] Raw CH data for ${client.name} (${client.companyNumber}):`, {
+      nextAccountsPeriodEnd: chData.nextAccountsPeriodEnd,
+      nextAccountsDue: chData.nextAccountsDue,
+      confirmationStatementNextDue: chData.confirmationStatementNextDue,
+      confirmationStatementNextMadeUpTo: chData.confirmationStatementNextMadeUpTo,
+    });
+    
     // Detect changes
     const changes = detectChanges(client, chData);
     if (changes.length === 0) {
@@ -113,6 +141,13 @@ async function syncClientData(client: Client): Promise<number> {
     // Create change requests for detected changes
     let createdRequests = 0;
     for (const change of changes) {
+      // VALIDATION: Skip if newValue is null or empty
+      // This is a safety net - detectChanges should already filter these out
+      if (!change.newValue || change.newValue.trim() === '') {
+        console.warn(`[CH Sync] Skipping invalid change for ${client.name}.${change.fieldName}: newValue is empty`);
+        continue;
+      }
+      
       // Check if there's already a pending request for this field/client
       const existingRequests = await storage.getAllChChangeRequests();
       const existingRequest = existingRequests.find((req: any) => 
@@ -132,7 +167,7 @@ async function syncClientData(client: Client): Promise<number> {
         changeType: 'ch_sync',
         fieldName: change.fieldName,
         oldValue: change.oldValue,
-        newValue: change.newValue || '',
+        newValue: change.newValue,
         detectedAt: new Date(),
         status: 'pending' as const,
         notes: `Detected during nightly sync on ${new Date().toISOString().split('T')[0]}`,
