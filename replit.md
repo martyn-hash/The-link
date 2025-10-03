@@ -5,6 +5,42 @@ Full-stack project management application built with Express, React, PostgreSQL,
 
 ## Recent Changes
 
+### October 3, 2025 - Risk Assessment Feature
+Added comprehensive risk assessment functionality for client compliance tracking:
+
+1. **Database Schema**
+   - Created `risk_assessments` table with one-to-many relationship to clients
+   - Fields for AML preparation, AML review, risk levels, dates, and notes
+   - Created `risk_assessment_responses` table for storing checklist answers
+   - Enum types: `risk_level` (low/medium/high), `risk_response` (yes/no/na)
+   - Proper indexing and cascade deletion for data integrity
+
+2. **Backend Implementation**
+   - 6 storage methods for CRUD operations (create, read, update, delete, get by client, save responses)
+   - RESTful API routes with authentication and authorization
+   - Proper validation using Zod schemas
+   - Authorization checks ensure users can only access assessments for clients they have permission to view
+
+3. **Frontend Components**
+   - New Risk tab as 8th tab in client detail view (desktop grid-cols-8, mobile carousel)
+   - RiskAssessmentTab component with full CRUD functionality
+   - 5 accordion sections with ~26 questions total:
+     * AML Preparation (5 questions)
+     * AML Review (4 questions)
+     * Individuals Checklist (5 questions)
+     * Business Checklist (6 questions)
+     * Risk Areas (5 questions)
+   - Create assessment dialog with version, date, risk level, and notes fields
+   - View/edit dialog with question responses using radio buttons
+   - Mobile-responsive design with proper tab navigation
+
+4. **Features**
+   - Support for multiple assessments per client (annual reviews)
+   - Risk level badges (low/medium/high) with color coding
+   - Persistent response storage with unique constraint per question
+   - Toast notifications for user feedback
+   - Proper React Query cache invalidation
+
 ### October 3, 2025 - Mobile Tab Navigation Enhancements
 Enhanced tab navigation on mobile for better clarity and usability:
 
@@ -142,6 +178,8 @@ The application uses PostgreSQL with Drizzle ORM. Key tables:
 - `communications` - Communication log
 - `documents` - Document storage metadata
 - `dashboards` - Custom dashboard configurations
+- `risk_assessments` - Risk assessments for client compliance (one-to-many with clients)
+- `risk_assessment_responses` - Responses to risk assessment checklist questions
 
 ## Development
 
@@ -182,6 +220,7 @@ npm run db:push --force  # Force push (for data-loss warnings)
 - Service scheduling and tracking
 - Communication logging (calls, emails, SMS)
 - Document management with object storage
+- Risk assessment and compliance tracking
 - Custom dashboards with widgets
 - Role-based access control
 - Companies House integration for UK companies
