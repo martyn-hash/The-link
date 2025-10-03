@@ -3,9 +3,30 @@
 ## Overview
 Full-stack project management application built with Express, React, PostgreSQL, and integrated with various services (SendGrid, RingCentral, Outlook, Object Storage).
 
-## Recent Changes (October 2, 2025)
+## Recent Changes
 
-### Mobile Responsive Transformation
+### October 3, 2025 - Mobile Tab Navigation Enhancements
+Enhanced tab navigation on mobile for better clarity and usability:
+
+1. **Client Detail Tabs**
+   - Added left/right arrow navigation buttons for clear affordance
+   - Fixed active tab indicator to scroll into view when swiping
+   - Implemented scoped selectors (data-client-tabs="main") to prevent interference
+   - Arrow buttons disabled at first/last tab with visual feedback
+
+2. **Person Detail Tabs (Related People)**
+   - Applied carousel treatment with 80vw width and peek previews
+   - Added arrow navigation buttons (left/right)
+   - Implemented swipe gesture support (50px threshold)
+   - Scoped with unique IDs (data-person-tabs="${id}") for multi-instance isolation
+   - Active tab scrolls into view on swipe or button click
+
+3. **Search Modal Repositioning**
+   - Moved to bottom sheet layout (slides up from bottom)
+   - Input positioned at bottom, results above to avoid keyboard overlap
+   - Height set to 85vh with rounded top corners for native feel
+
+### October 2, 2025 - Mobile Responsive Transformation
 Transformed the desktop-focused PWA into a fully responsive, mobile-optimized application with an app-like experience on phones.
 
 #### Pages Optimized for Mobile
