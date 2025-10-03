@@ -43,11 +43,6 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       icon: FileCheck,
     },
     {
-      label: "Companies",
-      href: "/companies", 
-      icon: Building,
-    },
-    {
       label: "Tags",
       href: "/tags",
       icon: Tags,

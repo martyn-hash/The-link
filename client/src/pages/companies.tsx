@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { type Client } from "@shared/schema";
+import { Link } from "wouter";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -25,7 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Building, RefreshCw, AlertTriangle, Calendar } from "lucide-react";
+import { Building, RefreshCw, AlertTriangle, Calendar, Search, Eye } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 
 export default function Companies() {
@@ -37,6 +39,7 @@ export default function Companies() {
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [syncResults, setSyncResults] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch all clients
   const { data: allClients, isLoading: clientsLoading } = useQuery<Client[]>({
@@ -49,6 +52,17 @@ export default function Companies() {
   const companiesHouseClients = allClients?.filter(client => 
     client.companyNumber
   ) || [];
+
+  // Filter by search query
+  const filteredClients = useMemo(() => {
+    if (!searchQuery.trim()) return companiesHouseClients;
+    
+    const query = searchQuery.toLowerCase();
+    return companiesHouseClients.filter(client => 
+      client.name.toLowerCase().includes(query) ||
+      client.companyNumber?.toLowerCase().includes(query)
+    );
+  }, [companiesHouseClients, searchQuery]);
 
   // Bulk sync mutation
   const syncMutation = useMutation({
@@ -100,7 +114,7 @@ export default function Companies() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedClients(new Set(companiesHouseClients.map(c => c.id)));
+      setSelectedClients(new Set(filteredClients.map(c => c.id)));
     } else {
       setSelectedClients(new Set());
     }
@@ -207,8 +221,8 @@ export default function Companies() {
     );
   }
 
-  const allSelected = companiesHouseClients.length > 0 && selectedClients.size === companiesHouseClients.length;
-  const someSelected = selectedClients.size > 0 && selectedClients.size < companiesHouseClients.length;
+  const allSelected = filteredClients.length > 0 && selectedClients.size === filteredClients.length;
+  const someSelected = selectedClients.size > 0 && selectedClients.size < filteredClients.length;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -252,6 +266,18 @@ export default function Companies() {
               <CardDescription>
                 Select clients and sync their Companies House data to detect changes
               </CardDescription>
+              <div className="pt-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or company number..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-search-companies"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {clientsLoading ? (
@@ -268,26 +294,37 @@ export default function Companies() {
                   ))}
                 </div>
               ) : companiesHouseClients.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={allSelected || someSelected}
-                          onCheckedChange={handleSelectAll}
-                          data-testid="checkbox-select-all"
-                          aria-label="Select all companies"
-                        />
-                      </TableHead>
-                      <TableHead>Client Name</TableHead>
-                      <TableHead>Company Number</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">CS Due</TableHead>
-                      <TableHead className="text-center">Accounts Due</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {companiesHouseClients.map((client) => {
+                <>
+                  {filteredClients.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-muted-foreground mb-2">No Results Found</h3>
+                      <p className="text-sm text-muted-foreground">
+                        No companies match your search query
+                      </p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">
+                            <Checkbox
+                              checked={allSelected || someSelected}
+                              onCheckedChange={handleSelectAll}
+                              data-testid="checkbox-select-all"
+                              aria-label="Select all companies"
+                            />
+                          </TableHead>
+                          <TableHead>Client Name</TableHead>
+                          <TableHead>Company Number</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-center">CS Due</TableHead>
+                          <TableHead className="text-center">Accounts Due</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredClients.map((client) => {
                       const csDays = getDaysUntil(client.confirmationStatementNextDue);
                       const accountsDays = getDaysUntil(client.nextAccountsDue);
                       
@@ -325,11 +362,25 @@ export default function Companies() {
                               {getDaysUntilBadge(accountsDays)}
                             </div>
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Link href={`/clients/${client.id}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                data-testid={`button-view-${client.id}`}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View
+                              </Button>
+                            </Link>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12">
                   <Building className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
