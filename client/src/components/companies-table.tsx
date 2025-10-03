@@ -273,11 +273,11 @@ export default function CompaniesTable({
       { id: "jurisdiction", label: "Jurisdiction", sortable: false, defaultVisible: false, minWidth: 120, type: "text" },
     ];
 
-    // Add service columns
+    // Add service columns (all sortable)
     const serviceColumns: ColumnConfig[] = allServices.map(service => ({
       id: `service_${service.id}`,
       label: service.name,
-      sortable: false,
+      sortable: true,
       defaultVisible: false,
       minWidth: 150,
       type: "service" as const,
@@ -441,6 +441,18 @@ export default function CompaniesTable({
     return map;
   }, [tagAssignments, tagsById]);
 
+  // Build client services map for quick lookup (needed for filtering and sorting)
+  const clientServicesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    clientServices.forEach(cs => {
+      if (!map.has(cs.clientId)) {
+        map.set(cs.clientId, new Set());
+      }
+      map.get(cs.clientId)!.add(cs.serviceId);
+    });
+    return map;
+  }, [clientServices]);
+
   const handleSort = (columnId: string) => {
     if (sortBy === columnId) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -481,48 +493,44 @@ export default function CompaniesTable({
       let aValue: any;
       let bValue: any;
 
-      switch (sortBy) {
-        case "name":
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
-          break;
-        case "companyNumber":
-          aValue = a.companyNumber || "";
-          bValue = b.companyNumber || "";
-          break;
-        case "companyStatus":
-          aValue = a.companyStatus || "";
-          bValue = b.companyStatus || "";
-          break;
-        case "csDue":
-          aValue = a.confirmationStatementNextDue ? new Date(a.confirmationStatementNextDue).getTime() : 0;
-          bValue = b.confirmationStatementNextDue ? new Date(b.confirmationStatementNextDue).getTime() : 0;
-          break;
-        case "accountsDue":
-          aValue = a.nextAccountsDue ? new Date(a.nextAccountsDue).getTime() : 0;
-          bValue = b.nextAccountsDue ? new Date(b.nextAccountsDue).getTime() : 0;
-          break;
-        default:
-          return 0;
+      // Check if sorting by service column
+      if (sortBy.startsWith("service_")) {
+        const serviceId = sortBy.replace("service_", "");
+        // Convert boolean to number: has service = 1, doesn't have = 0
+        aValue = clientServicesMap.get(a.id)?.has(serviceId) ? 1 : 0;
+        bValue = clientServicesMap.get(b.id)?.has(serviceId) ? 1 : 0;
+      } else {
+        switch (sortBy) {
+          case "name":
+            aValue = a.name.toLowerCase();
+            bValue = b.name.toLowerCase();
+            break;
+          case "companyNumber":
+            aValue = a.companyNumber || "";
+            bValue = b.companyNumber || "";
+            break;
+          case "companyStatus":
+            aValue = a.companyStatus || "";
+            bValue = b.companyStatus || "";
+            break;
+          case "csDue":
+            aValue = a.confirmationStatementNextDue ? new Date(a.confirmationStatementNextDue).getTime() : 0;
+            bValue = b.confirmationStatementNextDue ? new Date(b.confirmationStatementNextDue).getTime() : 0;
+            break;
+          case "accountsDue":
+            aValue = a.nextAccountsDue ? new Date(a.nextAccountsDue).getTime() : 0;
+            bValue = b.nextAccountsDue ? new Date(b.nextAccountsDue).getTime() : 0;
+            break;
+          default:
+            return 0;
+        }
       }
 
       if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
       if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
       return 0;
     });
-  }, [filteredClients, sortBy, sortOrder]);
-
-  // Build client services map for quick lookup (includes service objects)
-  const clientServicesMap = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    clientServices.forEach(cs => {
-      if (!map.has(cs.clientId)) {
-        map.set(cs.clientId, new Set());
-      }
-      map.get(cs.clientId)!.add(cs.serviceId);
-    });
-    return map;
-  }, [clientServices]);
+  }, [filteredClients, sortBy, sortOrder, clientServicesMap]);
 
   // Build map of client services with full details including owner
   const clientServicesDetailMap = useMemo(() => {
