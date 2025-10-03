@@ -34,7 +34,7 @@ export default function Companies() {
     retry: false,
   });
 
-  // Filter clients with Companies House connections
+  // Filter clients with Companies House connections (must have company number)
   const companiesHouseClients = allClients?.filter(client => 
     client.companyNumber
   ) || [];

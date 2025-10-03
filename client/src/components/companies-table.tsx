@@ -555,7 +555,7 @@ export default function CompaniesTable({
           const hasService = clientServicesMap.get(client.id)?.has(serviceId);
           return (
             <div className="flex items-center justify-center">
-              {hasService && <Check className="w-4 h-4 text-green-600" data-testid={`check-service-${serviceId}-${client.id}`} />}
+              {hasService && <Check className="w-5 h-5 text-green-600 stroke-[2.5]" data-testid={`check-service-${serviceId}-${client.id}`} />}
             </div>
           );
         }

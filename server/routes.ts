@@ -6245,7 +6245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
 
-      if (!client.isCompaniesHouseConnected || !client.companyNumber) {
+      if (!client.companyNumber) {
         return res.status(400).json({ message: "Client does not have Companies House connection" });
       }
 
