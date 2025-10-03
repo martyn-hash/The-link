@@ -32,6 +32,14 @@ The application features a mobile-first design approach, ensuring an optimal exp
 - **Core Project Management**: Kanban, list, and dashboard views for project tracking.
 - **Client & Contact Management**: Comprehensive client and individual profiles, including risk assessment.
 - **Service & Communication Tracking**: Scheduled services, communication logging (email, call, SMS), and document management.
+- **Client Portal & Messaging**: 
+  - Magic link authentication for clients (email-based, no passwords)
+  - Message threads with topics and status tracking (new, in_progress, resolved, closed)
+  - Real-time messaging between clients and staff
+  - Dual authorship support (staff users OR portal clients)
+  - Unread message tracking with tenant-scoped security
+  - Integration with communications table for unified staff visibility
+  - Mobile-first portal design with app-like experience
 - **Advanced Table Features**: Dynamic column management (reorder, resize, show/hide), service owner display, color-coded tags with filtering, and bulk selection.
 - **Risk Assessment**: Multi-version risk assessments with detailed checklists, unique response storage, and color-coded risk levels.
 - **Mobile Optimizations**: Dedicated mobile components for navigation (BottomNav), search (SuperSearch), and responsive layouts for all main pages (Dashboard, Projects, Client Detail, Scheduled Services).
@@ -41,6 +49,7 @@ The application features a mobile-first design approach, ensuring an optimal exp
 - **Monorepo Structure**: Separate `client/`, `server/`, and `shared/` directories for clear separation of concerns.
 - **Database Schema**: Relational database design supporting `users`, `clients`, `people`, `projects`, `services`, `client_services`, `communications`, `documents`, `dashboards`, `risk_assessments`, and `risk_assessment_responses` tables.
 - **API Design**: RESTful API routes with Zod for validation and authentication/authorization middleware.
+- **Client Portal Architecture**: Dedicated messaging system with magic link authentication, separate from staff OIDC auth. Portal uses `/api/portal/*` routes with JWT/session cookies, while staff uses `/api/internal/*` routes with OIDC middleware.
 
 ## External Dependencies
 - **SendGrid**: Email sending and tracking.
@@ -49,3 +58,68 @@ The application features a mobile-first design approach, ensuring an optimal exp
 - **Google Cloud Storage (GCS)**: Object storage for documents and files.
 - **Companies House**: Integration for UK company data lookup and synchronization.
 - **Neon**: Managed PostgreSQL database service.
+
+## Messaging System Architecture
+
+### Overview
+The messaging system provides a comprehensive client portal with instant messaging and ticketing capabilities, enabling direct communication between clients and staff through a mobile-first, app-like interface.
+
+### Database Schema
+**Client Portal Users** (`client_portal_users`)
+- Unique email-based authentication (no passwords)
+- Linked to main client records via `clientId`
+- Stores name, phone, and last login tracking
+- Supports multiple portal users per client
+
+**Message Threads** (`message_threads`)
+- Topic-based conversation organization
+- Status tracking: `new`, `in_progress`, `resolved`, `closed`
+- Creator tracking (staff user OR portal client)
+- Optional project/service association for context
+- Automatic `lastMessageAt` timestamp updates
+- Client-scoped for multi-tenant security
+
+**Messages** (`messages`)
+- Thread-based message storage
+- Dual authorship: `userId` (staff) OR `clientPortalUserId` (client)
+- Separate read receipts for staff and clients (`isReadByStaff`, `isReadByClient`)
+- Timestamps for message creation and read tracking
+- Enforces: exactly one author type per message
+
+**Portal Sessions** (`client_portal_sessions`)
+- JWT-based session management
+- Expiry tracking and revocation support
+- Client-scoped access control
+
+### Security Model
+**Tenant Isolation**
+- All queries filter by `clientId` for data isolation
+- Staff unread counts scoped to user's assigned projects:
+  - Admin users: see all messages
+  - Non-admin users: only see messages from clients where they are bookkeeper, client manager, project owner, or current assignee
+- Portal authentication completely separate from staff OIDC
+
+**Authentication Flow**
+- **Clients**: Magic link → JWT/session cookie → `/api/portal/*` routes
+- **Staff**: OIDC (Replit Auth) → `/api/internal/*` routes
+- Route prefixes enforce role-based access
+
+### Integration Points
+**Communications Table**
+- Message threads optionally link to communications via `threadId`
+- Enables unified staff visibility across all client interactions
+- Communications audit log remains separate from messaging domain
+
+**Storage Layer Security**
+- All messaging CRUD operations tenant-scoped
+- `getUnreadMessageCountForStaff(userId, isAdmin)` enforces project-based access
+- Automatic `lastMessageAt` updates on message creation
+- Read receipt tracking separate for staff and clients
+
+### Future Extensibility
+The schema supports planned portal features:
+- Document e-signing (file attachments in messages)
+- Task management (task references in threads)
+- Calendly booking (meeting scheduling via threads)
+- Document uploads (GCS integration via messages)
+- Key dates and organizers (thread-based reminders)
