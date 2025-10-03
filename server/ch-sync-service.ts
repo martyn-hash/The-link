@@ -127,9 +127,21 @@ async function syncClientData(client: Client): Promise<number> {
       nextAccountsDue: chData.nextAccountsDue,
       confirmationStatementNextDue: chData.confirmationStatementNextDue,
       confirmationStatementNextMadeUpTo: chData.confirmationStatementNextMadeUpTo,
+      companyStatusDetail: chData.companyStatusDetail,
     });
     
-    // Detect changes
+    // Update company status detail immediately (doesn't require approval)
+    // This captures strike-off proposals and other status changes
+    if (chData.companyStatusDetail !== client.companyStatusDetail) {
+      console.log(`[CH Sync] Updating companyStatusDetail for ${client.name}: ${client.companyStatusDetail} → ${chData.companyStatusDetail}`);
+      await storage.updateClient(client.id, {
+        companyStatusDetail: chData.companyStatusDetail,
+      });
+      // Update local client object to reflect the change
+      client.companyStatusDetail = chData.companyStatusDetail;
+    }
+    
+    // Detect changes in monitored date fields
     const changes = detectChanges(client, chData);
     if (changes.length === 0) {
       console.log(`[CH Sync] No changes detected for ${client.name}`);
