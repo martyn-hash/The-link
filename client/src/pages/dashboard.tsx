@@ -176,44 +176,6 @@ export default function Dashboard() {
       <TopNavigation user={user} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl md:text-2xl font-semibold text-foreground truncate" data-testid="text-page-title">
-                My Dashboard
-              </h2>
-              <p className="text-xs md:text-sm text-muted-foreground hidden md:block">
-                Your personalized view of active work and important updates
-              </p>
-            </div>
-            
-            <div className="flex items-center space-x-2 md:space-x-4">
-              {/* Quick Actions - Desktop Only */}
-              {!isMobile && (
-                <Button 
-                  className="bg-primary hover:bg-primary/90" 
-                  data-testid="button-create-project"
-                  onClick={() => window.location.href = '/scheduled-services'}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Project
-                </Button>
-              )}
-              
-              {/* Notifications */}
-              <Button variant="ghost" size="icon" className="relative h-9 w-9" data-testid="button-notifications">
-                <Bell className="w-4 h-4" />
-                {dashboardData?.deadlineAlerts && dashboardData.deadlineAlerts.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                    {dashboardData.deadlineAlerts.length}
-                  </span>
-                )}
-              </Button>
-            </div>
-          </div>
-        </header>
-        
         {/* Main Dashboard Content */}
         <main className="flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
           <div className="space-y-6">
