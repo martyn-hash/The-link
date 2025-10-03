@@ -275,30 +275,30 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
       console.log('[RingCentral] Call state updated to ringing');
 
-      // Make call with v2.x API - call() method might not be promise-based
+      // Make call with v2.x API - session is in webPhone.callSessions, not returned by call()
       console.log('[RingCentral] Calling webPhone.call() with number:', number);
-      console.log('[RingCentral] Inspecting call method type:', typeof webPhoneRef.current.call);
       
       let session: any;
       try {
-        // Call the method and log what it returns
-        const callResult = webPhoneRef.current.call({
+        // Initiate the call - this doesn't return the session
+        const callPromise = webPhoneRef.current.call({
           toNumber: number,
         });
-        console.log('[RingCentral] webPhone.call() returned:', callResult);
-        console.log('[RingCentral] Is it a Promise?', callResult instanceof Promise);
-        console.log('[RingCentral] Return type:', typeof callResult);
+        console.log('[RingCentral] Call initiated, promise:', callPromise);
         
-        // If it's a promise, await it; otherwise use it directly
-        if (callResult instanceof Promise) {
-          session = await callResult;
-          console.log('[RingCentral] Awaited session:', session);
+        // The session is created in webPhone.callSessions array
+        // Get the most recent session (last item in array)
+        const sessions = (webPhoneRef.current as any).callSessions;
+        console.log('[RingCentral] Current callSessions:', sessions);
+        console.log('[RingCentral] Number of sessions:', sessions?.length);
+        
+        if (sessions && sessions.length > 0) {
+          session = sessions[sessions.length - 1];
+          console.log('[RingCentral] Got session from callSessions:', session);
         } else {
-          session = callResult;
-          console.log('[RingCentral] Direct session result:', session);
+          console.warn('[RingCentral] No session found in callSessions!');
         }
         
-        console.log('[RingCentral] Final session value:', session);
         sessionRef.current = session;
         console.log('[RingCentral] Session saved to ref');
       } catch (callError: any) {
