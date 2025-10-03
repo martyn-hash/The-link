@@ -12,7 +12,7 @@ import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -2825,6 +2825,61 @@ function PersonTabbedView({
   const [activeTab, setActiveTab] = useState("basic-info");
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+
+  // Mobile swipe navigation for person tabs
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const tabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.changedTouches[0].screenX;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    };
+
+    const handleSwipe = () => {
+      const swipeThreshold = 50;
+      const currentIndex = tabs.indexOf(activeTab);
+      
+      if (touchStartX - touchEndX > swipeThreshold && currentIndex < tabs.length - 1) {
+        setActiveTab(tabs[currentIndex + 1]);
+      } else if (touchEndX - touchStartX > swipeThreshold && currentIndex > 0) {
+        setActiveTab(tabs[currentIndex - 1]);
+      }
+    };
+
+    const tabsContainer = document.querySelector(`[data-person-tabs="${clientPerson.person.id}"]`);
+    if (tabsContainer) {
+      tabsContainer.addEventListener('touchstart', handleTouchStart as any);
+      tabsContainer.addEventListener('touchend', handleTouchEnd as any);
+
+      return () => {
+        tabsContainer.removeEventListener('touchstart', handleTouchStart as any);
+        tabsContainer.removeEventListener('touchend', handleTouchEnd as any);
+      };
+    }
+  }, [isMobile, activeTab, clientPerson.person.id]);
+
+  // Scroll active person tab into view on mobile
+  useEffect(() => {
+    if (!isMobile) return;
+    
+    // Use specific selector for this person's tabs
+    const personTabsContainer = document.querySelector(`[data-person-tabs="${clientPerson.person.id}"]`);
+    if (personTabsContainer) {
+      const activeTabButton = personTabsContainer.querySelector(`[data-testid="tab-${activeTab}"]`);
+      if (activeTabButton) {
+        activeTabButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [activeTab, isMobile, clientPerson.person.id]);
 
   // Shared form state for all tabs
   const editForm = useForm<UpdatePersonData>({
@@ -3032,14 +3087,93 @@ function PersonTabbedView({
   };
 
   return (
-    <div className="pt-4">
+    <div className="pt-4" data-person-tabs={clientPerson.person.id}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="basic-info" data-testid="tab-basic-info">Basic Info</TabsTrigger>
-          <TabsTrigger value="contact-info" data-testid="tab-contact-info">Contact Info</TabsTrigger>
-          <TabsTrigger value="personal-services" data-testid="tab-personal-services">Personal Services</TabsTrigger>
-          <TabsTrigger value="related-companies" data-testid="tab-related-companies">Related Companies</TabsTrigger>
-        </TabsList>
+        {/* Desktop Tabs - Grid Layout */}
+        <div className="hidden md:block w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="basic-info" data-testid="tab-basic-info">Basic Info</TabsTrigger>
+            <TabsTrigger value="contact-info" data-testid="tab-contact-info">Contact Info</TabsTrigger>
+            <TabsTrigger value="personal-services" data-testid="tab-personal-services">Personal Services</TabsTrigger>
+            <TabsTrigger value="related-companies" data-testid="tab-related-companies">Related Companies</TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* Mobile Tabs - Carousel with Peek Preview and Arrow Navigation */}
+        <div className="md:hidden w-full relative">
+          {/* Left Arrow */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
+            onClick={() => {
+              const tabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
+              const currentIndex = tabs.indexOf(activeTab);
+              if (currentIndex > 0) {
+                setActiveTab(tabs[currentIndex - 1]);
+              }
+            }}
+            disabled={activeTab === "basic-info"}
+            data-testid="person-tab-nav-left"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </Button>
+
+          {/* Right Arrow */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
+            onClick={() => {
+              const tabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
+              const currentIndex = tabs.indexOf(activeTab);
+              if (currentIndex < tabs.length - 1) {
+                setActiveTab(tabs[currentIndex + 1]);
+              }
+            }}
+            disabled={activeTab === "related-companies"}
+            data-testid="person-tab-nav-right"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </Button>
+
+          <div className="w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <TabsList className="inline-flex gap-2 h-auto">
+              <TabsTrigger 
+                value="basic-info" 
+                data-testid="tab-basic-info" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Basic Info
+              </TabsTrigger>
+              <TabsTrigger 
+                value="contact-info" 
+                data-testid="tab-contact-info" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Contact Info
+              </TabsTrigger>
+              <TabsTrigger 
+                value="personal-services" 
+                data-testid="tab-personal-services" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Personal Services
+              </TabsTrigger>
+              <TabsTrigger 
+                value="related-companies" 
+                data-testid="tab-related-companies" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Related Companies
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        </div>
 
         {/* Basic Info Tab */}
         <TabsContent value="basic-info" className="mt-4">
@@ -5247,6 +5381,20 @@ export default function ClientDetail() {
     }
   }, [isMobile, activeTab]);
 
+  // Scroll active client tab into view on mobile when activeTab changes
+  useEffect(() => {
+    if (!isMobile) return;
+    
+    // Use more specific selector for client tabs only
+    const clientTabsContainer = document.querySelector('[data-client-tabs="main"]');
+    if (clientTabsContainer) {
+      const activeTabButton = clientTabsContainer.querySelector(`[data-testid="tab-${activeTab}"]`);
+      if (activeTabButton) {
+        activeTabButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [activeTab, isMobile]);
+
   // DEBUG: Comprehensive tab interaction logging
   useLayoutEffect(() => {
     const logMetrics = (eventType: string, tabValue?: string) => {
@@ -5684,6 +5832,7 @@ export default function ClientDetail() {
           onValueChange={setActiveTab}
           className="flex flex-col"
           data-tab-content="true"
+          data-client-tabs="main"
         >
           {/* Desktop Tabs - Grid Layout */}
           <div className="hidden md:block w-full">
@@ -5698,9 +5847,46 @@ export default function ClientDetail() {
             </TabsList>
           </div>
 
-          {/* Mobile Tabs - Carousel with Peek Preview */}
-          <div className="md:hidden w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <TabsList className="inline-flex gap-2 h-auto">
+          {/* Mobile Tabs - Carousel with Peek Preview and Arrow Navigation */}
+          <div className="md:hidden w-full relative">
+            {/* Left Arrow */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
+              onClick={() => {
+                const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
+                const currentIndex = tabs.indexOf(activeTab);
+                if (currentIndex > 0) {
+                  setActiveTab(tabs[currentIndex - 1]);
+                }
+              }}
+              disabled={activeTab === "overview"}
+              data-testid="tab-nav-left"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </Button>
+
+            {/* Right Arrow */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
+              onClick={() => {
+                const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
+                const currentIndex = tabs.indexOf(activeTab);
+                if (currentIndex < tabs.length - 1) {
+                  setActiveTab(tabs[currentIndex + 1]);
+                }
+              }}
+              disabled={activeTab === "tasks"}
+              data-testid="tab-nav-right"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </Button>
+
+            <div className="w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <TabsList className="inline-flex gap-2 h-auto">
               <TabsTrigger 
                 value="overview" 
                 data-testid="tab-overview" 
@@ -5807,6 +5993,7 @@ export default function ClientDetail() {
                 Tasks
               </TabsTrigger>
             </TabsList>
+            </div>
           </div>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
