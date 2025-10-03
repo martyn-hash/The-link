@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Client, type Service, type ClientService } from "@shared/schema";
+import { type Client, type Service, type ClientService, type User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -22,6 +23,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DndContext,
   closestCenter,
@@ -50,6 +65,10 @@ import {
   Settings2,
   GripVertical,
   Check,
+  Save,
+  ChevronDown,
+  Trash2,
+  Tag,
 } from "lucide-react";
 
 interface ColumnConfig {
@@ -69,6 +88,9 @@ function SortableColumnHeader({
   onSort,
   width,
   onResize,
+  allSelected,
+  someSelected,
+  onSelectAll,
 }: {
   column: ColumnConfig;
   sortBy: string;
@@ -76,6 +98,9 @@ function SortableColumnHeader({
   onSort?: (columnId: string) => void;
   width?: number;
   onResize?: (columnId: string, width: number) => void;
+  allSelected?: boolean;
+  someSelected?: boolean;
+  onSelectAll?: (checked: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -139,10 +164,23 @@ function SortableColumnHeader({
               <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
           )}
-          <span className="text-xs font-medium">
-            {column.label}{" "}
-            {column.sortable && sortBy === column.id && (sortOrder === "asc" ? "↑" : "↓")}
-          </span>
+          {column.id === "checkbox" && onSelectAll ? (
+            <Checkbox
+              checked={someSelected && !allSelected ? "indeterminate" : allSelected}
+              onCheckedChange={(checked) => {
+                // Convert CheckedState to boolean: true or "indeterminate" means select all, false means deselect all
+                const shouldSelect = checked === true || checked === "indeterminate";
+                onSelectAll(shouldSelect);
+              }}
+              data-testid="checkbox-select-all"
+              aria-label="Select all companies"
+            />
+          ) : (
+            <span className="text-xs font-medium">
+              {column.label}{" "}
+              {column.sortable && sortBy === column.id && (sortOrder === "asc" ? "↑" : "↓")}
+            </span>
+          )}
         </div>
         {onResize && column.id !== "actions" && column.id !== "checkbox" && (
           <div
@@ -188,13 +226,36 @@ export default function CompaniesTable({
     queryKey: ["/api/client-services"],
   });
 
-  // Build ALL_COLUMNS dynamically including service columns
+  // Fetch all users (for service owners)
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  // Fetch all client tags
+  const { data: allTags = [] } = useQuery<any[]>({
+    queryKey: ["/api/client-tags"],
+  });
+
+  // Fetch all client tag assignments
+  const { data: tagAssignments = [] } = useQuery<any[]>({
+    queryKey: ["/api/client-tag-assignments"],
+  });
+
+  // State for tags filter
+  const [selectedTag, setSelectedTag] = useState<string>("all");
+
+  // State for saved layouts
+  const [layoutName, setLayoutName] = useState("");
+  const [saveLayoutDialogOpen, setSaveLayoutDialogOpen] = useState(false);
+
+  // Build ALL_COLUMNS dynamically including service and tags columns
   const ALL_COLUMNS = useMemo<ColumnConfig[]>(() => {
     const baseColumns: ColumnConfig[] = [
       { id: "checkbox", label: "", defaultVisible: true, minWidth: 50, type: "text" },
       { id: "name", label: "Client Name", sortable: true, defaultVisible: true, minWidth: 200, type: "text" },
       { id: "companyNumber", label: "Company Number", sortable: true, defaultVisible: true, minWidth: 150, type: "text" },
       { id: "companyStatus", label: "Status", sortable: true, defaultVisible: true, minWidth: 150, type: "status" },
+      { id: "tags", label: "Tags", sortable: false, defaultVisible: true, minWidth: 180, type: "text" },
       { id: "csDue", label: "CS Due", sortable: true, defaultVisible: true, minWidth: 120, type: "date" },
       { id: "accountsDue", label: "Accounts Due", sortable: true, defaultVisible: true, minWidth: 140, type: "date" },
       { id: "csPeriodEnd", label: "CS Period End", sortable: false, defaultVisible: false, minWidth: 140, type: "date" },
@@ -210,7 +271,7 @@ export default function CompaniesTable({
       label: service.name,
       sortable: false,
       defaultVisible: false,
-      minWidth: 120,
+      minWidth: 150,
       type: "service" as const,
     }));
 
@@ -348,6 +409,30 @@ export default function CompaniesTable({
     }, 500);
   };
 
+  // Build tags lookup map for O(1) access
+  const tagsById = useMemo(() => {
+    const map = new Map<string, any>();
+    allTags.forEach((tag: any) => {
+      map.set(tag.id, tag);
+    });
+    return map;
+  }, [allTags]);
+
+  // Build client tags map for quick lookup (needs to be before filteredClients)
+  const clientTagsMap = useMemo(() => {
+    const map = new Map<string, any[]>();
+    tagAssignments.forEach((ta: any) => {
+      const tag = tagsById.get(ta.tagId);
+      if (tag) {
+        if (!map.has(ta.clientId)) {
+          map.set(ta.clientId, []);
+        }
+        map.get(ta.clientId)!.push(tag);
+      }
+    });
+    return map;
+  }, [tagAssignments, tagsById]);
+
   const handleSort = (columnId: string) => {
     if (sortBy === columnId) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -357,17 +442,30 @@ export default function CompaniesTable({
     }
   };
 
-  // Filter by search query
+  // Filter by search query and tags
   const filteredClients = useMemo(() => {
-    if (!searchQuery.trim()) return clients;
+    let filtered = clients;
 
-    const query = searchQuery.toLowerCase();
-    return clients.filter(
-      (client) =>
-        client.name.toLowerCase().includes(query) ||
-        client.companyNumber?.toLowerCase().includes(query)
-    );
-  }, [clients, searchQuery]);
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (client) =>
+          client.name.toLowerCase().includes(query) ||
+          client.companyNumber?.toLowerCase().includes(query)
+      );
+    }
+
+    // Filter by tag
+    if (selectedTag !== "all") {
+      filtered = filtered.filter((client) => {
+        const clientTags = clientTagsMap.get(client.id) || [];
+        return clientTags.some((tag: any) => tag.id === selectedTag);
+      });
+    }
+
+    return filtered;
+  }, [clients, searchQuery, selectedTag, clientTagsMap]);
 
   // Sort clients
   const sortedClients = useMemo(() => {
@@ -406,7 +504,7 @@ export default function CompaniesTable({
     });
   }, [filteredClients, sortBy, sortOrder]);
 
-  // Build client services map for quick lookup
+  // Build client services map for quick lookup (includes service objects)
   const clientServicesMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
     clientServices.forEach(cs => {
@@ -417,6 +515,23 @@ export default function CompaniesTable({
     });
     return map;
   }, [clientServices]);
+
+  // Build map of client services with full details including owner
+  const clientServicesDetailMap = useMemo(() => {
+    const map = new Map<string, Map<string, {service: Service, owner: User | undefined}>>();
+    clientServices.forEach(cs => {
+      const service = allServices.find(s => s.id === cs.serviceId);
+      if (!service) return;
+      
+      if (!map.has(cs.clientId)) {
+        map.set(cs.clientId, new Map());
+      }
+      
+      const owner = allUsers.find(u => u.id === cs.serviceOwnerId);
+      map.get(cs.clientId)!.set(service.id, { service, owner });
+    });
+    return map;
+  }, [clientServices, allServices, allUsers]);
 
   const getDaysUntil = (date: Date | string | null) => {
     if (!date) return null;
@@ -515,6 +630,27 @@ export default function CompaniesTable({
         return <span className="font-mono text-xs">{client.companyNumber}</span>;
       case "companyStatus":
         return getCompanyStatusBadge(client.companyStatus, client.companyStatusDetail);
+      case "tags":
+        const clientTags = clientTagsMap.get(client.id) || [];
+        return (
+          <div className="flex flex-wrap gap-1">
+            {clientTags.length > 0 ? (
+              clientTags.map((tag: any) => (
+                <Badge
+                  key={tag.id}
+                  style={{ backgroundColor: tag.color }}
+                  className="text-white text-xs"
+                  data-testid={`tag-${tag.id}-${client.id}`}
+                >
+                  <Tag className="w-2.5 h-2.5 mr-1" />
+                  {tag.name}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+        );
       case "csDue":
         const csDays = getDaysUntil(client.confirmationStatementNextDue);
         return (
@@ -549,15 +685,25 @@ export default function CompaniesTable({
           </Link>
         );
       default:
-        // Service columns
+        // Service columns with owner information
         if (column.type === "service") {
           const serviceId = column.id.replace("service_", "");
-          const hasService = clientServicesMap.get(client.id)?.has(serviceId);
-          return (
-            <div className="flex items-center justify-center">
-              {hasService && <Check className="w-5 h-5 text-green-600 stroke-[2.5]" data-testid={`check-service-${serviceId}-${client.id}`} />}
-            </div>
-          );
+          const serviceDetails = clientServicesDetailMap.get(client.id)?.get(serviceId);
+          
+          if (serviceDetails) {
+            const { owner } = serviceDetails;
+            return (
+              <div className="flex flex-col items-center justify-center space-y-0.5">
+                <Check className="w-5 h-5 text-green-600 stroke-[2.5]" data-testid={`check-service-${serviceId}-${client.id}`} />
+                {owner && (
+                  <span className="text-[10px] text-muted-foreground font-medium" data-testid={`owner-${serviceId}-${client.id}`}>
+                    {owner.firstName} {owner.lastName}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          return null;
         }
         return null;
     }
@@ -579,15 +725,39 @@ export default function CompaniesTable({
     <div className="space-y-4">
       {/* Header with Search and Controls */}
       <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or company number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-companies"
-          />
+        <div className="flex items-center gap-3 flex-1">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or company number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 border border-input"
+              data-testid="input-search-companies"
+            />
+          </div>
+          {allTags.length > 0 && (
+            <Select value={selectedTag} onValueChange={setSelectedTag}>
+              <SelectTrigger className="w-[200px]" data-testid="select-tag-filter">
+                <Tag className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Filter by tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {allTags.map((tag: any) => (
+                  <SelectItem key={tag.id} value={tag.id} data-testid={`tag-option-${tag.id}`}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="flex items-center space-x-2">
           <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -684,6 +854,9 @@ export default function CompaniesTable({
                       onSort={column.sortable ? handleSort : undefined}
                       width={columnWidths[column.id]}
                       onResize={handleColumnResize}
+                      allSelected={allSelected}
+                      someSelected={someSelected}
+                      onSelectAll={onSelectAll}
                     />
                   ))}
                 </SortableContext>
