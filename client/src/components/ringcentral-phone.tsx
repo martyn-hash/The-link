@@ -275,16 +275,32 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
       console.log('[RingCentral] Call state updated to ringing');
 
-      // Make call with v2.x API - use call method
+      // Make call with v2.x API - call() method might not be promise-based
       console.log('[RingCentral] Calling webPhone.call() with number:', number);
+      console.log('[RingCentral] Inspecting call method type:', typeof webPhoneRef.current.call);
+      
       let session: any;
       try {
-        session = await webPhoneRef.current.call({
+        // Call the method and log what it returns
+        const callResult = webPhoneRef.current.call({
           toNumber: number,
         });
+        console.log('[RingCentral] webPhone.call() returned:', callResult);
+        console.log('[RingCentral] Is it a Promise?', callResult instanceof Promise);
+        console.log('[RingCentral] Return type:', typeof callResult);
         
-        console.log('[RingCentral] Call session created successfully:', session);
+        // If it's a promise, await it; otherwise use it directly
+        if (callResult instanceof Promise) {
+          session = await callResult;
+          console.log('[RingCentral] Awaited session:', session);
+        } else {
+          session = callResult;
+          console.log('[RingCentral] Direct session result:', session);
+        }
+        
+        console.log('[RingCentral] Final session value:', session);
         sessionRef.current = session;
+        console.log('[RingCentral] Session saved to ref');
       } catch (callError: any) {
         console.error('[RingCentral] ERROR in webPhone.call():', callError);
         console.error('[RingCentral] Call error message:', callError?.message);
