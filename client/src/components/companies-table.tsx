@@ -456,6 +456,17 @@ export default function CompaniesTable({
     return map;
   }, [clientServices]);
 
+  const getDaysUntil = (date: Date | string | null) => {
+    if (!date) return null;
+    try {
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) return null;
+      return differenceInDays(targetDate, new Date());
+    } catch {
+      return null;
+    }
+  };
+
   const handleSort = (columnId: string) => {
     if (sortBy === columnId) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -579,17 +590,6 @@ export default function CompaniesTable({
     });
     return map;
   }, [clientServices, allServices, allUsers]);
-
-  const getDaysUntil = (date: Date | string | null) => {
-    if (!date) return null;
-    try {
-      const targetDate = new Date(date);
-      if (isNaN(targetDate.getTime())) return null;
-      return differenceInDays(targetDate, new Date());
-    } catch {
-      return null;
-    }
-  };
 
   const getDaysUntilBadge = (days: number | null) => {
     if (days === null) return <span className="text-muted-foreground text-xs">—</span>;
