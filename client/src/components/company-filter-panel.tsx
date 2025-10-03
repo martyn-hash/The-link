@@ -139,25 +139,25 @@ export default function CompanyFilterPanel({
   };
 
   const handleServiceToggle = (serviceId: string) => {
-    setSelectedServices(prev =>
+    setSelectedServices((prev: string[]) =>
       prev.includes(serviceId)
-        ? prev.filter(id => id !== serviceId)
+        ? prev.filter((id: string) => id !== serviceId)
         : [...prev, serviceId]
     );
   };
 
   const handleTagToggle = (tagId: string) => {
-    setSelectedTags(prev =>
+    setSelectedTags((prev: string[]) =>
       prev.includes(tagId)
-        ? prev.filter(id => id !== tagId)
+        ? prev.filter((id: string) => id !== tagId)
         : [...prev, tagId]
     );
   };
 
   const handleDaysUntilToggle = (range: string) => {
-    setDaysUntilDueFilter(prev =>
+    setDaysUntilDueFilter((prev: string[]) =>
       prev.includes(range)
-        ? prev.filter(r => r !== range)
+        ? prev.filter((r: string) => r !== range)
         : [...prev, range]
     );
   };

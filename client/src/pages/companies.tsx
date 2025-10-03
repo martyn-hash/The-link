@@ -3,11 +3,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { type Client } from "@shared/schema";
+import { type Client, type CompanyView } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import CompaniesTable from "@/components/companies-table";
+import CompanyFilterPanel from "@/components/company-filter-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building, RefreshCw, AlertTriangle } from "lucide-react";
+import { Building, RefreshCw, AlertTriangle, Filter, ChevronDown } from "lucide-react";
 
 export default function Companies() {
   const { user, isAuthenticated } = useAuth();
@@ -26,10 +33,38 @@ export default function Companies() {
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [syncResults, setSyncResults] = useState<any>(null);
+  
+  // Filter state
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [daysUntilDueFilter, setDaysUntilDueFilter] = useState<string[]>([]);
 
   // Fetch all clients
   const { data: allClients, isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Fetch services for filter
+  const { data: allServices = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/services"],
+    enabled: isAuthenticated,
+    retry: false,
+    select: (data: any[]) => data.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
+  });
+
+  // Fetch tags for filter
+  const { data: allTags = [] } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/client-tags"],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Fetch saved views
+  const { data: savedViews = [] } = useQuery<CompanyView[]>({
+    queryKey: ["/api/company-views"],
     enabled: isAuthenticated,
     retry: false,
   });
@@ -115,6 +150,24 @@ export default function Companies() {
     syncMutation.mutate(Array.from(selectedClients));
   };
 
+  const handleLoadView = (view: CompanyView) => {
+    const filters = typeof view.filters === 'string' 
+      ? JSON.parse(view.filters) 
+      : view.filters as any;
+    
+    setSelectedServices(filters.selectedServices || []);
+    setSelectedTags(filters.selectedTags || []);
+    setDaysUntilDueFilter(filters.daysUntilDueFilter || []);
+  };
+
+  const activeFilterCount = () => {
+    let count = 0;
+    if (selectedServices.length > 0) count++;
+    if (selectedTags.length > 0) count++;
+    if (daysUntilDueFilter.length > 0) count++;
+    return count;
+  };
+
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -154,6 +207,46 @@ export default function Companies() {
                 {companiesHouseClients.length} {companiesHouseClients.length === 1 ? 'Company' : 'Companies'}
               </Badge>
             </div>
+            <div className="flex items-center gap-2">
+              {/* Saved Views Dropdown */}
+              {savedViews.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" data-testid="button-load-saved-view">
+                      <span>Load saved view</span>
+                      <ChevronDown className="ml-2 w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {savedViews.map((view) => (
+                      <DropdownMenuItem
+                        key={view.id}
+                        onClick={() => handleLoadView(view)}
+                        data-testid={`menuitem-load-view-${view.id}`}
+                      >
+                        {view.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              
+              {/* Filter Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFilterPanelOpen(true)}
+                data-testid="button-open-filters"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filters
+                {activeFilterCount() > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {activeFilterCount()}
+                  </Badge>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -178,9 +271,26 @@ export default function Companies() {
             onSelectAll={handleSelectAll}
             onSyncSelected={handleSyncSelected}
             isSyncing={syncMutation.isPending}
+            selectedServices={selectedServices}
+            selectedTags={selectedTags}
+            daysUntilDueFilter={daysUntilDueFilter}
           />
         )}
       </main>
+
+      {/* Company Filter Panel */}
+      <CompanyFilterPanel
+        open={filterPanelOpen}
+        onOpenChange={setFilterPanelOpen}
+        selectedServices={selectedServices}
+        setSelectedServices={setSelectedServices}
+        selectedTags={selectedTags}
+        setSelectedTags={setSelectedTags}
+        daysUntilDueFilter={daysUntilDueFilter}
+        setDaysUntilDueFilter={setDaysUntilDueFilter}
+        services={allServices}
+        tags={allTags}
+      />
 
       {/* Sync Results Dialog */}
       <Dialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>

@@ -208,6 +208,9 @@ interface CompaniesTableProps {
   onSelectAll: (checked: boolean, filteredClientIds?: string[]) => void;
   onSyncSelected: () => void;
   isSyncing: boolean;
+  selectedServices?: string[];
+  selectedTags?: string[];
+  daysUntilDueFilter?: string[];
 }
 
 export default function CompaniesTable({
@@ -217,6 +220,9 @@ export default function CompaniesTable({
   onSelectAll,
   onSyncSelected,
   isSyncing,
+  selectedServices = [],
+  selectedTags = [],
+  daysUntilDueFilter = [],
 }: CompaniesTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<string>("name");
@@ -248,9 +254,6 @@ export default function CompaniesTable({
   const { data: tagAssignments = [] } = useQuery<any[]>({
     queryKey: ["/api/client-tag-assignments"],
   });
-
-  // State for tags filter (multi-select)
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // State for saved layouts
   const [layoutName, setLayoutName] = useState("");
@@ -462,7 +465,7 @@ export default function CompaniesTable({
     }
   };
 
-  // Filter by search query and tags
+  // Filter by search query, tags, services, and days until due
   const filteredClients = useMemo(() => {
     let filtered = clients;
 
@@ -484,8 +487,36 @@ export default function CompaniesTable({
       });
     }
 
+    // Filter by services (multi-select) - companies with ANY selected service
+    if (selectedServices.length > 0) {
+      filtered = filtered.filter((client) => {
+        const clientServiceSet = clientServicesMap.get(client.id);
+        if (!clientServiceSet) return false;
+        return selectedServices.some(serviceId => clientServiceSet.has(serviceId));
+      });
+    }
+
+    // Filter by days until accounts due
+    if (daysUntilDueFilter.length > 0) {
+      filtered = filtered.filter((client) => {
+        if (!client.nextAccountsDue) return false;
+        const daysUntil = getDaysUntil(client.nextAccountsDue);
+        if (daysUntil === null) return false;
+
+        return daysUntilDueFilter.some((range) => {
+          if (range === "1-10") return daysUntil >= 1 && daysUntil <= 10;
+          if (range === "11-31") return daysUntil >= 11 && daysUntil <= 31;
+          if (range === "32-60") return daysUntil >= 32 && daysUntil <= 60;
+          if (range === "61-90") return daysUntil >= 61 && daysUntil <= 90;
+          if (range === "90+") return daysUntil > 90;
+          if (range === "overdue") return daysUntil < 0;
+          return false;
+        });
+      });
+    }
+
     return filtered;
-  }, [clients, searchQuery, selectedTags, clientTagsMap]);
+  }, [clients, searchQuery, selectedTags, selectedServices, daysUntilDueFilter, clientTagsMap, clientServicesMap]);
 
   // Sort clients
   const sortedClients = useMemo(() => {
