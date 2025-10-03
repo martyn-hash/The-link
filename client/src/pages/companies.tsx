@@ -87,8 +87,10 @@ export default function Companies() {
     },
   });
 
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedClients(checked ? new Set(companiesHouseClients.map(c => c.id)) : new Set());
+  const handleSelectAll = (checked: boolean, filteredClientIds?: string[]) => {
+    // If filteredClientIds are provided, only select those; otherwise select all
+    const clientIds = filteredClientIds || companiesHouseClients.map(c => c.id);
+    setSelectedClients(checked ? new Set(clientIds) : new Set());
   };
 
   const handleSelectClient = (clientId: string, checked: boolean) => {

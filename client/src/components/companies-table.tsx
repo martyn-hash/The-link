@@ -38,6 +38,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -91,6 +96,7 @@ function SortableColumnHeader({
   allSelected,
   someSelected,
   onSelectAll,
+  filteredClientIds,
 }: {
   column: ColumnConfig;
   sortBy: string;
@@ -100,7 +106,8 @@ function SortableColumnHeader({
   onResize?: (columnId: string, width: number) => void;
   allSelected?: boolean;
   someSelected?: boolean;
-  onSelectAll?: (checked: boolean) => void;
+  onSelectAll?: (checked: boolean, filteredClientIds?: string[]) => void;
+  filteredClientIds?: string[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -170,7 +177,8 @@ function SortableColumnHeader({
               onCheckedChange={(checked) => {
                 // Convert CheckedState to boolean: true or "indeterminate" means select all, false means deselect all
                 const shouldSelect = checked === true || checked === "indeterminate";
-                onSelectAll(shouldSelect);
+                // Pass the filtered client IDs so only visible clients are selected
+                onSelectAll(shouldSelect, filteredClientIds);
               }}
               data-testid="checkbox-select-all"
               aria-label="Select all companies"
@@ -197,7 +205,7 @@ interface CompaniesTableProps {
   clients: Client[];
   selectedClients: Set<string>;
   onSelectClient: (clientId: string, checked: boolean) => void;
-  onSelectAll: (checked: boolean) => void;
+  onSelectAll: (checked: boolean, filteredClientIds?: string[]) => void;
   onSyncSelected: () => void;
   isSyncing: boolean;
 }
@@ -241,8 +249,8 @@ export default function CompaniesTable({
     queryKey: ["/api/client-tag-assignments"],
   });
 
-  // State for tags filter
-  const [selectedTag, setSelectedTag] = useState<string>("all");
+  // State for tags filter (multi-select)
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // State for saved layouts
   const [layoutName, setLayoutName] = useState("");
@@ -456,16 +464,16 @@ export default function CompaniesTable({
       );
     }
 
-    // Filter by tag
-    if (selectedTag !== "all") {
+    // Filter by tags (multi-select)
+    if (selectedTags.length > 0) {
       filtered = filtered.filter((client) => {
         const clientTags = clientTagsMap.get(client.id) || [];
-        return clientTags.some((tag: any) => tag.id === selectedTag);
+        return clientTags.some((tag: any) => selectedTags.includes(tag.id));
       });
     }
 
     return filtered;
-  }, [clients, searchQuery, selectedTag, clientTagsMap]);
+  }, [clients, searchQuery, selectedTags, clientTagsMap]);
 
   // Sort clients
   const sortedClients = useMemo(() => {
@@ -732,31 +740,69 @@ export default function CompaniesTable({
               placeholder="Search by name or company number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 border border-input"
+              className="pl-9 border-2"
               data-testid="input-search-companies"
             />
           </div>
           {allTags.length > 0 && (
-            <Select value={selectedTag} onValueChange={setSelectedTag}>
-              <SelectTrigger className="w-[200px]" data-testid="select-tag-filter">
-                <Tag className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Filter by tag" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Tags</SelectItem>
-                {allTags.map((tag: any) => (
-                  <SelectItem key={tag.id} value={tag.id} data-testid={`tag-option-${tag.id}`}>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: tag.color }}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-[200px] justify-start" data-testid="button-tag-filter">
+                  <Tag className="w-4 h-4 mr-2" />
+                  {selectedTags.length === 0 ? (
+                    "Filter by tags"
+                  ) : selectedTags.length === 1 ? (
+                    allTags.find((t: any) => t.id === selectedTags[0])?.name
+                  ) : (
+                    `${selectedTags.length} tags selected`
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[250px] p-3" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Filter by Tags</span>
+                    {selectedTags.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-1 text-xs"
+                        onClick={() => setSelectedTags([])}
+                        data-testid="button-clear-tags"
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {allTags.map((tag: any) => (
+                    <div key={tag.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`tag-filter-${tag.id}`}
+                        checked={selectedTags.includes(tag.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedTags([...selectedTags, tag.id]);
+                          } else {
+                            setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                          }
+                        }}
+                        data-testid={`checkbox-tag-${tag.id}`}
                       />
-                      {tag.name}
+                      <label
+                        htmlFor={`tag-filter-${tag.id}`}
+                        className="flex items-center gap-2 text-sm cursor-pointer flex-1"
+                      >
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                      </label>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
         </div>
         <div className="flex items-center space-x-2">
@@ -857,6 +903,7 @@ export default function CompaniesTable({
                       allSelected={allSelected}
                       someSelected={someSelected}
                       onSelectAll={onSelectAll}
+                      filteredClientIds={sortedClients.map(c => c.id)}
                     />
                   ))}
                 </SortableContext>
