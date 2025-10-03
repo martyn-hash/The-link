@@ -104,6 +104,8 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       console.log('[RingCentral] Creating WebPhone instance with sipInfo[0]...');
       const webPhone = new RingCentralWebPhone({ sipInfo: sipProvision.sipInfo[0] });
       console.log('[RingCentral] WebPhone instance created:', webPhone);
+      console.log('[RingCentral] WebPhone available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(webPhone)));
+      console.log('[RingCentral] WebPhone own properties:', Object.keys(webPhone));
 
       // Start the WebPhone (connects and registers)
       console.log('[RingCentral] Starting WebPhone (connecting WebSocket)...');
