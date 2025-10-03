@@ -37,6 +37,7 @@ import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
 import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
 import DocumentFolderView from "@/components/DocumentFolderView";
 import { CreateFolderDialog } from "@/components/CreateFolderDialog";
+import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -5836,7 +5837,7 @@ export default function ClientDetail() {
         >
           {/* Desktop Tabs - Grid Layout */}
           <div className="hidden md:block w-full">
-            <TabsList className="grid w-full grid-cols-7 gap-1 h-auto">
+            <TabsList className="grid w-full grid-cols-8 gap-1 h-auto">
               <TabsTrigger value="overview" data-testid="tab-overview" className="text-sm py-2">Overview</TabsTrigger>
               <TabsTrigger value="services" data-testid="tab-services" className="text-sm py-2">Services</TabsTrigger>
               <TabsTrigger value="projects" data-testid="tab-projects" className="text-sm py-2">Projects</TabsTrigger>
@@ -5844,6 +5845,7 @@ export default function ClientDetail() {
               <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
               <TabsTrigger value="documents" data-testid="tab-documents" className="text-sm py-2">Docs</TabsTrigger>
               <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-sm py-2">Tasks</TabsTrigger>
+              <TabsTrigger value="risk" data-testid="tab-risk" className="text-sm py-2">Risk</TabsTrigger>
             </TabsList>
           </div>
 
@@ -5855,7 +5857,7 @@ export default function ClientDetail() {
               size="icon"
               className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
               onClick={() => {
-                const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
+                const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"];
                 const currentIndex = tabs.indexOf(activeTab);
                 if (currentIndex > 0) {
                   setActiveTab(tabs[currentIndex - 1]);
@@ -5873,13 +5875,13 @@ export default function ClientDetail() {
               size="icon"
               className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
               onClick={() => {
-                const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
+                const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"];
                 const currentIndex = tabs.indexOf(activeTab);
                 if (currentIndex < tabs.length - 1) {
                   setActiveTab(tabs[currentIndex + 1]);
                 }
               }}
-              disabled={activeTab === "tasks"}
+              disabled={activeTab === "risk"}
               data-testid="tab-nav-right"
             >
               <ChevronRight className="h-6 w-6" />
@@ -5991,6 +5993,21 @@ export default function ClientDetail() {
                 }}
               >
                 Tasks
+              </TabsTrigger>
+              <TabsTrigger 
+                value="risk" 
+                data-testid="tab-risk" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-risk"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Risk
               </TabsTrigger>
             </TabsList>
             </div>
@@ -7401,6 +7418,10 @@ export default function ClientDetail() {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="risk" className="space-y-6 mt-6">
+            <RiskAssessmentTab clientId={id} />
           </TabsContent>
         </Tabs>
         </div>
