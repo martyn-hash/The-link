@@ -155,6 +155,17 @@ export const projectViews = pgTable("project_views", {
   index("idx_project_views_user_id").on(table.userId),
 ]);
 
+// Company views table - Saved filter configurations for companies page
+export const companyViews = pgTable("company_views", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  filters: text("filters").notNull(), // JSON string of filter state
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_company_views_user_id").on(table.userId),
+]);
+
 // User column preferences table - Stores column visibility, order, and width settings for project list view
 export const userColumnPreferences = pgTable("user_column_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1188,6 +1199,11 @@ export const insertProjectViewSchema = createInsertSchema(projectViews).omit({
   createdAt: true,
 });
 
+export const insertCompanyViewSchema = createInsertSchema(companyViews).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertUserColumnPreferencesSchema = createInsertSchema(userColumnPreferences).omit({
   id: true,
   createdAt: true,
@@ -1568,6 +1584,8 @@ export type UserNotificationPreferences = typeof userNotificationPreferences.$in
 
 export type ProjectView = typeof projectViews.$inferSelect;
 export type InsertProjectView = z.infer<typeof insertProjectViewSchema>;
+export type CompanyView = typeof companyViews.$inferSelect;
+export type InsertCompanyView = z.infer<typeof insertCompanyViewSchema>;
 export type UserColumnPreferences = typeof userColumnPreferences.$inferSelect;
 export type InsertUserColumnPreferences = z.infer<typeof insertUserColumnPreferencesSchema>;
 export type UpdateUserColumnPreferences = z.infer<typeof updateUserColumnPreferencesSchema>;
