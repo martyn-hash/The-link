@@ -646,6 +646,12 @@ export interface IStorage {
   markMessagesAsReadByClient(threadId: string): Promise<void>;
   getUnreadMessageCountForClient(clientId: string): Promise<number>;
   getUnreadMessageCountForStaff(userId: string, isAdmin?: boolean): Promise<number>;
+  
+  // Client Portal Session operations
+  createClientPortalSession(session: InsertClientPortalSession): Promise<ClientPortalSession>;
+  getClientPortalSessionByToken(token: string): Promise<ClientPortalSession | undefined>;
+  deleteClientPortalSession(id: string): Promise<void>;
+  cleanupExpiredSessions(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -8024,6 +8030,28 @@ export class DatabaseStorage implements IStorage {
         )
       ));
     return result[0]?.count || 0;
+  }
+
+  // Client Portal Session operations
+  async createClientPortalSession(session: InsertClientPortalSession): Promise<ClientPortalSession> {
+    const [newSession] = await db.insert(clientPortalSessions).values(session).returning();
+    return newSession;
+  }
+
+  async getClientPortalSessionByToken(token: string): Promise<ClientPortalSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(clientPortalSessions)
+      .where(eq(clientPortalSessions.token, token));
+    return session;
+  }
+
+  async deleteClientPortalSession(id: string): Promise<void> {
+    await db.delete(clientPortalSessions).where(eq(clientPortalSessions.id, id));
+  }
+
+  async cleanupExpiredSessions(): Promise<void> {
+    await db.delete(clientPortalSessions).where(sql`${clientPortalSessions.expiresAt} < NOW()`);
   }
 }
 

@@ -288,6 +288,203 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
+  // ===== CLIENT PORTAL AUTHENTICATION ROUTES (Public - No Auth Required) =====
+  const { sendMagicLink, verifyMagicLink } = await import('./portalAuth');
+
+  // Request magic link (only for pre-existing portal users)
+  app.post('/api/portal/auth/request-magic-link', async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: 'Email is required' });
+      }
+
+      const result = await sendMagicLink(email);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error || 'Failed to send magic link' });
+      }
+
+      // Always return success to prevent email enumeration
+      res.json({ message: 'If a portal account exists for this email, a magic link has been sent' });
+    } catch (error) {
+      console.error('Error requesting magic link:', error);
+      res.status(500).json({ message: 'Failed to send magic link' });
+    }
+  });
+
+  // Verify magic link and get JWT
+  app.get('/api/portal/auth/verify', async (req, res) => {
+    try {
+      const { token } = req.query;
+
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ message: 'Token is required' });
+      }
+
+      const result = await verifyMagicLink(token);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error || 'Verification failed' });
+      }
+
+      res.json({ jwt: result.jwt });
+    } catch (error) {
+      console.error('Error verifying magic link:', error);
+      res.status(500).json({ message: 'Verification failed' });
+    }
+  });
+
+  // ===== CLIENT PORTAL MESSAGING ROUTES (JWT Auth Required) =====
+  const { authenticatePortal } = await import('./portalAuth');
+
+  // Get all threads for authenticated portal user
+  app.get('/api/portal/threads', authenticatePortal, async (req: any, res) => {
+    try {
+      const clientId = req.portalUser!.clientId;
+      const status = req.query.status as string | undefined;
+      
+      const threads = await storage.getMessageThreadsByClient(clientId, status);
+      res.json(threads);
+    } catch (error) {
+      console.error('Error fetching threads:', error);
+      res.status(500).json({ message: 'Failed to fetch threads' });
+    }
+  });
+
+  // Get specific thread
+  app.get('/api/portal/threads/:threadId', authenticatePortal, async (req: any, res) => {
+    try {
+      const { threadId } = req.params;
+      const clientId = req.portalUser!.clientId;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      
+      if (!thread) {
+        return res.status(404).json({ message: 'Thread not found' });
+      }
+      
+      if (thread.clientId !== clientId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      res.json(thread);
+    } catch (error) {
+      console.error('Error fetching thread:', error);
+      res.status(500).json({ message: 'Failed to fetch thread' });
+    }
+  });
+
+  // Create new thread
+  app.post('/api/portal/threads', authenticatePortal, async (req: any, res) => {
+    try {
+      const portalUserId = req.portalUser!.id;
+      const clientId = req.portalUser!.clientId;
+      const { topic, projectId, serviceId } = req.body;
+      
+      if (!topic) {
+        return res.status(400).json({ message: 'Topic is required' });
+      }
+      
+      const thread = await storage.createMessageThread({
+        topic,
+        clientId,
+        clientPortalUserId: portalUserId,
+        projectId: projectId || null,
+        serviceId: serviceId || null,
+        status: 'new'
+      });
+      
+      res.status(201).json(thread);
+    } catch (error) {
+      console.error('Error creating thread:', error);
+      res.status(500).json({ message: 'Failed to create thread' });
+    }
+  });
+
+  // Get messages for a thread
+  app.get('/api/portal/threads/:threadId/messages', authenticatePortal, async (req: any, res) => {
+    try {
+      const { threadId } = req.params;
+      const clientId = req.portalUser!.clientId;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread || thread.clientId !== clientId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const messages = await storage.getMessagesByThreadId(threadId);
+      res.json(messages);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ message: 'Failed to fetch messages' });
+    }
+  });
+
+  // Send message in a thread
+  app.post('/api/portal/threads/:threadId/messages', authenticatePortal, async (req: any, res) => {
+    try {
+      const { threadId } = req.params;
+      const portalUserId = req.portalUser!.id;
+      const clientId = req.portalUser!.clientId;
+      const { content } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ message: 'Content is required' });
+      }
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread || thread.clientId !== clientId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const message = await storage.createMessage({
+        threadId,
+        content,
+        clientPortalUserId: portalUserId,
+        isReadByStaff: false,
+        isReadByClient: true
+      });
+      
+      res.status(201).json(message);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      res.status(500).json({ message: 'Failed to send message' });
+    }
+  });
+
+  // Mark thread as read for client
+  app.put('/api/portal/threads/:threadId/mark-read', authenticatePortal, async (req: any, res) => {
+    try {
+      const { threadId } = req.params;
+      const clientId = req.portalUser!.clientId;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread || thread.clientId !== clientId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      await storage.markMessagesAsReadByClient(threadId);
+      res.json({ message: 'Marked as read' });
+    } catch (error) {
+      console.error('Error marking thread as read:', error);
+      res.status(500).json({ message: 'Failed to mark as read' });
+    }
+  });
+
+  // Get unread count for client
+  app.get('/api/portal/unread-count', authenticatePortal, async (req: any, res) => {
+    try {
+      const clientId = req.portalUser!.clientId;
+      const count = await storage.getUnreadMessageCountForClient(clientId);
+      res.json({ count });
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+      res.status(500).json({ message: 'Failed to fetch unread count' });
+    }
+  });
+
   // Middleware to resolve effective user (for impersonation)
   const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {
@@ -7121,6 +7318,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting communication:", error);
       res.status(500).json({ message: "Failed to delete communication" });
+    }
+  });
+
+  // ===== INTERNAL STAFF MESSAGING ROUTES (OIDC Auth Required) =====
+  
+  // Get all threads for staff (filtered by user's assigned projects)
+  app.get("/api/internal/messages/threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const status = req.query.status as string | undefined;
+      
+      // Get all threads - filtering will be done based on user's project assignments
+      const allThreads = await storage.getAllMessageThreads(status);
+      
+      // Filter threads based on user access
+      let accessibleThreads = allThreads;
+      if (!isAdmin) {
+        const threadIds = allThreads.map(t => t.id);
+        const accessibleThreadIds = new Set<string>();
+        
+        // Check each thread's client for user access
+        for (const thread of allThreads) {
+          const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+          if (hasAccess) {
+            accessibleThreadIds.add(thread.id);
+          }
+        }
+        
+        accessibleThreads = allThreads.filter(t => accessibleThreadIds.has(t.id));
+      }
+      
+      res.json(accessibleThreads);
+    } catch (error) {
+      console.error("Error fetching threads:", error);
+      res.status(500).json({ message: "Failed to fetch threads" });
+    }
+  });
+
+  // Get specific thread for staff
+  app.get("/api/internal/messages/threads/:threadId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      res.json(thread);
+    } catch (error) {
+      console.error("Error fetching thread:", error);
+      res.status(500).json({ message: "Failed to fetch thread" });
+    }
+  });
+
+  // Get messages for a thread (staff)
+  app.get("/api/internal/messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const messages = await storage.getMessagesByThreadId(threadId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Reply to thread (staff)
+  app.post("/api/internal/messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const { content } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ message: "Content is required" });
+      }
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const message = await storage.createMessage({
+        threadId,
+        content,
+        userId: effectiveUserId,
+        isReadByStaff: true,
+        isReadByClient: false
+      });
+      
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  // Update thread status (staff)
+  app.put("/api/internal/messages/threads/:threadId/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const { status } = req.body;
+      
+      if (!status || !['new', 'in_progress', 'resolved', 'closed'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const updatedThread = await storage.updateMessageThread(threadId, { status });
+      res.json(updatedThread);
+    } catch (error) {
+      console.error("Error updating thread status:", error);
+      res.status(500).json({ message: "Failed to update thread status" });
+    }
+  });
+
+  // Mark thread as read for staff
+  app.put("/api/internal/messages/threads/:threadId/mark-read", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      await storage.markMessagesAsReadByStaff(threadId);
+      res.json({ message: "Marked as read" });
+    } catch (error) {
+      console.error("Error marking thread as read:", error);
+      res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
+
+  // Get unread count for staff
+  app.get("/api/internal/messages/unread-count", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      
+      const count = await storage.getUnreadMessageCountForStaff(effectiveUserId, isAdmin);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ message: "Failed to fetch unread count" });
     }
   });
 
