@@ -7010,8 +7010,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChChangeRequestsByClientId(clientId: string): Promise<ChChangeRequest[]> {
-    // TODO: Implement
-    throw new Error("Method not implemented.");
+    const results = await db
+      .select()
+      .from(chChangeRequests)
+      .where(eq(chChangeRequests.clientId, clientId))
+      .orderBy(chChangeRequests.detectedAt);
+    
+    return results;
   }
 
   async updateChChangeRequest(id: string, request: Partial<UpdateChChangeRequest>): Promise<ChChangeRequest> {
