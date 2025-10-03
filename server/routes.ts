@@ -4974,7 +4974,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client service not found" });
       }
 
+      console.log('[DEBUG] PUT /api/client-services/:id - Request body:', JSON.stringify(req.body, null, 2));
+      
       const validationResult = insertClientServiceSchema.partial().safeParse(req.body);
+      
+      console.log('[DEBUG] Validation result:', validationResult.success ? 'SUCCESS' : 'FAILED');
+      if (validationResult.success) {
+        console.log('[DEBUG] Validated data:', JSON.stringify(validationResult.data, null, 2));
+      }
       
       if (!validationResult.success) {
         return res.status(400).json({ 

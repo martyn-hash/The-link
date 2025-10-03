@@ -2538,7 +2538,7 @@ function EditableServiceDetails({
       });
       setIsEditing(false);
       onUpdate();
-      queryClient.invalidateQueries({ queryKey: ['/api/services/client'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientService.clientId}`] });
     },
     onError: (error) => {
       toast({
