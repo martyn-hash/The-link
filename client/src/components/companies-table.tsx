@@ -249,33 +249,43 @@ export default function CompaniesTable({
     },
   });
 
-  // Apply saved preferences on load
+  // Apply saved preferences on load, but merge with defaults
   useEffect(() => {
-    if (savedPreferences) {
-      if (savedPreferences.columnOrder) setColumnOrder(savedPreferences.columnOrder);
-      if (savedPreferences.visibleColumns) setVisibleColumns(savedPreferences.visibleColumns);
-      if (savedPreferences.columnWidths)
-        setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
-    }
-  }, [savedPreferences]);
-
-  // Sync column order when ALL_COLUMNS changes (services load)
-  useEffect(() => {
-    // Add new columns that aren't in columnOrder yet
-    const currentColumnIds = ALL_COLUMNS.map(col => col.id);
-    const missingColumns = currentColumnIds.filter(id => !columnOrder.includes(id));
-    if (missingColumns.length > 0) {
-      // Insert service columns before actions
-      const actionsIndex = columnOrder.indexOf('actions');
-      const newOrder = [...columnOrder];
-      if (actionsIndex !== -1) {
-        newOrder.splice(actionsIndex, 0, ...missingColumns);
-      } else {
-        newOrder.push(...missingColumns);
+    if (savedPreferences && ALL_COLUMNS.length > 0) {
+      if (savedPreferences.columnOrder) {
+        // Merge saved order with any new columns that weren't saved yet
+        const savedIds = savedPreferences.columnOrder;
+        const allCurrentIds = ALL_COLUMNS.map(col => col.id);
+        const newIds = allCurrentIds.filter(id => !savedIds.includes(id));
+        const actionsIndex = savedIds.indexOf('actions');
+        if (newIds.length > 0 && actionsIndex !== -1) {
+          const merged = [...savedIds];
+          merged.splice(actionsIndex, 0, ...newIds);
+          setColumnOrder(merged);
+        } else if (newIds.length > 0) {
+          setColumnOrder([...savedIds, ...newIds]);
+        } else {
+          setColumnOrder(savedIds);
+        }
       }
-      setColumnOrder(newOrder);
+      
+      if (savedPreferences.visibleColumns) {
+        // Merge saved visible columns with any new default-visible columns
+        const defaultVisibleIds = ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
+        const savedVisible = savedPreferences.visibleColumns;
+        const newDefaultVisible = defaultVisibleIds.filter(id => !savedVisible.includes(id));
+        if (newDefaultVisible.length > 0) {
+          setVisibleColumns([...savedVisible, ...newDefaultVisible]);
+        } else {
+          setVisibleColumns(savedVisible);
+        }
+      }
+      
+      if (savedPreferences.columnWidths) {
+        setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
+      }
     }
-  }, [ALL_COLUMNS, columnOrder]);
+  }, [savedPreferences, ALL_COLUMNS]);
 
   // Drag and drop sensors
   const sensors = useSensors(
