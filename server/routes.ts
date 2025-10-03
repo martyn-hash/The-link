@@ -7550,13 +7550,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/ringcentral/sip-provision - Get SIP provisioning credentials for WebRTC
   app.post("/api/ringcentral/sip-provision", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
+      console.log('\n========== [SERVER] SIP PROVISION REQUEST ==========');
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      console.log('[SERVER] Effective User ID:', effectiveUserId);
+      console.log('[SERVER] Requesting SIP provision from RingCentral API...');
       
       const sipProvision = await getSIPProvisionCredentials(effectiveUserId);
-      console.log("SIP provision response:", JSON.stringify(sipProvision, null, 2));
+      
+      console.log('[SERVER] ✓ SIP provision SUCCESS');
+      console.log('[SERVER] Device ID:', sipProvision?.device?.id);
+      console.log('[SERVER] Extension:', sipProvision?.device?.extension?.extensionNumber);
+      console.log('[SERVER] SIP Username:', sipProvision?.sipInfo?.[0]?.username);
+      console.log('[SERVER] SIP Domain:', sipProvision?.sipInfo?.[0]?.domain);
+      console.log('[SERVER] Transport:', sipProvision?.sipInfo?.[0]?.transport);
+      console.log('[SERVER] Outbound Proxy:', sipProvision?.sipInfo?.[0]?.outboundProxy);
+      console.log('[SERVER] Full response available - ready for WebPhone initialization');
+      console.log('====================================================\n');
+      
       res.json(sipProvision);
     } catch (error) {
-      console.error("Error getting SIP provision:", error);
+      console.error('\n========== [SERVER] SIP PROVISION ERROR ==========');
+      console.error('[SERVER] ✗ Error getting SIP provision:', error);
+      console.error('==================================================\n');
       if (error instanceof Error && error.message.includes('not connected')) {
         return res.status(401).json({ message: "RingCentral account not connected. Please authenticate first." });
       }

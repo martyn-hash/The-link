@@ -25,6 +25,10 @@ interface RingCentralPhoneProps {
 }
 
 export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCallComplete }: RingCentralPhoneProps) {
+  // VERSION CHECK - if you see this, new code is loaded!
+  console.log('🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500');
+  console.log('🔄 Props:', { clientId, personId, defaultPhoneNumber });
+  
   const { toast } = useToast();
   
   const initialCallState: CallState = {
