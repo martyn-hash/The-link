@@ -44,6 +44,9 @@ import {
   documents,
   riskAssessments,
   riskAssessmentResponses,
+  clientPortalUsers,
+  messageThreads,
+  messages,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -138,6 +141,12 @@ import {
   type InsertRiskAssessment,
   type RiskAssessmentResponse,
   type InsertRiskAssessmentResponse,
+  type ClientPortalUser,
+  type InsertClientPortalUser,
+  type MessageThread,
+  type InsertMessageThread,
+  type Message,
+  type InsertMessage,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -610,6 +619,33 @@ export interface IStorage {
   // Risk Assessment Response operations
   saveRiskAssessmentResponses(assessmentId: string, responses: InsertRiskAssessmentResponse[]): Promise<void>;
   getRiskAssessmentResponses(assessmentId: string): Promise<RiskAssessmentResponse[]>;
+  
+  // Client Portal User operations
+  createClientPortalUser(user: InsertClientPortalUser): Promise<ClientPortalUser>;
+  getClientPortalUserById(id: string): Promise<ClientPortalUser | undefined>;
+  getClientPortalUserByEmail(email: string): Promise<ClientPortalUser | undefined>;
+  getClientPortalUsersByClientId(clientId: string): Promise<ClientPortalUser[]>;
+  updateClientPortalUser(id: string, user: Partial<InsertClientPortalUser>): Promise<ClientPortalUser>;
+  deleteClientPortalUser(id: string): Promise<void>;
+  
+  // Message Thread operations
+  createMessageThread(thread: InsertMessageThread): Promise<MessageThread>;
+  getMessageThreadById(id: string): Promise<MessageThread | undefined>;
+  getMessageThreadsByClientId(clientId: string, filters?: { status?: string }): Promise<MessageThread[]>;
+  getAllMessageThreads(filters?: { status?: string; clientId?: string }): Promise<MessageThread[]>;
+  updateMessageThread(id: string, thread: Partial<InsertMessageThread>): Promise<MessageThread>;
+  deleteMessageThread(id: string): Promise<void>;
+  
+  // Message operations
+  createMessage(message: InsertMessage): Promise<Message>;
+  getMessageById(id: string): Promise<Message | undefined>;
+  getMessagesByThreadId(threadId: string): Promise<Message[]>;
+  updateMessage(id: string, message: Partial<InsertMessage>): Promise<Message>;
+  deleteMessage(id: string): Promise<void>;
+  markMessagesAsReadByStaff(threadId: string): Promise<void>;
+  markMessagesAsReadByClient(threadId: string): Promise<void>;
+  getUnreadMessageCountForClient(clientId: string): Promise<number>;
+  getUnreadMessageCountForStaff(userId: string, isAdmin?: boolean): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7770,6 +7806,224 @@ export class DatabaseStorage implements IStorage {
       .from(riskAssessmentResponses)
       .where(eq(riskAssessmentResponses.riskAssessmentId, assessmentId));
     return results;
+  }
+
+  // Client Portal User operations
+  async createClientPortalUser(user: InsertClientPortalUser): Promise<ClientPortalUser> {
+    const [newUser] = await db
+      .insert(clientPortalUsers)
+      .values(user)
+      .returning();
+    return newUser;
+  }
+
+  async getClientPortalUserById(id: string): Promise<ClientPortalUser | undefined> {
+    const [user] = await db
+      .select()
+      .from(clientPortalUsers)
+      .where(eq(clientPortalUsers.id, id));
+    return user;
+  }
+
+  async getClientPortalUserByEmail(email: string): Promise<ClientPortalUser | undefined> {
+    const [user] = await db
+      .select()
+      .from(clientPortalUsers)
+      .where(eq(clientPortalUsers.email, email));
+    return user;
+  }
+
+  async getClientPortalUsersByClientId(clientId: string): Promise<ClientPortalUser[]> {
+    return await db
+      .select()
+      .from(clientPortalUsers)
+      .where(eq(clientPortalUsers.clientId, clientId));
+  }
+
+  async updateClientPortalUser(id: string, user: Partial<InsertClientPortalUser>): Promise<ClientPortalUser> {
+    const [updated] = await db
+      .update(clientPortalUsers)
+      .set({ ...user, updatedAt: new Date() })
+      .where(eq(clientPortalUsers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientPortalUser(id: string): Promise<void> {
+    await db.delete(clientPortalUsers).where(eq(clientPortalUsers.id, id));
+  }
+
+  // Message Thread operations
+  async createMessageThread(thread: InsertMessageThread): Promise<MessageThread> {
+    const [newThread] = await db
+      .insert(messageThreads)
+      .values(thread)
+      .returning();
+    return newThread;
+  }
+
+  async getMessageThreadById(id: string): Promise<MessageThread | undefined> {
+    const [thread] = await db
+      .select()
+      .from(messageThreads)
+      .where(eq(messageThreads.id, id));
+    return thread;
+  }
+
+  async getMessageThreadsByClientId(clientId: string, filters?: { status?: string }): Promise<MessageThread[]> {
+    const conditions = [eq(messageThreads.clientId, clientId)];
+    if (filters?.status) {
+      conditions.push(sql`${messageThreads.status} = ${filters.status}`);
+    }
+    
+    return await db
+      .select()
+      .from(messageThreads)
+      .where(and(...conditions))
+      .orderBy(desc(messageThreads.lastMessageAt));
+  }
+
+  async getAllMessageThreads(filters?: { status?: string; clientId?: string }): Promise<MessageThread[]> {
+    const conditions = [];
+    if (filters?.status) {
+      conditions.push(sql`${messageThreads.status} = ${filters.status}`);
+    }
+    if (filters?.clientId) {
+      conditions.push(eq(messageThreads.clientId, filters.clientId));
+    }
+    
+    const query = db
+      .select()
+      .from(messageThreads)
+      .orderBy(desc(messageThreads.lastMessageAt));
+    
+    if (conditions.length > 0) {
+      return await query.where(and(...conditions));
+    }
+    return await query;
+  }
+
+  async updateMessageThread(id: string, thread: Partial<InsertMessageThread>): Promise<MessageThread> {
+    const [updated] = await db
+      .update(messageThreads)
+      .set({ ...thread, updatedAt: new Date() })
+      .where(eq(messageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMessageThread(id: string): Promise<void> {
+    await db.delete(messageThreads).where(eq(messageThreads.id, id));
+  }
+
+  // Message operations
+  async createMessage(message: InsertMessage): Promise<Message> {
+    const [newMessage] = await db
+      .insert(messages)
+      .values(message)
+      .returning();
+    
+    // Update thread's lastMessageAt
+    await db
+      .update(messageThreads)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(messageThreads.id, message.threadId));
+    
+    return newMessage;
+  }
+
+  async getMessageById(id: string): Promise<Message | undefined> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, id));
+    return message;
+  }
+
+  async getMessagesByThreadId(threadId: string): Promise<Message[]> {
+    return await db
+      .select()
+      .from(messages)
+      .where(eq(messages.threadId, threadId))
+      .orderBy(messages.createdAt);
+  }
+
+  async updateMessage(id: string, message: Partial<InsertMessage>): Promise<Message> {
+    const [updated] = await db
+      .update(messages)
+      .set({ ...message, updatedAt: new Date() })
+      .where(eq(messages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMessage(id: string): Promise<void> {
+    await db.delete(messages).where(eq(messages.id, id));
+  }
+
+  async markMessagesAsReadByStaff(threadId: string): Promise<void> {
+    await db
+      .update(messages)
+      .set({ isReadByStaff: true })
+      .where(and(
+        eq(messages.threadId, threadId),
+        eq(messages.isReadByStaff, false)
+      ));
+  }
+
+  async markMessagesAsReadByClient(threadId: string): Promise<void> {
+    await db
+      .update(messages)
+      .set({ isReadByClient: true })
+      .where(and(
+        eq(messages.threadId, threadId),
+        eq(messages.isReadByClient, false)
+      ));
+  }
+
+  async getUnreadMessageCountForClient(clientId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(messages)
+      .innerJoin(messageThreads, eq(messages.threadId, messageThreads.id))
+      .where(and(
+        eq(messageThreads.clientId, clientId),
+        eq(messages.isReadByClient, false),
+        isNull(messages.clientPortalUserId) // Messages from staff
+      ));
+    return result[0]?.count || 0;
+  }
+
+  async getUnreadMessageCountForStaff(userId: string, isAdmin: boolean = false): Promise<number> {
+    // If admin, count all unread messages from clients
+    if (isAdmin) {
+      const result = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messages)
+        .where(and(
+          eq(messages.isReadByStaff, false),
+          isNull(messages.userId) // Messages from clients
+        ));
+      return result[0]?.count || 0;
+    }
+    
+    // For non-admin users, only count unread messages from clients where the user has project assignments
+    const result = await db
+      .select({ count: sql<number>`count(DISTINCT ${messages.id})::int` })
+      .from(messages)
+      .innerJoin(messageThreads, eq(messages.threadId, messageThreads.id))
+      .innerJoin(projects, eq(messageThreads.clientId, projects.clientId))
+      .where(and(
+        eq(messages.isReadByStaff, false),
+        isNull(messages.userId), // Messages from clients
+        or(
+          eq(projects.bookkeeperId, userId),
+          eq(projects.clientManagerId, userId),
+          eq(projects.projectOwnerId, userId),
+          eq(projects.currentAssigneeId, userId)
+        )
+      ));
+    return result[0]?.count || 0;
   }
 }
 
