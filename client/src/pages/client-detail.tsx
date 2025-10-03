@@ -2472,6 +2472,212 @@ function AddPersonModal({
   );
 }
 
+// Editable Service Details Component
+function EditableServiceDetails({
+  clientService,
+  onUpdate
+}: {
+  clientService: EnhancedClientService;
+  onUpdate: () => void;
+}) {
+  const { toast } = useToast();
+  const [isEditing, setIsEditing] = useState(false);
+  const [udfValues, setUdfValues] = useState<Record<string, any>>(() => {
+    const values = (clientService.udfValues as Record<string, any>) || {};
+    const formattedValues: Record<string, any> = {};
+    
+    // Format date values for HTML date inputs
+    if (clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions)) {
+      clientService.service.udfDefinitions.forEach((field: any) => {
+        if (field.type === 'date' && values[field.id]) {
+          const date = new Date(values[field.id]);
+          formattedValues[field.id] = date.toISOString().split('T')[0];
+        } else {
+          formattedValues[field.id] = values[field.id];
+        }
+      });
+    }
+    
+    return formattedValues;
+  });
+
+  const updateServiceMutation = useMutation({
+    mutationFn: async (data: { udfValues: Record<string, any> }) => {
+      const processedUdfValues: Record<string, any> = {};
+      
+      // Convert date values from YYYY-MM-DD to ISO format for backend storage
+      if (clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions)) {
+        clientService.service.udfDefinitions.forEach((field: any) => {
+          const value = data.udfValues[field.id];
+          
+          if (field.type === 'date' && value) {
+            processedUdfValues[field.id] = new Date(value).toISOString();
+          } else {
+            processedUdfValues[field.id] = value;
+          }
+        });
+      }
+
+      return apiRequest("PUT", `/api/client-services/${clientService.id}`, {
+        nextStartDate: clientService.nextStartDate,
+        nextDueDate: clientService.nextDueDate,
+        serviceOwnerId: clientService.serviceOwnerId,
+        frequency: clientService.frequency,
+        isActive: clientService.isActive,
+        roleAssignments: [],
+        udfValues: processedUdfValues,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Service details updated successfully",
+      });
+      setIsEditing(false);
+      onUpdate();
+      queryClient.invalidateQueries({ queryKey: ['/api/services/client'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update service details",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSave = () => {
+    updateServiceMutation.mutate({ udfValues });
+  };
+
+  const handleCancel = () => {
+    // Reset to original values
+    const values = (clientService.udfValues as Record<string, any>) || {};
+    const formattedValues: Record<string, any> = {};
+    
+    if (clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions)) {
+      clientService.service.udfDefinitions.forEach((field: any) => {
+        if (field.type === 'date' && values[field.id]) {
+          const date = new Date(values[field.id]);
+          formattedValues[field.id] = date.toISOString().split('T')[0];
+        } else {
+          formattedValues[field.id] = values[field.id];
+        }
+      });
+    }
+    
+    setUdfValues(formattedValues);
+    setIsEditing(false);
+  };
+
+  if (!clientService.service?.udfDefinitions || !Array.isArray(clientService.service.udfDefinitions) || clientService.service.udfDefinitions.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">No service details defined for this service.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h5 className="font-medium text-sm flex items-center">
+          <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+          Service Details
+        </h5>
+        {!isEditing && (
+          <Button 
+            size="sm" 
+            variant="outline"
+            onClick={() => setIsEditing(true)}
+            data-testid="button-edit-service-details"
+          >
+            <Pencil className="h-3 w-3 mr-1" />
+            Edit
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {clientService.service.udfDefinitions.map((field: any) => (
+          <div key={field.id} className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-1">
+              {field.name}
+              {field.required && <span className="text-red-500">*</span>}
+            </label>
+            
+            {field.type === 'number' && (
+              <Input
+                type="number"
+                value={udfValues[field.id] ?? ''}
+                onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value ? Number(e.target.value) : null })}
+                placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                disabled={!isEditing}
+                data-testid={`input-service-detail-${field.id}`}
+              />
+            )}
+            
+            {field.type === 'date' && (
+              <Input
+                type="date"
+                value={udfValues[field.id] ?? ''}
+                onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                disabled={!isEditing}
+                data-testid={`input-service-detail-${field.id}`}
+              />
+            )}
+            
+            {field.type === 'boolean' && (
+              <div className="flex items-center space-x-2 h-10">
+                <Switch
+                  checked={udfValues[field.id] ?? false}
+                  onCheckedChange={(checked) => setUdfValues({ ...udfValues, [field.id]: checked })}
+                  disabled={!isEditing}
+                  data-testid={`switch-service-detail-${field.id}`}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {udfValues[field.id] ? 'Yes' : 'No'}
+                </span>
+              </div>
+            )}
+            
+            {field.type === 'short_text' && (
+              <Input
+                type="text"
+                value={udfValues[field.id] ?? ''}
+                onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                disabled={!isEditing}
+                data-testid={`input-service-detail-${field.id}`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {isEditing && (
+        <div className="flex justify-end space-x-2 pt-4 border-t">
+          <Button 
+            variant="outline" 
+            onClick={handleCancel}
+            disabled={updateServiceMutation.isPending}
+            data-testid="button-cancel-service-details"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSave}
+            disabled={updateServiceMutation.isPending}
+            data-testid="button-save-service-details"
+          >
+            {updateServiceMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Edit Service Modal Component
 function EditServiceModal({ 
   service, 
@@ -2501,27 +2707,6 @@ function EditServiceModal({
     })) || []
   );
 
-  // State for UDF values - format dates to YYYY-MM-DD for HTML date inputs
-  const [udfValues, setUdfValues] = useState<Record<string, any>>(() => {
-    const values = (service.udfValues as Record<string, any>) || {};
-    const formattedValues: Record<string, any> = {};
-    
-    // Format date values for HTML date inputs
-    if (service.service?.udfDefinitions && Array.isArray(service.service.udfDefinitions)) {
-      service.service.udfDefinitions.forEach((field: any) => {
-        if (field.type === 'date' && values[field.id]) {
-          // Convert ISO datetime to YYYY-MM-DD format
-          const date = new Date(values[field.id]);
-          formattedValues[field.id] = date.toISOString().split('T')[0];
-        } else {
-          formattedValues[field.id] = values[field.id];
-        }
-      });
-    }
-    
-    return formattedValues;
-  });
-
   // Check if this is a Companies House service
   const isCompaniesHouseService = service.service.isCompaniesHouseConnected;
 
@@ -2530,7 +2715,7 @@ function EditServiceModal({
 
   // Use the mutation for updating service
   const updateServiceMutation = useMutation({
-    mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}>; udfValues?: Record<string, any> }) => {
+    mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}> }) => {
       // First update the service itself (dates, owner, frequency, etc.)
       const serviceUpdateData = {
         nextStartDate: data.nextStartDate && data.nextStartDate.trim() !== '' ? 
@@ -2542,7 +2727,6 @@ function EditServiceModal({
         serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
         frequency: isCompaniesHouseService ? "annually" : data.frequency,
         isActive: data.isActive,
-        udfValues: data.udfValues,
       };
       
       // Call the appropriate API endpoint based on service type
@@ -2596,27 +2780,10 @@ function EditServiceModal({
   });
 
   const handleSubmit = (data: EditServiceData) => {
-    // Convert date UDF values from YYYY-MM-DD to ISO format for backend storage
-    const processedUdfValues: Record<string, any> = {};
-    
-    if (service.service?.udfDefinitions && Array.isArray(service.service.udfDefinitions)) {
-      service.service.udfDefinitions.forEach((field: any) => {
-        const value = udfValues[field.id];
-        
-        if (field.type === 'date' && value) {
-          // Convert YYYY-MM-DD to ISO datetime
-          processedUdfValues[field.id] = new Date(value).toISOString();
-        } else {
-          processedUdfValues[field.id] = value;
-        }
-      });
-    }
-    
     updateServiceMutation.mutate({
       ...data,
       serviceId: service.id,
       roleAssignments,
-      udfValues: processedUdfValues,
     });
   };
 
@@ -2811,71 +2978,6 @@ function EditServiceModal({
                 </div>
               )}
             </div>
-
-            {/* Custom Fields Section */}
-            {service.service?.udfDefinitions && Array.isArray(service.service.udfDefinitions) && service.service.udfDefinitions.length > 0 && (
-              <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                  <FormLabel>Custom Fields</FormLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Fields specific to this service
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {service.service.udfDefinitions.map((field: any) => (
-                    <div key={field.id} className="space-y-2">
-                      <FormLabel className="flex items-center gap-2">
-                        {field.name}
-                        {field.required && <span className="text-red-500">*</span>}
-                      </FormLabel>
-                      
-                      {field.type === 'number' && (
-                        <Input
-                          type="number"
-                          value={udfValues[field.id] ?? ''}
-                          onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value ? Number(e.target.value) : null })}
-                          placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
-                          data-testid={`input-udf-${field.id}`}
-                        />
-                      )}
-                      
-                      {field.type === 'date' && (
-                        <Input
-                          type="date"
-                          value={udfValues[field.id] ?? ''}
-                          onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
-                          data-testid={`input-udf-${field.id}`}
-                        />
-                      )}
-                      
-                      {field.type === 'boolean' && (
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={udfValues[field.id] ?? false}
-                            onCheckedChange={(checked) => setUdfValues({ ...udfValues, [field.id]: checked })}
-                            data-testid={`switch-udf-${field.id}`}
-                          />
-                          <span className="text-sm text-muted-foreground">
-                            {udfValues[field.id] ? 'Yes' : 'No'}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {field.type === 'short_text' && (
-                        <Input
-                          type="text"
-                          value={udfValues[field.id] ?? ''}
-                          onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
-                          placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
-                          data-testid={`input-udf-${field.id}`}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-edit">
@@ -6770,7 +6872,7 @@ export default function ClientDetail() {
                                       <Tabs defaultValue="roles" className="w-full">
                                         <TabsList className="grid w-full grid-cols-3">
                                           <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
-                                          <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Custom Fields</TabsTrigger>
+                                          <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Service Details</TabsTrigger>
                                           <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
                                         </TabsList>
 
@@ -6811,42 +6913,10 @@ export default function ClientDetail() {
                                         </TabsContent>
 
                                         <TabsContent value="custom-fields" className="mt-4">
-                                          <div className="space-y-4">
-                                            <h5 className="font-medium text-sm flex items-center">
-                                              <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                                              Custom Fields
-                                            </h5>
-                                            
-                                            {clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions) && clientService.service.udfDefinitions.length > 0 ? (
-                                              <div className="space-y-3">
-                                                {clientService.service.udfDefinitions.map((field: any) => {
-                                                  const currentValue = (clientService.udfValues as Record<string, any>)?.[field.id];
-                                                  return (
-                                                    <div key={field.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                                      <div className="flex-1">
-                                                        <div className="font-medium text-sm flex items-center gap-2">
-                                                          {field.name}
-                                                          {field.required && <span className="text-red-500">*</span>}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground capitalize">Type: {field.type}</div>
-                                                      </div>
-                                                      <div className="text-right text-sm">
-                                                        {currentValue !== undefined && currentValue !== null && currentValue !== '' ? (
-                                                          <span className="font-medium">{String(currentValue)}</span>
-                                                        ) : (
-                                                          <span className="text-muted-foreground italic">Not set</span>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
-                                            ) : (
-                                              <div className="text-center py-8">
-                                                <p className="text-muted-foreground">No custom fields defined for this service.</p>
-                                              </div>
-                                            )}
-                                          </div>
+                                          <EditableServiceDetails 
+                                            clientService={clientService}
+                                            onUpdate={() => refetchServices()}
+                                          />
                                         </TabsContent>
 
                                         <TabsContent value="projects" className="mt-4">
@@ -6994,7 +7064,7 @@ export default function ClientDetail() {
                                           <Tabs defaultValue="roles" className="w-full">
                                             <TabsList className="grid w-full grid-cols-3">
                                               <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
-                                              <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Custom Fields</TabsTrigger>
+                                              <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Service Details</TabsTrigger>
                                               <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
                                             </TabsList>
 
@@ -7035,42 +7105,10 @@ export default function ClientDetail() {
                                             </TabsContent>
 
                                             <TabsContent value="custom-fields" className="mt-4">
-                                              <div className="space-y-4">
-                                                <h5 className="font-medium text-sm flex items-center">
-                                                  <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                                                  Custom Fields
-                                                </h5>
-                                                
-                                                {clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions) && clientService.service.udfDefinitions.length > 0 ? (
-                                                  <div className="space-y-3">
-                                                    {clientService.service.udfDefinitions.map((field: any) => {
-                                                      const currentValue = (clientService.udfValues as Record<string, any>)?.[field.id];
-                                                      return (
-                                                        <div key={field.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                                          <div className="flex-1">
-                                                            <div className="font-medium text-sm flex items-center gap-2">
-                                                              {field.name}
-                                                              {field.required && <span className="text-red-500">*</span>}
-                                                            </div>
-                                                            <div className="text-xs text-muted-foreground capitalize">Type: {field.type}</div>
-                                                          </div>
-                                                          <div className="text-right text-sm">
-                                                            {currentValue !== undefined && currentValue !== null && currentValue !== '' ? (
-                                                              <span className="font-medium">{String(currentValue)}</span>
-                                                            ) : (
-                                                              <span className="text-muted-foreground italic">Not set</span>
-                                                            )}
-                                                          </div>
-                                                        </div>
-                                                      );
-                                                    })}
-                                                  </div>
-                                                ) : (
-                                                  <div className="text-center py-8">
-                                                    <p className="text-muted-foreground">No custom fields defined for this service.</p>
-                                                  </div>
-                                                )}
-                                              </div>
+                                              <EditableServiceDetails 
+                                                clientService={clientService}
+                                                onUpdate={() => refetchServices()}
+                                              />
                                             </TabsContent>
 
                                             <TabsContent value="projects" className="mt-4">
