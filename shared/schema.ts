@@ -457,7 +457,7 @@ export const changeReasons = pgTable("change_reasons", {
 ]);
 
 // Project types configuration table (renamed from project descriptions)
-export const projectTypes = pgTable("project_types", {
+export const projectTypes: any = pgTable("project_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(), // project type name (e.g. "Monthly Bookkeeping", "Payroll")
   description: text("description"), // optional description of the project type
@@ -524,7 +524,7 @@ export const reasonFieldResponses = pgTable("reason_field_responses", {
 ]);
 
 // Services table
-export const services = pgTable("services", {
+export const services: any = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(),
   description: text("description"),

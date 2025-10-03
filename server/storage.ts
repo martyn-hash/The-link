@@ -186,7 +186,7 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, ne } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, ne, not } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -831,7 +831,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(userNotificationPreferences.notifySchedulingSummary, true),
           eq(users.isAdmin, true), // SECURITY: Only allow admin users to receive scheduling summaries
-          isNull(users.email).not() // Ensure users have valid email addresses
+          not(isNull(users.email)) // Ensure users have valid email addresses
         )
       );
     
@@ -913,13 +913,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences> {
-    // Security: Explicitly omit userId from updates to prevent cross-user preference takeover
-    const { userId: _omit, ...safePreferences } = preferences;
-    
     const [updated] = await db
       .update(userColumnPreferences)
       .set({
-        ...safePreferences,
+        ...preferences,
         updatedAt: new Date(),
       })
       .where(eq(userColumnPreferences.userId, userId))
@@ -1850,7 +1847,7 @@ export class DatabaseStorage implements IStorage {
       : { 
           ...personData, 
           id: `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
-        };
+        } as InsertPerson;
     
     const [person] = await db.insert(people).values(personWithId).returning();
     return person;
@@ -1871,9 +1868,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePerson(id: string, personData: Partial<InsertPerson>): Promise<Person> {
+    const updateData: any = { ...personData };
+    if (updateData.nationality === "") {
+      updateData.nationality = null;
+    }
+    
     const [person] = await db
       .update(people)
-      .set(personData)
+      .set(updateData)
       .where(eq(people.id, id))
       .returning();
     
@@ -1985,7 +1987,8 @@ export class DatabaseStorage implements IStorage {
       const existingClient = await this.getClientByCompanyNumber(clientData.companyNumber);
       if (existingClient) {
         // Update existing client with CH data (exclude id from update)
-        const { id, ...updateData } = clientData;
+        const updateData = { ...clientData };
+        delete (updateData as any).id;
         return await this.updateClient(existingClient.id, updateData);
       }
     }
@@ -2001,7 +2004,8 @@ export class DatabaseStorage implements IStorage {
       
       if (existingPerson) {
         // Update existing person (exclude id from update)
-        const { id, ...updateData } = personData;
+        const updateData = { ...personData };
+        delete (updateData as any).id;
         return await this.updatePerson(existingPerson.id, updateData);
       }
     }
@@ -2042,7 +2046,7 @@ export class DatabaseStorage implements IStorage {
     // Create new relationship
     const relationshipId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    const linkData: InsertClientPerson = {
+    const linkData = {
       id: relationshipId,
       clientId,
       personId,
@@ -2071,7 +2075,7 @@ export class DatabaseStorage implements IStorage {
     
     const peopleWithRoles = clientPeopleData.map(row => ({
       ...row.person,
-      officerRole: row.officerRole
+      officerRole: row.officerRole ?? undefined
     }));
     
     return {
@@ -2131,9 +2135,10 @@ export class DatabaseStorage implements IStorage {
     return await db.transaction(async (tx) => {
       // Create the new company client
       const newCompanyClient = await this.createClient({
+        name: companyData.name!,
         ...companyData,
         clientType: 'company'
-      });
+      } as InsertClient);
 
       // Link the person to the new company with sensible default role
       const clientPerson = await this.linkPersonToClient(
@@ -2379,15 +2384,15 @@ export class DatabaseStorage implements IStorage {
       
       switch (filters.dynamicDateFilter) {
         case 'overdue':
-          whereConditions.push(lt(projects.dueDate, today.toISOString()));
+          whereConditions.push(lt(projects.dueDate, sql`${today}`));
           break;
         case 'today':
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lt(projects.dueDate, tomorrow.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lt(projects.dueDate, sql`${tomorrow}`)
             )!
           );
           break;
@@ -2396,8 +2401,8 @@ export class DatabaseStorage implements IStorage {
           next7.setDate(next7.getDate() + 7);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next7.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next7}`)
             )!
           );
           break;
@@ -2406,8 +2411,8 @@ export class DatabaseStorage implements IStorage {
           next14.setDate(next14.getDate() + 14);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next14.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next14}`)
             )!
           );
           break;
@@ -2416,8 +2421,8 @@ export class DatabaseStorage implements IStorage {
           next30.setDate(next30.getDate() + 30);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next30.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next30}`)
             )!
           );
           break;
@@ -2425,14 +2430,14 @@ export class DatabaseStorage implements IStorage {
           if (filters.dateFrom && filters.dateTo) {
             whereConditions.push(
               and(
-                gte(projects.dueDate, filters.dateFrom),
-                lte(projects.dueDate, filters.dateTo)
+                gte(projects.dueDate, sql`${filters.dateFrom}`),
+                lte(projects.dueDate, sql`${filters.dateTo}`)
               )!
             );
           } else if (filters.dateFrom) {
-            whereConditions.push(gte(projects.dueDate, filters.dateFrom));
+            whereConditions.push(gte(projects.dueDate, sql`${filters.dateFrom}`));
           } else if (filters.dateTo) {
-            whereConditions.push(lte(projects.dueDate, filters.dateTo));
+            whereConditions.push(lte(projects.dueDate, sql`${filters.dateTo}`));
           }
           break;
       }
@@ -2559,15 +2564,15 @@ export class DatabaseStorage implements IStorage {
       
       switch (filters.dynamicDateFilter) {
         case 'overdue':
-          whereConditions.push(lt(projects.dueDate, today.toISOString()));
+          whereConditions.push(lt(projects.dueDate, sql`${today}`));
           break;
         case 'today':
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lt(projects.dueDate, tomorrow.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lt(projects.dueDate, sql`${tomorrow}`)
             )!
           );
           break;
@@ -2576,8 +2581,8 @@ export class DatabaseStorage implements IStorage {
           next7.setDate(next7.getDate() + 7);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next7.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next7}`)
             )!
           );
           break;
@@ -2586,8 +2591,8 @@ export class DatabaseStorage implements IStorage {
           next14.setDate(next14.getDate() + 14);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next14.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next14}`)
             )!
           );
           break;
@@ -2596,8 +2601,8 @@ export class DatabaseStorage implements IStorage {
           next30.setDate(next30.getDate() + 30);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next30.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next30}`)
             )!
           );
           break;
@@ -2605,14 +2610,14 @@ export class DatabaseStorage implements IStorage {
           if (filters.dateFrom && filters.dateTo) {
             whereConditions.push(
               and(
-                gte(projects.dueDate, filters.dateFrom),
-                lte(projects.dueDate, filters.dateTo)
+                gte(projects.dueDate, sql`${filters.dateFrom}`),
+                lte(projects.dueDate, sql`${filters.dateTo}`)
               )!
             );
           } else if (filters.dateFrom) {
-            whereConditions.push(gte(projects.dueDate, filters.dateFrom));
+            whereConditions.push(gte(projects.dueDate, sql`${filters.dateFrom}`));
           } else if (filters.dateTo) {
-            whereConditions.push(lte(projects.dueDate, filters.dateTo));
+            whereConditions.push(lte(projects.dueDate, sql`${filters.dateTo}`));
           }
           break;
       }
@@ -2721,15 +2726,15 @@ export class DatabaseStorage implements IStorage {
       
       switch (filters.dynamicDateFilter) {
         case 'overdue':
-          whereConditions.push(lt(projects.dueDate, today.toISOString()));
+          whereConditions.push(lt(projects.dueDate, sql`${today}`));
           break;
         case 'today':
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lt(projects.dueDate, tomorrow.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lt(projects.dueDate, sql`${tomorrow}`)
             )!
           );
           break;
@@ -2738,8 +2743,8 @@ export class DatabaseStorage implements IStorage {
           next7.setDate(next7.getDate() + 7);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next7.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next7}`)
             )!
           );
           break;
@@ -2748,8 +2753,8 @@ export class DatabaseStorage implements IStorage {
           next14.setDate(next14.getDate() + 14);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next14.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next14}`)
             )!
           );
           break;
@@ -2758,8 +2763,8 @@ export class DatabaseStorage implements IStorage {
           next30.setDate(next30.getDate() + 30);
           whereConditions.push(
             and(
-              gte(projects.dueDate, today.toISOString()),
-              lte(projects.dueDate, next30.toISOString())
+              gte(projects.dueDate, sql`${today}`),
+              lte(projects.dueDate, sql`${next30}`)
             )!
           );
           break;
@@ -2767,14 +2772,14 @@ export class DatabaseStorage implements IStorage {
           if (filters.dateFrom && filters.dateTo) {
             whereConditions.push(
               and(
-                gte(projects.dueDate, filters.dateFrom),
-                lte(projects.dueDate, filters.dateTo)
+                gte(projects.dueDate, sql`${filters.dateFrom}`),
+                lte(projects.dueDate, sql`${filters.dateTo}`)
               )!
             );
           } else if (filters.dateFrom) {
-            whereConditions.push(gte(projects.dueDate, filters.dateFrom));
+            whereConditions.push(gte(projects.dueDate, sql`${filters.dateFrom}`));
           } else if (filters.dateTo) {
-            whereConditions.push(lte(projects.dueDate, filters.dateTo));
+            whereConditions.push(lte(projects.dueDate, sql`${filters.dateTo}`));
           }
           break;
       }

@@ -79,9 +79,10 @@ import {
 const sendEmailSchema = z.object({
   to: z.string().email("Invalid email address"),
   subject: z.string().min(1, "Subject is required"),
-  body: z.string().min(1, "Email body is required"),
-  cc: z.string().email().optional(),
-  bcc: z.string().email().optional(),
+  content: z.string().min(1, "Email content is required"),
+  clientId: z.string().optional(), // Optional - allows ad-hoc emails not linked to clients
+  personId: z.string().optional(),
+  isHtml: z.boolean().optional(),
 });
 
 // Push notification schemas
@@ -617,7 +618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { to, subject, body, cc, bcc } = validationResult.data;
+      const { to, subject, content, clientId, personId } = validationResult.data;
 
       // Check if user has Outlook connected
       const outlookClient = await getUserOutlookClient(userId);
@@ -632,7 +633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subject,
         body: {
           contentType: 'HTML',
-          content: body
+          content: content
         },
         toRecipients: [
           {
@@ -640,31 +641,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
               address: to
             }
           }
-        ],
-        ...(cc && {
-          ccRecipients: [
-            {
-              emailAddress: {
-                address: cc
-              }
-            }
-          ]
-        }),
-        ...(bcc && {
-          bccRecipients: [
-            {
-              emailAddress: {
-                address: bcc
-              }
-            }
-          ]
-        })
+        ]
       };
 
       // Send email through Microsoft Graph API
       await outlookClient.api('/me/sendMail').post({
         message
       });
+
+      // Log the communication only if linked to a client
+      if (clientId) {
+        await storage.createCommunication({
+          clientId,
+          personId: personId || null,
+          type: 'email_sent',
+          subject: subject,
+          content: content,
+          actualContactTime: new Date(),
+          userId
+        });
+      }
 
       res.json({ 
         message: "Email sent successfully",
@@ -1334,14 +1330,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (!existingPerson) {
                 console.warn(`Person ${decision.personId} not found, creating new person instead`);
                 const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
-                person = await storage.createPerson(personData);
+                // Validate and coerce the data through Zod schema
+                const validatedData = insertPersonSchema.parse(personData);
+                person = await storage.createPerson(validatedData);
               } else {
                 person = existingPerson;
               }
             } else {
               // Create new person
               const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
-              person = await storage.createPerson(personData);
+              // Validate and coerce the data through Zod schema
+              const validatedData = insertPersonSchema.parse(personData);
+              person = await storage.createPerson(validatedData);
             }
             
             // Link person to client with officer role
@@ -1367,8 +1367,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
             
+            // Validate and coerce the data through Zod schema
+            const validatedData = insertPersonSchema.parse(personData);
+            
             // Create or update person using automatic upsert
-            const person = await storage.upsertPersonFromCH(personData);
+            const person = await storage.upsertPersonFromCH(validatedData);
             
             // Link person to client with officer role
             await storage.linkPersonToClient(
@@ -2681,7 +2684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/clients/:clientId/tags/:tagId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const clientValidation = validateParams(paramClientIdSchema, req.params);
-      const tagValidation = validateParams({ tagId: z.string().uuid() }, req.params);
+      const tagValidation = validateParams(z.object({ tagId: z.string().uuid() }), req.params);
       
       if (!clientValidation.success) {
         return res.status(400).json({ 
@@ -2707,7 +2710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/people/:personId/tags", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const paramValidation = validateParams({ personId: z.string().uuid() }, req.params);
+      const paramValidation = validateParams(z.object({ personId: z.string().uuid() }), req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -2725,7 +2728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/people/:personId/tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      const paramValidation = validateParams({ personId: z.string().uuid() }, req.params);
+      const paramValidation = validateParams(z.object({ personId: z.string().uuid() }), req.params);
       if (!paramValidation.success) {
         return res.status(400).json({ 
           message: "Invalid path parameters", 
@@ -2755,8 +2758,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/people/:personId/tags/:tagId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      const personValidation = validateParams({ personId: z.string().uuid() }, req.params);
-      const tagValidation = validateParams({ tagId: z.string().uuid() }, req.params);
+      const personValidation = validateParams(z.object({ personId: z.string().uuid() }), req.params);
+      const tagValidation = validateParams(z.object({ tagId: z.string().uuid() }), req.params);
       
       if (!personValidation.success) {
         return res.status(400).json({ 
@@ -4112,7 +4115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData = updateProjectTypeSchema.parse(req.body);
       
       // Check if we're trying to deactivate the project type
-      if (updateData.active === false) {
+      if (updateData.active !== undefined && updateData.active === false) {
         // Get the current project type to check if it's currently active
         const allProjectTypes = await storage.getAllProjectTypes();
         const projectType = allProjectTypes.find(pt => pt.id === req.params.id);
@@ -5007,11 +5010,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Convert ISO string dates to Date objects for database insertion
+      // Convert Date objects to ISO string for database insertion
       const dataForStorage = {
         ...finalClientServiceData,
-        nextStartDate: finalClientServiceData.nextStartDate ? new Date(finalClientServiceData.nextStartDate) : null,
-        nextDueDate: finalClientServiceData.nextDueDate ? new Date(finalClientServiceData.nextDueDate) : null,
+        nextStartDate: finalClientServiceData.nextStartDate instanceof Date 
+          ? finalClientServiceData.nextStartDate.toISOString() 
+          : finalClientServiceData.nextStartDate,
+        nextDueDate: finalClientServiceData.nextDueDate instanceof Date 
+          ? finalClientServiceData.nextDueDate.toISOString() 
+          : finalClientServiceData.nextDueDate,
       };
       
       // Check if client-service mapping already exists
@@ -5130,7 +5137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientService = await storage.updateClientService(id, validationResult.data);
       
       // Log chronology entry if isActive status changed
-      if (validationResult.data.isActive !== undefined && 
+      if (validationResult.data.isActive !== undefined && validationResult.data.isActive !== null &&
           validationResult.data.isActive !== existingClientService.isActive) {
         const service = await storage.getServiceById(clientService.serviceId);
         const eventType = validationResult.data.isActive ? 'service_activated' : 'service_deactivated';
@@ -5277,11 +5284,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const peopleServiceData = validation.data;
 
-      // Convert ISO string dates to Date objects for database insertion
+      // Convert Date objects to ISO string for database insertion
       const dataForStorage = {
         ...peopleServiceData,
-        nextStartDate: peopleServiceData.nextStartDate ? new Date(peopleServiceData.nextStartDate) : null,
-        nextDueDate: peopleServiceData.nextDueDate ? new Date(peopleServiceData.nextDueDate) : null,
+        nextStartDate: peopleServiceData.nextStartDate instanceof Date 
+          ? peopleServiceData.nextStartDate.toISOString() 
+          : peopleServiceData.nextStartDate,
+        nextDueDate: peopleServiceData.nextDueDate instanceof Date 
+          ? peopleServiceData.nextDueDate.toISOString() 
+          : peopleServiceData.nextDueDate,
       };
 
       // Verify the service is a personal service before creation
@@ -5390,7 +5401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedPeopleService = await storage.updatePeopleService(peopleServiceId, peopleServiceData);
       
       // Log chronology entry if isActive status changed
-      if (peopleServiceData.isActive !== undefined && 
+      if (peopleServiceData.isActive !== undefined && peopleServiceData.isActive !== null &&
           peopleServiceData.isActive !== existingPeopleService.isActive) {
         const service = await storage.getServiceById(updatedPeopleService.serviceId);
         const eventType = peopleServiceData.isActive ? 'service_activated' : 'service_deactivated';
@@ -6242,7 +6253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // For each client group, determine impact
-      for (const [clientId, group] of groupedByClient) {
+      for (const [clientId, group] of Array.from(groupedByClient.entries())) {
         // Get client services to determine affected services
         const clientServices = await storage.getClientServicesByClientId(clientId);
         
@@ -6648,25 +6659,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const result = await runMockTimeProgression({
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        stepSize: stepSize || 'daily',
-        dryRun: dryRun || false,
-        filters: {
-          serviceIds,
-          clientIds
-        }
-      });
-      
-      res.json({
-        message: "Mock time progression completed",
-        status: result.status,
-        totalDaysSimulated: result.totalDaysSimulated,
-        schedulingRuns: result.schedulingRuns,
-        summary: result.summary,
-        errors: result.errors,
-        options: { startDate, endDate, stepSize, dryRun, serviceIds, clientIds }
+      // runMockTimeProgression is not yet implemented
+      return res.status(501).json({
+        message: "Mock time progression feature is not yet implemented",
+        error: "NOT_IMPLEMENTED"
       });
     } catch (error) {
       console.error("Error running mock time progression:", error instanceof Error ? error.message : error);
@@ -6690,20 +6686,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const result = await generateTestScenario({
-        name,
-        type,
-        dryRun: dryRun || false
-      });
-      
-      res.json({
-        message: "Test scenario generated",
-        status: result.status,
-        scenarioName: result.scenarioName,
-        description: result.description,
-        servicesAffected: result.servicesAffected,
-        recommendedTests: result.recommendedTests,
-        summary: result.summary
+      // generateTestScenario is not yet implemented
+      return res.status(501).json({
+        message: "Test scenario generation feature is not yet implemented",
+        error: "NOT_IMPLEMENTED"
       });
     } catch (error) {
       console.error("Error generating test scenario:", error instanceof Error ? error.message : error);
@@ -6779,7 +6765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Address details service unavailable' });
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       // Transform GetAddress.io response to our expected format
       const transformedAddress = {
@@ -7322,7 +7308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     to: z.string().email("Invalid email address format"),
     subject: z.string().min(1, "Subject is required"),
     content: z.string().min(1, "Email content is required"),
-    clientId: z.string().min(1, "Client ID is required"),
+    clientId: z.string().optional(), // Optional - allows ad-hoc emails not linked to clients
     personId: z.string().optional(),
     isHtml: z.boolean().optional(),
   });
@@ -7349,13 +7335,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { to, subject, content, clientId, personId, isHtml } = bodyValidation.data;
       
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
-      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId);
+      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none');
       
-      // Check if user has access to this client
-      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
-      if (!hasAccess) {
-        console.error('[EMAIL SEND] Access denied for user:', effectiveUserId, 'to client:', clientId);
-        return res.status(403).json({ message: "Access denied. You don't have permission to send emails for this client." });
+      // Check if user has access to this client (only if clientId is provided)
+      if (clientId) {
+        const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+        if (!hasAccess) {
+          console.error('[EMAIL SEND] Access denied for user:', effectiveUserId, 'to client:', clientId);
+          return res.status(403).json({ message: "Access denied. You don't have permission to send emails for this client." });
+        }
       }
       
       // Import the Outlook client functions
@@ -7366,25 +7354,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const emailResult = await sendEmail(to, subject, content, isHtml || false);
       console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject, result: emailResult });
       
-      // Log the email as a communication record
-      const communication = await storage.createCommunication({
-        clientId,
-        personId: personId || null,
-        type: 'email_sent',
-        subject: subject,
-        content: content,
-        actualContactTime: new Date(),
-        userId: effectiveUserId,
-        externalReference: `outlook_${Date.now()}`
-      });
-      
-      console.log('[EMAIL SEND] Communication logged with ID:', communication.id);
+      // Log the email as a communication record (only if linked to a client)
+      let communication = null;
+      if (clientId) {
+        communication = await storage.createCommunication({
+          clientId,
+          personId: personId || null,
+          type: 'email_sent',
+          subject: subject,
+          content: content,
+          actualContactTime: new Date(),
+          userId: effectiveUserId
+        });
+        console.log('[EMAIL SEND] Communication logged with ID:', communication.id);
+      }
       
       res.json({
         success: true,
         message: "Email sent successfully",
         emailResult,
-        communication: await storage.getCommunicationById(communication.id)
+        ...(communication && { communication: await storage.getCommunicationById(communication.id) })
       });
       
     } catch (error) {
@@ -7585,8 +7574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subject: 'SMS Sent',
         content: message,
         actualContactTime: new Date(),
-        userId: effectiveUserId,
-        externalReference: (smsResponse as any).message_id || smsData.external_reference
+        userId: effectiveUserId
       });
       
       res.json({
