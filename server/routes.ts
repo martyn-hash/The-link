@@ -2580,6 +2580,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/client-tag-assignments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const assignments = await storage.getAllClientTagAssignments();
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching client tag assignments:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client tag assignments" });
+    }
+  });
+
   app.get("/api/people-tags", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const tags = await storage.getAllPeopleTags();

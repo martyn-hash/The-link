@@ -539,6 +539,7 @@ export interface IStorage {
   deletePeopleTag(id: string): Promise<void>;
   
   // Tag assignment operations
+  getAllClientTagAssignments(): Promise<ClientTagAssignment[]>;
   getClientTags(clientId: string): Promise<(ClientTagAssignment & { tag: ClientTag })[]>;
   assignClientTag(assignment: InsertClientTagAssignment): Promise<ClientTagAssignment>;
   unassignClientTag(clientId: string, tagId: string): Promise<void>;
@@ -7067,6 +7068,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tag assignment operations implementation
+  async getAllClientTagAssignments(): Promise<ClientTagAssignment[]> {
+    return await db.select().from(clientTagAssignments);
+  }
+
   async getClientTags(clientId: string): Promise<(ClientTagAssignment & { tag: ClientTag })[]> {
     return await db
       .select({

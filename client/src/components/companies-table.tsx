@@ -783,66 +783,6 @@ export default function CompaniesTable({
               data-testid="input-search-companies"
             />
           </div>
-          {allTags.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[200px] justify-start" data-testid="button-tag-filter">
-                  <Tag className="w-4 h-4 mr-2" />
-                  {selectedTags.length === 0 ? (
-                    "Filter by tags"
-                  ) : selectedTags.length === 1 ? (
-                    allTags.find((t: any) => t.id === selectedTags[0])?.name
-                  ) : (
-                    `${selectedTags.length} tags selected`
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[250px] p-3" align="start">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Filter by Tags</span>
-                    {selectedTags.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-auto p-1 text-xs"
-                        onClick={() => setSelectedTags([])}
-                        data-testid="button-clear-tags"
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  {allTags.map((tag: any) => (
-                    <div key={tag.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`tag-filter-${tag.id}`}
-                        checked={selectedTags.includes(tag.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedTags([...selectedTags, tag.id]);
-                          } else {
-                            setSelectedTags(selectedTags.filter(id => id !== tag.id));
-                          }
-                        }}
-                        data-testid={`checkbox-tag-${tag.id}`}
-                      />
-                      <label
-                        htmlFor={`tag-filter-${tag.id}`}
-                        className="flex items-center gap-2 text-sm cursor-pointer flex-1"
-                      >
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        {tag.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
         </div>
         <div className="flex items-center space-x-2">
           <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
