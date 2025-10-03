@@ -363,14 +363,48 @@ export default function SuperSearch({
 
   const hasResults = searchResults && searchResults.total > 0;
 
-  // Mobile Full-Screen Modal
+  // Mobile Bottom Sheet Modal
   if (isMobile) {
     return (
       <>
         <Dialog open={showDropdown} onOpenChange={setShowDropdown}>
-          <DialogContent className="p-0 max-w-full w-full h-[100dvh] max-h-[100dvh] m-0 rounded-none flex flex-col">
-            {/* Mobile Search Header */}
-            <div className="flex items-center gap-3 p-4 border-b sticky top-0 bg-background z-10">
+          <DialogContent className="p-0 max-w-full w-full h-[85vh] m-0 rounded-t-2xl rounded-b-none flex flex-col fixed bottom-0 top-auto translate-y-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom">
+            {/* Mobile Results - Positioned at top to be visible above keyboard */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {isLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-3"></div>
+                    <span className="text-sm text-muted-foreground">Searching...</span>
+                  </div>
+                </div>
+              ) : debouncedSearch.length < 2 ? (
+                <div className="flex-1 flex items-center justify-center p-8 text-center">
+                  <div>
+                    <Search className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground">Start typing to search</p>
+                    <div className="flex flex-wrap gap-2 justify-center mt-4">
+                      <Badge variant="outline" className="text-xs">Companies</Badge>
+                      <Badge variant="outline" className="text-xs">People</Badge>
+                      <Badge variant="outline" className="text-xs">Projects</Badge>
+                    </div>
+                  </div>
+                </div>
+              ) : hasResults ? (
+                renderMobileResults()
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-8 text-center">
+                  <div>
+                    <Search className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
+                    <div className="text-base font-medium mb-2">No results found</div>
+                    <div className="text-sm text-muted-foreground">Try a different search term</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Search Input - Fixed at bottom */}
+            <div className="flex items-center gap-3 p-4 border-t sticky bottom-0 bg-background z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
               <Button
                 variant="ghost"
                 size="icon"
@@ -403,40 +437,6 @@ export default function SuperSearch({
               >
                 <Plus className="w-4 h-4" />
               </Button>
-            </div>
-
-            {/* Mobile Results */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {isLoading ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-3"></div>
-                    <span className="text-sm text-muted-foreground">Searching...</span>
-                  </div>
-                </div>
-              ) : debouncedSearch.length < 2 ? (
-                <div className="flex-1 flex items-center justify-center p-8 text-center">
-                  <div>
-                    <Search className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
-                    <p className="text-sm text-muted-foreground">Start typing to search</p>
-                    <div className="flex flex-wrap gap-2 justify-center mt-4">
-                      <Badge variant="outline" className="text-xs">Companies</Badge>
-                      <Badge variant="outline" className="text-xs">People</Badge>
-                      <Badge variant="outline" className="text-xs">Projects</Badge>
-                    </div>
-                  </div>
-                </div>
-              ) : hasResults ? (
-                renderMobileResults()
-              ) : (
-                <div className="flex-1 flex items-center justify-center p-8 text-center">
-                  <div>
-                    <Search className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
-                    <div className="text-base font-medium mb-2">No results found</div>
-                    <div className="text-sm text-muted-foreground">Try a different search term</div>
-                  </div>
-                </div>
-              )}
             </div>
           </DialogContent>
         </Dialog>
