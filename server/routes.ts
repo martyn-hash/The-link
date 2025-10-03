@@ -6865,30 +6865,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/clients/:clientId/risk-assessments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { clientId } = req.params;
+      console.log("[RiskAssessment Backend] Creating assessment for clientId:", clientId);
+      console.log("[RiskAssessment Backend] Request body:", JSON.stringify(req.body, null, 2));
       
       // Check if user has access to this client
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      console.log("[RiskAssessment Backend] User ID:", effectiveUserId, "Admin:", req.user.isAdmin);
+      
       const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      console.log("[RiskAssessment Backend] Has access:", hasAccess);
+      
       if (!hasAccess) {
+        console.log("[RiskAssessment Backend] Access denied");
         return res.status(403).json({ message: "Access denied. You don't have permission to create risk assessments for this client." });
       }
       
       const bodyValidation = insertRiskAssessmentSchema.omit({ clientId: true }).safeParse(req.body);
+      console.log("[RiskAssessment Backend] Validation success:", bodyValidation.success);
+      
       if (!bodyValidation.success) {
+        console.log("[RiskAssessment Backend] Validation errors:", JSON.stringify(bodyValidation.error.issues, null, 2));
         return res.status(400).json({ 
           message: "Invalid risk assessment data", 
           errors: bodyValidation.error.issues 
         });
       }
       
+      console.log("[RiskAssessment Backend] Validated data:", JSON.stringify(bodyValidation.data, null, 2));
+      
       const newAssessment = await storage.createRiskAssessment({
         ...bodyValidation.data,
         clientId,
       });
       
+      console.log("[RiskAssessment Backend] Created assessment:", JSON.stringify(newAssessment, null, 2));
       res.status(201).json(newAssessment);
     } catch (error) {
-      console.error("Error creating risk assessment:", error);
+      console.error("[RiskAssessment Backend] Error creating risk assessment:", error);
       res.status(500).json({ message: "Failed to create risk assessment" });
     }
   });
