@@ -118,7 +118,15 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
       console.log("[RiskAssessment] Creating assessment with data:", data);
       console.log("[RiskAssessment] Client ID:", clientId);
       console.log("[RiskAssessment] API URL:", `/api/clients/${clientId}/risk-assessments`);
-      const result = await apiRequest("POST", `/api/clients/${clientId}/risk-assessments`, data);
+      
+      // Ensure initialDate is a proper Date object
+      const payload = {
+        ...data,
+        initialDate: data.initialDate instanceof Date ? data.initialDate.toISOString() : new Date(data.initialDate).toISOString(),
+      };
+      console.log("[RiskAssessment] Payload being sent:", payload);
+      
+      const result = await apiRequest("POST", `/api/clients/${clientId}/risk-assessments`, payload);
       console.log("[RiskAssessment] API response:", result);
       return result;
     },

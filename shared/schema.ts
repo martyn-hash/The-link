@@ -1893,6 +1893,12 @@ export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).om
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Allow both Date objects and ISO strings for timestamp fields
+  initialDate: z.union([z.date(), z.string().transform((val) => new Date(val))]),
+  reviewDate: z.union([z.date(), z.string().transform((val) => new Date(val))]).optional().nullable(),
+  furtherRisksInitialDate: z.union([z.date(), z.string().transform((val) => new Date(val))]).optional().nullable(),
+  mloReviewDate: z.union([z.date(), z.string().transform((val) => new Date(val))]).optional().nullable(),
 });
 
 export const updateRiskAssessmentSchema = insertRiskAssessmentSchema.partial();
