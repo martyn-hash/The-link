@@ -18,6 +18,7 @@ import {
   magicLinkTokens,
   userNotificationPreferences,
   projectViews,
+  companyViews,
   userColumnPreferences,
   dashboards,
   services,
@@ -83,6 +84,8 @@ import {
   type UpdateUserNotificationPreferences,
   type ProjectView,
   type InsertProjectView,
+  type CompanyView,
+  type InsertCompanyView,
   type UserColumnPreferences,
   type InsertUserColumnPreferences,
   type UpdateUserColumnPreferences,
@@ -399,6 +402,11 @@ export interface IStorage {
   createProjectView(view: InsertProjectView): Promise<ProjectView>;
   getProjectViewsByUserId(userId: string): Promise<ProjectView[]>;
   deleteProjectView(id: string): Promise<void>;
+  
+  // Company views operations (saved filter configurations)
+  createCompanyView(view: InsertCompanyView): Promise<CompanyView>;
+  getCompanyViewsByUserId(userId: string): Promise<CompanyView[]>;
+  deleteCompanyView(id: string): Promise<void>;
   
   // User column preferences operations
   getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined>;
@@ -851,6 +859,30 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(projectViews)
       .where(eq(projectViews.id, id));
+  }
+
+  // Company views operations (saved filter configurations)
+  async createCompanyView(view: InsertCompanyView): Promise<CompanyView> {
+    const [newView] = await db
+      .insert(companyViews)
+      .values(view)
+      .returning();
+    return newView;
+  }
+
+  async getCompanyViewsByUserId(userId: string): Promise<CompanyView[]> {
+    const views = await db
+      .select()
+      .from(companyViews)
+      .where(eq(companyViews.userId, userId))
+      .orderBy(desc(companyViews.createdAt));
+    return views;
+  }
+
+  async deleteCompanyView(id: string): Promise<void> {
+    await db
+      .delete(companyViews)
+      .where(eq(companyViews.id, id));
   }
 
   // User column preferences operations
