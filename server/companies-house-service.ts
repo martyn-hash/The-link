@@ -132,29 +132,130 @@ interface CompaniesHousePSC {
   notified_on: string;
 }
 
+interface ApiKeyState {
+  key: string;
+  requestCount: number;
+  lastUsed: Date;
+}
+
+class ApiKeyRotationManager {
+  private keys: ApiKeyState[] = [];
+  private currentKeyIndex = 0;
+  private readonly MAX_REQUESTS_PER_KEY = 150;
+
+  constructor() {
+    this.loadApiKeys();
+  }
+
+  private loadApiKeys() {
+    const keyCount = 3;
+    for (let i = 1; i <= keyCount; i++) {
+      const key = process.env[`COMPANIES_HOUSE_API_KEY_${i}`];
+      if (key) {
+        this.keys.push({
+          key,
+          requestCount: 0,
+          lastUsed: new Date(0)
+        });
+      }
+    }
+
+    if (this.keys.length === 0) {
+      const fallbackKey = process.env.COMPANIES_HOUSE_API_KEY;
+      if (fallbackKey) {
+        this.keys.push({
+          key: fallbackKey,
+          requestCount: 0,
+          lastUsed: new Date(0)
+        });
+      } else {
+        throw new Error('No Companies House API keys found. Set COMPANIES_HOUSE_API_KEY_1, _2, _3 or COMPANIES_HOUSE_API_KEY');
+      }
+    }
+
+    console.log(`[CH API] Loaded ${this.keys.length} API key(s) for rotation`);
+  }
+
+  getCurrentKey(): string {
+    return this.keys[this.currentKeyIndex].key;
+  }
+
+  incrementRequestCount() {
+    this.keys[this.currentKeyIndex].requestCount++;
+    this.keys[this.currentKeyIndex].lastUsed = new Date();
+  }
+
+  shouldRotate(): boolean {
+    return this.keys[this.currentKeyIndex].requestCount >= this.MAX_REQUESTS_PER_KEY;
+  }
+
+  rotateKey() {
+    if (this.keys.length === 1) {
+      console.log('[CH API] Only one key available, resetting request count');
+      this.keys[0].requestCount = 0;
+      return;
+    }
+
+    const oldIndex = this.currentKeyIndex;
+    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
+    
+    console.log(`[CH API] Rotating from key ${oldIndex + 1} to key ${this.currentKeyIndex + 1} (${this.keys[oldIndex].requestCount} requests used)`);
+    
+    this.keys[this.currentKeyIndex].requestCount = 0;
+  }
+
+  handleRateLimitError() {
+    console.warn(`[CH API] Rate limit hit on key ${this.currentKeyIndex + 1}, rotating immediately`);
+    this.rotateKey();
+  }
+
+  getStats() {
+    return this.keys.map((keyState, index) => ({
+      keyIndex: index + 1,
+      requestCount: keyState.requestCount,
+      lastUsed: keyState.lastUsed,
+      isCurrent: index === this.currentKeyIndex
+    }));
+  }
+}
+
 class CompaniesHouseService {
-  private apiKey: string;
+  private keyManager: ApiKeyRotationManager;
   private baseUrl = 'https://api.company-information.service.gov.uk';
 
   constructor() {
-    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
-    if (!apiKey) {
-      throw new Error('COMPANIES_HOUSE_API_KEY environment variable is required');
-    }
-    this.apiKey = apiKey;
+    this.keyManager = new ApiKeyRotationManager();
   }
 
   private getAuthHeaders() {
+    const apiKey = this.keyManager.getCurrentKey();
     return {
-      'Authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`,
+      'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`,
       'Content-Type': 'application/json'
     };
   }
 
-  private async makeRequest(endpoint: string) {
+  private async makeRequest(endpoint: string, retryCount = 0): Promise<any> {
+    // Rotate key before the request if needed
+    if (this.keyManager.shouldRotate()) {
+      this.keyManager.rotateKey();
+    }
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       headers: this.getAuthHeaders()
     });
+
+    // Increment count only after successful request initiation
+    this.keyManager.incrementRequestCount();
+
+    // Handle rate limiting by rotating key and retrying
+    if (response.status === 429 && retryCount < 3) {
+      console.log(`[CH API] Rate limit hit (attempt ${retryCount + 1}/3), rotating key and retrying...`);
+      this.keyManager.handleRateLimitError();
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+      // Retry with the new key by calling makeRequest recursively
+      return this.makeRequest(endpoint, retryCount + 1);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -162,6 +263,10 @@ class CompaniesHouseService {
     }
 
     return response.json();
+  }
+
+  getKeyStats() {
+    return this.keyManager.getStats();
   }
 
   // Search for companies by name
@@ -203,6 +308,7 @@ class CompaniesHouseService {
       companiesHouseName: profile.company_name,
       companyNumber: profile.company_number,
       companyStatus: profile.company_status,
+      companyStatusDetail: profile.company_status_detail,
       companyType: profile.company_type,
       dateOfCreation: profile.date_of_creation ? new Date(profile.date_of_creation) : undefined,
       jurisdiction: profile.jurisdiction,

@@ -1,13 +1,15 @@
 import { storage } from "./storage";
+import { companiesHouseService } from "./companies-house-service";
 import type { Client, ChChangeRequest } from "../shared/schema";
 
-// Mock Companies House API data structure
+// Companies House API data structure
 interface ChApiData {
   companyNumber: string;
-  nextAccountsPeriodEnd: string | null;
-  nextAccountsDue: string | null;
-  confirmationStatementNextDue: string | null;
-  confirmationStatementNextMadeUpTo: string | null;
+  nextAccountsPeriodEnd: Date | null;
+  nextAccountsDue: Date | null;
+  confirmationStatementNextDue: Date | null;
+  confirmationStatementNextMadeUpTo: Date | null;
+  companyStatusDetail: string | null;
 }
 
 // CH fields that we monitor for changes
@@ -21,49 +23,26 @@ const CH_MONITORED_FIELDS = [
 type ChMonitoredField = typeof CH_MONITORED_FIELDS[number];
 
 /**
- * Mock function to simulate fetching data from Companies House API
- * In a real implementation, this would make HTTP requests to the CH API
+ * Fetch data from Companies House API
  */
-async function fetchChDataMock(companyNumber: string): Promise<ChApiData | null> {
+async function fetchChData(companyNumber: string): Promise<ChApiData | null> {
   console.log(`[CH Sync] Fetching data for company: ${companyNumber}`);
   
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  // Mock data that might have changes
-  const mockData: ChApiData = {
-    companyNumber,
-    nextAccountsPeriodEnd: null,
-    nextAccountsDue: null,
-    confirmationStatementNextDue: null,
-    confirmationStatementNextMadeUpTo: null,
-  };
-
-  // Simulate some companies having updated data (random chance)
-  const hasUpdates = Math.random() < 0.3; // 30% chance of updates
-  
-  if (hasUpdates) {
-    const now = new Date();
-    const futureDate = new Date(now);
-    futureDate.setMonth(futureDate.getMonth() + 12); // Add 1 year
+  try {
+    const profile = await companiesHouseService.getCompanyProfile(companyNumber);
     
-    // Randomly update some fields
-    if (Math.random() < 0.5) {
-      mockData.nextAccountsPeriodEnd = futureDate.toISOString().split('T')[0];
-    }
-    if (Math.random() < 0.5) {
-      const dueDate = new Date(futureDate);
-      dueDate.setMonth(dueDate.getMonth() + 3); // Due 3 months after period end
-      mockData.nextAccountsDue = dueDate.toISOString().split('T')[0];
-    }
-    if (Math.random() < 0.3) {
-      const confDate = new Date(now);
-      confDate.setFullYear(confDate.getFullYear() + 1);
-      mockData.confirmationStatementNextDue = confDate.toISOString().split('T')[0];
-    }
+    return {
+      companyNumber,
+      nextAccountsPeriodEnd: profile.accounts?.next_made_up_to ? new Date(profile.accounts.next_made_up_to) : null,
+      nextAccountsDue: profile.accounts?.next_due ? new Date(profile.accounts.next_due) : null,
+      confirmationStatementNextDue: profile.confirmation_statement?.next_due ? new Date(profile.confirmation_statement.next_due) : null,
+      confirmationStatementNextMadeUpTo: profile.confirmation_statement?.next_made_up_to ? new Date(profile.confirmation_statement.next_made_up_to) : null,
+      companyStatusDetail: profile.company_status_detail || null,
+    };
+  } catch (error) {
+    console.error(`[CH Sync] Error fetching data for company ${companyNumber}:`, error);
+    return null;
   }
-  
-  return mockData;
 }
 
 /**
@@ -87,7 +66,8 @@ function detectChanges(client: Client, chData: ChApiData): Array<{
     // Convert dates to strings for comparison
     const clientDateStr = clientValue ? 
       (clientValue instanceof Date ? clientValue.toISOString().split('T')[0] : clientValue) : null;
-    const chDateStr = chValue || null;
+    const chDateStr = chValue ? 
+      (chValue instanceof Date ? chValue.toISOString().split('T')[0] : chValue) : null;
     
     // Detect changes
     if (clientDateStr !== chDateStr) {
@@ -106,18 +86,18 @@ function detectChanges(client: Client, chData: ChApiData): Array<{
  * Process a single client for CH data sync
  */
 async function syncClientData(client: Client): Promise<number> {
-  if (!client.companiesHouseName) {
-    console.log(`[CH Sync] Skipping client ${client.name} - no CH name`);
+  if (!client.companyNumber) {
+    console.log(`[CH Sync] Skipping client ${client.name} - no company number`);
     return 0;
   }
   
   try {
-    console.log(`[CH Sync] Processing client: ${client.name} (CH: ${client.companiesHouseName})`);
+    console.log(`[CH Sync] Processing client: ${client.name} (Company: ${client.companyNumber})`);
     
     // Fetch latest CH data
-    const chData = await fetchChDataMock(client.companiesHouseName);
+    const chData = await fetchChData(client.companyNumber);
     if (!chData) {
-      console.log(`[CH Sync] No CH data found for ${client.companiesHouseName}`);
+      console.log(`[CH Sync] No CH data found for ${client.companyNumber}`);
       return 0;
     }
     
@@ -190,11 +170,11 @@ export async function runChSync(): Promise<{
   };
   
   try {
-    // Get all clients with CH names
+    // Get all clients with company numbers
     const allClients = await storage.getAllClients();
-    const chClients = allClients.filter((client: any) => client.companiesHouseName);
+    const chClients = allClients.filter((client: any) => client.companyNumber);
     
-    console.log(`[CH Sync] Found ${chClients.length} clients with Companies House names`);
+    console.log(`[CH Sync] Found ${chClients.length} clients with Companies House numbers`);
     
     if (chClients.length === 0) {
       console.log('[CH Sync] No clients to process');

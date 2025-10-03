@@ -197,6 +197,7 @@ export const clients = pgTable("clients", {
   companyNumber: varchar("company_number"), // Existing field
   companiesHouseName: varchar("companies_house_name"), // Existing field
   companyStatus: varchar("company_status"), // Existing field
+  companyStatusDetail: varchar("company_status_detail"), // CH status detail for strike-off detection
   companyType: varchar("company_type"), // Existing field
   dateOfCreation: timestamp("date_of_creation"), // Existing field
   jurisdiction: varchar("jurisdiction"), // Existing field

@@ -5966,8 +5966,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User identification required" });
       }
 
-      const approvedRequest = await storage.approveChChangeRequest(id, currentUser.id, notes);
-      res.json(approvedRequest);
+      // Apply CH changes using smart update logic
+      const { applyChChanges } = await import('./ch-update-logic');
+      const result = await applyChChanges(
+        existingRequest.client.id,
+        [id],
+        currentUser.id,
+        notes
+      );
+
+      console.log(`[CH Approve] Applied changes: ${result.updatedClients} clients, ${result.updatedServices} services, ${result.updatedProjects} projects`);
+
+      res.json({ 
+        message: "Change request approved and applied successfully",
+        updatedClients: result.updatedClients,
+        updatedServices: result.updatedServices,
+        updatedProjects: result.updatedProjects,
+      });
     } catch (error) {
       console.error("Error approving CH change request:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to approve CH change request" });
