@@ -5,6 +5,48 @@ Full-stack project management application built with Express, React, PostgreSQL,
 
 ## Recent Changes
 
+### October 3, 2025 - Companies View Enhancement (Projects-Style Table)
+Transformed the Companies view into a powerful, full-width table with advanced column management:
+
+1. **Full-Width Layout**
+   - Matches Projects page layout style
+   - Header row below main navigation
+   - Full-width data table (no card wrapper)
+   - Clean, professional presentation
+
+2. **Advanced Column Management**
+   - **Movable Columns**: Drag column headers to reorder (via @dnd-kit)
+   - **Resizable Columns**: Drag column borders to adjust widths
+   - **Show/Hide Columns**: Settings dialog with checkboxes for visibility control
+   - Column preferences saved per user to database
+   - Columns organized into two groups: Company Fields and Service Columns
+
+3. **Dynamic Service Columns**
+   - Automatically generates a column for each active service
+   - Shows checkmark (✓) if client has that service
+   - Uses client-services relationships from database
+   - Enables quick visual understanding of service distribution
+
+4. **Standard Company Columns**
+   - Client Name, Company Number (always visible)
+   - Company Status with strike-off detection
+   - CS Due / Accounts Due with color-coded badges
+   - CS Period End, Accounts Period End (hideable)
+   - Company Type, Date of Creation, Jurisdiction (hideable)
+
+5. **Features Retained**
+   - Search box (by name or company number)
+   - Bulk selection and sync
+   - View button linking to client detail
+   - Sort by clicking column headers
+   - Sync results dialog
+
+6. **Backend Infrastructure**
+   - New CompaniesTable component (client/src/components/companies-table.tsx)
+   - API endpoints: GET/POST /api/companies-column-preferences
+   - Reuses existing column preferences storage system
+   - Fetches services and client-services via existing APIs
+
 ### October 3, 2025 - Risk Assessment Feature
 Added comprehensive risk assessment functionality for client compliance tracking:
 

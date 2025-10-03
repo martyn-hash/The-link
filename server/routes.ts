@@ -2197,6 +2197,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Companies table column preferences routes (reuse same storage as main column preferences)
+  app.get("/api/companies-column-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const preferences = await storage.getUserColumnPreferences(effectiveUserId);
+      
+      // Return null if no preferences exist yet (first time user)
+      res.json(preferences || null);
+    } catch (error) {
+      console.error("Error fetching companies column preferences:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch companies column preferences" });
+    }
+  });
+
+  app.post("/api/companies-column-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate and sanitize input - ensure userId comes from auth, not body
+      const validPreferencesData = insertUserColumnPreferencesSchema.parse({
+        ...req.body,
+        userId: effectiveUserId, // Security: Always use authenticated user ID
+      });
+      
+      const savedPreferences = await storage.upsertUserColumnPreferences(validPreferencesData);
+      res.json(savedPreferences);
+    } catch (error) {
+      console.error("Error saving companies column preferences:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to save companies column preferences" });
+    }
+  });
+
   // Dashboard CRUD routes
   app.get("/api/dashboards", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
