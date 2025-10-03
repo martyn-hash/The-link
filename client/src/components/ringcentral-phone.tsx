@@ -64,7 +64,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Initialize WebPhone with v2.x API (CACHE BUST v2025-10-03-071500)
+  // Initialize WebPhone with v2.x API (CACHE BUST v2025-10-03-084900)
   const initializeWebPhone = async () => {
     console.log('[RingCentral] initializeWebPhone called');
     console.log('[RingCentral] isInitializing:', isInitializing, 'isInitialized:', isInitialized);
