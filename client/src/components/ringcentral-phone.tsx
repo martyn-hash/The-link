@@ -275,36 +275,43 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
       console.log('[RingCentral] Call state updated to ringing');
 
-      // Make call with v2.x API - session is in webPhone.callSessions, not returned by call()
-      console.log('[RingCentral] Calling webPhone.call() with number:', number);
+      // Format phone number for RingCentral (add +44 for UK numbers if needed)
+      let formattedNumber = number;
+      if (number.startsWith('07')) {
+        // UK mobile number - convert 07XXX to +447XXX
+        formattedNumber = '+44' + number.substring(1);
+        console.log('[RingCentral] Formatted UK mobile:', number, '->', formattedNumber);
+      } else if (number.startsWith('01') || number.startsWith('02')) {
+        // UK landline - convert 01XXX/02XXX to +441XXX/+442XXX
+        formattedNumber = '+44' + number.substring(1);
+        console.log('[RingCentral] Formatted UK landline:', number, '->', formattedNumber);
+      } else if (!number.startsWith('+')) {
+        // No country code, assume UK and add +44
+        formattedNumber = '+44' + number;
+        console.log('[RingCentral] Added country code:', number, '->', formattedNumber);
+      }
+      
+      console.log('[RingCentral] Initiating call to:', formattedNumber);
       
       let session: any;
       try {
-        // Initiate the call - this doesn't return the session
-        const callPromise = webPhoneRef.current.call({
-          toNumber: number,
+        // Initiate the call - returns a Promise but session is in webPhone.callSessions
+        webPhoneRef.current.call({
+          toNumber: formattedNumber,
         });
-        console.log('[RingCentral] Call initiated, promise:', callPromise);
         
-        // The session is created in webPhone.callSessions array
-        // Get the most recent session (last item in array)
+        // Get the session from webPhone.callSessions array (created synchronously)
         const sessions = (webPhoneRef.current as any).callSessions;
-        console.log('[RingCentral] Current callSessions:', sessions);
-        console.log('[RingCentral] Number of sessions:', sessions?.length);
-        
         if (sessions && sessions.length > 0) {
           session = sessions[sessions.length - 1];
-          console.log('[RingCentral] Got session from callSessions:', session);
+          console.log('[RingCentral] Session retrieved from callSessions');
         } else {
-          console.warn('[RingCentral] No session found in callSessions!');
+          throw new Error('No session created in callSessions');
         }
         
         sessionRef.current = session;
-        console.log('[RingCentral] Session saved to ref');
       } catch (callError: any) {
-        console.error('[RingCentral] ERROR in webPhone.call():', callError);
-        console.error('[RingCentral] Call error message:', callError?.message);
-        console.error('[RingCentral] Call error stack:', callError?.stack);
+        console.error('[RingCentral] Call failed:', callError?.message || callError);
         throw callError;
       }
 
