@@ -5205,6 +5205,48 @@ export default function ClientDetail() {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const debugMetricsRef = useRef<any[]>([]);
 
+  // Mobile swipe navigation for tabs
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.changedTouches[0].screenX;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    };
+
+    const handleSwipe = () => {
+      const swipeThreshold = 50; // Minimum distance for swipe
+      const currentIndex = tabs.indexOf(activeTab);
+      
+      if (touchStartX - touchEndX > swipeThreshold && currentIndex < tabs.length - 1) {
+        // Swipe left - go to next tab
+        setActiveTab(tabs[currentIndex + 1]);
+      } else if (touchEndX - touchStartX > swipeThreshold && currentIndex > 0) {
+        // Swipe right - go to previous tab
+        setActiveTab(tabs[currentIndex - 1]);
+      }
+    };
+
+    const tabsContainer = document.querySelector('[data-tab-content="true"]');
+    if (tabsContainer) {
+      tabsContainer.addEventListener('touchstart', handleTouchStart as any);
+      tabsContainer.addEventListener('touchend', handleTouchEnd as any);
+
+      return () => {
+        tabsContainer.removeEventListener('touchstart', handleTouchStart as any);
+        tabsContainer.removeEventListener('touchend', handleTouchEnd as any);
+      };
+    }
+  }, [isMobile, activeTab]);
+
   // DEBUG: Comprehensive tab interaction logging
   useLayoutEffect(() => {
     const logMetrics = (eventType: string, tabValue?: string) => {
@@ -5641,16 +5683,129 @@ export default function ClientDetail() {
           value={activeTab} 
           onValueChange={setActiveTab}
           className="flex flex-col"
+          data-tab-content="true"
         >
-          <div className="w-full overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
-            <TabsList className="inline-flex md:grid w-auto md:w-full md:grid-cols-7 gap-1 h-auto">
-              <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs md:text-sm py-2 whitespace-nowrap">Overview</TabsTrigger>
-              <TabsTrigger value="services" data-testid="tab-services" className="text-xs md:text-sm py-2 whitespace-nowrap">Services</TabsTrigger>
-              <TabsTrigger value="projects" data-testid="tab-projects" className="text-xs md:text-sm py-2 whitespace-nowrap">Projects</TabsTrigger>
-              <TabsTrigger value="communications" data-testid="tab-communications" className="text-xs md:text-sm py-2 whitespace-nowrap">Comms</TabsTrigger>
-              <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-xs md:text-sm py-2 whitespace-nowrap">History</TabsTrigger>
-              <TabsTrigger value="documents" data-testid="tab-documents" className="text-xs md:text-sm py-2 whitespace-nowrap">Docs</TabsTrigger>
-              <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-xs md:text-sm py-2 whitespace-nowrap">Tasks</TabsTrigger>
+          {/* Desktop Tabs - Grid Layout */}
+          <div className="hidden md:block w-full">
+            <TabsList className="grid w-full grid-cols-7 gap-1 h-auto">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="text-sm py-2">Overview</TabsTrigger>
+              <TabsTrigger value="services" data-testid="tab-services" className="text-sm py-2">Services</TabsTrigger>
+              <TabsTrigger value="projects" data-testid="tab-projects" className="text-sm py-2">Projects</TabsTrigger>
+              <TabsTrigger value="communications" data-testid="tab-communications" className="text-sm py-2">Comms</TabsTrigger>
+              <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
+              <TabsTrigger value="documents" data-testid="tab-documents" className="text-sm py-2">Docs</TabsTrigger>
+              <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-sm py-2">Tasks</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Mobile Tabs - Carousel with Peek Preview */}
+          <div className="md:hidden w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <TabsList className="inline-flex gap-2 h-auto">
+              <TabsTrigger 
+                value="overview" 
+                data-testid="tab-overview" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-overview"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Overview
+              </TabsTrigger>
+              <TabsTrigger 
+                value="services" 
+                data-testid="tab-services" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-services"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Services
+              </TabsTrigger>
+              <TabsTrigger 
+                value="projects" 
+                data-testid="tab-projects" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-projects"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Projects
+              </TabsTrigger>
+              <TabsTrigger 
+                value="communications" 
+                data-testid="tab-communications" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-communications"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Comms
+              </TabsTrigger>
+              <TabsTrigger 
+                value="chronology" 
+                data-testid="tab-chronology" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-chronology"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                History
+              </TabsTrigger>
+              <TabsTrigger 
+                value="documents" 
+                data-testid="tab-documents" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-documents"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Docs
+              </TabsTrigger>
+              <TabsTrigger 
+                value="tasks" 
+                data-testid="tab-tasks" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+                onClick={() => {
+                  const container = document.querySelector('.snap-x');
+                  const tab = document.querySelector('[data-testid="tab-tasks"]');
+                  if (container && tab) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }}
+              >
+                Tasks
+              </TabsTrigger>
             </TabsList>
           </div>
 
