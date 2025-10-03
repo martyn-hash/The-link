@@ -1,0 +1,40 @@
+Can you help review and plan some tweaks to the companies house update over night. 
+
+Starting with the API key, there may be times as we grow that the rate limits become an issue, so I'd like to add 2 or 3 more api keys, and then the system should rotate these each 150 request. 
+
+Then, the update logic - I'd like to know what we do know, and compare to the below, but the logic should be this: 
+
+1) There's a nightly run to get updated Companies House data
+2) System checks if there is any change for the next_accounts_period_end or the next_accounts_due. 
+
+
+If there is a change to both of these, then the system should update: 
+
+	- Client 
+	- Any service mapped to the client that uses these dates
+
+
+If there is a change ONLY to the next_accounts_due, then the system should update: 
+
+	- Client
+	- Any service mapped to the client that uses these dates
+	- Any active project mapped to this client that was created by the service
+
+
+To explain the logic here - if both fields have updated, it means that we've submitted accounts online and now the 'next start date' and 'next due date' reflect the next year of that business. If the 'next_accounts_period_end' (next start date) stays the same, it means we've requested an extension to the current account. 
+
+
+3) Always update the next start and next due for confirmation statements and update: 
+
+	- The Client
+	- Any service mapped to them
+
+But not the project
+
+
+
+Then, improve the 'Companies House Changes' page to list clients where there has been a change from companies house. 1 row per client (as opposed to now, which is 1 row per field). And in that row show previous value & new value for client, service & project. This will allow me to sense check that what has been changed is correct (for example, if only 'next_accounts_due' has changed, I would expect to see changes across the old value and new value in client, service, project, but if both have changed, I would only expect to see changes in the old and new across client and service).  
+
+Create an updated 'Companies' view that is no longer cards showing (this view should be all clients where the 'company_number' is not NULL), but is rows of data - 1 row per client, tight, condensed, as we have for the communications chronology. In this view, include fields to show if there is an active proposal to strike off the client on companies house, how many days until confirmation statement is due, and how many days until accounts are due. 
+
+This view should allow to select one or many companies and press a button to select them all and run a Companies House update on them. Any changes found should be reported to the user in a summary modal (4 companies had changes etc), and then the user navigates to the 'Companies House Changes' page to review them. 
