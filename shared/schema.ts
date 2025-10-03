@@ -1831,6 +1831,77 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   uploadedAt: true,
 });
 
+// Risk assessment enums
+export const riskLevelEnum = pgEnum("risk_level", ["low", "medium", "high"]);
+export const riskResponseEnum = pgEnum("risk_response", ["no", "yes", "na"]);
+
+// Risk assessments table - one-to-many with clients
+export const riskAssessments = pgTable("risk_assessments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  version: varchar("version").notNull(), // e.g., "2024/25"
+  
+  // AML Preparation
+  amlPreparedBy: varchar("aml_prepared_by").references(() => users.id),
+  preparationStarted: timestamp("preparation_started"),
+  preparationCompleted: timestamp("preparation_completed"),
+  enhancedDueDiligenceRequired: boolean("enhanced_due_diligence_required").default(false),
+  
+  // AML Review
+  amlReviewedBy: varchar("aml_reviewed_by").references(() => users.id),
+  reviewStarted: timestamp("review_started"),
+  reviewCompleted: timestamp("review_completed"),
+  
+  // General Information
+  generalInformation: text("general_information"),
+  
+  // Risk Assessment
+  riskLevel: riskLevelEnum("risk_level"),
+  initialDate: timestamp("initial_date"),
+  reviewDate: timestamp("review_date"),
+  furtherRisksInitialDate: timestamp("further_risks_initial_date"),
+  furtherRisksReviewDate: timestamp("further_risks_review_date"),
+  
+  // Money Laundering Officer
+  moneyLaunderingOfficer: varchar("money_laundering_officer").references(() => users.id),
+  mloReviewDate: timestamp("mlo_review_date"),
+  
+  // Electronic Search
+  electronicSearchReference: text("electronic_search_reference"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_risk_assessments_client_id").on(table.clientId),
+  index("idx_risk_assessments_version").on(table.version),
+]);
+
+// Risk assessment responses table - stores answers to checklist questions
+export const riskAssessmentResponses = pgTable("risk_assessment_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  riskAssessmentId: varchar("risk_assessment_id").notNull().references(() => riskAssessments.id, { onDelete: "cascade" }),
+  questionKey: varchar("question_key").notNull(), // e.g., 'individuals_confirm_identity', 'business_certificate_incorporation'
+  response: riskResponseEnum("response").notNull(), // 'no', 'yes', or 'na'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_risk_responses_assessment_id").on(table.riskAssessmentId),
+  unique("unique_assessment_question").on(table.riskAssessmentId, table.questionKey),
+]);
+
+// Zod schemas for risk assessments
+export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateRiskAssessmentSchema = insertRiskAssessmentSchema.partial();
+
+export const insertRiskAssessmentResponseSchema = createInsertSchema(riskAssessmentResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
@@ -1846,6 +1917,11 @@ export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type RiskAssessment = typeof riskAssessments.$inferSelect;
+export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
+export type UpdateRiskAssessment = z.infer<typeof updateRiskAssessmentSchema>;
+export type RiskAssessmentResponse = typeof riskAssessmentResponses.$inferSelect;
+export type InsertRiskAssessmentResponse = z.infer<typeof insertRiskAssessmentResponseSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {

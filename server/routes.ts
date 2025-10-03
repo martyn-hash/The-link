@@ -68,6 +68,9 @@ import {
   insertUserIntegrationSchema,
   insertDocumentSchema,
   insertDocumentFolderSchema,
+  insertRiskAssessmentSchema,
+  updateRiskAssessmentSchema,
+  insertRiskAssessmentResponseSchema,
   type User,
 } from "@shared/schema";
 
@@ -6808,6 +6811,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting communication:", error);
       res.status(500).json({ message: "Failed to delete communication" });
+    }
+  });
+
+  // Risk Assessment Routes
+  
+  // GET /api/clients/:clientId/risk-assessments - Get all risk assessments for a client
+  app.get("/api/clients/:clientId/risk-assessments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      
+      // Check if user has access to this client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to access this client's risk assessments." });
+      }
+      
+      const assessments = await storage.getRiskAssessmentsByClientId(clientId);
+      res.json(assessments);
+    } catch (error) {
+      console.error("Error fetching risk assessments:", error);
+      res.status(500).json({ message: "Failed to fetch risk assessments" });
+    }
+  });
+
+  // GET /api/risk-assessments/:id - Get a specific risk assessment with responses
+  app.get("/api/risk-assessments/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const assessment = await storage.getRiskAssessmentById(id);
+      if (!assessment) {
+        return res.status(404).json({ message: "Risk assessment not found" });
+      }
+      
+      // Check if user has access to the client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const hasAccess = await userHasClientAccess(effectiveUserId, assessment.clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to access this risk assessment." });
+      }
+      
+      const responses = await storage.getRiskAssessmentResponses(id);
+      res.json({ ...assessment, responses });
+    } catch (error) {
+      console.error("Error fetching risk assessment:", error);
+      res.status(500).json({ message: "Failed to fetch risk assessment" });
+    }
+  });
+
+  // POST /api/clients/:clientId/risk-assessments - Create a new risk assessment
+  app.post("/api/clients/:clientId/risk-assessments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      
+      // Check if user has access to this client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to create risk assessments for this client." });
+      }
+      
+      const bodyValidation = insertRiskAssessmentSchema.omit({ clientId: true }).safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid risk assessment data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+      
+      const newAssessment = await storage.createRiskAssessment({
+        ...bodyValidation.data,
+        clientId,
+      });
+      
+      res.status(201).json(newAssessment);
+    } catch (error) {
+      console.error("Error creating risk assessment:", error);
+      res.status(500).json({ message: "Failed to create risk assessment" });
+    }
+  });
+
+  // PATCH /api/risk-assessments/:id - Update a risk assessment
+  app.patch("/api/risk-assessments/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const existingAssessment = await storage.getRiskAssessmentById(id);
+      if (!existingAssessment) {
+        return res.status(404).json({ message: "Risk assessment not found" });
+      }
+      
+      // Check if user has access to the client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const hasAccess = await userHasClientAccess(effectiveUserId, existingAssessment.clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to update this risk assessment." });
+      }
+      
+      const bodyValidation = updateRiskAssessmentSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid risk assessment data", 
+          errors: bodyValidation.error.issues 
+        });
+      }
+      
+      const updatedAssessment = await storage.updateRiskAssessment(id, bodyValidation.data);
+      res.json(updatedAssessment);
+    } catch (error) {
+      console.error("Error updating risk assessment:", error);
+      res.status(500).json({ message: "Failed to update risk assessment" });
+    }
+  });
+
+  // DELETE /api/risk-assessments/:id - Delete a risk assessment
+  app.delete("/api/risk-assessments/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const existingAssessment = await storage.getRiskAssessmentById(id);
+      if (!existingAssessment) {
+        return res.status(404).json({ message: "Risk assessment not found" });
+      }
+      
+      // Check if user has access to the client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const hasAccess = await userHasClientAccess(effectiveUserId, existingAssessment.clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to delete this risk assessment." });
+      }
+      
+      await storage.deleteRiskAssessment(id);
+      res.json({ message: "Risk assessment deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting risk assessment:", error);
+      res.status(500).json({ message: "Failed to delete risk assessment" });
+    }
+  });
+
+  // POST /api/risk-assessments/:id/responses - Save responses for a risk assessment
+  app.post("/api/risk-assessments/:id/responses", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const existingAssessment = await storage.getRiskAssessmentById(id);
+      if (!existingAssessment) {
+        return res.status(404).json({ message: "Risk assessment not found" });
+      }
+      
+      // Check if user has access to the client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const hasAccess = await userHasClientAccess(effectiveUserId, existingAssessment.clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied. You don't have permission to update this risk assessment." });
+      }
+      
+      // Validate responses array
+      const responsesValidation = z.array(insertRiskAssessmentResponseSchema.omit({ riskAssessmentId: true })).safeParse(req.body.responses);
+      if (!responsesValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid responses data", 
+          errors: responsesValidation.error.issues 
+        });
+      }
+      
+      // Add assessment ID to each response
+      const responsesWithAssessmentId = responsesValidation.data.map(response => ({
+        ...response,
+        riskAssessmentId: id,
+      }));
+      
+      await storage.saveRiskAssessmentResponses(id, responsesWithAssessmentId);
+      res.json({ message: "Responses saved successfully" });
+    } catch (error) {
+      console.error("Error saving risk assessment responses:", error);
+      res.status(500).json({ message: "Failed to save risk assessment responses" });
     }
   });
 
