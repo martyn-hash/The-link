@@ -540,6 +540,7 @@ export const clientServices = pgTable("client_services", {
   nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
   nextDueDate: timestamp("next_due_date"), // Next due date for the service
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
+  udfValues: jsonb("udf_values").default(sql`'{}'::jsonb`), // User-defined field values as key-value pairs
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_client_services_client_id").on(table.clientId),
@@ -1275,6 +1276,7 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).optional(),
   nextStartDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
   nextDueDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
+  udfValues: z.record(z.any()).optional(),
 });
 
 export const updateClientServiceSchema = insertClientServiceSchema.partial();

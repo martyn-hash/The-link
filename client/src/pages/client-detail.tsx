@@ -2501,6 +2501,27 @@ function EditServiceModal({
     })) || []
   );
 
+  // State for UDF values - format dates to YYYY-MM-DD for HTML date inputs
+  const [udfValues, setUdfValues] = useState<Record<string, any>>(() => {
+    const values = (service.udfValues as Record<string, any>) || {};
+    const formattedValues: Record<string, any> = {};
+    
+    // Format date values for HTML date inputs
+    if (service.service?.udfDefinitions && Array.isArray(service.service.udfDefinitions)) {
+      service.service.udfDefinitions.forEach((field: any) => {
+        if (field.type === 'date' && values[field.id]) {
+          // Convert ISO datetime to YYYY-MM-DD format
+          const date = new Date(values[field.id]);
+          formattedValues[field.id] = date.toISOString().split('T')[0];
+        } else {
+          formattedValues[field.id] = values[field.id];
+        }
+      });
+    }
+    
+    return formattedValues;
+  });
+
   // Check if this is a Companies House service
   const isCompaniesHouseService = service.service.isCompaniesHouseConnected;
 
@@ -2509,7 +2530,7 @@ function EditServiceModal({
 
   // Use the mutation for updating service
   const updateServiceMutation = useMutation({
-    mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}> }) => {
+    mutationFn: async (data: EditServiceData & { serviceId: string; roleAssignments: Array<{workRoleId: string; userId: string}>; udfValues?: Record<string, any> }) => {
       // First update the service itself (dates, owner, frequency, etc.)
       const serviceUpdateData = {
         nextStartDate: data.nextStartDate && data.nextStartDate.trim() !== '' ? 
@@ -2521,6 +2542,7 @@ function EditServiceModal({
         serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
         frequency: isCompaniesHouseService ? "annually" : data.frequency,
         isActive: data.isActive,
+        udfValues: data.udfValues,
       };
       
       // Call the appropriate API endpoint based on service type
@@ -2574,10 +2596,27 @@ function EditServiceModal({
   });
 
   const handleSubmit = (data: EditServiceData) => {
+    // Convert date UDF values from YYYY-MM-DD to ISO format for backend storage
+    const processedUdfValues: Record<string, any> = {};
+    
+    if (service.service?.udfDefinitions && Array.isArray(service.service.udfDefinitions)) {
+      service.service.udfDefinitions.forEach((field: any) => {
+        const value = udfValues[field.id];
+        
+        if (field.type === 'date' && value) {
+          // Convert YYYY-MM-DD to ISO datetime
+          processedUdfValues[field.id] = new Date(value).toISOString();
+        } else {
+          processedUdfValues[field.id] = value;
+        }
+      });
+    }
+    
     updateServiceMutation.mutate({
       ...data,
       serviceId: service.id,
       roleAssignments,
+      udfValues: processedUdfValues,
     });
   };
 
@@ -2772,6 +2811,71 @@ function EditServiceModal({
                 </div>
               )}
             </div>
+
+            {/* Custom Fields Section */}
+            {service.service?.udfDefinitions && Array.isArray(service.service.udfDefinitions) && service.service.udfDefinitions.length > 0 && (
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <FormLabel>Custom Fields</FormLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Fields specific to this service
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {service.service.udfDefinitions.map((field: any) => (
+                    <div key={field.id} className="space-y-2">
+                      <FormLabel className="flex items-center gap-2">
+                        {field.name}
+                        {field.required && <span className="text-red-500">*</span>}
+                      </FormLabel>
+                      
+                      {field.type === 'number' && (
+                        <Input
+                          type="number"
+                          value={udfValues[field.id] ?? ''}
+                          onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value ? Number(e.target.value) : null })}
+                          placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                          data-testid={`input-udf-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === 'date' && (
+                        <Input
+                          type="date"
+                          value={udfValues[field.id] ?? ''}
+                          onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                          data-testid={`input-udf-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === 'boolean' && (
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={udfValues[field.id] ?? false}
+                            onCheckedChange={(checked) => setUdfValues({ ...udfValues, [field.id]: checked })}
+                            data-testid={`switch-udf-${field.id}`}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {udfValues[field.id] ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {field.type === 'short_text' && (
+                        <Input
+                          type="text"
+                          value={udfValues[field.id] ?? ''}
+                          onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                          placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                          data-testid={`input-udf-${field.id}`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-edit">
@@ -6664,8 +6768,9 @@ export default function ClientDetail() {
                                         </Button>
                                       </div>
                                       <Tabs defaultValue="roles" className="w-full">
-                                        <TabsList className="grid w-full grid-cols-2">
+                                        <TabsList className="grid w-full grid-cols-3">
                                           <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
+                                          <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Custom Fields</TabsTrigger>
                                           <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
                                         </TabsList>
 
@@ -6700,6 +6805,45 @@ export default function ClientDetail() {
                                             ) : (
                                               <div className="text-center py-8">
                                                 <p className="text-muted-foreground">No role assignments configured for this service.</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TabsContent>
+
+                                        <TabsContent value="custom-fields" className="mt-4">
+                                          <div className="space-y-4">
+                                            <h5 className="font-medium text-sm flex items-center">
+                                              <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+                                              Custom Fields
+                                            </h5>
+                                            
+                                            {clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions) && clientService.service.udfDefinitions.length > 0 ? (
+                                              <div className="space-y-3">
+                                                {clientService.service.udfDefinitions.map((field: any) => {
+                                                  const currentValue = (clientService.udfValues as Record<string, any>)?.[field.id];
+                                                  return (
+                                                    <div key={field.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                                      <div className="flex-1">
+                                                        <div className="font-medium text-sm flex items-center gap-2">
+                                                          {field.name}
+                                                          {field.required && <span className="text-red-500">*</span>}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground capitalize">Type: {field.type}</div>
+                                                      </div>
+                                                      <div className="text-right text-sm">
+                                                        {currentValue !== undefined && currentValue !== null && currentValue !== '' ? (
+                                                          <span className="font-medium">{String(currentValue)}</span>
+                                                        ) : (
+                                                          <span className="text-muted-foreground italic">Not set</span>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div className="text-center py-8">
+                                                <p className="text-muted-foreground">No custom fields defined for this service.</p>
                                               </div>
                                             )}
                                           </div>
@@ -6848,8 +6992,9 @@ export default function ClientDetail() {
                                             </Button>
                                           </div>
                                           <Tabs defaultValue="roles" className="w-full">
-                                            <TabsList className="grid w-full grid-cols-2">
+                                            <TabsList className="grid w-full grid-cols-3">
                                               <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
+                                              <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Custom Fields</TabsTrigger>
                                               <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
                                             </TabsList>
 
@@ -6884,6 +7029,45 @@ export default function ClientDetail() {
                                                 ) : (
                                                   <div className="text-center py-8">
                                                     <p className="text-muted-foreground">No role assignments configured for this service.</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </TabsContent>
+
+                                            <TabsContent value="custom-fields" className="mt-4">
+                                              <div className="space-y-4">
+                                                <h5 className="font-medium text-sm flex items-center">
+                                                  <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+                                                  Custom Fields
+                                                </h5>
+                                                
+                                                {clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions) && clientService.service.udfDefinitions.length > 0 ? (
+                                                  <div className="space-y-3">
+                                                    {clientService.service.udfDefinitions.map((field: any) => {
+                                                      const currentValue = (clientService.udfValues as Record<string, any>)?.[field.id];
+                                                      return (
+                                                        <div key={field.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                                          <div className="flex-1">
+                                                            <div className="font-medium text-sm flex items-center gap-2">
+                                                              {field.name}
+                                                              {field.required && <span className="text-red-500">*</span>}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground capitalize">Type: {field.type}</div>
+                                                          </div>
+                                                          <div className="text-right text-sm">
+                                                            {currentValue !== undefined && currentValue !== null && currentValue !== '' ? (
+                                                              <span className="font-medium">{String(currentValue)}</span>
+                                                            ) : (
+                                                              <span className="text-muted-foreground italic">Not set</span>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                ) : (
+                                                  <div className="text-center py-8">
+                                                    <p className="text-muted-foreground">No custom fields defined for this service.</p>
                                                   </div>
                                                 )}
                                               </div>
