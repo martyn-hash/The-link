@@ -2524,7 +2524,10 @@ function EditableServiceDetails({
         serviceOwnerId: clientService.serviceOwnerId,
         frequency: clientService.frequency,
         isActive: clientService.isActive,
-        roleAssignments: [],
+        roleAssignments: clientService.roleAssignments?.map(ra => ({
+          workRoleId: ra.workRole.id,
+          userId: ra.user.id,
+        })) || [],
         udfValues: processedUdfValues,
       });
     },
