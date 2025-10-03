@@ -1,0 +1,353 @@
+react-dom.development.js:29895 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+client-detail.tsx:5416 🔍 TAB DEBUG [TAB_VALUE_CHANGE]: {
+  "timestamp": 1759482271048,
+  "eventType": "TAB_VALUE_CHANGE",
+  "tabValue": "overview",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "windowSize": {
+    "width": 1702,
+    "height": 988
+  },
+  "documentSize": {
+    "clientHeight": 988
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1702,
+    "height": 1033,
+    "top": 0,
+    "right": 1702,
+    "bottom": 1033,
+    "left": 0
+  }
+}
+client-detail.tsx:5416 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_RAF]: {
+  "timestamp": 1759482271054,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_RAF",
+  "tabValue": "overview",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "windowSize": {
+    "width": 1702,
+    "height": 988
+  },
+  "documentSize": {
+    "clientHeight": 988
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1702,
+    "height": 1033,
+    "top": 0,
+    "right": 1702,
+    "bottom": 1033,
+    "left": 0
+  }
+}
+client-detail.tsx:5416 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_TIMEOUT]: {
+  "timestamp": 1759482271057,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_TIMEOUT",
+  "tabValue": "overview",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "windowSize": {
+    "width": 1702,
+    "height": 988
+  },
+  "documentSize": {
+    "clientHeight": 988
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1702,
+    "height": 1033,
+    "top": 0,
+    "right": 1702,
+    "bottom": 1033,
+    "left": 0
+  }
+}
+client-detail.tsx:5416 🔍 TAB DEBUG [TAB_VALUE_CHANGE]: {
+  "timestamp": 1759482273871,
+  "eventType": "TAB_VALUE_CHANGE",
+  "tabValue": "communications",
+  "scrollY": 0,
+  "activeElement": "BODY",
+  "hash": "",
+  "tabsList": {
+    "x": 107,
+    "y": 239,
+    "width": 1488,
+    "height": 44,
+    "top": 239,
+    "right": 1595,
+    "bottom": 283,
+    "left": 107
+  },
+  "activeTabPanel": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+  },
+  "windowSize": {
+    "width": 1702,
+    "height": 988
+  },
+  "documentSize": {
+    "clientHeight": 988
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1702,
+    "height": 1454,
+    "top": 0,
+    "right": 1702,
+    "bottom": 1454,
+    "left": 0
+  }
+}
+client-detail.tsx:5486 🖱️ TAB CLICK: tab=comms, scrollY=0, timestamp=1759482273879
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-sm py-2, relatedTarget=null, activeTab=communications, scrollY=0
+client-detail.tsx:5416 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_RAF]: {
+  "timestamp": 1759482273880,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_RAF",
+  "tabValue": "communications",
+  "scrollY": 0,
+  "activeElement": "BUTTON.inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-sm py-2",
+  "hash": "",
+  "tabsList": {
+    "x": 107,
+    "y": 239,
+    "width": 1488,
+    "height": 44,
+    "top": 239,
+    "right": 1595,
+    "bottom": 283,
+    "left": 107
+  },
+  "activeTabPanel": {
+    "x": 107,
+    "y": 307,
+    "width": 1488,
+    "height": 250,
+    "top": 307,
+    "right": 1595,
+    "bottom": 557,
+    "left": 107
+  },
+  "windowSize": {
+    "width": 1702,
+    "height": 988
+  },
+  "documentSize": {
+    "clientHeight": 988
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1702,
+    "height": 1033,
+    "top": 0,
+    "right": 1702,
+    "bottom": 1033,
+    "left": 0
+  }
+}
+client-detail.tsx:5416 🔍 TAB DEBUG [TAB_VALUE_CHANGE_AFTER_TIMEOUT]: {
+  "timestamp": 1759482273881,
+  "eventType": "TAB_VALUE_CHANGE_AFTER_TIMEOUT",
+  "tabValue": "communications",
+  "scrollY": 0,
+  "activeElement": "BUTTON.inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-sm py-2",
+  "hash": "",
+  "tabsList": {
+    "x": 107,
+    "y": 239,
+    "width": 1488,
+    "height": 44,
+    "top": 239,
+    "right": 1595,
+    "bottom": 283,
+    "left": 107
+  },
+  "activeTabPanel": {
+    "x": 107,
+    "y": 307,
+    "width": 1488,
+    "height": 250,
+    "top": 307,
+    "right": 1595,
+    "bottom": 557,
+    "left": 107
+  },
+  "windowSize": {
+    "width": 1702,
+    "height": 988
+  },
+  "documentSize": {
+    "clientHeight": 988
+  },
+  "bodyRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1702,
+    "height": 1033,
+    "top": 0,
+    "right": 1702,
+    "bottom": 1033,
+    "left": 0
+  }
+}
+client-detail.tsx:5444 ⚡ LAYOUT SHIFT: value=0.003788153586344973, hadRecentInput=true, activeTab=communications, scrollY=0
+client-detail.tsx:5444 ⚡ LAYOUT SHIFT: value=0.42664338177233757, hadRecentInput=true, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3, relatedTarget=null, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: undefined, defaultPhoneNumber: undefined}
+dialog.tsx:542  Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ dialog.tsx:542
+commitHookEffectListMount @ react-dom.development.js:23189
+commitPassiveMountOnFiber @ react-dom.development.js:24965
+commitPassiveMountEffects_complete @ react-dom.development.js:24930
+commitPassiveMountEffects_begin @ react-dom.development.js:24917
+commitPassiveMountEffects @ react-dom.development.js:24905
+flushPassiveEffectsImpl @ react-dom.development.js:27078
+flushPassiveEffects @ react-dom.development.js:27023
+commitRootImpl @ react-dom.development.js:26974
+commitRoot @ react-dom.development.js:26721
+performSyncWorkOnRoot @ react-dom.development.js:26156
+flushSyncCallbacks @ react-dom.development.js:12042
+(anonymous) @ react-dom.development.js:25690
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.flex h-10 w-full items-center justify-between rounded-md px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 transition-all duration-200 border border-input bg-background focus:ring-ring data-[placeholder]:text-muted-foreground, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin] data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1, relatedTarget=DIV, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50, relatedTarget=DIV, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin] data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1, relatedTarget=DIV, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50, relatedTarget=DIV, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054560266_jb2m51idw', defaultPhoneNumber: '07741392660'}
+ringcentral-phone.tsx:59 [RingCentral] Setting phone number from prop: 07741392660
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-w-2xl, relatedTarget=null, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054560266_jb2m51idw', defaultPhoneNumber: '07741392660'}
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.flex h-10 w-full items-center justify-between rounded-md px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 transition-all duration-200 border border-input bg-background focus:ring-ring data-[placeholder]:text-muted-foreground, relatedTarget=DIV, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2, relatedTarget=BUTTON, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:73 [RingCentral] initializeWebPhone called
+ringcentral-phone.tsx:74 [RingCentral] isInitializing: false isInitialized: false
+ringcentral-phone.tsx:83 [RingCentral] Starting initialization...
+ringcentral-phone.tsx:86 [RingCentral] Requesting SIP provisioning from backend...
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054560266_jb2m51idw', defaultPhoneNumber: '07741392660'}
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=DIV.fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-w-2xl, relatedTarget=null, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:89 [RingCentral] SIP provision response received: {device: {…}, sipInfo: Array(1), sipInfoPstn: Array(0), sipFlags: {…}, sipErrorCodes: Array(1)}
+ringcentral-phone.tsx:95 [RingCentral] SIP provisioning successful
+ringcentral-phone.tsx:96 [RingCentral] sipInfo details: {username: '443459900041*301', domain: 'sip.ringcentral.co.uk', outboundProxy: 'sip131-1211.ringcentral.com:8083', transport: 'WSS'}
+ringcentral-phone.tsx:104 [RingCentral] Creating WebPhone instance with sipInfo[0]...
+ringcentral-phone.tsx:106 [RingCentral] WebPhone instance created: WebPhone {listeners: Map(0), tempListeners: Map(0), sipInfo: {…}, sipClient: DefaultSipClient, deviceManager: DefaultDeviceManager, …}
+ringcentral-phone.tsx:109 [RingCentral] Starting WebPhone (connecting WebSocket)...
+ringcentral-phone.tsx:111 [RingCentral] WebPhone started and registered successfully
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054560266_jb2m51idw', defaultPhoneNumber: '07741392660'}
+client-detail.tsx:5444 ⚡ LAYOUT SHIFT: value=0.007611448067340379, hadRecentInput=false, activeTab=communications, scrollY=0
+mixpanel.module.js:21133   POST https://api-js.mixpanel.com/track/?verbose=1&ip=1&_=1759482298581 net::ERR_BLOCKED_BY_CLIENT
+MixpanelLib._send_request @ mixpanel.module.js:21133
+(anonymous) @ mixpanel.module.js:21227
+(anonymous) @ mixpanel.module.js:16881
+RequestBatcher.sendRequestPromise @ mixpanel.module.js:16880
+(anonymous) @ mixpanel.module.js:17076
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+f6f4dd22-3f09-4c0f-969f-288e5a3f4227:1  Tracking Prevention blocked an XHR request to https://api-js.mixpanel.com/track/?verbose=1&ip=1&_=1759482298581.
+mixpanel.module.js:21133   POST https://api-js.mixpanel.com/engage/?verbose=1&ip=1&_=1759482298582 net::ERR_BLOCKED_BY_CLIENT
+MixpanelLib._send_request @ mixpanel.module.js:21133
+(anonymous) @ mixpanel.module.js:21227
+(anonymous) @ mixpanel.module.js:16881
+RequestBatcher.sendRequestPromise @ mixpanel.module.js:16880
+(anonymous) @ mixpanel.module.js:17076
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+f6f4dd22-3f09-4c0f-969f-288e5a3f4227:1  Tracking Prevention blocked an XHR request to https://api-js.mixpanel.com/engage/?verbose=1&ip=1&_=1759482298582.
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full, relatedTarget=DIV, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:246 [RingCentral] makeCall called with number: 07741392660
+ringcentral-phone.tsx:247 [RingCentral] webPhoneRef.current: WebPhone {listeners: Map(1), tempListeners: Map(0), sipInfo: {…}, sipClient: DefaultSipClient, deviceManager: DefaultDeviceManager, …}
+ringcentral-phone.tsx:248 [RingCentral] isInitialized: true
+ringcentral-phone.tsx:261 [RingCentral] Starting call to: 07741392660
+ringcentral-phone.tsx:263 [RingCentral] Generated session ID: call-1759482300504
+ringcentral-phone.tsx:274 [RingCentral] Call state updated to ringing
+ringcentral-phone.tsx:277 [RingCentral] Calling webPhone.call() with toNumber: 07741392660
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054560266_jb2m51idw', defaultPhoneNumber: '07741392660'}
+client-detail.tsx:5444 ⚡ LAYOUT SHIFT: value=0.0006374749533822011, hadRecentInput=true, activeTab=communications, scrollY=0
+client-detail.tsx:5460 🎯 FOCUS EVENT: target=BUTTON.inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2 w-full, relatedTarget=null, activeTab=communications, scrollY=0
+ringcentral-phone.tsx:29 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:30 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054560266_jb2m51idw', defaultPhoneNumber: '07741392660'}

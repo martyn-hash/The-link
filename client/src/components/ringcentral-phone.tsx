@@ -273,14 +273,22 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
       console.log('[RingCentral] Call state updated to ringing');
 
-      // Make call with v2.x API
-      console.log('[RingCentral] Calling webPhone.call() with toNumber:', number);
-      const session = await webPhoneRef.current.call({
-        toNumber: number,
-      });
-      
-      console.log('[RingCentral] Call session created:', session);
-      sessionRef.current = session;
+      // Make call with v2.x API - use makeCall instead of call
+      console.log('[RingCentral] Calling webPhone.makeCall() with number:', number);
+      let session: any;
+      try {
+        session = await webPhoneRef.current.makeCall({
+          toNumber: number,
+        });
+        
+        console.log('[RingCentral] Call session created successfully:', session);
+        sessionRef.current = session;
+      } catch (callError: any) {
+        console.error('[RingCentral] ERROR in webPhone.makeCall():', callError);
+        console.error('[RingCentral] Call error message:', callError?.message);
+        console.error('[RingCentral] Call error stack:', callError?.stack);
+        throw callError;
+      }
 
       // Setup session event listeners for outbound call
       session.on('accepted', () => {
