@@ -213,7 +213,9 @@ export default function PersonDetail() {
 
   const handleShowQRCode = async () => {
     try {
-      if (!person?.clientConnections || person.clientConnections.length === 0) {
+      const validConnections = person?.clientConnections?.filter(conn => conn.client) || [];
+      
+      if (validConnections.length === 0) {
         toast({
           title: "Error",
           description: "No client connections found for this person",
@@ -222,7 +224,7 @@ export default function PersonDetail() {
         return;
       }
       
-      const firstConnection = person.clientConnections[0];
+      const firstConnection = validConnections[0];
       const email = person.primaryEmail || person.email;
       
       if (!email) {
@@ -254,11 +256,13 @@ export default function PersonDetail() {
 
   const sendInviteMutation = useMutation({
     mutationFn: async () => {
-      if (!person?.clientConnections || person.clientConnections.length === 0) {
+      const validConnections = person?.clientConnections?.filter(conn => conn.client) || [];
+      
+      if (validConnections.length === 0) {
         throw new Error('No client connections found');
       }
       
-      const firstConnection = person.clientConnections[0];
+      const firstConnection = validConnections[0];
       return await apiRequest("POST", "/api/portal-user/send-invitation", {
         personId: id,
         clientId: firstConnection.client.id,
