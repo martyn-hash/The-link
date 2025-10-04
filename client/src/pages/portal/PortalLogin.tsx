@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageCircle, Send, ArrowLeft, Mail } from 'lucide-react';
+import { MessageCircle, Send, Mail } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -14,13 +14,24 @@ import {
 export default function PortalLogin() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
-  const [step, setStep] = useState<'email' | 'code'>('email');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const { toast } = useToast();
+  const codeInputRef = useRef<HTMLDivElement>(null);
 
-  const handleRequestCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  // Focus code input when code is sent
+  useEffect(() => {
+    if (codeSent && codeInputRef.current) {
+      // Small delay to ensure the input is enabled
+      setTimeout(() => {
+        const firstInput = codeInputRef.current?.querySelector('input');
+        firstInput?.focus();
+      }, 100);
+    }
+  }, [codeSent]);
+
+  const handleRequestCode = async () => {
     if (!email) {
       toast({
         title: 'Email required',
@@ -30,10 +41,10 @@ export default function PortalLogin() {
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSendingCode(true);
     try {
       await portalApi.auth.requestCode(email);
-      setStep('code');
+      setCodeSent(true);
       toast({
         title: 'Code sent!',
         description: 'Check your email for your 6-digit login code.',
@@ -45,7 +56,7 @@ export default function PortalLogin() {
         variant: 'destructive',
       });
     } finally {
-      setIsSubmitting(false);
+      setIsSendingCode(false);
     }
   };
 
@@ -61,7 +72,7 @@ export default function PortalLogin() {
       return;
     }
 
-    setIsSubmitting(true);
+    setIsVerifying(true);
     try {
       const result = await portalApi.auth.verifyCode(email, code);
       
@@ -80,13 +91,8 @@ export default function PortalLogin() {
       });
       setCode('');
     } finally {
-      setIsSubmitting(false);
+      setIsVerifying(false);
     }
-  };
-
-  const handleBack = () => {
-    setStep('email');
-    setCode('');
   };
 
   return (
@@ -100,54 +106,60 @@ export default function PortalLogin() {
             Client Portal Login
           </CardTitle>
           <CardDescription>
-            {step === 'email'
-              ? 'Enter your email to receive a login code'
-              : 'Enter the 6-digit code sent to your email'}
+            Enter your email and we'll send you a login code
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {step === 'email' ? (
-            <form onSubmit={handleRequestCode} className="space-y-4">
-              <div className="space-y-2">
+          <form onSubmit={handleVerifyCode} className="space-y-6">
+            {/* Email Field - Always Visible */}
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Email Address
+              </label>
+              <div className="flex gap-2">
                 <Input
+                  id="email"
                   type="email"
                   placeholder="your.email@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
+                  disabled={codeSent}
                   data-testid="input-portal-email"
-                  className="text-base"
+                  className="text-base flex-1"
                   autoFocus
                 />
+                {!codeSent && (
+                  <Button
+                    type="button"
+                    onClick={handleRequestCode}
+                    className="bg-gradient-to-r from-[#0A7BBF] to-[#0869A3] hover:from-[#0869A3] hover:to-[#065580] text-white shadow-lg"
+                    disabled={isSendingCode || !email}
+                    data-testid="button-request-code"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-[#0A7BBF] to-[#0869A3] hover:from-[#0869A3] hover:to-[#065580] text-white shadow-lg"
-                disabled={isSubmitting}
-                data-testid="button-request-code"
-              >
-                <Send className="mr-2 h-4 w-4" />
-                {isSubmitting ? 'Sending...' : 'Send Login Code'}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyCode} className="space-y-6">
-              <div className="space-y-4">
-                <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-900 dark:text-blue-100">
-                  <div className="flex items-start gap-2">
-                    <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium mb-1">Code sent to {email}</p>
-                      <p className="text-xs opacity-80">Check your email for a 6-digit code. It expires in 10 minutes.</p>
-                    </div>
-                  </div>
-                </div>
-                
+              {codeSent && (
+                <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  Code sent! Check your email.
+                </p>
+              )}
+            </div>
+
+            {/* Code Field - Always Visible but Disabled Until Code Sent */}
+            <div className="space-y-2">
+              <label htmlFor="code" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Verification Code
+              </label>
+              <div ref={codeInputRef} className={`${!codeSent ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex justify-center">
                   <InputOTP
                     maxLength={6}
                     value={code}
                     onChange={setCode}
+                    disabled={!codeSent}
                     data-testid="input-verification-code"
                   >
                     <InputOTPGroup>
@@ -161,30 +173,44 @@ export default function PortalLogin() {
                   </InputOTP>
                 </div>
               </div>
+              {!codeSent && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                  Enter your email above to receive a code
+                </p>
+              )}
+              {codeSent && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
+                  Code expires in 10 minutes
+                </p>
+              )}
+            </div>
 
-              <div className="space-y-3">
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-[#0A7BBF] to-[#0869A3] hover:from-[#0869A3] hover:to-[#065580] text-white shadow-lg"
-                  disabled={isSubmitting || code.length !== 6}
-                  data-testid="button-verify-code"
-                >
-                  {isSubmitting ? 'Verifying...' : 'Verify Code'}
-                </Button>
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              className="w-full bg-gradient-to-r from-[#0A7BBF] to-[#0869A3] hover:from-[#0869A3] hover:to-[#065580] text-white shadow-lg"
+              disabled={!codeSent || isVerifying || code.length !== 6}
+              data-testid="button-verify-code"
+            >
+              {isVerifying ? 'Verifying...' : 'Login'}
+            </Button>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={handleBack}
-                  data-testid="button-back-to-email"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Use Different Email
-                </Button>
-              </div>
-            </form>
-          )}
+            {/* Change Email Option */}
+            {codeSent && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-sm"
+                onClick={() => {
+                  setCodeSent(false);
+                  setCode('');
+                }}
+                data-testid="button-change-email"
+              >
+                Use Different Email
+              </Button>
+            )}
+          </form>
         </CardContent>
       </Card>
     </div>
