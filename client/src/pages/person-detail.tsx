@@ -7,14 +7,23 @@ import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, Phone, Mail, User as UserIcon, Globe, Check, ArrowLeft, Shield, Edit, Eye, EyeOff, QrCode } from "lucide-react";
+import { Building2, MapPin, Calendar, Phone, Mail, User as UserIcon, Globe, Check, ArrowLeft, Shield, Edit, Eye, EyeOff, QrCode, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import type { Person, Client, ClientPerson, ClientPortalUser, PeopleService } from "@shared/schema";
+import { insertPersonSchema } from "@shared/schema";
 
 type PersonWithDetails = Person & {
   clientConnections: Array<{
@@ -24,6 +33,23 @@ type PersonWithDetails = Person & {
   portalUser?: ClientPortalUser | null;
   services: PeopleService[];
 };
+
+// Validation schema for editing person
+const updatePersonSchema = insertPersonSchema.partial().extend({
+  fullName: z.string().min(1, "Full name is required"),
+  email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  email2: z.string().email("Invalid email format").optional().or(z.literal("")),
+  primaryEmail: z.string().email("Invalid email format").optional().or(z.literal("")),
+  telephone2: z.string().optional().or(z.literal("")),
+  primaryPhone: z.string().optional().or(z.literal("")),
+  linkedinUrl: z.union([z.string().url("Invalid LinkedIn URL"), z.literal("")]).optional(),
+  instagramUrl: z.union([z.string().url("Invalid Instagram URL"), z.literal("")]).optional(),
+  twitterUrl: z.union([z.string().url("Invalid Twitter URL"), z.literal("")]).optional(),
+  facebookUrl: z.union([z.string().url("Invalid Facebook URL"), z.literal("")]).optional(),
+  tiktokUrl: z.union([z.string().url("Invalid TikTok URL"), z.literal("")]).optional(),
+});
+
+type UpdatePersonData = z.infer<typeof updatePersonSchema>;
 
 function formatPersonName(fullName: string): string {
   if (!fullName) return '';
@@ -90,6 +116,7 @@ export default function PersonDetail() {
   const [showQRCode, setShowQRCode] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   const { data: person, isLoading, error } = useQuery<PersonWithDetails>({
     queryKey: [`/api/people/${id}`],
@@ -97,18 +124,131 @@ export default function PersonDetail() {
     enabled: !!id,
   });
 
-  const handleShowQRCode = async () => {
-    try {
-      const response = await fetch(`/api/portal-user/qr-code/${id}`);
-      if (!response.ok) throw new Error('Failed to generate QR code');
-      
-      const data = await response.json();
-      setQrCodeDataUrl(data.qrCode);
-      setShowQRCode(true);
-    } catch (error) {
+  // Edit form setup
+  const editForm = useForm<UpdatePersonData>({
+    resolver: zodResolver(updatePersonSchema),
+    defaultValues: {
+      fullName: "",
+      title: "",
+      dateOfBirth: "",
+      nationality: "",
+      occupation: "",
+      telephone: "",
+      email: "",
+      primaryPhone: "",
+      primaryEmail: "",
+      telephone2: "",
+      email2: "",
+      addressLine1: "",
+      addressLine2: "",
+      locality: "",
+      region: "",
+      postalCode: "",
+      country: "",
+      niNumber: "",
+      personalUtrNumber: "",
+      photoIdVerified: false,
+      addressVerified: false,
+      linkedinUrl: "",
+      twitterUrl: "",
+      facebookUrl: "",
+      instagramUrl: "",
+      tiktokUrl: "",
+    },
+  });
+
+  // Reset form when person data loads
+  useEffect(() => {
+    if (person) {
+      editForm.reset({
+        fullName: person.fullName || "",
+        title: person.title || "",
+        dateOfBirth: person.dateOfBirth || "",
+        nationality: person.nationality || "",
+        occupation: person.occupation || "",
+        telephone: person.telephone || "",
+        email: person.email || "",
+        primaryPhone: person.primaryPhone || "",
+        primaryEmail: person.primaryEmail || "",
+        telephone2: person.telephone2 || "",
+        email2: person.email2 || "",
+        addressLine1: person.addressLine1 || "",
+        addressLine2: person.addressLine2 || "",
+        locality: person.locality || "",
+        region: person.region || "",
+        postalCode: person.postalCode || "",
+        country: person.country || "",
+        niNumber: person.niNumber || "",
+        personalUtrNumber: person.personalUtrNumber || "",
+        photoIdVerified: Boolean(person.photoIdVerified),
+        addressVerified: Boolean(person.addressVerified),
+        linkedinUrl: person.linkedinUrl || "",
+        twitterUrl: person.twitterUrl || "",
+        facebookUrl: person.facebookUrl || "",
+        instagramUrl: person.instagramUrl || "",
+        tiktokUrl: person.tiktokUrl || "",
+      });
+    }
+  }, [person, editForm]);
+
+  // Update person mutation
+  const updatePersonMutation = useMutation({
+    mutationFn: async (data: UpdatePersonData) => {
+      return await apiRequest("PATCH", `/api/people/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Person Updated",
+        description: "Person details have been updated successfully",
+      });
+      setShowEditDialog(false);
+      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}`] });
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to generate QR code",
+        description: error?.message || "Failed to update person",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleShowQRCode = async () => {
+    try {
+      if (!person?.clientConnections || person.clientConnections.length === 0) {
+        toast({
+          title: "Error",
+          description: "No client connections found for this person",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const firstConnection = person.clientConnections[0];
+      const email = person.primaryEmail || person.email;
+      
+      if (!email) {
+        toast({
+          title: "Error",
+          description: "No email address found for this person",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const response = await apiRequest("POST", "/api/portal-user/generate-qr-code", {
+        personId: id,
+        clientId: firstConnection.client.id,
+        email: email,
+        name: formatPersonName(person.fullName),
+      });
+      
+      setQrCodeDataUrl(response.qrCodeDataUrl);
+      setShowQRCode(true);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to generate QR code",
         variant: "destructive",
       });
     }
@@ -210,13 +350,7 @@ export default function PersonDetail() {
           <div className="flex gap-2">
             <Button
               variant="default"
-              onClick={() => {
-                // TODO: Implement edit functionality
-                toast({
-                  title: "Edit Person",
-                  description: "Edit functionality coming soon",
-                });
-              }}
+              onClick={() => setShowEditDialog(true)}
               data-testid="button-edit-person"
             >
               <Edit className="h-4 w-4 mr-2" />
@@ -596,6 +730,410 @@ export default function PersonDetail() {
           )}
         </div>
       </main>
+
+      {/* Edit Person Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Person</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit((data) => updatePersonMutation.mutate(data))} className="space-y-6">
+              <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                  <TabsTrigger value="contact">Contact</TabsTrigger>
+                  <TabsTrigger value="verification">Verification</TabsTrigger>
+                  <TabsTrigger value="social">Social Media</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="basic" className="space-y-4 mt-4">
+                  <FormField
+                    control={editForm.control}
+                    name="fullName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-fullname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Title</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-title" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="dateOfBirth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date of Birth</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} data-testid="input-dob" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="nationality"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nationality</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-nationality" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="occupation"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Occupation</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-occupation" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="contact" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="telephone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Primary Phone</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-telephone" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="telephone2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Secondary Phone</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-telephone2" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Primary Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} data-testid="input-email" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="email2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Secondary Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} data-testid="input-email2" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="addressLine1"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Address Line 1</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-address1" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="addressLine2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Address Line 2</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-address2" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="locality"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>City</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-locality" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="region"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Region</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-region" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="postalCode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Postal Code</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-postalcode" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="country"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Country</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-country" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="verification" className="space-y-4 mt-4">
+                  <FormField
+                    control={editForm.control}
+                    name="niNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>NI Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-ni-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="personalUtrNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Personal UTR</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-utr-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="photoIdVerified"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-photo-verified"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Photo ID Verified</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="addressVerified"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-address-verified"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Address Verified</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="social" className="space-y-4 mt-4">
+                  <FormField
+                    control={editForm.control}
+                    name="linkedinUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LinkedIn URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://linkedin.com/in/..." data-testid="input-linkedin" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="twitterUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Twitter URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://twitter.com/..." data-testid="input-twitter" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="facebookUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Facebook URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://facebook.com/..." data-testid="input-facebook" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="instagramUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Instagram URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://instagram.com/..." data-testid="input-instagram" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="tiktokUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>TikTok URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://tiktok.com/@..." data-testid="input-tiktok" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+              </Tabs>
+              
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEditDialog(false)}
+                  disabled={updatePersonMutation.isPending}
+                  data-testid="button-cancel-edit"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updatePersonMutation.isPending}
+                  data-testid="button-save-person"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {updatePersonMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* QR Code Dialog */}
       <Dialog open={showQRCode} onOpenChange={setShowQRCode}>

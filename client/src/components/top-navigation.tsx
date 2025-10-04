@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
@@ -98,7 +98,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   </div>
                 </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-80 p-0">
+              <DropdownMenuContent align="start" className="w-[700px] p-0">
                 <div className="bg-card rounded-lg border border-border shadow-lg">
                   {/* Header */}
                   <div className="px-6 py-4 border-b border-border/20">
@@ -112,24 +112,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                     </div>
                   </div>
                   
-                  {/* Navigation Section */}
-                  <div className="px-6 py-4 border-b border-border/20">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                        <FolderOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <span className="text-sm font-semibold text-foreground">Navigation</span>
-                    </div>
+                  {/* 3-Column Layout */}
+                  <div className="grid grid-cols-3 gap-4 px-6 py-4">
+                    {/* Column 1: Dashboard, Projects, Services */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-dashboard">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center shrink-0">
                               <Home className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Dashboard</div>
-                              <div className="text-xs text-muted-foreground">Overview and quick access</div>
                             </div>
                           </div>
                         </Link>
@@ -137,25 +131,41 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       <DropdownMenuItem asChild>
                         <Link href="/projects" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-projects-menu">
-                            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center shrink-0">
                               <FolderOpen className="w-4 h-4 text-violet-600 dark:text-violet-400" />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Projects</div>
-                              <div className="text-xs text-muted-foreground">Manage client projects</div>
                             </div>
                           </div>
                         </Link>
                       </DropdownMenuItem>
+                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
+                        <DropdownMenuItem asChild>
+                          <Link href="/scheduled-services" className="w-full">
+                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-services-menu">
+                              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
+                                <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-foreground text-sm">Services</div>
+                              </div>
+                            </div>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                    </div>
+
+                    {/* Column 2: Messages, Companies, People */}
+                    <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/messages" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-messages-menu">
-                            <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900 flex items-center justify-center shrink-0">
                               <MessageCircle className="w-4 h-4 text-pink-600 dark:text-pink-400" />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Messages</div>
-                              <div className="text-xs text-muted-foreground">Client portal conversations</div>
                             </div>
                           </div>
                         </Link>
@@ -163,27 +173,25 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       {(user?.isAdmin || user?.canSeeAdminMenu) && (
                         <>
                           <DropdownMenuItem asChild>
-                            <Link href="/scheduled-services" className="w-full">
-                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-services-menu">
-                                <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center">
-                                  <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                            <Link href="/companies" className="w-full">
+                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
+                                <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
+                                  <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                                 </div>
-                                <div className="flex-1">
-                                  <div className="font-medium text-foreground text-sm">Services</div>
-                                  <div className="text-xs text-muted-foreground">Scheduled services overview</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-foreground text-sm">Companies</div>
                                 </div>
                               </div>
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
-                            <Link href="/companies" className="w-full">
-                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
-                                <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center">
-                                  <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                            <Link href="/people" className="w-full">
+                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-people-menu">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
+                                  <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                                 </div>
-                                <div className="flex-1">
-                                  <div className="font-medium text-foreground text-sm">Companies</div>
-                                  <div className="text-xs text-muted-foreground">Companies House clients</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-foreground text-sm">People</div>
                                 </div>
                               </div>
                             </Link>
@@ -191,34 +199,25 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                         </>
                       )}
                     </div>
-                  </div>
-                  
-                  {/* Profile Section */}
-                  <div className="px-6 py-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900 flex items-center justify-center">
-                        <UserIcon className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                      </div>
-                      <span className="text-sm font-semibold text-foreground">Account</span>
-                    </div>
+
+                    {/* Column 3: User Profile, Sign Out */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/profile" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-user-profile">
-                            <Avatar className="w-8 h-8">
+                            <Avatar className="w-8 h-8 shrink-0">
                               <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
                               <AvatarFallback className="bg-accent text-accent-foreground text-xs">
                                 {getUserInitials()}
                               </AvatarFallback>
                             </Avatar>
-                            <div className="flex-1">
-                              <div className="font-medium text-foreground text-sm">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm truncate">
                                 {getUserDisplayName()}
                                 {isImpersonating && (
                                   <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground">View and edit profile</div>
                             </div>
                           </div>
                         </Link>
@@ -229,12 +228,11 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors text-left"
                           data-testid="button-logout"
                         >
-                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
                             <Settings className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="font-medium text-foreground text-sm">Sign Out</div>
-                            <div className="text-xs text-muted-foreground">Log out of your account</div>
                           </div>
                         </button>
                       </DropdownMenuItem>
