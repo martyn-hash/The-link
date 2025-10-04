@@ -12,13 +12,14 @@ import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -5703,6 +5704,187 @@ function ProjectsList({ projects, isLoading, clientId }: { projects?: ProjectWit
   );
 }
 
+// Related Person Row Component for condensed table view
+function RelatedPersonRow({
+  clientPerson,
+  clientId,
+  clientName,
+}: {
+  clientPerson: ClientPersonWithPerson;
+  clientId: string;
+  clientName: string;
+}) {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [showQRCode, setShowQRCode] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  
+  // Fetch portal user status
+  const { data: portalUser, refetch } = useQuery<ClientPortalUser>({
+    queryKey: [`/api/portal-user/by-person/${clientPerson.person.id}`],
+    enabled: false,
+  });
+
+  const personEmail = clientPerson.person.primaryEmail || clientPerson.person.email;
+  const hasEmail = Boolean(personEmail);
+
+  // Send invitation mutation
+  const sendInviteMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/portal-user/send-invitation", {
+        personId: clientPerson.person.id,
+        clientId,
+        email: personEmail,
+        name: formatPersonName(clientPerson.person.fullName),
+        clientName,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation Sent",
+        description: `Portal invitation sent to ${personEmail}`,
+      });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to send invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch and generate QR code when needed
+  const handleShowQRCode = async () => {
+    try {
+      const response = await fetch(`/api/portal-user/qr-code/${clientPerson.person.id}`);
+      if (!response.ok) throw new Error('Failed to generate QR code');
+      
+      const data = await response.json();
+      setQrCodeDataUrl(data.qrCode);
+      setShowQRCode(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate QR code",
+        variant: "destructive",
+      });
+    }
+  };
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return (
+    <>
+      <TableRow data-testid={`person-row-${clientPerson.person.id}`}>
+        <TableCell className="font-medium">
+          <div>
+            <div data-testid={`text-person-name-${clientPerson.person.id}`}>
+              {formatPersonName(clientPerson.person.fullName)}
+            </div>
+            {clientPerson.officerRole && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {clientPerson.officerRole}
+              </div>
+            )}
+          </div>
+        </TableCell>
+        <TableCell>
+          <span className="text-sm" data-testid={`text-person-primary-email-${clientPerson.person.id}`}>
+            {clientPerson.person.primaryEmail || clientPerson.person.email || '-'}
+          </span>
+        </TableCell>
+        <TableCell>
+          <span className="text-sm" data-testid={`text-person-primary-phone-${clientPerson.person.id}`}>
+            {clientPerson.person.primaryPhone || clientPerson.person.telephone || '-'}
+          </span>
+        </TableCell>
+        <TableCell className="text-center">
+          {portalUser?.lastLogin ? (
+            <Check className="h-4 w-4 text-green-500 mx-auto" data-testid={`icon-has-app-access-${clientPerson.person.id}`} />
+          ) : (
+            <span className="text-muted-foreground text-xs">-</span>
+          )}
+        </TableCell>
+        <TableCell className="text-center">
+          {portalUser?.pushNotificationsEnabled ? (
+            <Check className="h-4 w-4 text-blue-500 mx-auto" data-testid={`icon-push-enabled-${clientPerson.person.id}`} />
+          ) : (
+            <span className="text-muted-foreground text-xs">-</span>
+          )}
+        </TableCell>
+        <TableCell>
+          <span className="text-sm" data-testid={`text-dob-${clientPerson.person.id}`}>
+            {clientPerson.person.dateOfBirth ? formatBirthDate(clientPerson.person.dateOfBirth) : '-'}
+          </span>
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="flex items-center justify-end gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={!hasEmail} data-testid={`button-person-actions-${clientPerson.person.id}`}>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => sendInviteMutation.mutate()}
+                  disabled={sendInviteMutation.isPending || !hasEmail}
+                  data-testid={`action-send-invite-${clientPerson.person.id}`}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send App Invite
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleShowQRCode}
+                  data-testid={`action-show-qr-${clientPerson.person.id}`}
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Show QR Code
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setLocation(`/person/${clientPerson.person.id}`)}
+              data-testid={`button-view-person-${clientPerson.person.id}`}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQRCode} onOpenChange={setShowQRCode}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Portal Access QR Code</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center space-y-4 py-4">
+            {qrCodeDataUrl && (
+              <img 
+                src={qrCodeDataUrl} 
+                alt="Portal QR Code" 
+                className="w-64 h-64"
+                data-testid="qr-code-image"
+              />
+            )}
+            <p className="text-sm text-muted-foreground text-center">
+              Scan this QR code to access the client portal
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -6559,132 +6741,30 @@ export default function ClientDetail() {
                       </p>
                     </div>
                   ) : relatedPeople && relatedPeople.length > 0 ? (
-                    <div className="bg-background space-y-4">
-                      <Accordion
-                        type="single"
-                        collapsible
-                        value={expandedPersonId ?? undefined}
-                        onValueChange={(value) => setExpandedPersonId(value ?? null)}
-                        className="space-y-4"
-                      >
-                        {relatedPeople.map((clientPerson) => (
-                          <AccordionItem key={clientPerson.person.id} value={clientPerson.person.id} className="border rounded-lg bg-card">
-                          <AccordionTrigger 
-                            className="text-left hover:no-underline p-4"
-                            data-testid={`person-row-${clientPerson.person.id}`}
-                          >
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mr-4">
-                              {/* Column 1: Name, Role, and Contact Information */}
-                              <div className="space-y-2">
-                                <div>
-                                  <h4 className="font-medium text-lg" data-testid={`text-person-name-${clientPerson.person.id}`}>
-                                    {formatPersonName(clientPerson.person.fullName)}
-                                  </h4>
-                                  {clientPerson.officerRole && (
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {clientPerson.officerRole}
-                                    </p>
-                                  )}
-                                </div>
-                                
-                                {/* Contact Information */}
-                                <div className="space-y-2">
-                                  {clientPerson.person.email && (
-                                    <div className="flex items-center space-x-2">
-                                      <Mail className="h-4 w-4 text-muted-foreground" />
-                                      <span className="text-sm font-medium" data-testid={`text-person-email-preview-${clientPerson.person.id}`}>
-                                        {clientPerson.person.email}
-                                      </span>
-                                    </div>
-                                  )}
-                                  
-                                  {clientPerson.person.telephone && (
-                                    <div className="flex items-center space-x-2">
-                                      <Phone className="h-4 w-4 text-muted-foreground" />
-                                      <span className="text-sm font-medium" data-testid={`text-person-phone-preview-${clientPerson.person.id}`}>
-                                        {clientPerson.person.telephone}
-                                      </span>
-                                    </div>
-                                  )}
-                                  
-                                  {!clientPerson.person.email && !clientPerson.person.telephone && (
-                                    <div className="flex items-center space-x-2 text-muted-foreground">
-                                      <UserIcon className="h-4 w-4" />
-                                      <span className="text-sm italic">No contact info available</span>
-                                    </div>
-                                  )}
-                                  
-                                  {clientPerson.person.dateOfBirth && (
-                                    <div className="flex items-center space-x-2 text-muted-foreground">
-                                      <Calendar className="h-4 w-4" />
-                                      <div>
-                                        <div className="text-xs">Date of Birth</div>
-                                        <div className="text-sm font-medium" data-testid={`text-dob-${clientPerson.person.id}`}>
-                                          {formatBirthDate(clientPerson.person.dateOfBirth)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Column 2: Address Information */}
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                                  <span className="text-sm font-medium text-muted-foreground">Address</span>
-                                </div>
-                                {(() => {
-                                  const addressParts = [
-                                    clientPerson.person.addressLine1,
-                                    clientPerson.person.addressLine2,
-                                    clientPerson.person.locality,
-                                    clientPerson.person.region,
-                                    clientPerson.person.postalCode,
-                                    clientPerson.person.country
-                                  ].filter(Boolean);
-                                  
-                                  return addressParts.length > 0 ? (
-                                    <div className="space-y-1 text-sm" data-testid={`text-person-address-${clientPerson.person.id}`}>
-                                      {clientPerson.person.addressLine1 && <p className="font-medium">{clientPerson.person.addressLine1}</p>}
-                                      {clientPerson.person.addressLine2 && <p>{clientPerson.person.addressLine2}</p>}
-                                      {clientPerson.person.locality && <p>{clientPerson.person.locality}</p>}
-                                      {clientPerson.person.region && <p>{clientPerson.person.region}</p>}
-                                      {clientPerson.person.postalCode && <p className="font-medium">{clientPerson.person.postalCode}</p>}
-                                      {clientPerson.person.country && <p className="text-muted-foreground">{clientPerson.person.country}</p>}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground italic">No address available</p>
-                                  );
-                                })()}
-                              </div>
-
-                              {/* Column 3: Portal Access Status */}
-                              <PortalStatusColumn 
-                                personId={clientPerson.person.id}
-                                personEmail={clientPerson.person.primaryEmail || clientPerson.person.email}
-                                personName={clientPerson.person.fullName}
-                                clientId={id!}
-                                clientName={client?.name || ''}
-                              />
-                            </div>
-                          </AccordionTrigger>
-                          
-                          <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-person-details-${clientPerson.id}`}>
-                            <PersonTabbedView
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Primary Email</TableHead>
+                            <TableHead>Primary Phone</TableHead>
+                            <TableHead className="text-center">App Access</TableHead>
+                            <TableHead className="text-center">Push</TableHead>
+                            <TableHead>Date of Birth</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {relatedPeople.map((clientPerson) => (
+                            <RelatedPersonRow
+                              key={clientPerson.person.id}
                               clientPerson={clientPerson}
-                              editingPersonId={editingPersonId}
-                              setEditingPersonId={setEditingPersonId}
-                              updatePersonMutation={updatePersonMutation}
-                              revealedIdentifiers={revealedIdentifiers}
-                              setRevealedIdentifiers={setRevealedIdentifiers}
-                              peopleServices={peopleServices}
                               clientId={id!}
+                              clientName={client?.name || ''}
                             />
-                          </AccordionContent>
-                        </AccordionItem>
-                      ))}
-                      </Accordion>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   ) : (
                     <div className="text-center py-8">

@@ -244,6 +244,8 @@ export interface IStorage {
   getPersonById(id: string): Promise<Person | undefined>;
   getPersonByPersonNumber(personNumber: string): Promise<Person | undefined>;
   getAllPeople(): Promise<Person[]>;
+  getAllPeopleWithPortalStatus(): Promise<(Person & { portalUser?: ClientPortalUser; relatedCompanies: Client[] })[]>;
+  getPersonWithDetails(id: string): Promise<(Person & { portalUser?: ClientPortalUser; relatedCompanies: (ClientPerson & { client: Client })[]; personalServices: (PeopleService & { service: Service })[] }) | undefined>;
   updatePerson(id: string, person: Partial<InsertPerson>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
   upsertPersonFromCH(personData: Partial<InsertPerson>): Promise<Person>;
@@ -1908,6 +1910,87 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPeople(): Promise<Person[]> {
     return await db.select().from(people);
+  }
+
+  async getAllPeopleWithPortalStatus(): Promise<(Person & { portalUser?: ClientPortalUser; relatedCompanies: Client[] })[]> {
+    // Get all people
+    const allPeople = await db.select().from(people);
+    
+    // Get all portal users
+    const allPortalUsers = await db.select().from(clientPortalUsers);
+    
+    // Get all client-person relationships with client details
+    const allClientPeople = await db
+      .select({
+        clientPerson: clientPeople,
+        client: clients,
+      })
+      .from(clientPeople)
+      .leftJoin(clients, eq(clientPeople.clientId, clients.id));
+    
+    // Map each person with their portal status and related companies
+    return allPeople.map(person => {
+      const portalUser = allPortalUsers.find(pu => pu.personId === person.id);
+      const relatedCompanies = allClientPeople
+        .filter(cp => cp.clientPerson.personId === person.id && cp.client)
+        .map(cp => cp.client!);
+      
+      return {
+        ...person,
+        portalUser,
+        relatedCompanies,
+      };
+    });
+  }
+
+  async getPersonWithDetails(id: string): Promise<(Person & { portalUser?: ClientPortalUser; relatedCompanies: (ClientPerson & { client: Client })[]; personalServices: (PeopleService & { service: Service })[] }) | undefined> {
+    // Get the person
+    const [person] = await db.select().from(people).where(eq(people.id, id));
+    if (!person) return undefined;
+    
+    // Get portal user status
+    const [portalUser] = await db.select().from(clientPortalUsers).where(eq(clientPortalUsers.personId, id));
+    
+    // Get related companies
+    const relatedCompaniesData = await db
+      .select({
+        clientPerson: clientPeople,
+        client: clients,
+      })
+      .from(clientPeople)
+      .leftJoin(clients, eq(clientPeople.clientId, clients.id))
+      .where(eq(clientPeople.personId, id));
+    
+    const relatedCompanies = relatedCompaniesData
+      .filter(item => item.client)
+      .map(item => ({
+        ...item.clientPerson,
+        client: item.client!,
+      }));
+    
+    // Get personal services
+    const personalServicesData = await db
+      .select({
+        peopleService: peopleServices,
+        service: services,
+      })
+      .from(peopleServices)
+      .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .where(eq(peopleServices.personId, id));
+    
+    const personalServices = personalServicesData
+      .filter(item => item.service)
+      .map(item => ({
+        ...item.peopleService,
+        service: item.service!,
+      }));
+    
+    return {
+      ...person,
+      portalUser,
+      relatedCompanies,
+      personalServices,
+    };
   }
 
   async updatePerson(id: string, personData: Partial<InsertPerson>): Promise<Person> {

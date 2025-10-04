@@ -968,11 +968,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // People management routes
   app.get("/api/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const people = await storage.getAllPeople();
+      const people = await storage.getAllPeopleWithPortalStatus();
       res.json(people);
     } catch (error) {
       console.error("Error fetching people:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch people" });
+    }
+  });
+
+  app.get("/api/people/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const personIdSchema = z.object({ 
+        id: z.string().min(1, "Person ID is required")
+      });
+      const paramValidation = validateParams(personIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ 
+          message: "Invalid parameters",
+          errors: paramValidation.errors 
+        });
+      }
+
+      const person = await storage.getPersonWithDetails(paramValidation.data.id);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+      
+      res.json(person);
+    } catch (error) {
+      console.error("Error fetching person details:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch person details" });
     }
   });
 
