@@ -19,6 +19,7 @@ async function portalRequest(url: string, options: RequestInit = {}) {
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include',
   });
 
   if (response.status === 401) {
@@ -28,11 +29,25 @@ async function portalRequest(url: string, options: RequestInit = {}) {
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || 'Request failed');
+    const errorText = await response.text();
+    let errorMessage = 'Request failed';
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMessage = errorJson.message || errorJson.error || errorText;
+    } catch {
+      errorMessage = errorText || 'Request failed';
+    }
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) return null;
+  
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 export const portalApi = {
@@ -42,11 +57,19 @@ export const portalApi = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      }).then(res => res.json()),
+        credentials: 'include',
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to request magic link');
+        return res.json();
+      }),
 
     verifyMagicLink: (token: string) =>
-      fetch(`/api/portal/auth/verify?token=${token}`)
-        .then(res => res.json()),
+      fetch(`/api/portal/auth/verify?token=${token}`, {
+        credentials: 'include',
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to verify magic link');
+        return res.json();
+      }),
   },
 
   threads: {

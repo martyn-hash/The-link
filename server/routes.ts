@@ -7615,6 +7615,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
+      // Note: JWT sessions are automatically invalidated on next request when user doesn't exist
+      // The requirePortalAuth middleware verifies the user exists for each authenticated request
       await storage.deleteClientPortalUser(portalUserId);
       res.json({ message: "Portal user deleted successfully" });
     } catch (error) {
