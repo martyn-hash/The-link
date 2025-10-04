@@ -5957,9 +5957,18 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Client-service mapping already exists between client '${clientName}' and service '${service.name}'. Each client can only be mapped to a service once.`);
     }
 
+    // Convert ISO string dates to Date objects for timestamp fields
+    const processedData = { ...clientServiceData };
+    if (processedData.nextStartDate && typeof processedData.nextStartDate === 'string') {
+      processedData.nextStartDate = new Date(processedData.nextStartDate);
+    }
+    if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
+      processedData.nextDueDate = new Date(processedData.nextDueDate);
+    }
+
     const [clientService] = await db
       .insert(clientServices)
-      .values(clientServiceData)
+      .values(processedData)
       .returning();
     
     return clientService;
@@ -6858,7 +6867,16 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [newPeopleService] = await db.insert(peopleServices).values(peopleServiceData).returning();
+    // Convert ISO string dates to Date objects for timestamp fields
+    const processedData = { ...peopleServiceData };
+    if (processedData.nextStartDate && typeof processedData.nextStartDate === 'string') {
+      processedData.nextStartDate = new Date(processedData.nextStartDate);
+    }
+    if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
+      processedData.nextDueDate = new Date(processedData.nextDueDate);
+    }
+
+    const [newPeopleService] = await db.insert(peopleServices).values(processedData).returning();
     return newPeopleService;
   }
 
@@ -6908,9 +6926,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Convert ISO string dates to Date objects for timestamp fields
+    const processedData = { ...peopleServiceData };
+    if (processedData.nextStartDate && typeof processedData.nextStartDate === 'string') {
+      processedData.nextStartDate = new Date(processedData.nextStartDate);
+    }
+    if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
+      processedData.nextDueDate = new Date(processedData.nextDueDate);
+    }
+
     const [updatedPeopleService] = await db
       .update(peopleServices)
-      .set(peopleServiceData)
+      .set(processedData)
       .where(eq(peopleServices.id, id))
       .returning();
 
