@@ -91,6 +91,8 @@ export default function DataImport() {
         Papa.parse(clientsFile, {
           header: true,
           skipEmptyLines: true,
+          transformHeader: (header: string) => header?.trim() || header,
+          transform: (value: string) => typeof value === 'string' ? value.trim() : value,
           complete: (results) => resolve(results.data),
           error: (error: any) => reject(error),
         });
@@ -99,6 +101,8 @@ export default function DataImport() {
         Papa.parse(servicesFile, {
           header: true,
           skipEmptyLines: true,
+          transformHeader: (header: string) => header?.trim() || header,
+          transform: (value: string) => typeof value === 'string' ? value.trim() : value,
           complete: (results) => resolve(results.data),
           error: (error: any) => reject(error),
         });
@@ -107,6 +111,8 @@ export default function DataImport() {
         Papa.parse(rolesFile, {
           header: true,
           skipEmptyLines: true,
+          transformHeader: (header: string) => header?.trim() || header,
+          transform: (value: string) => typeof value === 'string' ? value.trim() : value,
           complete: (results) => resolve(results.data),
           error: (error: any) => reject(error),
         });

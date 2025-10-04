@@ -9228,14 +9228,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
             // Create relationship
-            const relationshipData = {
+            await storage.linkPersonToClient(
               clientId,
               personId,
-              officerRole: row.officer_role || null,
-              isPrimaryContact: row.is_primary_contact?.toLowerCase() === 'yes',
-            };
-            
-            await storage.linkPersonToClient(relationshipData);
+              row.officer_role || undefined,
+              row.is_primary_contact?.toLowerCase() === 'yes'
+            );
             result.relationshipsCreated++;
           }
         } catch (error) {
