@@ -146,34 +146,64 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
 
 export async function verifyMagicLink(token: string): Promise<{ success: boolean; jwt?: string; error?: string }> {
   try {
-    // Find session by token
+    console.log('[Portal Auth] Verifying magic link, token:', token.substring(0, 10) + '...');
+    
+    // Try to find session by token (email magic link flow)
     const session = await storage.getClientPortalSessionByToken(token);
     
-    if (!session) {
+    if (session) {
+      console.log('[Portal Auth] Found session for token');
+      // Check if expired
+      if (new Date() > new Date(session.expiresAt)) {
+        await storage.deleteClientPortalSession(session.id);
+        return { success: false, error: 'Link has expired' };
+      }
+      
+      // Get portal user
+      const portalUser = await storage.getClientPortalUserById(session.clientPortalUserId);
+      if (!portalUser) {
+        return { success: false, error: 'Portal user not found' };
+      }
+      
+      // Update last login
+      await storage.updateClientPortalUser(portalUser.id, {
+        lastLogin: new Date()
+      });
+      
+      // Delete the used session token
+      await storage.deleteClientPortalSession(session.id);
+      
+      // Create JWT for ongoing authentication
+      const jwtToken = createJWT({
+        id: portalUser.id,
+        clientId: portalUser.clientId,
+        email: portalUser.email,
+        name: portalUser.name || 'Portal User'
+      });
+      
+      return { success: true, jwt: jwtToken };
+    }
+    
+    // If no session found, try to find portal user by magicLinkToken (QR code/invitation flow)
+    const portalUser = await storage.getClientPortalUserByMagicLinkToken(token);
+    
+    if (!portalUser) {
       return { success: false, error: 'Invalid or expired link' };
     }
     
-    // Check if expired
-    if (new Date() > new Date(session.expiresAt)) {
-      await storage.deleteClientPortalSession(session.id);
+    // Check if token expired
+    if (portalUser.tokenExpiry && new Date() > new Date(portalUser.tokenExpiry)) {
       return { success: false, error: 'Link has expired' };
     }
     
-    // Get portal user
-    const portalUser = await storage.getClientPortalUserById(session.clientPortalUserId);
-    if (!portalUser) {
-      return { success: false, error: 'Portal user not found' };
-    }
-    
-    // Update last login
+    // Allow token reuse until expiry - makes endpoint fully idempotent
+    // Update last login each time for tracking, but don't fail on duplicates
     await storage.updateClientPortalUser(portalUser.id, {
       lastLogin: new Date()
     });
+    // Note: Token remains valid until tokenExpiry (24 hours) to allow idempotent requests
     
-    // Delete the used session token
-    await storage.deleteClientPortalSession(session.id);
-    
-    // Create JWT for ongoing authentication
+    // Create JWT for ongoing authentication (works for both first use and duplicate requests)
     const jwtToken = createJWT({
       id: portalUser.id,
       clientId: portalUser.clientId,
