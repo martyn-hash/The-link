@@ -208,6 +208,20 @@ export default function PersonDetail() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="default"
+              onClick={() => {
+                // TODO: Implement edit functionality
+                toast({
+                  title: "Edit Person",
+                  description: "Edit functionality coming soon",
+                });
+              }}
+              data-testid="button-edit-person"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
             {hasEmail && (
               <>
                 <Button
