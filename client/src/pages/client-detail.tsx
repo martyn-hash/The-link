@@ -4677,10 +4677,10 @@ function PersonViewMode({
             <h6 className="text-sm font-medium text-muted-foreground">Primary Contact Details</h6>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
+                <span className="font-medium">Email:</span> {clientPerson.person.primaryEmail || clientPerson.person.email || "Not provided"}
               </div>
               <div>
-                <span className="font-medium">Phone:</span> {clientPerson.person.telephone || "Not provided"}
+                <span className="font-medium">Phone:</span> {clientPerson.person.primaryPhone || clientPerson.person.telephone || "Not provided"}
               </div>
             </div>
           </div>
