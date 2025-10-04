@@ -28,6 +28,10 @@ import {
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, buildSchedulingPreview, type SchedulingRunResult } from "./project-scheduler";
+// Import protected core modules
+import * as serviceMapper from "./core/service-mapper";
+import * as projectCreator from "./core/project-creator";
+import * as scheduleCalculator from "./core/schedule-calculator";
 import { z } from "zod";
 import {
   clientPeople,
@@ -5143,6 +5147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/client-services - Create new client-service mapping (admin only)
+  // Uses protected service mapper module for all validation and business logic
   app.post("/api/client-services", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const validationResult = insertClientServiceSchema.safeParse(req.body);
@@ -5156,117 +5161,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const clientServiceData = validationResult.data;
       
-      // Check if service is Companies House connected and auto-populate dates
-      const service = await storage.getServiceById(clientServiceData.serviceId);
-      if (!service) {
-        return res.status(404).json({ message: "Service not found" });
-      }
-      
-      // Prevent personal services from being assigned to clients
-      if (service.isPersonalService) {
-        return res.status(400).json({ 
-          message: "Personal services cannot be assigned to clients",
-          serviceId: service.id,
-          serviceName: service.name
-        });
-      }
-      
-      let finalClientServiceData = { ...clientServiceData };
-      
-      // Handle static services - these are for display/tracking only and don't need frequency or dates
-      if (service.isStaticService) {
-        // Static services don't require frequency or dates - leave them null if not provided
-        // This allows static services to be assigned without scheduling information
-      } else if (service.isCompaniesHouseConnected) {
-        // Force annual frequency for CH services (always set for consistency)
-        finalClientServiceData.frequency = 'annually' as const;
+      // Use protected service mapper module for creation
+      try {
+        const clientService = await serviceMapper.createClientServiceMapping(clientServiceData);
         
-        // Get client to read CH field values
-        const client = await storage.getClientById(clientServiceData.clientId);
-        if (!client) {
-          return res.status(404).json({ message: "Client not found" });
+        console.log(`[Routes] Successfully created client service mapping: ${clientService.id}`);
+        return res.status(201).json(clientService);
+      } catch (mapperError: any) {
+        console.error('[Routes] Service mapper error:', mapperError);
+        
+        // Handle specific error types with appropriate HTTP status codes
+        if (mapperError.message?.includes('not found')) {
+          return res.status(404).json({ message: mapperError.message });
         }
-        
-        // Whitelist allowed CH date fields for security
-        const allowedDateFields = ['nextAccountsPeriodEnd', 'nextAccountsDue', 'confirmationStatementNextDue', 'confirmationStatementNextMadeUpTo'];
-        
-        if (!service.chStartDateField || !service.chDueDateField) {
-          return res.status(400).json({ 
-            message: "Companies House service must specify both start and due date field mappings"
+        if (mapperError.message?.includes('already exists')) {
+          return res.status(409).json({ 
+            message: mapperError.message,
+            code: "DUPLICATE_CLIENT_SERVICE_MAPPING"
           });
         }
-        
-        if (!allowedDateFields.includes(service.chStartDateField) || !allowedDateFields.includes(service.chDueDateField)) {
-          return res.status(400).json({ 
-            message: "Invalid CH date field mapping",
-            details: { allowedFields: allowedDateFields }
-          });
+        if (mapperError.message?.includes('cannot be assigned') || 
+            mapperError.message?.includes('Personal service')) {
+          return res.status(400).json({ message: mapperError.message });
+        }
+        if (mapperError.message?.includes('CH') || 
+            mapperError.message?.includes('Companies House')) {
+          return res.status(400).json({ message: mapperError.message });
         }
         
-        // Get and validate date values
-        const startDateField = service.chStartDateField as keyof typeof client;
-        const dueDateField = service.chDueDateField as keyof typeof client;
-        
-        const startDateValue = client[startDateField];
-        const dueDateValue = client[dueDateField];
-        
-        // Coerce and validate dates safely
-        const startDate = startDateValue ? new Date(startDateValue as any) : null;
-        const dueDate = dueDateValue ? new Date(dueDateValue as any) : null;
-        
-        if (!startDate || !dueDate || isNaN(startDate.getTime()) || isNaN(dueDate.getTime())) {
-          return res.status(400).json({ 
-            message: "Companies House service requires client to have valid CH date fields",
-            details: {
-              startDateField: service.chStartDateField,
-              dueDateField: service.chDueDateField,
-              startDateValid: startDate && !isNaN(startDate.getTime()),
-              dueDateValid: dueDate && !isNaN(dueDate.getTime()),
-            }
-          });
-        }
-        
-        // Auto-populate with validated dates
-        finalClientServiceData = {
-          ...finalClientServiceData,
-          nextStartDate: startDate.toISOString(),
-          nextDueDate: dueDate.toISOString(),
-        };
-      } else {
-        // Normal services (not static, not CH) require frequency with default
-        if (!finalClientServiceData.frequency) {
-          finalClientServiceData.frequency = 'monthly' as const;
-        }
+        throw mapperError; // Re-throw unexpected errors
       }
       
-      // Convert Date objects to ISO string for database insertion
-      const dataForStorage = {
-        ...finalClientServiceData,
-        nextStartDate: finalClientServiceData.nextStartDate instanceof Date 
-          ? finalClientServiceData.nextStartDate.toISOString() 
-          : finalClientServiceData.nextStartDate,
-        nextDueDate: finalClientServiceData.nextDueDate instanceof Date 
-          ? finalClientServiceData.nextDueDate.toISOString() 
-          : finalClientServiceData.nextDueDate,
-      };
-      
-      // Check if client-service mapping already exists
-      const mappingExists = await storage.checkClientServiceMappingExists(
-        clientServiceData.clientId, 
-        clientServiceData.serviceId
-      );
-      
-      if (mappingExists) {
-        return res.status(409).json({ 
-          message: "Client service mapping already exists",
-          code: "DUPLICATE_CLIENT_SERVICE_MAPPING"
-        });
-      }
-
-      const clientService = await storage.createClientService(dataForStorage);
-      res.status(201).json(clientService);
-    } catch (error) {
-      console.error("Error creating client service:", error instanceof Error ? error.message : error);
+    } catch (error: any) {
+      console.error('[Routes] POST /api/client-services error:', error);
       
       // Handle duplicate mapping case (unique constraint violation)
       if (error instanceof Error && (error as any).code === '23505') {
@@ -5276,7 +5203,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      res.status(500).json({ message: "Failed to create client service" });
+      return res.status(500).json({ 
+        message: "Failed to create client service", 
+        error: error.message || "An unexpected error occurred"
+      });
     }
   });
 
@@ -5312,6 +5242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/client-services/:id - Update client service (admin only)
+  // Uses protected service mapper module for all validation and business logic
   app.put("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       // Validate path parameters
@@ -5347,46 +5278,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // If serviceId is being updated, prevent personal services from being assigned to clients
-      if (validationResult.data.serviceId) {
-        const service = await storage.getServiceById(validationResult.data.serviceId);
-        if (!service) {
-          return res.status(404).json({ message: "Service not found" });
-        }
+      // Use protected service mapper module for update
+      try {
+        const clientService = await serviceMapper.updateClientServiceMapping(id, validationResult.data);
         
-        if (service.isPersonalService) {
-          return res.status(400).json({ 
-            message: "Personal services cannot be assigned to clients",
-            serviceId: service.id,
-            serviceName: service.name
+        console.log(`[Routes] Successfully updated client service mapping: ${id}`);
+        
+        // Handle chronology logging for isActive status changes (kept in routes as it's not core logic)
+        if (validationResult.data.isActive !== undefined && validationResult.data.isActive !== null &&
+            validationResult.data.isActive !== existingClientService.isActive) {
+          const service = await storage.getServiceById(clientService.serviceId);
+          const eventType = validationResult.data.isActive ? 'service_activated' : 'service_deactivated';
+          const fromValue = existingClientService.isActive?.toString() || 'true';
+          const toValue = validationResult.data.isActive.toString();
+          
+          await storage.createClientChronologyEntry({
+            clientId: clientService.clientId,
+            eventType,
+            entityType: 'client_service',
+            entityId: clientService.id,
+            fromValue,
+            toValue,
+            userId: req.user?.effectiveUserId || req.user?.id,
+            changeReason: `Service "${service?.name || 'Unknown'}" ${validationResult.data.isActive ? 'activated' : 'deactivated'}`,
+            notes: null,
           });
         }
-      }
-
-      const clientService = await storage.updateClientService(id, validationResult.data);
-      
-      // Log chronology entry if isActive status changed
-      if (validationResult.data.isActive !== undefined && validationResult.data.isActive !== null &&
-          validationResult.data.isActive !== existingClientService.isActive) {
-        const service = await storage.getServiceById(clientService.serviceId);
-        const eventType = validationResult.data.isActive ? 'service_activated' : 'service_deactivated';
-        const fromValue = existingClientService.isActive?.toString() || 'true';
-        const toValue = validationResult.data.isActive.toString();
         
-        await storage.createClientChronologyEntry({
-          clientId: clientService.clientId,
-          eventType,
-          entityType: 'client_service',
-          entityId: clientService.id,
-          fromValue,
-          toValue,
-          userId: req.user?.effectiveUserId || req.user?.id,
-          changeReason: `Service "${service?.name || 'Unknown'}" ${validationResult.data.isActive ? 'activated' : 'deactivated'}`,
-          notes: null,
-        });
+        return res.json(clientService);
+      } catch (mapperError: any) {
+        console.error('[Routes] Service mapper error:', mapperError);
+        
+        // Handle specific error types with appropriate HTTP status codes  
+        if (mapperError.message?.includes('not found')) {
+          return res.status(404).json({ message: mapperError.message });
+        }
+        if (mapperError.message?.includes('already exists')) {
+          return res.status(409).json({ message: mapperError.message });
+        }
+        if (mapperError.message?.includes('cannot be assigned') || 
+            mapperError.message?.includes('Personal service')) {
+          return res.status(400).json({ message: mapperError.message });
+        }
+        
+        throw mapperError; // Re-throw unexpected errors
       }
-      
-      res.json(clientService);
     } catch (error) {
       console.error("Error updating client service:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to update client service" });
@@ -5500,6 +5436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/people-services - Create a new people service
+  // Uses protected service mapper module for all validation and business logic
   app.post("/api/people-services", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       // Validate request body using Zod schema
@@ -5513,50 +5450,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const peopleServiceData = validation.data;
 
-      // Convert Date objects to ISO string for database insertion
-      const dataForStorage = {
-        ...peopleServiceData,
-        nextStartDate: peopleServiceData.nextStartDate instanceof Date 
-          ? peopleServiceData.nextStartDate.toISOString() 
-          : peopleServiceData.nextStartDate,
-        nextDueDate: peopleServiceData.nextDueDate instanceof Date 
-          ? peopleServiceData.nextDueDate.toISOString() 
-          : peopleServiceData.nextDueDate,
-      };
-
-      // Verify the service is a personal service before creation
-      const service = await storage.getServiceById(dataForStorage.serviceId);
-      if (!service) {
-        return res.status(404).json({ message: `Service with ID '${dataForStorage.serviceId}' not found` });
-      }
-      if (!service.isPersonalService) {
-        return res.status(400).json({ message: `Service '${service.name}' is not a personal service and cannot be assigned to people` });
-      }
-
-      // Create the people service
-      const newPeopleService = await storage.createPeopleService(dataForStorage);
-      
-      // Fetch the complete people service with relations
-      const completePeopleService = await storage.getPeopleServiceById(newPeopleService.id);
-      
-      res.status(201).json(completePeopleService);
-    } catch (error) {
-      console.error("Error creating people service:", error instanceof Error ? error.message : error);
-      
-      // Handle specific validation errors
-      if (error instanceof Error) {
-        if (error.message.includes('not found')) {
-          return res.status(404).json({ message: error.message });
+      // Use protected service mapper module for creation
+      try {
+        const newPeopleService = await serviceMapper.createPeopleServiceMapping(peopleServiceData);
+        
+        // Fetch the complete people service with relations
+        const completePeopleService = await storage.getPeopleServiceById(newPeopleService.id);
+        
+        console.log(`[Routes] Successfully created people service mapping: ${newPeopleService.id}`);
+        return res.status(201).json(completePeopleService);
+      } catch (mapperError: any) {
+        console.error('[Routes] Service mapper error:', mapperError);
+        
+        // Handle specific error types with appropriate HTTP status codes
+        if (mapperError.message?.includes('not found')) {
+          return res.status(404).json({ message: mapperError.message });
         }
-        if (error.message.includes('not a personal service')) {
-          return res.status(400).json({ message: error.message });
+        if (mapperError.message?.includes('already exists')) {
+          return res.status(409).json({ message: mapperError.message });
         }
-        if (error.message.includes('mapping already exists')) {
-          return res.status(409).json({ message: error.message });
+        if (mapperError.message?.includes('not a personal service')) {
+          return res.status(400).json({ message: mapperError.message });
         }
+        
+        throw mapperError; // Re-throw unexpected errors
       }
       
-      res.status(500).json({ message: "Failed to create people service" });
+    } catch (error: any) {
+      console.error('[Routes] POST /api/people-services error:', error);
+      return res.status(500).json({ 
+        message: "Failed to create people service",
+        error: error.message || "An unexpected error occurred"
+      });
     }
   });
 
@@ -5589,6 +5514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/people-services/:peopleServiceId - Update a people service
+  // Uses protected service mapper module for all validation and business logic
   app.put("/api/people-services/:peopleServiceId", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       // Validate path parameters
@@ -5615,69 +5541,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "People service not found" });
       }
 
-      // If serviceId is being changed, verify it's a personal service
-      if (peopleServiceData.serviceId) {
-        const service = await storage.getServiceById(peopleServiceData.serviceId);
-        if (!service) {
-          return res.status(404).json({ message: `Service with ID '${peopleServiceData.serviceId}' not found` });
-        }
-        if (!service.isPersonalService) {
-          return res.status(400).json({ message: `Service '${service.name}' is not a personal service and cannot be assigned to people` });
-        }
-      }
-
-      // Update the people service
-      const updatedPeopleService = await storage.updatePeopleService(peopleServiceId, peopleServiceData);
-      
-      // Log chronology entry if isActive status changed
-      if (peopleServiceData.isActive !== undefined && peopleServiceData.isActive !== null &&
-          peopleServiceData.isActive !== existingPeopleService.isActive) {
-        const service = await storage.getServiceById(updatedPeopleService.serviceId);
-        const eventType = peopleServiceData.isActive ? 'service_activated' : 'service_deactivated';
-        const fromValue = existingPeopleService.isActive?.toString() || 'true';
-        const toValue = peopleServiceData.isActive.toString();
+      // Use protected service mapper module for update
+      try {
+        const updatedPeopleService = await serviceMapper.updatePeopleServiceMapping(peopleServiceId, peopleServiceData);
         
-        // Get the client ID through the person relationship
-        const person = await storage.getPersonById(updatedPeopleService.personId);
-        if (person) {
-          const clientPeople = await storage.getClientPeopleByPersonId(person.id);
-          if (clientPeople.length > 0) {
-            await storage.createClientChronologyEntry({
-              clientId: clientPeople[0].clientId, // Use the first client relationship
-              eventType,
-              entityType: 'people_service',
-              entityId: updatedPeopleService.id,
-              fromValue,
-              toValue,
-              userId: req.user?.effectiveUserId || req.user?.id,
-              changeReason: `People service "${service?.name || 'Unknown'}" for ${person.fullName} ${peopleServiceData.isActive ? 'activated' : 'deactivated'}`,
-              notes: null,
-            });
+        console.log(`[Routes] Successfully updated people service mapping: ${peopleServiceId}`);
+        
+        // Handle chronology logging for isActive status changes (kept in routes as it's not core logic)
+        if (peopleServiceData.isActive !== undefined && peopleServiceData.isActive !== null &&
+            peopleServiceData.isActive !== existingPeopleService.isActive) {
+          const service = await storage.getServiceById(updatedPeopleService.serviceId);
+          const eventType = peopleServiceData.isActive ? 'service_activated' : 'service_deactivated';
+          const fromValue = existingPeopleService.isActive?.toString() || 'true';
+          const toValue = peopleServiceData.isActive.toString();
+          
+          // Get the client ID through the person relationship
+          const person = await storage.getPersonById(updatedPeopleService.personId);
+          if (person) {
+            const clientPeople = await storage.getClientPeopleByPersonId(person.id);
+            if (clientPeople.length > 0) {
+              await storage.createClientChronologyEntry({
+                clientId: clientPeople[0].clientId, // Use the first client relationship
+                eventType,
+                entityType: 'people_service',
+                entityId: updatedPeopleService.id,
+                fromValue,
+                toValue,
+                userId: req.user?.effectiveUserId || req.user?.id,
+                changeReason: `People service "${service?.name || 'Unknown'}" for ${person.fullName} ${peopleServiceData.isActive ? 'activated' : 'deactivated'}`,
+                notes: null,
+              });
+            }
           }
         }
+        
+        // Fetch the complete people service with relations
+        const completePeopleService = await storage.getPeopleServiceById(updatedPeopleService.id);
+        
+        return res.json(completePeopleService);
+      } catch (mapperError: any) {
+        console.error('[Routes] Service mapper error:', mapperError);
+        
+        // Handle specific error types with appropriate HTTP status codes
+        if (mapperError.message?.includes('not found')) {
+          return res.status(404).json({ message: mapperError.message });
+        }
+        if (mapperError.message?.includes('already exists')) {
+          return res.status(409).json({ message: mapperError.message });
+        }
+        if (mapperError.message?.includes('not a personal service')) {
+          return res.status(400).json({ message: mapperError.message });
+        }
+        
+        throw mapperError; // Re-throw unexpected errors
       }
       
-      // Fetch the complete people service with relations
-      const completePeopleService = await storage.getPeopleServiceById(updatedPeopleService.id);
-      
-      res.json(completePeopleService);
-    } catch (error) {
-      console.error("Error updating people service:", error instanceof Error ? error.message : error);
-      
-      // Handle specific validation errors
-      if (error instanceof Error) {
-        if (error.message.includes('not found')) {
-          return res.status(404).json({ message: error.message });
-        }
-        if (error.message.includes('not a personal service')) {
-          return res.status(400).json({ message: error.message });
-        }
-        if (error.message.includes('mapping already exists')) {
-          return res.status(409).json({ message: error.message });
-        }
-      }
-      
-      res.status(500).json({ message: "Failed to update people service" });
+    } catch (error: any) {
+      console.error('[Routes] PUT /api/people-services error:', error);
+      return res.status(500).json({ 
+        message: "Failed to update people service",
+        error: error.message || "An unexpected error occurred"
+      });
     }
   });
 
