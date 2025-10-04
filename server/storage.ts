@@ -176,7 +176,7 @@ export interface ScheduledServiceView {
 // Super search result types
 export interface SearchResult {
   id: string;
-  type: 'client' | 'person' | 'project' | 'communication' | 'service';
+  type: 'client' | 'person' | 'project' | 'communication';
   title: string;
   subtitle?: string;
   description?: string;
@@ -188,7 +188,6 @@ export interface SuperSearchResults {
   people: SearchResult[];
   projects: SearchResult[];
   communications: SearchResult[];
-  services: SearchResult[];
   total: number;
 }
 import bcrypt from "bcrypt";
