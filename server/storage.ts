@@ -452,6 +452,7 @@ export interface IStorage {
   getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
+  getServiceByName(name: string): Promise<Service | undefined>;
   getScheduledServices(): Promise<ScheduledServiceView[]>;
   createService(service: InsertService): Promise<Service>;
   updateService(id: string, service: Partial<InsertService>): Promise<Service>;
@@ -461,6 +462,7 @@ export interface IStorage {
   // Work Roles CRUD  
   getAllWorkRoles(): Promise<WorkRole[]>;
   getWorkRoleById(id: string): Promise<WorkRole | undefined>;
+  getWorkRoleByName(name: string): Promise<WorkRole | undefined>;
   createWorkRole(role: InsertWorkRole): Promise<WorkRole>;
   updateWorkRole(id: string, role: Partial<InsertWorkRole>): Promise<WorkRole>;
   deleteWorkRole(id: string): Promise<void>;
@@ -5233,6 +5235,11 @@ export class DatabaseStorage implements IStorage {
     return service;
   }
 
+  async getServiceByName(name: string): Promise<Service | undefined> {
+    const [service] = await db.select().from(services).where(eq(services.name, name));
+    return service;
+  }
+
   async getScheduledServices(): Promise<ScheduledServiceView[]> {
     // Get client services data
     const clientServicesData = await db
@@ -5474,6 +5481,11 @@ export class DatabaseStorage implements IStorage {
 
   async getWorkRoleById(id: string): Promise<WorkRole | undefined> {
     const [workRole] = await db.select().from(workRoles).where(eq(workRoles.id, id));
+    return workRole;
+  }
+
+  async getWorkRoleByName(name: string): Promise<WorkRole | undefined> {
+    const [workRole] = await db.select().from(workRoles).where(eq(workRoles.name, name));
     return workRole;
   }
 

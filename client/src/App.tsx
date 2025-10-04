@@ -30,6 +30,7 @@ import ChChanges from "@/pages/ch-changes";
 import Companies from "@/pages/companies";
 import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
+import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
 import PortalLogin from "@/pages/portal/PortalLogin";
 import PortalVerify from "@/pages/portal/PortalVerify";
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/tags" component={Tags} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
+      <Route path="/admin/import" component={DataImport} />
       <Route path="/push-diagnostics" component={PushDiagnostics} />
       
       {/* Catch-all NotFound route */}

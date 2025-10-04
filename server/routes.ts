@@ -9057,6 +9057,256 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Data Import Routes
+  app.post("/api/import/validate", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clients, clientServices, roleAssignments } = req.body;
+      
+      const errors: string[] = [];
+      const warnings: string[] = [];
+      
+      // Validate clients data
+      const clientRefs = new Set<string>();
+      const personRefs = new Set<string>();
+      
+      for (const row of clients || []) {
+        if (!row.client_ref) errors.push("Missing client_ref in clients data");
+        if (!row.client_name) errors.push(`Missing client_name for ${row.client_ref}`);
+        if (!row.client_type) errors.push(`Missing client_type for ${row.client_ref}`);
+        if (row.client_type && !['company', 'individual'].includes(row.client_type)) {
+          errors.push(`Invalid client_type for ${row.client_ref}. Must be 'company' or 'individual'`);
+        }
+        
+        if (row.client_ref) clientRefs.add(row.client_ref);
+        if (row.person_ref) personRefs.add(row.person_ref);
+        
+        if (!row.person_full_name && row.person_ref) {
+          errors.push(`Missing person_full_name for ${row.person_ref}`);
+        }
+      }
+      
+      // Validate client services
+      for (const row of clientServices || []) {
+        if (!row.client_ref) errors.push("Missing client_ref in services data");
+        if (row.client_ref && !clientRefs.has(row.client_ref)) {
+          errors.push(`Client ref ${row.client_ref} in services not found in clients data`);
+        }
+        if (!row.service_name) errors.push(`Missing service_name for ${row.client_ref}`);
+        if (!row.frequency) errors.push(`Missing frequency for ${row.client_ref} - ${row.service_name}`);
+        if (row.frequency && !['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'annually'].includes(row.frequency)) {
+          errors.push(`Invalid frequency for ${row.client_ref}. Must be one of: daily, weekly, fortnightly, monthly, quarterly, annually`);
+        }
+        
+        // Check if service exists
+        if (row.service_name) {
+          const service = await storage.getServiceByName(row.service_name);
+          if (!service) {
+            errors.push(`Service "${row.service_name}" not found in system`);
+          }
+        }
+        
+        // Check if service owner exists
+        if (row.service_owner_email) {
+          const user = await storage.getUserByEmail(row.service_owner_email);
+          if (!user) {
+            errors.push(`User with email "${row.service_owner_email}" not found in system`);
+          }
+        }
+      }
+      
+      // Validate role assignments
+      for (const row of roleAssignments || []) {
+        if (!row.client_ref) errors.push("Missing client_ref in role assignments");
+        if (row.client_ref && !clientRefs.has(row.client_ref)) {
+          errors.push(`Client ref ${row.client_ref} in role assignments not found in clients data`);
+        }
+        if (!row.service_name) errors.push(`Missing service_name for ${row.client_ref}`);
+        if (!row.work_role_name) errors.push(`Missing work_role_name for ${row.client_ref} - ${row.service_name}`);
+        if (!row.assigned_user_email) errors.push(`Missing assigned_user_email for ${row.client_ref} - ${row.service_name} - ${row.work_role_name}`);
+        
+        // Check if work role exists
+        if (row.work_role_name) {
+          const workRole = await storage.getWorkRoleByName(row.work_role_name);
+          if (!workRole) {
+            errors.push(`Work role "${row.work_role_name}" not found in system`);
+          }
+        }
+        
+        // Check if user exists
+        if (row.assigned_user_email) {
+          const user = await storage.getUserByEmail(row.assigned_user_email);
+          if (!user) {
+            errors.push(`User with email "${row.assigned_user_email}" not found in system`);
+          }
+        }
+      }
+      
+      res.json({
+        isValid: errors.length === 0,
+        errors,
+        warnings,
+      });
+    } catch (error) {
+      console.error("Validation error:", error);
+      res.status(500).json({ message: "Validation failed" });
+    }
+  });
+
+  app.post("/api/import/execute", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clients, clientServices, roleAssignments } = req.body;
+      
+      const result = {
+        success: true,
+        clientsCreated: 0,
+        peopleCreated: 0,
+        relationshipsCreated: 0,
+        servicesCreated: 0,
+        rolesAssigned: 0,
+        errors: [] as string[],
+      };
+      
+      // Maps for tracking created entities
+      const clientMap = new Map<string, string>(); // client_ref -> client_id
+      const personMap = new Map<string, string>(); // person_ref -> person_id
+      
+      // Process clients and people
+      for (const row of clients || []) {
+        try {
+          // Create or get client
+          let clientId = clientMap.get(row.client_ref);
+          
+          if (!clientId) {
+            const clientData = {
+              name: row.client_name,
+              email: row.client_email,
+              clientType: row.client_type,
+              companyNumber: row.company_number || null,
+            };
+            
+            const client = await storage.createClient(clientData);
+            clientId = client.id;
+            clientMap.set(row.client_ref, clientId);
+            result.clientsCreated++;
+          }
+          
+          // Create or get person
+          if (row.person_ref && row.person_full_name) {
+            let personId = personMap.get(row.person_ref);
+            
+            if (!personId) {
+              const personData = {
+                fullName: row.person_full_name,
+                email: row.person_email || null,
+                telephone: row.person_telephone || null,
+                primaryPhone: row.person_primary_phone || null,
+                primaryEmail: row.person_primary_email || null,
+              };
+              
+              const person = await storage.createPerson(personData);
+              personId = person.id;
+              personMap.set(row.person_ref, personId);
+              result.peopleCreated++;
+            }
+            
+            // Create relationship
+            const relationshipData = {
+              clientId,
+              personId,
+              officerRole: row.officer_role || null,
+              isPrimaryContact: row.is_primary_contact?.toLowerCase() === 'yes',
+            };
+            
+            await storage.linkPersonToClient(relationshipData);
+            result.relationshipsCreated++;
+          }
+        } catch (error) {
+          result.errors.push(`Error processing client ${row.client_ref}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // Process client services
+      for (const row of clientServices || []) {
+        try {
+          const clientId = clientMap.get(row.client_ref);
+          if (!clientId) {
+            result.errors.push(`Client ref ${row.client_ref} not found when processing services`);
+            continue;
+          }
+          
+          const service = await storage.getServiceByName(row.service_name);
+          if (!service) {
+            result.errors.push(`Service "${row.service_name}" not found`);
+            continue;
+          }
+          
+          let serviceOwnerId = null;
+          if (row.service_owner_email) {
+            const user = await storage.getUserByEmail(row.service_owner_email);
+            if (user) {
+              serviceOwnerId = user.id;
+            }
+          }
+          
+          // Parse dates
+          const parseDate = (dateStr: string) => {
+            if (!dateStr) return null;
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+              const [day, month, year] = parts;
+              return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            }
+            return null;
+          };
+          
+          const clientServiceData = {
+            clientId,
+            serviceId: service.id,
+            serviceOwnerId,
+            frequency: row.frequency,
+            nextStartDate: parseDate(row.next_start_date),
+            nextDueDate: parseDate(row.next_due_date),
+            isActive: row.is_active?.toLowerCase() !== 'no',
+          };
+          
+          const clientService = await storage.createClientService(clientServiceData);
+          result.servicesCreated++;
+          
+          // Process role assignments for this service
+          const serviceRoleAssignments = roleAssignments?.filter(
+            (ra: any) => ra.client_ref === row.client_ref && ra.service_name === row.service_name
+          ) || [];
+          
+          for (const roleRow of serviceRoleAssignments) {
+            try {
+              const workRole = await storage.getWorkRoleByName(roleRow.work_role_name);
+              const user = await storage.getUserByEmail(roleRow.assigned_user_email);
+              
+              if (workRole && user) {
+                await storage.createClientServiceRoleAssignment({
+                  clientServiceId: clientService.id,
+                  workRoleId: workRole.id,
+                  userId: user.id,
+                  isActive: roleRow.is_active?.toLowerCase() !== 'no',
+                });
+                result.rolesAssigned++;
+              }
+            } catch (error) {
+              result.errors.push(`Error assigning role for ${row.client_ref} - ${row.service_name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+        } catch (error) {
+          result.errors.push(`Error processing service for ${row.client_ref}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Import error:", error);
+      res.status(500).json({ message: "Import failed", errors: [error instanceof Error ? error.message : 'Unknown error'] });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
