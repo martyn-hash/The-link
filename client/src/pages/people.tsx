@@ -674,7 +674,7 @@ export default function People() {
                                     <TableCell key={column.id} style={cellStyle}>
                                       {person.relatedCompanies && person.relatedCompanies.length > 0 ? (
                                         <div className="flex flex-wrap gap-1">
-                                          {person.relatedCompanies.slice(0, 2).map((conn, index) => (
+                                          {person.relatedCompanies.filter(conn => conn.client).slice(0, 2).map((conn, index) => (
                                             <Badge
                                               key={index}
                                               variant="secondary"
@@ -686,9 +686,9 @@ export default function People() {
                                               {conn.client.name}
                                             </Badge>
                                           ))}
-                                          {person.relatedCompanies.length > 2 && (
+                                          {person.relatedCompanies.filter(conn => conn.client).length > 2 && (
                                             <Badge variant="outline" className="text-xs">
-                                              +{person.relatedCompanies.length - 2} more
+                                              +{person.relatedCompanies.filter(conn => conn.client).length - 2} more
                                             </Badge>
                                           )}
                                         </div>
