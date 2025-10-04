@@ -6,11 +6,21 @@ This full-stack project management application aims to provide a comprehensive s
 
 ### Recent Updates (October 2025)
 - **Data Import System**: Added comprehensive CSV import functionality at `/admin/import` for bulk importing client data, people, services, and role assignments. Supports multi-step workflow with validation, preview, and execution phases. System successfully creates clients, people, client-person relationships, service mappings, and role assignments from CSV files.
-- **Client Portal Enhancements** (October 4, 2025):
-  - Branded email templates for magic links using "The Link" sender name with professional styling, logo, and brand colors (Primary #0A7BBF, Accent #76CA23) - requires FROM_EMAIL secret and SendGrid sender verification
+- **Client Portal Authentication Upgrade** (October 4, 2025):
+  - **Code-based authentication**: Replaced magic links with secure 6-digit email verification codes
+  - Two-step login flow: email entry → code verification (10-minute expiry, one-time use)
+  - Beautiful `/portal/install` page with device-specific PWA installation instructions
+  - QR codes now point to install page instead of auto-login magic links
+  - Updated login UI with InputOTP component for code entry, brand gradient styling
+  - Branded email templates for verification codes using "The Link" sender (requires FROM_EMAIL secret)
+  - Backend: `sendVerificationCode()` and `verifyCode()` functions in `server/portalAuth.ts`
+  - API routes: `POST /api/portal/auth/request-code`, `POST /api/portal/auth/verify-code`
+  - Database: Added `verificationCode` and `codeExpiry` fields to `client_portal_users` table
+  - Magic link system deprecated but kept functional for backward compatibility
+  - Cookie-based dynamic manifest selection for proper PWA behavior
+- **Client Portal UI Enhancements** (October 4, 2025):
   - Fixed QR code login UX: already-authenticated users are immediately redirected without showing verification error flash
   - Portal-specific PWA manifest (`/portal-manifest.json`) with `/portal/login` start URL and `/portal/` scope
-  - Dynamic manifest loading via `usePortalManifest` hook in all portal pages with cleanup to restore staff manifest
   - iOS 26+ detection for updated PWA install instructions (3-dot menu instead of share button) with pulsing animations
   - New 5-button bottom navigation: Hamburger menu (future features), Tasks, Chats (center position for messaging), Profile, and TBD placeholder
   - Portal Tasks page (`/portal/tasks`) with coming soon placeholder for task management and organizers
@@ -46,13 +56,15 @@ The application features a mobile-first design approach, ensuring an optimal exp
 - **Client & Contact Management**: Comprehensive client and individual profiles, including risk assessment.
 - **Service & Communication Tracking**: Scheduled services, communication logging (email, call, SMS), and document management.
 - **Client Portal & Messaging**: 
-  - Magic link authentication for clients (email-based, no passwords)
+  - **Code-based authentication** (Primary): 6-digit email verification codes with 10-minute expiry
+  - Magic link authentication (Deprecated but functional for backward compatibility)
   - Message threads with topics and status tracking (new, in_progress, resolved, closed)
   - Real-time messaging between clients and staff
   - Dual authorship support (staff users OR portal clients)
   - Unread message tracking with tenant-scoped security
   - Integration with communications table for unified staff visibility
   - Mobile-first portal design with app-like experience
+  - **PWA Installation Flow**: QR code → Install instructions → Code-based login
 - **Advanced Table Features**: Dynamic column management (reorder, resize, show/hide), service owner display, color-coded tags with filtering, and bulk selection.
 - **Risk Assessment**: Multi-version risk assessments with detailed checklists, unique response storage, and color-coded risk levels.
 - **Data Import System**: 
@@ -120,7 +132,15 @@ The messaging system provides a comprehensive client portal with instant messagi
 - Portal authentication completely separate from staff OIDC
 
 **Authentication Flow**
-- **Clients**: Magic link → JWT/session cookie → `/api/portal/*` routes
+- **Clients (Primary)**: Email → 6-digit code → JWT → `/api/portal/*` routes
+  - QR code scans lead to `/portal/install` (PWA installation instructions)
+  - Login at `/portal/login` uses two-step flow: email entry → code verification
+  - Verification codes expire after 10 minutes, one-time use
+  - Codes stored in `verificationCode` and `codeExpiry` fields
+  - API routes: `POST /api/portal/auth/request-code`, `POST /api/portal/auth/verify-code`
+- **Clients (Deprecated)**: Magic link → JWT/session cookie → `/api/portal/*` routes
+  - Still functional for backward compatibility with old QR codes
+  - Routes marked as DEPRECATED: `POST /api/portal/auth/request-magic-link`, `GET /api/portal/auth/verify`
 - **Staff**: OIDC (Replit Auth) → `/api/internal/*` routes
 - Route prefixes enforce role-based access
 
