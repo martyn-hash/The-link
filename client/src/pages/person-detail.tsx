@@ -26,12 +26,9 @@ import type { Person, Client, ClientPerson, ClientPortalUser, PeopleService } fr
 import { insertPersonSchema } from "@shared/schema";
 
 type PersonWithDetails = Person & {
-  clientConnections: Array<{
-    clientPerson: ClientPerson;
-    client: Client;
-  }>;
+  relatedCompanies: Array<ClientPerson & { client: Client }>;
   portalUser?: ClientPortalUser | null;
-  services: PeopleService[];
+  personalServices?: Array<any>;
 };
 
 // Validation schema for editing person
@@ -215,7 +212,7 @@ export default function PersonDetail() {
 
   const handleShowQRCode = async () => {
     try {
-      const validConnections = person?.clientConnections?.filter(conn => conn.client) || [];
+      const validConnections = person?.relatedCompanies?.filter(conn => conn.client) || [];
       
       if (validConnections.length === 0) {
         toast({
@@ -258,7 +255,7 @@ export default function PersonDetail() {
 
   const sendInviteMutation = useMutation({
     mutationFn: async () => {
-      const validConnections = person?.clientConnections?.filter(conn => conn.client) || [];
+      const validConnections = person?.relatedCompanies?.filter(conn => conn.client) || [];
       
       if (validConnections.length === 0) {
         throw new Error('No client connections found');
@@ -687,18 +684,18 @@ export default function PersonDetail() {
           </Card>
 
           {/* Related Companies Card */}
-          {person.clientConnections && person.clientConnections.length > 0 && (
+          {person.relatedCompanies && person.relatedCompanies.length > 0 && (
             <Card data-testid="card-related-companies" className="md:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="h-5 w-5" />
                   Related Companies
-                  <Badge variant="secondary">{person.clientConnections.length}</Badge>
+                  <Badge variant="secondary">{person.relatedCompanies.length}</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {person.clientConnections.map((connection) => (
+                  {person.relatedCompanies.map((connection) => (
                     <div
                       key={connection.client.id}
                       className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
@@ -714,15 +711,15 @@ export default function PersonDetail() {
                             <h4 className="font-medium" data-testid={`text-company-name-${connection.client.id}`}>
                               {connection.client.name}
                             </h4>
-                            {connection.clientPerson.officerRole && (
+                            {connection.officerRole && (
                               <p className="text-sm text-muted-foreground" data-testid={`text-role-${connection.client.id}`}>
-                                {connection.clientPerson.officerRole}
+                                {connection.officerRole}
                               </p>
                             )}
                           </div>
                         </div>
-                        <Badge variant={connection.clientPerson.isPrimaryContact ? "default" : "secondary"}>
-                          {connection.clientPerson.isPrimaryContact ? "Primary Contact" : "Contact"}
+                        <Badge variant={connection.isPrimaryContact ? "default" : "secondary"}>
+                          {connection.isPrimaryContact ? "Primary Contact" : "Contact"}
                         </Badge>
                       </div>
                     </div>
