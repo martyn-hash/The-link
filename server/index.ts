@@ -6,6 +6,8 @@ import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling } from "./project-scheduler";
 import { sendSchedulingSummaryEmail } from "./emailService";
 import { storage } from "./storage";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 app.use(express.json());
@@ -59,6 +61,31 @@ app.use((req, res, next) => {
     await setupVite(app, server);
   } else {
     serveStatic(app);
+    
+    // Portal manifest fix for PRODUCTION ONLY
+    // In production, intercept portal routes and swap manifest in built HTML
+    app.use('/portal/*', async (req, res, next) => {
+      const acceptsHtml = req.accepts('html') || req.accepts('*/*');
+      const isApiRoute = req.path.startsWith('/api');
+      
+      if (acceptsHtml && !isApiRoute) {
+        try {
+          const builtHtmlPath = path.resolve(import.meta.dirname, "public", "index.html");
+          let html = await fs.promises.readFile(builtHtmlPath, "utf-8");
+          
+          // Swap manifest for portal PWA
+          html = html.replace(
+            '<link rel="manifest" href="/manifest.json" />',
+            '<link rel="manifest" href="/portal-manifest.json" />'
+          );
+          
+          return res.status(200).set({ "Content-Type": "text/html" }).send(html);
+        } catch (error) {
+          return next(error);
+        }
+      }
+      next();
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
