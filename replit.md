@@ -4,6 +4,9 @@
 ## Overview
 This full-stack project management application aims to provide a comprehensive solution for managing projects, clients, and services. It focuses on delivering a seamless, app-like experience across devices, with a strong emphasis on mobile responsiveness and intuitive user interfaces. The application integrates with various third-party services to streamline communication, document management, and compliance tracking, offering a robust platform for efficient business operations.
 
+### Recent Updates (October 2025)
+- **Data Import System**: Added comprehensive CSV import functionality at `/admin/import` for bulk importing client data, people, services, and role assignments. Supports multi-step workflow with validation, preview, and execution phases.
+
 ## User Preferences
 - Mobile-first responsive design
 - Touch-friendly interactions
@@ -42,6 +45,13 @@ The application features a mobile-first design approach, ensuring an optimal exp
   - Mobile-first portal design with app-like experience
 - **Advanced Table Features**: Dynamic column management (reorder, resize, show/hide), service owner display, color-coded tags with filtering, and bulk selection.
 - **Risk Assessment**: Multi-version risk assessments with detailed checklists, unique response storage, and color-coded risk levels.
+- **Data Import System**: 
+  - Admin-only CSV import at `/admin/import`
+  - Three-spreadsheet format: Clients & People, Client Services, Role Assignments
+  - Multi-step workflow: Upload → Validate → Preview → Import → Results
+  - Downloadable templates with correct service/role names
+  - Comprehensive validation with helpful error messages suggesting available services/roles
+  - Creates clients, people, client-people relationships, service mappings, and role assignments
 - **Mobile Optimizations**: Dedicated mobile components for navigation (BottomNav), search (SuperSearch), and responsive layouts for all main pages (Dashboard, Projects, Client Detail, Scheduled Services).
 - **Hooks**: Custom `useMediaQuery`, `useIsMobile`, and `useBreakpoint` hooks for adaptive rendering.
 
