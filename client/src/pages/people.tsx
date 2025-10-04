@@ -676,7 +676,7 @@ export default function People() {
                                               key={index}
                                               variant="secondary"
                                               className="text-xs cursor-pointer hover:bg-secondary/80"
-                                              onClick={() => setLocation(`/client/${client.id}`)}
+                                              onClick={() => setLocation(`/clients/${client.id}`)}
                                               data-testid={`badge-company-${client.id}`}
                                             >
                                               <Building2 className="w-3 h-3 mr-1" />
