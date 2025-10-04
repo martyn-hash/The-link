@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Smartphone, Share, PlusSquare, MoreVertical, Download } from 'lucide-react';
+import { Share, PlusSquare, MoreVertical, Download } from 'lucide-react';
 import { detectDevice } from '@/lib/pwaUtils';
+import logoPath from '@assets/full_logo_transparent_600_1759469504917.png';
 
 export default function PortalInstall() {
   const [device, setDevice] = useState<'ios' | 'android' | 'other'>('other');
@@ -22,42 +23,12 @@ export default function PortalInstall() {
     <div className="min-h-screen bg-gradient-to-br from-[#0A7BBF] via-[#0c8fd6] to-[#76CA23] flex items-center justify-center p-4">
       <Card className="w-full max-w-lg shadow-2xl border-0">
         <CardHeader className="text-center pb-4">
-          <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-br from-[#0A7BBF] to-[#76CA23] rounded-3xl flex items-center justify-center shadow-lg">
-            <Smartphone className="h-10 w-10 text-white" />
-          </div>
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-[#0A7BBF] to-[#76CA23] bg-clip-text text-transparent">
-            Welcome to The Link
+          <img src={logoPath} alt="Growth Accountants" className="mx-auto mb-6 w-48 h-auto" />
+          <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
+            Client Portal App Download
           </CardTitle>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Your secure client portal is just one tap away
-          </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Why Install */}
-          <div className="bg-gradient-to-br from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-2xl p-6">
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <Download className="h-5 w-5 text-[#0A7BBF]" />
-              Why Install the App?
-            </h3>
-            <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-              <li className="flex items-start gap-2">
-                <span className="text-[#76CA23] mt-0.5">✓</span>
-                <span>Instant access from your home screen</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#76CA23] mt-0.5">✓</span>
-                <span>Secure messaging with your accountant</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#76CA23] mt-0.5">✓</span>
-                <span>Receive important notifications</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#76CA23] mt-0.5">✓</span>
-                <span>Works offline when you need it</span>
-              </li>
-            </ul>
-          </div>
 
           {/* Installation Instructions */}
           {device === 'ios' && (
@@ -170,16 +141,13 @@ export default function PortalInstall() {
           )}
 
           {/* CTA */}
-          <div className="pt-4 text-center space-y-3">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              After installing, open the app from your home screen to get started
-            </p>
+          <div className="pt-4">
             <Button
               onClick={() => window.location.href = '/portal/login'}
               className="w-full bg-gradient-to-r from-[#0A7BBF] to-[#76CA23] hover:from-[#0A7BBF]/90 hover:to-[#76CA23]/90 text-white font-semibold py-6 text-lg shadow-lg"
-              data-testid="button-skip-to-login"
+              data-testid="button-go-to-portal"
             >
-              Skip to Login
+              Go to Portal
             </Button>
           </div>
         </CardContent>
