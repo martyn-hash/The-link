@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
+import { PortalAuthProvider, usePortalAuth } from "@/contexts/PortalAuthContext";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -28,6 +29,11 @@ import Companies from "@/pages/companies";
 import Tags from "@/pages/tags";
 import Admin from "@/pages/admin";
 import PushDiagnostics from "@/pages/push-diagnostics";
+import PortalLogin from "@/pages/portal/PortalLogin";
+import PortalVerify from "@/pages/portal/PortalVerify";
+import PortalThreadList from "@/pages/portal/PortalThreadList";
+import PortalThreadDetail from "@/pages/portal/PortalThreadDetail";
+import PortalNewThread from "@/pages/portal/PortalNewThread";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,6 +51,16 @@ function Router() {
 
   return (
     <Switch>
+      {/* Portal routes - separate auth system */}
+      <Route path="/portal/login" component={PortalLogin} />
+      <Route path="/portal/verify" component={PortalVerify} />
+      <Route path="/portal/threads/new" component={PortalNewThread} />
+      <Route path="/portal/threads/:id" component={PortalThreadDetail} />
+      <Route path="/portal/threads" component={PortalThreadList} />
+      <Route path="/portal">
+        <Redirect to="/portal/threads" />
+      </Route>
+
       {/* Public routes - always available */}
       <Route path="/magic-link-verify" component={MagicLinkVerify} />
       <Route path="/login" component={() => <Landing />} />
@@ -90,9 +106,11 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AppContent />
-      </TooltipProvider>
+      <PortalAuthProvider>
+        <TooltipProvider>
+          <AppContent />
+        </TooltipProvider>
+      </PortalAuthProvider>
     </QueryClientProvider>
   );
 }
