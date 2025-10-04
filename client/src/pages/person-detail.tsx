@@ -699,7 +699,7 @@ export default function PersonDetail() {
                     <div
                       key={connection.client.id}
                       className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
-                      onClick={() => setLocation(`/client/${connection.client.id}`)}
+                      onClick={() => setLocation(`/clients/${connection.client.id}`)}
                       data-testid={`company-${connection.client.id}`}
                     >
                       <div className="flex items-center justify-between">
