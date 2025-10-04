@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,29 @@ export default function PortalLogin() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const { toast } = useToast();
+
+  // Set portal-specific PWA manifest for portal pages
+  useEffect(() => {
+    const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+    const originalHref = manifestLink?.href || '/manifest.json';
+    
+    if (manifestLink) {
+      manifestLink.href = '/portal-manifest.json';
+    } else {
+      const newManifestLink = document.createElement('link');
+      newManifestLink.rel = 'manifest';
+      newManifestLink.href = '/portal-manifest.json';
+      document.head.appendChild(newManifestLink);
+    }
+
+    // Restore original manifest on cleanup
+    return () => {
+      const currentManifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+      if (currentManifestLink) {
+        currentManifestLink.href = originalHref;
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

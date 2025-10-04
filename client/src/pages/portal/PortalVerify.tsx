@@ -8,7 +8,7 @@ import { usePortalAuth } from '@/contexts/PortalAuthContext';
 
 export default function PortalVerify() {
   const [, setLocation] = useLocation();
-  const { login, isAuthenticated } = usePortalAuth();
+  const { login, isAuthenticated, isLoading } = usePortalAuth();
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [error, setError] = useState<string>('');
 
@@ -22,12 +22,14 @@ export default function PortalVerify() {
       return;
     }
 
-    // If already authenticated, just redirect (QR code reuse case)
+    // If already authenticated, immediately redirect without showing UI (QR code reuse case)
     if (isAuthenticated) {
-      setStatus('success');
-      setTimeout(() => {
-        setLocation('/portal/threads');
-      }, 500);
+      setLocation('/portal/threads');
+      return;
+    }
+
+    // Skip verification if still loading auth state
+    if (isLoading) {
       return;
     }
 
@@ -48,7 +50,24 @@ export default function PortalVerify() {
         setStatus('error');
         setError(err.message || 'Verification failed');
       });
-  }, [login, setLocation, isAuthenticated]);
+  }, [login, setLocation, isAuthenticated, isLoading]);
+
+  // Don't render error/verification UI if user is already authenticated
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <CardTitle className="text-2xl">Already Logged In</CardTitle>
+            <CardDescription>Redirecting to your portal...</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">

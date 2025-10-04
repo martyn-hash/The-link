@@ -41,7 +41,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem(PORTAL_TOKEN_KEY);
     return storedToken ? parseTokenUser(storedToken) : null;
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (token) {
