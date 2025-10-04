@@ -21,6 +21,7 @@ import Profile from "@/pages/profile";
 import MagicLinkVerify from "@/pages/magic-link-verify";
 import Clients from "@/pages/clients";
 import ClientDetail from "@/pages/client-detail";
+import ClientServiceDetail from "@/pages/client-service-detail";
 import People from "@/pages/people";
 import PersonDetail from "@/pages/person-detail";
 import Services from "@/pages/services";
@@ -85,6 +86,7 @@ function Router() {
       </Route>
       <Route path="/clients" component={Clients} />
       <Route path="/clients/:id" component={ClientDetail} />
+      <Route path="/client-service/:id" component={ClientServiceDetail} />
       <Route path="/people" component={People} />
       <Route path="/person/:id" component={PersonDetail} />
       <Route path="/profile" component={Profile} />

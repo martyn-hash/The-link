@@ -5885,6 +5885,98 @@ function RelatedPersonRow({
   );
 }
 
+// Client Service Row Component for condensed table view
+function ClientServiceRow({
+  clientService,
+}: {
+  clientService: EnhancedClientService;
+}) {
+  const [, setLocation] = useLocation();
+
+  return (
+    <TableRow data-testid={`service-row-${clientService.id}`}>
+      <TableCell className="font-medium">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span data-testid={`text-service-name-${clientService.id}`}>
+              {clientService.service?.name || 'Service'}
+            </span>
+            {clientService.service?.isStaticService && (
+              <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`badge-static-${clientService.id}`}>
+                Static
+              </Badge>
+            )}
+            {clientService.service?.isPersonalService && (
+              <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`badge-personal-${clientService.id}`}>
+                Personal
+              </Badge>
+            )}
+            {clientService.service?.isCompaniesHouseConnected && (
+              <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`badge-ch-${clientService.id}`}>
+                CH
+              </Badge>
+            )}
+          </div>
+          {clientService.service?.description && (
+            <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
+              {clientService.service.description}
+            </div>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-frequency-${clientService.id}`}>
+          {clientService.frequency || '-'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">
+          {clientService.nextStartDate ? (
+            <div data-testid={`text-next-start-${clientService.id}`}>
+              {formatDate(clientService.nextStartDate)}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">
+          {clientService.nextDueDate ? (
+            <div data-testid={`text-next-due-${clientService.id}`}>
+              {formatDate(clientService.nextDueDate)}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">
+          {clientService.serviceOwner ? (
+            <div data-testid={`text-service-owner-${clientService.id}`}>
+              {clientService.serviceOwner.firstName} {clientService.serviceOwner.lastName}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => setLocation(`/client-service/${clientService.id}`)}
+          data-testid={`button-view-service-${clientService.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -6921,7 +7013,7 @@ export default function ClientDetail() {
                     {(() => {
                       // Simple conditional logic for data source
                       const isIndividualWithConnections = client.clientType === 'individual' && (companyConnections?.length ?? 0) > 0;
-                      const displayServices = isIndividualWithConnections ? companyServicesQueries.data : clientServices;
+                      const displayServices: EnhancedClientService[] | undefined = isIndividualWithConnections ? (companyServicesQueries.data as unknown as EnhancedClientService[]) : clientServices;
                       const loading = isIndividualWithConnections ? companyServicesQueries.isLoading : servicesLoading;
                       const error = isIndividualWithConnections ? companyServicesQueries.isError : servicesError;
                       
@@ -6954,220 +7046,28 @@ export default function ClientDetail() {
                             {activeClientServices.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm text-muted-foreground mb-3">Active Services</h4>
-                                <Accordion
-                                  type="single"
-                                  collapsible
-                                  value={expandedClientServiceId ?? undefined}
-                                  onValueChange={(value) => setExpandedClientServiceId(value ?? null)}
-                                  className="space-y-4"
-                                >
-                                  {activeClientServices.map((clientService: EnhancedClientService) => (
-                                <AccordionItem key={clientService.id} value={clientService.id} className="border rounded-lg bg-card">
-                                  <AccordionTrigger 
-                                    className="text-left hover:no-underline p-4"
-                                    data-testid={`service-row-${clientService.id}`}
-                                  >
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full mr-4">
-                                      {/* Column 1: Service Name and Description */}
-                                      <div className="space-y-2">
-                                        <div>
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
-                                              {clientService.service?.name || 'Service'}
-                                            </h4>
-                                            {clientService.service?.isStaticService && (
-                                              <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`static-status-${clientService.id}`}>
-                                                Static
-                                              </Badge>
-                                            )}
-                                            {clientService.service?.isPersonalService && (
-                                              <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`personal-status-${clientService.id}`}>
-                                                Personal
-                                              </Badge>
-                                            )}
-                                            {clientService.service?.isCompaniesHouseConnected && (
-                                              <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`ch-status-${clientService.id}`}>
-                                                CH
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          {clientService.service?.description && (
-                                            <p className="text-sm text-muted-foreground mt-1">
-                                              {clientService.service.description}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          Frequency: {clientService.frequency}
-                                        </div>
-                                      </div>
-
-                                      {/* Column 2: Next Service Dates (Start & Due) */}
-                                      <div className="space-y-2">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <Clock className="h-4 w-4 text-muted-foreground" />
-                                          <span className="text-sm font-medium text-muted-foreground">Next Service Dates</span>
-                                        </div>
-                                        <div className="space-y-1">
-                                          {clientService.nextStartDate ? (
-                                            <div className="flex items-center space-x-2">
-                                              <span className="text-xs text-muted-foreground">Start:</span>
-                                              <span className="text-sm font-medium" data-testid={`text-next-start-date-${clientService.id}`}>
-                                                {formatDate(clientService.nextStartDate)}
-                                              </span>
-                                            </div>
-                                          ) : null}
-                                          {clientService.nextDueDate ? (
-                                            <div className="flex items-center space-x-2">
-                                              <span className="text-xs text-muted-foreground">Due:</span>
-                                              <span className="text-sm font-medium" data-testid={`text-next-due-date-${clientService.id}`}>
-                                                {formatDate(clientService.nextDueDate)}
-                                              </span>
-                                            </div>
-                                          ) : null}
-                                          {!clientService.nextStartDate && !clientService.nextDueDate && (
-                                            <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Column 3: Current Project Dates (Start & Due) */}
-                                      <div className="space-y-2">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                                          <span className="text-sm font-medium text-muted-foreground">Current Project Dates</span>
-                                        </div>
-                                        {clientService.hasActiveProject && (clientService.currentProjectStartDate || clientService.currentProjectDueDate) ? (
-                                          <div className="space-y-1">
-                                            {clientService.currentProjectStartDate ? (
-                                              <div className="flex items-center space-x-2">
-                                                <span className="text-xs text-muted-foreground">Started:</span>
-                                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300" data-testid={`text-current-start-date-${clientService.id}`}>
-                                                  {formatDate(clientService.currentProjectStartDate)}
-                                                </span>
-                                              </div>
-                                            ) : null}
-                                            {clientService.currentProjectDueDate ? (
-                                              <div className="flex items-center space-x-2">
-                                                <span className="text-xs text-muted-foreground">Due:</span>
-                                                <span className="text-sm font-medium text-orange-700 dark:text-orange-300" data-testid={`text-current-due-date-${clientService.id}`}>
-                                                  {formatDate(clientService.currentProjectDueDate)}
-                                                </span>
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        ) : (
-                                          <p className="text-sm text-muted-foreground italic">No active project</p>
-                                        )}
-                                      </div>
-
-                                      {/* Column 4: Service Owner */}
-                                      <div className="space-y-2">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <UserIcon className="h-4 w-4 text-muted-foreground" />
-                                          <span className="text-sm font-medium text-muted-foreground">Service Owner</span>
-                                        </div>
-                                        {clientService.serviceOwner ? (
-                                          <div className="space-y-1">
-                                            <div className="text-sm font-medium" data-testid={`text-service-owner-${clientService.id}`}>
-                                              {clientService.serviceOwner.firstName} {clientService.serviceOwner.lastName}
-                                            </div>
-                                            {clientService.serviceOwner.email && (
-                                              <div className="text-xs text-muted-foreground">
-                                                {clientService.serviceOwner.email}
-                                              </div>
-                                            )}
-                                          </div>
-                                        ) : (
-                                          <p className="text-sm text-muted-foreground italic">No owner assigned</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </AccordionTrigger>
-                                  
-                                  <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-service-details-${clientService.id}`}>
-                                    <div className="pt-4">
-                                      <div className="flex items-center justify-between mb-4">
-                                        <div></div>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setEditingServiceId(clientService.id)}
-                                          data-testid={`button-edit-service-${clientService.id}`}
-                                          className="h-8 px-3 text-xs"
-                                        >
-                                          <Pencil className="h-3 w-3 mr-1" />
-                                          Edit Service
-                                        </Button>
-                                      </div>
-                                      <Tabs defaultValue="roles" className="w-full">
-                                        <TabsList className="grid w-full grid-cols-3">
-                                          <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
-                                          <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Service Details</TabsTrigger>
-                                          <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
-                                        </TabsList>
-
-                                        <TabsContent value="roles" className="mt-4">
-                                          <div className="space-y-4">
-                                            <h5 className="font-medium text-sm flex items-center">
-                                              <Users className="h-4 w-4 mr-2 text-muted-foreground" />
-                                              Role Assignments
-                                            </h5>
-                                            
-                                            {clientService.roleAssignments && clientService.roleAssignments.length > 0 ? (
-                                              <div className="space-y-3">
-                                                {clientService.roleAssignments.map((assignment) => (
-                                                  <div key={assignment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                                    <div>
-                                                      <div className="font-medium text-sm">{assignment.workRole.name}</div>
-                                                      {assignment.workRole.description && (
-                                                        <div className="text-xs text-muted-foreground">{assignment.workRole.description}</div>
-                                                      )}
-                                                    </div>
-                                                    <div className="text-right">
-                                                      <div className="text-sm font-medium">
-                                                        {assignment.user.firstName} {assignment.user.lastName}
-                                                      </div>
-                                                      {assignment.user.email && (
-                                                        <div className="text-xs text-muted-foreground">{assignment.user.email}</div>
-                                                      )}
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            ) : (
-                                              <div className="text-center py-8">
-                                                <p className="text-muted-foreground">No role assignments configured for this service.</p>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </TabsContent>
-
-                                        <TabsContent value="custom-fields" className="mt-4">
-                                          <EditableServiceDetails 
-                                            clientService={clientService}
-                                            onUpdate={() => refetchServices()}
-                                          />
-                                        </TabsContent>
-
-                                        <TabsContent value="projects" className="mt-4">
-                                          <div className="space-y-4">
-                                            <h5 className="font-medium text-sm flex items-center">
-                                              <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
-                                              Related Projects
-                                            </h5>
-                                            
-                                            <ServiceProjectsList 
-                                              serviceId={clientService.serviceId} 
-                                            />
-                                          </div>
-                                        </TabsContent>
-                                      </Tabs>
-                                    </div>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              ))}
-                                </Accordion>
+                                <div className="border rounded-lg">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Service</TableHead>
+                                        <TableHead>Frequency</TableHead>
+                                        <TableHead>Next Start</TableHead>
+                                        <TableHead>Next Due</TableHead>
+                                        <TableHead>Service Owner</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {activeClientServices.map((clientService: EnhancedClientService) => (
+                                        <ClientServiceRow 
+                                          key={clientService.id}
+                                          clientService={clientService}
+                                        />
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
                               </div>
                             )}
                             
@@ -7175,191 +7075,28 @@ export default function ClientDetail() {
                             {inactiveClientServices.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm text-muted-foreground mb-3">Inactive Services</h4>
-                                <Accordion
-                                  type="single"
-                                  collapsible
-                                  value={expandedClientServiceId ?? undefined}
-                                  onValueChange={(value) => setExpandedClientServiceId(value ?? null)}
-                                  className="space-y-4"
-                                >
-                                  {inactiveClientServices.map((clientService: EnhancedClientService) => (
-                                    <AccordionItem key={clientService.id} value={clientService.id} className="border rounded-lg bg-card opacity-60">
-                                      <AccordionTrigger 
-                                        className="text-left hover:no-underline p-4"
-                                        data-testid={`service-row-${clientService.id}`}
-                                      >
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full mr-4">
-                                          {/* Column 1: Service Name and Description */}
-                                          <div className="space-y-2">
-                                            <div>
-                                              <div className="flex items-center gap-2 flex-wrap">
-                                                <h4 className="font-medium text-lg" data-testid={`text-service-name-${clientService.id}`}>
-                                                  {clientService.service?.name || 'Service'} <span className="text-xs text-red-500">(Inactive)</span>
-                                                </h4>
-                                                {clientService.service?.isStaticService && (
-                                                  <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`static-status-${clientService.id}`}>
-                                                    Static
-                                                  </Badge>
-                                                )}
-                                                {clientService.service?.isPersonalService && (
-                                                  <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`personal-status-${clientService.id}`}>
-                                                    Personal
-                                                  </Badge>
-                                                )}
-                                                {clientService.service?.isCompaniesHouseConnected && (
-                                                  <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`ch-status-${clientService.id}`}>
-                                                    CH
-                                                  </Badge>
-                                                )}
-                                              </div>
-                                              {clientService.service?.description && (
-                                                <p className="text-sm text-muted-foreground mt-1">
-                                                  {clientService.service.description}
-                                                </p>
-                                              )}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                              Frequency: {clientService.frequency}
-                                            </div>
-                                          </div>
-
-                                          {/* Column 2: Next Start Date */}
-                                          <div className="space-y-2">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <Clock className="h-4 w-4 text-muted-foreground" />
-                                              <span className="text-sm font-medium text-muted-foreground">Next Start Date</span>
-                                            </div>
-                                            {clientService.nextStartDate ? (
-                                              <div className="text-sm font-medium" data-testid={`text-next-start-date-${clientService.id}`}>
-                                                {formatDate(clientService.nextStartDate)}
-                                              </div>
-                                            ) : (
-                                              <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                            )}
-                                          </div>
-
-                                          {/* Column 3: Next Due Date */}
-                                          <div className="space-y-2">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                                              <span className="text-sm font-medium text-muted-foreground">Next Due Date</span>
-                                            </div>
-                                            {clientService.nextDueDate ? (
-                                              <div className="text-sm font-medium" data-testid={`text-next-due-date-${clientService.id}`}>
-                                                {formatDate(clientService.nextDueDate)}
-                                              </div>
-                                            ) : (
-                                              <p className="text-sm text-muted-foreground italic">Not scheduled</p>
-                                            )}
-                                          </div>
-
-                                          {/* Column 4: Service Owner */}
-                                          <div className="space-y-2">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <UserIcon className="h-4 w-4 text-muted-foreground" />
-                                              <span className="text-sm font-medium text-muted-foreground">Service Owner</span>
-                                            </div>
-                                            {clientService.serviceOwner ? (
-                                              <div className="space-y-1">
-                                                <div className="text-sm font-medium" data-testid={`text-service-owner-${clientService.id}`}>
-                                                  {clientService.serviceOwner.firstName} {clientService.serviceOwner.lastName}
-                                                </div>
-                                                {clientService.serviceOwner.email && (
-                                                  <div className="text-xs text-muted-foreground">
-                                                    {clientService.serviceOwner.email}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            ) : (
-                                              <p className="text-sm text-muted-foreground italic">No owner assigned</p>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </AccordionTrigger>
-                                      
-                                      <AccordionContent className="px-4 pb-4 border-t bg-gradient-to-r from-muted/30 to-muted/10 dark:from-muted/40 dark:to-muted/20" data-testid={`section-service-details-${clientService.id}`}>
-                                        <div className="pt-4">
-                                          <div className="flex items-center justify-between mb-4">
-                                            <div></div>
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => setEditingServiceId(clientService.id)}
-                                              data-testid={`button-edit-service-${clientService.id}`}
-                                              className="h-8 px-3 text-xs"
-                                            >
-                                              <Pencil className="h-3 w-3 mr-1" />
-                                              Edit Service
-                                            </Button>
-                                          </div>
-                                          <Tabs defaultValue="roles" className="w-full">
-                                            <TabsList className="grid w-full grid-cols-3">
-                                              <TabsTrigger value="roles" data-testid={`tab-roles-${clientService.id}`}>Roles & Assignments</TabsTrigger>
-                                              <TabsTrigger value="custom-fields" data-testid={`tab-custom-fields-${clientService.id}`}>Service Details</TabsTrigger>
-                                              <TabsTrigger value="projects" data-testid={`tab-projects-${clientService.id}`}>Related Projects</TabsTrigger>
-                                            </TabsList>
-
-                                            <TabsContent value="roles" className="mt-4">
-                                              <div className="space-y-4">
-                                                <h5 className="font-medium text-sm flex items-center">
-                                                  <Users className="h-4 w-4 mr-2 text-muted-foreground" />
-                                                  Role Assignments
-                                                </h5>
-                                                
-                                                {clientService.roleAssignments && clientService.roleAssignments.length > 0 ? (
-                                                  <div className="space-y-3">
-                                                    {clientService.roleAssignments.map((assignment) => (
-                                                      <div key={assignment.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                                        <div>
-                                                          <div className="font-medium text-sm">{assignment.workRole.name}</div>
-                                                          {assignment.workRole.description && (
-                                                            <div className="text-xs text-muted-foreground">{assignment.workRole.description}</div>
-                                                          )}
-                                                        </div>
-                                                        <div className="text-right">
-                                                          <div className="text-sm font-medium">
-                                                            {assignment.user.firstName} {assignment.user.lastName}
-                                                          </div>
-                                                          {assignment.user.email && (
-                                                            <div className="text-xs text-muted-foreground">{assignment.user.email}</div>
-                                                          )}
-                                                        </div>
-                                                      </div>
-                                                    ))}
-                                                  </div>
-                                                ) : (
-                                                  <div className="text-center py-8">
-                                                    <p className="text-muted-foreground">No role assignments configured for this service.</p>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </TabsContent>
-
-                                            <TabsContent value="custom-fields" className="mt-4">
-                                              <EditableServiceDetails 
-                                                clientService={clientService}
-                                                onUpdate={() => refetchServices()}
-                                              />
-                                            </TabsContent>
-
-                                            <TabsContent value="projects" className="mt-4">
-                                              <div className="space-y-4">
-                                                <h5 className="font-medium text-sm flex items-center">
-                                                  <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
-                                                  Related Projects
-                                                </h5>
-                                                
-                                                <ServiceProjectsList 
-                                                  serviceId={clientService.serviceId} 
-                                                />
-                                              </div>
-                                            </TabsContent>
-                                          </Tabs>
-                                        </div>
-                                      </AccordionContent>
-                                    </AccordionItem>
-                                  ))}
-                                </Accordion>
+                                <div className="border rounded-lg opacity-60">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Service</TableHead>
+                                        <TableHead>Frequency</TableHead>
+                                        <TableHead>Next Start</TableHead>
+                                        <TableHead>Next Due</TableHead>
+                                        <TableHead>Service Owner</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {inactiveClientServices.map((clientService: EnhancedClientService) => (
+                                        <ClientServiceRow 
+                                          key={clientService.id}
+                                          clientService={clientService}
+                                        />
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
                               </div>
                             )}
                           </div>

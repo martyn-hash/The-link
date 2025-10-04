@@ -475,7 +475,12 @@ export interface IStorage {
 
   // Client Services CRUD
   getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } })[]>;
-  getClientServiceById(id: string): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } }) | undefined>;
+  getClientServiceById(id: string): Promise<(ClientService & { 
+    client: Client; 
+    service: Service & { projectType: ProjectType }; 
+    serviceOwner?: User;
+    roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
+  }) | undefined>;
   getClientServicesByClientId(clientId: string): Promise<(ClientService & { 
     service: Service & { projectType: ProjectType }; 
     serviceOwner?: User; 
@@ -5651,80 +5656,135 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getClientServiceById(id: string): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } }) | undefined> {
-    const [result] = await db
-      .select({
-        id: clientServices.id,
-        clientId: clientServices.clientId,
-        serviceId: clientServices.serviceId,
-        serviceOwnerId: clientServices.serviceOwnerId,
-        frequency: clientServices.frequency,
-        nextStartDate: clientServices.nextStartDate,
-        nextDueDate: clientServices.nextDueDate,
-        isActive: clientServices.isActive,
-        createdAt: clientServices.createdAt,
-        clientId_data: clients.id,
-        clientName: clients.name,
-        clientEmail: clients.email,
-        clientCreatedAt: clients.createdAt,
-        serviceId_data: services.id,
-        serviceName: services.name,
-        serviceDescription: services.description,
-
-
-        serviceUdfDefinitions: services.udfDefinitions,
-        serviceCreatedAt: services.createdAt,
-        projectTypeId: projectTypes.id,
-        projectTypeName: projectTypes.name,
-        projectTypeDescription: projectTypes.description,
-        projectTypeActive: projectTypes.active,
-        projectTypeOrder: projectTypes.order,
-        projectTypeCreatedAt: projectTypes.createdAt,
-      })
-      .from(clientServices)
-      .innerJoin(clients, eq(clientServices.clientId, clients.id))
-      .innerJoin(services, eq(clientServices.serviceId, services.id))
-      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
-      .where(eq(clientServices.id, id));
-    
-    if (!result) {
-      return undefined;
-    }
-    
-    return {
-      id: result.id,
-      clientId: result.clientId,
-      serviceId: result.serviceId,
-      serviceOwnerId: result.serviceOwnerId,
-      frequency: result.frequency,
-      nextStartDate: result.nextStartDate,
-      nextDueDate: result.nextDueDate,
-      isActive: result.isActive,
-      createdAt: result.createdAt,
-      client: {
-        id: result.clientId_data,
-        name: result.clientName,
-        email: result.clientEmail,
-        createdAt: result.clientCreatedAt,
-      },
-      service: {
-        id: result.serviceId_data,
-        name: result.serviceName,
-        description: result.serviceDescription,
-        projectTypeId: result.projectTypeId,
-
-        udfDefinitions: result.serviceUdfDefinitions,
-        createdAt: result.serviceCreatedAt,
-        projectType: {
-          id: result.projectTypeId,
-          name: result.projectTypeName,
-          description: result.projectTypeDescription,
-          active: result.projectTypeActive,
-          order: result.projectTypeOrder,
-          createdAt: result.projectTypeCreatedAt,
+  async getClientServiceById(id: string): Promise<(ClientService & { 
+    client: Client; 
+    service: Service & { projectType: ProjectType }; 
+    serviceOwner?: User;
+    roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
+  }) | undefined> {
+    try {
+      console.log(`[DEBUG] Fetching client service by ID: ${id}`);
+      
+      // Get basic client service first
+      const clientServicesList = await db
+        .select()
+        .from(clientServices)
+        .where(eq(clientServices.id, id));
+      
+      if (!clientServicesList.length) {
+        console.log(`[DEBUG] Client service not found for ID: ${id}`);
+        return undefined;
+      }
+      
+      const cs = clientServicesList[0];
+      console.log(`[DEBUG] Found client service with serviceId: ${cs.serviceId}`);
+      
+      // Get client details
+      const clientsList = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.id, cs.clientId));
+      
+      if (!clientsList.length) {
+        console.warn(`[WARNING] Client not found for clientId: ${cs.clientId}`);
+        return undefined;
+      }
+      
+      const client = clientsList[0];
+      console.log(`[DEBUG] Found client: ${client.name}`);
+      
+      // Get service details
+      const servicesList = await db
+        .select()
+        .from(services)
+        .where(eq(services.id, cs.serviceId));
+      
+      if (!servicesList.length) {
+        console.warn(`[WARNING] Service not found for serviceId: ${cs.serviceId}`);
+        return undefined;
+      }
+      
+      const service = servicesList[0];
+      console.log(`[DEBUG] Found service: ${service.name}`);
+      
+      // Get project type - try by ID first, then by name matching
+      let projectType = undefined;
+      if (service.projectTypeId) {
+        const projectTypesList = await db
+          .select()
+          .from(projectTypes)
+          .where(eq(projectTypes.id, service.projectTypeId));
+        projectType = projectTypesList.length ? projectTypesList[0] : undefined;
+        console.log(`[DEBUG] Project type found by ID: ${projectType?.name || 'None'}`);
+      } else {
+        // Try to match by name if no projectTypeId is set
+        const projectTypesList = await db
+          .select()
+          .from(projectTypes)
+          .where(or(
+            eq(projectTypes.name, service.name),
+            ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`),
+            ilike(service.name, `%${projectTypes.name}%`)
+          ));
+        projectType = projectTypesList.length ? projectTypesList[0] : undefined;
+        console.log(`[DEBUG] Project type found by name matching: ${projectType?.name || 'None'} for service: ${service.name}`);
+      }
+      
+      // Get service owner if exists
+      let serviceOwner = undefined;
+      if (cs.serviceOwnerId) {
+        const ownersList = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, cs.serviceOwnerId));
+        serviceOwner = ownersList.length ? ownersList[0] : undefined;
+        console.log(`[DEBUG] Service owner found: ${serviceOwner?.email || 'None'}`);
+      }
+      
+      // Get role assignments
+      const roleAssignments = await this.getActiveClientServiceRoleAssignments(cs.id);
+      console.log(`[DEBUG] Found ${roleAssignments.length} role assignments`);
+      
+      return {
+        id: cs.id,
+        clientId: cs.clientId,
+        serviceId: cs.serviceId,
+        serviceOwnerId: cs.serviceOwnerId,
+        frequency: cs.frequency,
+        nextStartDate: cs.nextStartDate,
+        nextDueDate: cs.nextDueDate,
+        isActive: cs.isActive,
+        udfValues: cs.udfValues,
+        createdAt: cs.createdAt,
+        client: {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          createdAt: client.createdAt,
         },
-      },
-    };
+        service: {
+          id: service.id,
+          name: service.name,
+          description: service.description,
+          projectTypeId: service.projectTypeId,
+          udfDefinitions: service.udfDefinitions,
+          isActive: service.isActive,
+          isPersonalService: service.isPersonalService,
+          isStaticService: service.isStaticService,
+          isCompaniesHouseConnected: service.isCompaniesHouseConnected,
+          chStartDateField: service.chStartDateField,
+          chDueDateField: service.chDueDateField,
+          createdAt: service.createdAt,
+          projectType,
+        },
+        serviceOwner,
+        roleAssignments,
+      };
+    } catch (error) {
+      console.error(`[ERROR] Error in getClientServiceById for id ${id}:`, error);
+      console.error(`[ERROR] Stack trace:`, error instanceof Error ? error.stack : 'No stack trace');
+      throw error;
+    }
   }
 
   async getClientServicesByClientId(clientId: string): Promise<(ClientService & { 
