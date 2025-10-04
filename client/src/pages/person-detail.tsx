@@ -4,7 +4,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNav from "@/components/bottom-nav";
-import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, MapPin, Calendar, Phone, Mail, User as UserIcon, Globe, Check, ArrowLeft, Shield, Edit, Eye, EyeOff, QrCode, Save, X } from "lucide-react";
@@ -115,7 +114,6 @@ export default function PersonDetail() {
   const [revealedUTR, setRevealedUTR] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
 
   const { data: person, isLoading, error } = useQuery<PersonWithDetails>({
@@ -294,7 +292,7 @@ export default function PersonDetail() {
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-64 w-full" />
         </main>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        {isMobile && <BottomNav />}
       </div>
     );
   }
@@ -313,7 +311,7 @@ export default function PersonDetail() {
             </CardContent>
           </Card>
         </main>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        {isMobile && <BottomNav />}
       </div>
     );
   }
@@ -323,7 +321,6 @@ export default function PersonDetail() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation />
-      <SuperSearch />
       
       <main className="container mx-auto py-6 space-y-6">
         {/* Header Section */}
