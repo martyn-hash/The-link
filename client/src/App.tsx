@@ -34,6 +34,7 @@ import PortalVerify from "@/pages/portal/PortalVerify";
 import PortalThreadList from "@/pages/portal/PortalThreadList";
 import PortalThreadDetail from "@/pages/portal/PortalThreadDetail";
 import PortalNewThread from "@/pages/portal/PortalNewThread";
+import Messages from "@/pages/messages";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -74,6 +75,7 @@ function Router() {
       </Route>
       
       {/* Protected routes - render regardless of auth state, let components handle auth */}
+      <Route path="/messages" component={Messages} />
       <Route path="/projects" component={Projects} />
       <Route path="/projects/:id" component={ProjectDetail} />
       {/* Redirect old /all-projects route to new /projects route */}

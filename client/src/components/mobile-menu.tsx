@@ -11,7 +11,8 @@ import {
   Calendar, 
   User as UserIcon, 
   LogOut,
-  X 
+  X,
+  MessageCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
@@ -54,6 +55,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
   const navItems = [
     { href: "/", label: "Dashboard", icon: Home, show: true },
     { href: "/projects", label: "Projects", icon: FolderOpen, show: true },
+    { href: "/messages", label: "Messages", icon: MessageCircle, show: true },
     { 
       href: "/scheduled-services", 
       label: "Services", 

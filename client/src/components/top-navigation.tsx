@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
@@ -143,6 +143,19 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                             <div className="flex-1">
                               <div className="font-medium text-foreground text-sm">Projects</div>
                               <div className="text-xs text-muted-foreground">Manage client projects</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/messages" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-messages-menu">
+                            <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900 flex items-center justify-center">
+                              <MessageCircle className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-foreground text-sm">Messages</div>
+                              <div className="text-xs text-muted-foreground">Client portal conversations</div>
                             </div>
                           </div>
                         </Link>
