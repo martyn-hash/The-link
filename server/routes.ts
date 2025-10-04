@@ -9062,6 +9062,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { clients, clientServices, roleAssignments } = req.body;
       
+      console.log("=== Import Validation Request ===");
+      console.log("Clients count:", clients?.length || 0);
+      console.log("Client Services count:", clientServices?.length || 0);
+      console.log("Role Assignments count:", roleAssignments?.length || 0);
+      
+      if (clients?.length > 0) {
+        console.log("First client row:", JSON.stringify(clients[0], null, 2));
+        console.log("Client row keys:", Object.keys(clients[0]));
+      }
+      if (clientServices?.length > 0) {
+        console.log("First service row:", JSON.stringify(clientServices[0], null, 2));
+        console.log("Service row keys:", Object.keys(clientServices[0]));
+      }
+      
       const errors: string[] = [];
       const warnings: string[] = [];
       
@@ -9071,8 +9085,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const row of clients || []) {
         if (!row.client_ref) errors.push("Missing client_ref in clients data");
-        if (!row.client_name) errors.push(`Missing client_name for ${row.client_ref}`);
-        if (!row.client_type) errors.push(`Missing client_type for ${row.client_ref}`);
+        if (!row.client_name) errors.push(`Missing client_name for ${row.client_ref || 'unknown'}`);
+        if (!row.client_type) errors.push(`Missing client_type for ${row.client_ref || 'unknown'}`);
         if (row.client_type && !['company', 'individual'].includes(row.client_type)) {
           errors.push(`Invalid client_type for ${row.client_ref}. Must be 'company' or 'individual'`);
         }

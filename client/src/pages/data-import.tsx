@@ -137,16 +137,25 @@ export default function DataImport() {
   const validateData = async (data: ParsedData) => {
     try {
       const response = await apiRequest("POST", "/api/import/validate", data);
-      setValidationResult(response as ValidationResult);
-      if ((response as ValidationResult).isValid) {
+      const validationResponse = response as ValidationResult;
+      console.log("Validation response:", validationResponse);
+      setValidationResult(validationResponse);
+      
+      if (validationResponse.isValid) {
+        console.log("Validation successful, moving to preview");
+        setCurrentStep('preview');
+      } else {
+        console.log("Validation failed with errors:", validationResponse.errors);
         setCurrentStep('preview');
       }
     } catch (error: any) {
+      console.error("Validation error:", error);
       toast({
         title: "Validation Error",
         description: error.message || "Failed to validate data",
         variant: "destructive",
       });
+      setCurrentStep('upload');
     }
   };
 
@@ -280,7 +289,7 @@ CLI001,Monthly Bookkeeping,Bookkeeper,admin@example.com,yes`;
                     type="file"
                     accept=".csv"
                     onChange={(e) => setClientsFile(e.target.files?.[0] || null)}
-                    data-testid="input-clients-file"
+                    data-testid="upload-clients"
                   />
                   {clientsFile && (
                     <Badge variant="outline" data-testid="badge-clients-uploaded">
@@ -306,7 +315,7 @@ CLI001,Monthly Bookkeeping,Bookkeeper,admin@example.com,yes`;
                     type="file"
                     accept=".csv"
                     onChange={(e) => setServicesFile(e.target.files?.[0] || null)}
-                    data-testid="input-services-file"
+                    data-testid="upload-services"
                   />
                   {servicesFile && (
                     <Badge variant="outline" data-testid="badge-services-uploaded">
@@ -332,7 +341,7 @@ CLI001,Monthly Bookkeeping,Bookkeeper,admin@example.com,yes`;
                     type="file"
                     accept=".csv"
                     onChange={(e) => setRolesFile(e.target.files?.[0] || null)}
-                    data-testid="input-roles-file"
+                    data-testid="upload-roles"
                   />
                   {rolesFile && (
                     <Badge variant="outline" data-testid="badge-roles-uploaded">
@@ -348,7 +357,7 @@ CLI001,Monthly Bookkeeping,Bookkeeper,admin@example.com,yes`;
               onClick={parseFiles}
               disabled={!clientsFile || !servicesFile || !rolesFile}
               className="w-full"
-              data-testid="button-parse-files"
+              data-testid="button-validate"
             >
               <Upload className="w-4 h-4 mr-2" />
               Parse and Validate Files
@@ -547,7 +556,7 @@ CLI001,Monthly Bookkeeping,Bookkeeper,admin@example.com,yes`;
                   <Button
                     onClick={executeImport}
                     className="flex-1"
-                    data-testid="button-execute-import"
+                    data-testid="button-import"
                   >
                     Execute Import
                   </Button>
