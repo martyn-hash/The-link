@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, MapPin, Calendar, Phone, Mail, User as UserIcon, Globe, Check, ArrowLeft, Shield, Edit, Eye, EyeOff, QrCode, Save, X } from "lucide-react";
@@ -115,6 +116,7 @@ export default function PersonDetail() {
   const [showQRCode, setShowQRCode] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const { data: person, isLoading, error } = useQuery<PersonWithDetails>({
     queryKey: [`/api/people/${id}`],
@@ -296,7 +298,7 @@ export default function PersonDetail() {
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-64 w-full" />
         </main>
-        {isMobile && <BottomNav />}
+        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
       </div>
     );
   }
@@ -315,7 +317,7 @@ export default function PersonDetail() {
             </CardContent>
           </Card>
         </main>
-        {isMobile && <BottomNav />}
+        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
       </div>
     );
   }
@@ -333,7 +335,7 @@ export default function PersonDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setLocation('/people')}
+              onClick={() => window.history.back()}
               data-testid="button-back"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -1157,6 +1159,14 @@ export default function PersonDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Mobile Search Modal */}
+      {isMobile && (
+        <SuperSearch 
+          isOpen={mobileSearchOpen} 
+          onOpenChange={setMobileSearchOpen}
+        />
+      )}
 
       {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
     </div>
