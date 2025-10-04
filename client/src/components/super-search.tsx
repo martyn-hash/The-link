@@ -16,7 +16,8 @@ import {
   Settings,
   User,
   Briefcase,
-  X 
+  X,
+  Phone
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CompaniesHouseClientModal } from "@/components/companies-house-client-modal";
@@ -36,7 +37,6 @@ interface SuperSearchResults {
   people: SearchResult[];
   projects: SearchResult[];
   communications: SearchResult[];
-  services: SearchResult[];
   total: number;
 }
 
@@ -137,9 +137,6 @@ export default function SuperSearch({
           setLocation(`/clients?search=${encodeURIComponent(result.metadata.clientName)}`);
         }
         break;
-      case 'service':
-        setLocation(`/services?search=${encodeURIComponent(result.title)}`);
-        break;
       default:
         console.warn('Unknown result type:', result.type);
     }
@@ -224,7 +221,7 @@ export default function SuperSearch({
 
     return (
       <div key={type} className={`${columnClass} min-h-0`}>
-        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border/20">
+        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border/20 bg-muted/5">
           <div className="flex items-center gap-2 md:gap-3">
             <div className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center ${getResultColor(type)}`}>
               {getResultIcon(type)}
@@ -237,7 +234,7 @@ export default function SuperSearch({
             </Badge>
           </div>
         </div>
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto pb-2">
           {results.map((result) => (
             <div
               key={`${result.type}-${result.id}`}
@@ -256,6 +253,12 @@ export default function SuperSearch({
                   {result.subtitle && (
                     <div className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">
                       {result.subtitle}
+                    </div>
+                  )}
+                  {result.type === 'person' && result.metadata?.primaryPhone && (
+                    <div className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      {result.metadata.primaryPhone}
                     </div>
                   )}
                   {result.description && (
@@ -281,7 +284,6 @@ export default function SuperSearch({
       ...searchResults.people,
       ...searchResults.projects,
       ...searchResults.communications,
-      ...searchResults.services,
     ];
 
     const tabs = [
@@ -289,13 +291,12 @@ export default function SuperSearch({
       { value: "clients", label: "Companies", count: searchResults.clients.length, results: searchResults.clients },
       { value: "people", label: "People", count: searchResults.people.length, results: searchResults.people },
       { value: "projects", label: "Projects", count: searchResults.projects.length, results: searchResults.projects },
-      { value: "services", label: "Work", count: searchResults.services.length, results: searchResults.services },
       { value: "communications", label: "Comms", count: searchResults.communications.length, results: searchResults.communications },
     ];
 
     return (
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-        <TabsList className="grid grid-cols-6 w-full rounded-none border-b h-auto p-0">
+        <TabsList className="grid grid-cols-5 w-full rounded-none border-b h-auto p-0">
           {tabs.map(tab => (
             <TabsTrigger
               key={tab.value}
@@ -337,6 +338,12 @@ export default function SuperSearch({
                         {result.subtitle && (
                           <div className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                             {result.subtitle}
+                          </div>
+                        )}
+                        {result.type === 'person' && result.metadata?.primaryPhone && (
+                          <div className="text-xs text-muted-foreground mt-1 leading-relaxed flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {result.metadata.primaryPhone}
                           </div>
                         )}
                         {result.description && (
@@ -511,13 +518,9 @@ export default function SuperSearch({
                   {renderResultCategory('communications', searchResults.communications, 'flex-1')}
                 </div>
                 
-                {/* Column 2: Projects & Services */}
+                {/* Column 2: Projects */}
                 <div className="flex flex-col">
                   {renderResultCategory('projects', searchResults.projects, 'flex-1')}
-                  {searchResults.projects.length > 0 && searchResults.services.length > 0 && (
-                    <div className="border-t border-border/20 mx-6"></div>
-                  )}
-                  {renderResultCategory('services', searchResults.services, 'flex-1')}
                 </div>
                 
                 {/* Column 3: People */}

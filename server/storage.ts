@@ -1680,9 +1680,18 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(limit);
 
-    // Search people by name, email
+    // Search people by name, email, phone
     const peopleResults = await db
-      .select()
+      .select({
+        id: people.id,
+        fullName: people.fullName,
+        firstName: people.firstName,
+        lastName: people.lastName,
+        email: people.email,
+        primaryEmail: people.primaryEmail,
+        primaryPhone: people.primaryPhone,
+        occupation: people.occupation,
+      })
       .from(people)
       .where(
         or(
@@ -1707,6 +1716,7 @@ export class DatabaseStorage implements IStorage {
           lastName: people.lastName,
           email: people.email,
           primaryEmail: people.primaryEmail,
+          primaryPhone: people.primaryPhone,
           occupation: people.occupation,
           clientId: clientPeople.clientId,
           clientName: clients.name,
@@ -1720,6 +1730,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Search projects by description, including client name via join
+    // Only include active, non-archived projects
     const projectResults = await db
       .select({
         id: projects.id,
@@ -1731,9 +1742,13 @@ export class DatabaseStorage implements IStorage {
       .from(projects)
       .leftJoin(clients, eq(projects.clientId, clients.id))
       .where(
-        or(
-          ilike(projects.description, searchTerm),
-          ilike(clients.name, searchTerm)
+        and(
+          or(
+            ilike(projects.description, searchTerm),
+            ilike(clients.name, searchTerm)
+          ),
+          eq(projects.archived, false),
+          eq(projects.inactive, false)
         )
       )
       .limit(limit);
@@ -1760,17 +1775,7 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(limit);
 
-    // Search services by name and description
-    const serviceResults = await db
-      .select()
-      .from(services)
-      .where(
-        or(
-          ilike(services.name, searchTerm),
-          ilike(services.description, searchTerm)
-        )
-      )
-      .limit(limit);
+    // Services removed from search - users can access via services page
 
     // Transform results into SearchResult format
     const clientSearchResults: SearchResult[] = clientResults.map(client => ({
@@ -1796,6 +1801,7 @@ export class DatabaseStorage implements IStorage {
       metadata: {
         email: person.email,
         primaryEmail: person.primaryEmail,
+        primaryPhone: person.primaryPhone,
         occupation: person.occupation
       }
     }));
@@ -1809,6 +1815,7 @@ export class DatabaseStorage implements IStorage {
       metadata: {
         email: person.email,
         primaryEmail: person.primaryEmail,
+        primaryPhone: person.primaryPhone,
         occupation: person.occupation,
         clientName: person.clientName,
         isPrimaryContact: person.isPrimaryContact
@@ -1864,28 +1871,14 @@ export class DatabaseStorage implements IStorage {
       }
     }));
 
-    const serviceSearchResults: SearchResult[] = serviceResults.map(service => ({
-      id: service.id,
-      type: 'service' as const,
-      title: service.name,
-      subtitle: service.description || undefined,
-      description: service.isPersonalService ? 'Personal Service' : 'Business Service',
-      metadata: {
-        isPersonalService: service.isPersonalService,
-        isActive: service.isActive
-      }
-    }));
-
     const totalResults = clientSearchResults.length + peopleSearchResults.length + 
-                        projectSearchResults.length + communicationSearchResults.length + 
-                        serviceSearchResults.length;
+                        projectSearchResults.length + communicationSearchResults.length;
 
     return {
       clients: clientSearchResults,
       people: peopleSearchResults,
       projects: projectSearchResults,
       communications: communicationSearchResults,
-      services: serviceSearchResults,
       total: totalResults
     };
   }
