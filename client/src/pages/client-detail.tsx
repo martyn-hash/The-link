@@ -43,7 +43,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useActivityTracker } from "@/lib/activityTracker";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication, Document } from "@shared/schema";
+import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication, Document, ClientPortalUser } from "@shared/schema";
 import { insertPersonSchema, insertCommunicationSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
@@ -120,6 +120,187 @@ function formatBirthDate(dateOfBirth: string | Date | null): string {
   return date.toLocaleDateString('en-GB', {
     timeZone: 'UTC'
   });
+}
+
+// Portal Status Column Component
+function PortalStatusColumn({ 
+  personId, 
+  personEmail, 
+  personName, 
+  clientId, 
+  clientName 
+}: { 
+  personId: string; 
+  personEmail: string | null; 
+  personName: string; 
+  clientId: string; 
+  clientName: string; 
+}) {
+  const { toast } = useToast();
+  const [showQRCode, setShowQRCode] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  
+  // Fetch portal user status
+  const { data: portalUser, isLoading, refetch } = useQuery<ClientPortalUser>({
+    queryKey: [`/api/portal-user/by-person/${personId}`],
+    enabled: false, // Don't auto-fetch
+  });
+  
+  // Check if person has email
+  const hasEmail = Boolean(personEmail);
+  
+  // Send invitation mutation
+  const sendInviteMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/portal-user/send-invitation", {
+        personId,
+        clientId,
+        email: personEmail,
+        name: formatPersonName(personName),
+        clientName,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation Sent",
+        description: `Portal invitation sent to ${personEmail}`,
+      });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to send invitation",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Generate QR code mutation
+  const generateQRMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/portal-user/generate-qr-code", {
+        personId,
+        clientId,
+        email: personEmail,
+        name: formatPersonName(personName),
+      });
+    },
+    onSuccess: (data: any) => {
+      setQrCodeDataUrl(data.qrCodeDataUrl);
+      setShowQRCode(true);
+      toast({
+        title: "QR Code Generated",
+        description: "Scan to access portal",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to generate QR code",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Fetch portal user on mount
+  useEffect(() => {
+    if (hasEmail) {
+      refetch();
+    }
+  }, [hasEmail, refetch]);
+  
+  if (!hasEmail) {
+    return (
+      <div className="space-y-2">
+        <div className="text-xs text-muted-foreground">Portal Access</div>
+        <p className="text-sm text-muted-foreground italic">No email available</p>
+      </div>
+    );
+  }
+  
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <div className="text-xs text-muted-foreground">Portal Access</div>
+        <Skeleton className="h-4 w-20" />
+      </div>
+    );
+  }
+  
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-muted-foreground">Portal Access</div>
+      
+      {/* Status Indicators */}
+      {portalUser && (
+        <div className="space-y-2">
+          {portalUser.lastLogin && (
+            <div className="flex items-center gap-2">
+              <Check className="h-3 w-3 text-green-500" />
+              <span className="text-xs text-muted-foreground">
+                Has App Access
+              </span>
+            </div>
+          )}
+          {portalUser.pushNotificationsEnabled && (
+            <div className="flex items-center gap-2">
+              <Check className="h-3 w-3 text-blue-500" />
+              <span className="text-xs text-muted-foreground">
+                Push Enabled
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Action Buttons */}
+      <div className="flex flex-col gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => sendInviteMutation.mutate()}
+          disabled={sendInviteMutation.isPending}
+          data-testid={`button-send-portal-invite-${personId}`}
+          className="w-full text-xs"
+        >
+          {sendInviteMutation.isPending ? "Sending..." : "Send Invite"}
+        </Button>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => generateQRMutation.mutate()}
+          disabled={generateQRMutation.isPending}
+          data-testid={`button-generate-qr-${personId}`}
+          className="w-full text-xs"
+        >
+          {generateQRMutation.isPending ? "Generating..." : "Show QR Code"}
+        </Button>
+      </div>
+      
+      {/* QR Code Dialog */}
+      {qrCodeDataUrl && (
+        <Dialog open={showQRCode} onOpenChange={setShowQRCode}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Portal Login QR Code</DialogTitle>
+              <DialogDescription>
+                Scan this QR code to access the portal
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-center p-4">
+              <img 
+                src={qrCodeDataUrl} 
+                alt="Portal Login QR Code"
+                className="max-w-full h-auto"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
 }
 
 // Communication types with relations
@@ -6478,47 +6659,14 @@ export default function ClientDetail() {
                                 })()}
                               </div>
 
-                              {/* Column 3: Nationality, Occupation, and Contact Status */}
-                              <div className="space-y-2">
-                                {/* Main Contact and Primary Contact Status */}
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                  {clientPerson.isPrimaryContact && (
-                                    <Badge variant="default" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
-                                      Primary Contact
-                                    </Badge>
-                                  )}
-                                  
-                                  {clientPerson.person.isMainContact && (
-                                    <Badge variant="outline" data-testid={`badge-main-contact-${clientPerson.person.id}`}>
-                                      Main Contact
-                                    </Badge>
-                                  )}
-                                </div>
-                                
-                                {/* Nationality */}
-                                {clientPerson.person.nationality && (
-                                  <div className="space-y-1">
-                                    <div className="text-xs text-muted-foreground">Nationality</div>
-                                    <div className="text-sm font-medium capitalize" data-testid={`text-nationality-${clientPerson.person.id}`}>
-                                      {clientPerson.person.nationality.replace(/_/g, ' ')}
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {/* Occupation */}
-                                {clientPerson.person.occupation && (
-                                  <div className="space-y-1">
-                                    <div className="text-xs text-muted-foreground">Occupation</div>
-                                    <div className="text-sm font-medium" data-testid={`text-occupation-${clientPerson.person.id}`}>
-                                      {clientPerson.person.occupation}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {!clientPerson.person.nationality && !clientPerson.person.occupation && !clientPerson.isPrimaryContact && !clientPerson.person.isMainContact && (
-                                  <p className="text-sm text-muted-foreground italic">No additional info available</p>
-                                )}
-                              </div>
+                              {/* Column 3: Portal Access Status */}
+                              <PortalStatusColumn 
+                                personId={clientPerson.person.id}
+                                personEmail={clientPerson.person.email}
+                                personName={clientPerson.person.fullName}
+                                clientId={id!}
+                                clientName={client?.name || ''}
+                              />
                             </div>
                           </AccordionTrigger>
                           

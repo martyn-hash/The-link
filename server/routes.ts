@@ -26,6 +26,7 @@ import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, buildSchedulingPreview, type SchedulingRunResult } from "./project-scheduler";
 import { z } from "zod";
 import {
+  clientPeople,
   insertUserSchema,
   insertPersonSchema,
   insertKanbanStageSchema,
@@ -8850,6 +8851,258 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error disconnecting RingCentral:", error);
       res.status(500).json({ message: "Failed to disconnect RingCentral account" });
+    }
+  });
+
+  // ==================================================
+  // PORTAL USER MANAGEMENT ROUTES
+  // ==================================================
+
+  // GET /api/portal-user/by-person/:personId - Get portal user by person ID (auto-creates if missing)
+  app.get("/api/portal-user/by-person/:personId", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { personId } = req.params;
+      let portalUser = await storage.getClientPortalUserByPersonId(personId);
+      
+      // If portal user doesn't exist, create one
+      if (!portalUser) {
+        // Fetch person to get their email and client ID
+        const person = await storage.getPerson(personId);
+        if (!person) {
+          return res.status(404).json({ message: "Person not found" });
+        }
+        
+        // Find client association for this person
+        const clientPerson = await db.query.clientPeople.findFirst({
+          where: eq(clientPeople.personId, personId),
+        });
+        
+        if (!clientPerson || !person.email) {
+          return res.status(400).json({ message: "Person must have email and be linked to a client" });
+        }
+        
+        // Create portal user
+        portalUser = await storage.createClientPortalUser({
+          clientId: clientPerson.clientId,
+          email: person.email,
+          name: person.fullName,
+          personId: personId,
+        });
+      }
+      
+      res.json(portalUser);
+    } catch (error) {
+      console.error("Error fetching portal user:", error);
+      res.status(500).json({ message: "Failed to fetch portal user" });
+    }
+  });
+
+  // POST /api/portal-user/generate-magic-link - Generate magic link for a person
+  app.post("/api/portal-user/generate-magic-link", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { personId, clientId, email, name } = req.body;
+      
+      if (!personId || !clientId || !email) {
+        return res.status(400).json({ message: "personId, clientId, and email are required" });
+      }
+      
+      // Check if portal user exists for this person
+      let portalUser = await storage.getClientPortalUserByPersonId(personId);
+      
+      if (!portalUser) {
+        // Create new portal user linked to person
+        portalUser = await storage.createClientPortalUser({
+          clientId,
+          email,
+          name,
+          personId,
+        });
+      }
+      
+      // Generate magic link token
+      const token = require('crypto').randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      // Update portal user with magic link token
+      await db
+        .update(clientPortalUsers)
+        .set({ 
+          magicLinkToken: token, 
+          tokenExpiry 
+        })
+        .where(eq(clientPortalUsers.id, portalUser.id));
+      
+      // Generate magic link URL
+      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/login?token=${token}`;
+      
+      res.json({ magicLink, portalUser });
+    } catch (error) {
+      console.error("Error generating magic link:", error);
+      res.status(500).json({ message: "Failed to generate magic link" });
+    }
+  });
+
+  // POST /api/portal-user/generate-qr-code - Generate QR code for a person
+  app.post("/api/portal-user/generate-qr-code", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const QRCode = require('qrcode');
+      const { personId, clientId, email, name } = req.body;
+      
+      if (!personId || !clientId || !email) {
+        return res.status(400).json({ message: "personId, clientId, and email are required" });
+      }
+      
+      // Check if portal user exists for this person
+      let portalUser = await storage.getClientPortalUserByPersonId(personId);
+      
+      if (!portalUser) {
+        // Create new portal user linked to person
+        portalUser = await storage.createClientPortalUser({
+          clientId,
+          email,
+          name,
+          personId,
+        });
+      }
+      
+      // Generate magic link token
+      const token = require('crypto').randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      // Update portal user with magic link token
+      await db
+        .update(clientPortalUsers)
+        .set({ 
+          magicLinkToken: token, 
+          tokenExpiry 
+        })
+        .where(eq(clientPortalUsers.id, portalUser.id));
+      
+      // Generate magic link URL
+      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/login?token=${token}`;
+      
+      // Generate QR code as data URL
+      const qrCodeDataUrl = await QRCode.toDataURL(magicLink, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      res.json({ qrCodeDataUrl, magicLink, portalUser });
+    } catch (error) {
+      console.error("Error generating QR code:", error);
+      res.status(500).json({ message: "Failed to generate QR code" });
+    }
+  });
+
+  // POST /api/portal-user/send-invitation - Send invitation email with magic link
+  app.post("/api/portal-user/send-invitation", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const sgMail = require('@sendgrid/mail');
+      const { personId, clientId, email, name, clientName } = req.body;
+      
+      if (!personId || !clientId || !email) {
+        return res.status(400).json({ message: "personId, clientId, and email are required" });
+      }
+      
+      // Check if portal user exists for this person
+      let portalUser = await storage.getClientPortalUserByPersonId(personId);
+      
+      if (!portalUser) {
+        // Create new portal user linked to person
+        portalUser = await storage.createClientPortalUser({
+          clientId,
+          email,
+          name,
+          personId,
+        });
+      }
+      
+      // Generate magic link token
+      const token = require('crypto').randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      // Update portal user with magic link token
+      await db
+        .update(clientPortalUsers)
+        .set({ 
+          magicLinkToken: token, 
+          tokenExpiry 
+        })
+        .where(eq(clientPortalUsers.id, portalUser.id));
+      
+      // Generate magic link URL
+      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/login?token=${token}`;
+      
+      // Send invitation email
+      if (!process.env.SENDGRID_API_KEY) {
+        return res.status(500).json({ message: "SendGrid is not configured" });
+      }
+      
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      
+      const msg = {
+        to: email,
+        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@example.com',
+        subject: `Welcome to ${clientName || 'Client'} Portal`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Your Portal</h1>
+              </div>
+              
+              <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">Hi ${name || 'there'},</p>
+                
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                  You've been invited to access your secure client portal${clientName ? ` for ${clientName}` : ''}. 
+                  Click the button below to log in instantly - no password required!
+                </p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${magicLink}" 
+                     style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                    Access Portal
+                  </a>
+                </div>
+                
+                <p style="font-size: 14px; color: #666; margin-top: 30px;">
+                  This link is valid for 24 hours. If you didn't request this invitation, you can safely ignore this email.
+                </p>
+                
+                <p style="font-size: 14px; color: #666; margin-top: 20px;">
+                  Or copy and paste this URL into your browser:<br>
+                  <a href="${magicLink}" style="color: #667eea; word-break: break-all;">${magicLink}</a>
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin-top: 20px; padding: 20px; color: #999; font-size: 12px;">
+                <p>This is an automated message. Please do not reply to this email.</p>
+              </div>
+            </body>
+          </html>
+        `,
+      };
+      
+      await sgMail.send(msg);
+      
+      res.json({ 
+        message: "Invitation sent successfully", 
+        magicLink,
+        portalUser 
+      });
+    } catch (error) {
+      console.error("Error sending invitation:", error);
+      res.status(500).json({ message: "Failed to send invitation" });
     }
   });
 
