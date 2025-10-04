@@ -8937,7 +8937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(clientPortalUsers.id, portalUser.id));
       
       // Generate magic link URL
-      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/login?token=${token}`;
+      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/verify?token=${token}`;
       
       res.json({ magicLink, portalUser });
     } catch (error) {
@@ -8982,7 +8982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(clientPortalUsers.id, portalUser.id));
       
       // Generate magic link URL
-      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/login?token=${token}`;
+      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/verify?token=${token}`;
       
       // Generate QR code as data URL
       const qrCodeDataUrl = await QRCode.toDataURL(magicLink, {
@@ -9037,7 +9037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(clientPortalUsers.id, portalUser.id));
       
       // Generate magic link URL
-      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/login?token=${token}`;
+      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/verify?token=${token}`;
       
       // Send invitation email
       if (!process.env.SENDGRID_API_KEY) {
@@ -9048,7 +9048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const msg = {
         to: email,
-        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@example.com',
+        from: process.env.FROM_EMAIL || 'link@growth-accountants.com',
         subject: `Welcome to ${clientName || 'Client'} Portal`,
         html: `
           <!DOCTYPE html>
