@@ -1759,6 +1759,7 @@ export const userIntegrations = pgTable("user_integrations", {
 export const clientPortalUsers = pgTable("client_portal_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  personId: text("person_id").references(() => people.id, { onDelete: "cascade" }), // Optional link to person
   email: varchar("email").notNull(),
   name: varchar("name"),
   magicLinkToken: text("magic_link_token"),
@@ -1773,6 +1774,8 @@ export const clientPortalUsers = pgTable("client_portal_users", {
   uniqueEmail: unique("unique_client_portal_email").on(table.email),
   // Index for client lookups
   clientIdIdx: index("client_portal_users_client_id_idx").on(table.clientId),
+  // Index for person lookups
+  personIdIdx: index("client_portal_users_person_id_idx").on(table.personId),
 }));
 
 // Message Threads - conversation threads between clients and staff

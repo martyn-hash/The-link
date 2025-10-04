@@ -625,6 +625,7 @@ export interface IStorage {
   getClientPortalUserById(id: string): Promise<ClientPortalUser | undefined>;
   getClientPortalUserByEmail(email: string): Promise<ClientPortalUser | undefined>;
   getClientPortalUsersByClientId(clientId: string): Promise<ClientPortalUser[]>;
+  getClientPortalUserByPersonId(personId: string): Promise<ClientPortalUser | undefined>;
   updateClientPortalUser(id: string, user: Partial<InsertClientPortalUser>): Promise<ClientPortalUser>;
   deleteClientPortalUser(id: string): Promise<void>;
   
@@ -7844,6 +7845,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(clientPortalUsers)
       .where(eq(clientPortalUsers.clientId, clientId));
+  }
+
+  async getClientPortalUserByPersonId(personId: string): Promise<ClientPortalUser | undefined> {
+    const [user] = await db
+      .select()
+      .from(clientPortalUsers)
+      .where(eq(clientPortalUsers.personId, personId));
+    return user;
   }
 
   async updateClientPortalUser(id: string, user: Partial<InsertClientPortalUser>): Promise<ClientPortalUser> {

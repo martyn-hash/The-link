@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import Papa from "papaparse";
 import { storage } from "./storage";
+import { db } from "./db";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
@@ -73,6 +74,7 @@ import {
   updateRiskAssessmentSchema,
   insertRiskAssessmentResponseSchema,
   type User,
+  clientPortalUsers,
 } from "@shared/schema";
 
 // Email sending schema
@@ -7595,6 +7597,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating portal user:", error);
       res.status(500).json({ message: "Failed to update portal user" });
+    }
+  });
+
+  // Get portal status summary for all clients (for Companies table)
+  app.get("/api/portal-status", isAuthenticated, async (req: any, res: any) => {
+    try {
+      // Get all portal users with their person links
+      const portalUsers = await db
+        .select({
+          id: clientPortalUsers.id,
+          clientId: clientPortalUsers.clientId,
+          personId: clientPortalUsers.personId,
+          lastLogin: clientPortalUsers.lastLogin,
+          pushNotificationsEnabled: clientPortalUsers.pushNotificationsEnabled,
+        })
+        .from(clientPortalUsers);
+
+      // Group by clientId and count statuses
+      const statusByClient: Record<string, { hasApp: number; pushEnabled: number }> = {};
+      
+      for (const user of portalUsers) {
+        if (!statusByClient[user.clientId]) {
+          statusByClient[user.clientId] = { hasApp: 0, pushEnabled: 0 };
+        }
+        
+        // Count users who have logged in at least once
+        if (user.lastLogin) {
+          statusByClient[user.clientId].hasApp += 1;
+        }
+        
+        // Count users with push notifications enabled
+        if (user.pushNotificationsEnabled) {
+          statusByClient[user.clientId].pushEnabled += 1;
+        }
+      }
+      
+      res.json(statusByClient);
+    } catch (error) {
+      console.error("Error fetching portal status:", error);
+      res.status(500).json({ message: "Failed to fetch portal status" });
     }
   });
 

@@ -255,6 +255,11 @@ export default function CompaniesTable({
     queryKey: ["/api/client-tag-assignments"],
   });
 
+  // Fetch portal status for all clients
+  const { data: portalStatus = {} } = useQuery<Record<string, { hasApp: number; pushEnabled: number }>>({
+    queryKey: ["/api/portal-status"],
+  });
+
   // State for saved layouts
   const [layoutName, setLayoutName] = useState("");
   const [saveLayoutDialogOpen, setSaveLayoutDialogOpen] = useState(false);
@@ -267,6 +272,8 @@ export default function CompaniesTable({
       { id: "companyNumber", label: "Company Number", sortable: true, defaultVisible: true, minWidth: 150, type: "text" },
       { id: "companyStatus", label: "Status", sortable: true, defaultVisible: true, minWidth: 150, type: "status" },
       { id: "tags", label: "Tags", sortable: false, defaultVisible: true, minWidth: 180, type: "text" },
+      { id: "hasApp", label: "Has App", sortable: false, defaultVisible: true, minWidth: 100, type: "text" },
+      { id: "pushEnabled", label: "Push Enabled", sortable: false, defaultVisible: true, minWidth: 120, type: "text" },
       { id: "csDue", label: "CS Due", sortable: true, defaultVisible: true, minWidth: 120, type: "date" },
       { id: "accountsDue", label: "Accounts Due", sortable: true, defaultVisible: true, minWidth: 140, type: "date" },
       { id: "csPeriodEnd", label: "CS Period End", sortable: false, defaultVisible: false, minWidth: 140, type: "date" },
@@ -693,6 +700,38 @@ export default function CompaniesTable({
                   {tag.name}
                 </Badge>
               ))
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+        );
+      case "hasApp":
+        const hasAppCount = portalStatus[client.id]?.hasApp || 0;
+        return (
+          <div className="flex items-center justify-center space-x-1">
+            {hasAppCount > 0 ? (
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: Math.min(hasAppCount, 5) }).map((_, i) => (
+                  <Check key={i} className="w-3 h-3 text-green-600" data-testid={`check-has-app-${i}-${client.id}`} />
+                ))}
+                {hasAppCount > 5 && <span className="text-xs text-muted-foreground ml-1">+{hasAppCount - 5}</span>}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+        );
+      case "pushEnabled":
+        const pushEnabledCount = portalStatus[client.id]?.pushEnabled || 0;
+        return (
+          <div className="flex items-center justify-center space-x-1">
+            {pushEnabledCount > 0 ? (
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: Math.min(pushEnabledCount, 5) }).map((_, i) => (
+                  <Check key={i} className="w-3 h-3 text-blue-600" data-testid={`check-push-enabled-${i}-${client.id}`} />
+                ))}
+                {pushEnabledCount > 5 && <span className="text-xs text-muted-foreground ml-1">+{pushEnabledCount - 5}</span>}
+              </div>
             ) : (
               <span className="text-xs text-muted-foreground">—</span>
             )}
