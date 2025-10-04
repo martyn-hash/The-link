@@ -53,10 +53,7 @@ type PersonWithPortalStatus = Person & {
     lastLogin: Date | null;
     pushEnabled: boolean;
   } | null;
-  relatedCompanies?: Array<{
-    clientPerson: ClientPerson;
-    client: Client;
-  }>;
+  relatedCompanies?: Client[];
 };
 
 interface ColumnConfig {
@@ -674,21 +671,21 @@ export default function People() {
                                     <TableCell key={column.id} style={cellStyle}>
                                       {person.relatedCompanies && person.relatedCompanies.length > 0 ? (
                                         <div className="flex flex-wrap gap-1">
-                                          {person.relatedCompanies.filter(conn => conn.client).slice(0, 2).map((conn, index) => (
+                                          {person.relatedCompanies.slice(0, 2).map((client, index) => (
                                             <Badge
                                               key={index}
                                               variant="secondary"
                                               className="text-xs cursor-pointer hover:bg-secondary/80"
-                                              onClick={() => setLocation(`/client/${conn.client.id}`)}
-                                              data-testid={`badge-company-${conn.client.id}`}
+                                              onClick={() => setLocation(`/client/${client.id}`)}
+                                              data-testid={`badge-company-${client.id}`}
                                             >
                                               <Building2 className="w-3 h-3 mr-1" />
-                                              {conn.client.name}
+                                              {client.name}
                                             </Badge>
                                           ))}
-                                          {person.relatedCompanies.filter(conn => conn.client).length > 2 && (
+                                          {person.relatedCompanies.length > 2 && (
                                             <Badge variant="outline" className="text-xs">
-                                              +{person.relatedCompanies.filter(conn => conn.client).length - 2} more
+                                              +{person.relatedCompanies.length - 2} more
                                             </Badge>
                                           )}
                                         </div>
