@@ -119,7 +119,7 @@ export default function ClientServiceDetail() {
   // Update service mutation
   const updateServiceMutation = useMutation({
     mutationFn: async (data: UpdateServiceData) => {
-      return await apiRequest("PATCH", `/api/client-services/${id}`, data);
+      return await apiRequest("PUT", `/api/client-services/${id}`, data);
     },
     onSuccess: () => {
       toast({
