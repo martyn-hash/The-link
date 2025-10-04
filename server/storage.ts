@@ -648,9 +648,9 @@ export interface IStorage {
   getUnreadMessageCountForClient(clientId: string): Promise<number>;
   getUnreadMessageCountForStaff(userId: string, isAdmin?: boolean): Promise<number>;
   
-  // Client Portal Session operations
-  createClientPortalSession(session: InsertClientPortalSession): Promise<ClientPortalSession>;
-  getClientPortalSessionByToken(token: string): Promise<ClientPortalSession | undefined>;
+  // Client Portal Session operations (using built-in token fields)
+  createClientPortalSession(data: { clientPortalUserId: string; token: string; expiresAt: Date }): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date }>;
+  getClientPortalSessionByToken(token: string): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date } | undefined>;
   deleteClientPortalSession(id: string): Promise<void>;
   cleanupExpiredSessions(): Promise<void>;
 }
@@ -8041,26 +8041,64 @@ export class DatabaseStorage implements IStorage {
     return result[0]?.count || 0;
   }
 
-  // Client Portal Session operations
-  async createClientPortalSession(session: InsertClientPortalSession): Promise<ClientPortalSession> {
-    const [newSession] = await db.insert(clientPortalSessions).values(session).returning();
-    return newSession;
+  // Client Portal Session operations - using built-in token fields
+  async createClientPortalSession(data: { clientPortalUserId: string; token: string; expiresAt: Date }): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date }> {
+    const [updated] = await db
+      .update(clientPortalUsers)
+      .set({
+        magicLinkToken: data.token,
+        tokenExpiry: data.expiresAt,
+        updatedAt: new Date()
+      })
+      .where(eq(clientPortalUsers.id, data.clientPortalUserId))
+      .returning();
+    
+    return {
+      id: updated.id,
+      clientPortalUserId: updated.id,
+      token: updated.magicLinkToken!,
+      expiresAt: updated.tokenExpiry!
+    };
   }
 
-  async getClientPortalSessionByToken(token: string): Promise<ClientPortalSession | undefined> {
-    const [session] = await db
+  async getClientPortalSessionByToken(token: string): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date } | undefined> {
+    const [user] = await db
       .select()
-      .from(clientPortalSessions)
-      .where(eq(clientPortalSessions.token, token));
-    return session;
+      .from(clientPortalUsers)
+      .where(eq(clientPortalUsers.magicLinkToken, token));
+    
+    if (!user || !user.magicLinkToken || !user.tokenExpiry) {
+      return undefined;
+    }
+    
+    return {
+      id: user.id,
+      clientPortalUserId: user.id,
+      token: user.magicLinkToken,
+      expiresAt: user.tokenExpiry
+    };
   }
 
   async deleteClientPortalSession(id: string): Promise<void> {
-    await db.delete(clientPortalSessions).where(eq(clientPortalSessions.id, id));
+    await db
+      .update(clientPortalUsers)
+      .set({
+        magicLinkToken: null,
+        tokenExpiry: null,
+        updatedAt: new Date()
+      })
+      .where(eq(clientPortalUsers.id, id));
   }
 
   async cleanupExpiredSessions(): Promise<void> {
-    await db.delete(clientPortalSessions).where(sql`${clientPortalSessions.expiresAt} < NOW()`);
+    await db
+      .update(clientPortalUsers)
+      .set({
+        magicLinkToken: null,
+        tokenExpiry: null,
+        updatedAt: new Date()
+      })
+      .where(sql`${clientPortalUsers.tokenExpiry} < NOW() AND ${clientPortalUsers.tokenExpiry} IS NOT NULL`);
   }
 }
 
