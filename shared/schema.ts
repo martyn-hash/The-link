@@ -1764,6 +1764,7 @@ export const clientPortalUsers = pgTable("client_portal_users", {
   magicLinkToken: text("magic_link_token"),
   tokenExpiry: timestamp("token_expiry"),
   lastLogin: timestamp("last_login"),
+  pushNotificationsEnabled: boolean("push_notifications_enabled").default(false),
   notificationPreferences: jsonb("notification_preferences"), // Email, SMS preferences
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
