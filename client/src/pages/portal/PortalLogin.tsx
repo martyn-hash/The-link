@@ -11,14 +11,73 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 
+const CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes (same as backend)
+
 export default function PortalLogin() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      // Check if stored session is expired
+      const timestamp = localStorage.getItem('portal_code_timestamp');
+      if (timestamp) {
+        const elapsed = Date.now() - parseInt(timestamp, 10);
+        if (elapsed > CODE_EXPIRY_MS) {
+          // Session expired, clear everything
+          localStorage.removeItem('portal_login_email');
+          localStorage.removeItem('portal_code_sent');
+          localStorage.removeItem('portal_code_timestamp');
+          return '';
+        }
+      }
+      return localStorage.getItem('portal_login_email') || '';
+    }
+    return '';
+  });
   const [code, setCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
+  const [codeSent, setCodeSent] = useState(() => {
+    if (typeof window !== 'undefined') {
+      // Check if stored session is expired
+      const timestamp = localStorage.getItem('portal_code_timestamp');
+      if (timestamp) {
+        const elapsed = Date.now() - parseInt(timestamp, 10);
+        if (elapsed > CODE_EXPIRY_MS) {
+          // Session expired, clear everything
+          localStorage.removeItem('portal_login_email');
+          localStorage.removeItem('portal_code_sent');
+          localStorage.removeItem('portal_code_timestamp');
+          return false;
+        }
+      }
+      return localStorage.getItem('portal_code_sent') === 'true';
+    }
+    return false;
+  });
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const { toast } = useToast();
   const codeInputRef = useRef<HTMLDivElement>(null);
+
+  // Persist email and codeSent state to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (email) {
+      localStorage.setItem('portal_login_email', email);
+    } else {
+      localStorage.removeItem('portal_login_email');
+    }
+  }, [email]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (codeSent) {
+      localStorage.setItem('portal_code_sent', 'true');
+      // Don't set timestamp here - it's set in handleRequestCode when code is actually sent
+    } else {
+      localStorage.removeItem('portal_code_sent');
+      localStorage.removeItem('portal_code_timestamp');
+    }
+  }, [codeSent]);
 
   // Focus code input when code is sent
   useEffect(() => {
@@ -45,6 +104,12 @@ export default function PortalLogin() {
     try {
       await portalApi.auth.requestCode(email);
       setCodeSent(true);
+      
+      // Set timestamp when code is actually sent (not during mount/restore)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('portal_code_timestamp', Date.now().toString());
+      }
+      
       toast({
         title: 'Code sent!',
         description: 'Check your email for your 6-digit login code.',
@@ -77,8 +142,15 @@ export default function PortalLogin() {
       const result = await portalApi.auth.verifyCode(email, code);
       
       if (result.jwt) {
-        // Store JWT in localStorage
-        localStorage.setItem('portal_jwt', result.jwt);
+        if (typeof window !== 'undefined') {
+          // Store JWT in localStorage
+          localStorage.setItem('portal_jwt', result.jwt);
+          
+          // Clear login state from localStorage
+          localStorage.removeItem('portal_login_email');
+          localStorage.removeItem('portal_code_sent');
+          localStorage.removeItem('portal_code_timestamp');
+        }
         
         // Redirect to portal home
         window.location.href = '/portal';
@@ -204,6 +276,12 @@ export default function PortalLogin() {
                 onClick={() => {
                   setCodeSent(false);
                   setCode('');
+                  setEmail('');
+                  if (typeof window !== 'undefined') {
+                    localStorage.removeItem('portal_login_email');
+                    localStorage.removeItem('portal_code_sent');
+                    localStorage.removeItem('portal_code_timestamp');
+                  }
                 }}
                 data-testid="button-change-email"
               >
