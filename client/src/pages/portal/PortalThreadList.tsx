@@ -9,6 +9,8 @@ import { MessageCircle, Plus, LogOut, Clock, CheckCircle, XCircle } from 'lucide
 import { portalApi } from '@/lib/portalApi';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { formatDistanceToNow } from 'date-fns';
+import PortalBottomNav from '@/components/portal-bottom-nav';
+import PWAInstallPrompt from '@/components/pwa-install-prompt';
 
 interface MessageThread {
   id: string;
@@ -66,7 +68,7 @@ export default function PortalThreadList() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
           <div className="p-4">
@@ -170,7 +172,7 @@ export default function PortalThreadList() {
           )}
         </div>
 
-        <div className="fixed bottom-6 right-6">
+        <div className="fixed bottom-24 right-6">
           <Button
             size="lg"
             className="rounded-full shadow-lg h-14 w-14 p-0"
@@ -181,6 +183,8 @@ export default function PortalThreadList() {
           </Button>
         </div>
       </div>
+      <PortalBottomNav />
+      <PWAInstallPrompt />
     </div>
   );
 }

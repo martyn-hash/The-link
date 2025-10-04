@@ -8,7 +8,7 @@ import { usePortalAuth } from '@/contexts/PortalAuthContext';
 
 export default function PortalVerify() {
   const [, setLocation] = useLocation();
-  const { login } = usePortalAuth();
+  const { login, isAuthenticated } = usePortalAuth();
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [error, setError] = useState<string>('');
 
@@ -19,6 +19,15 @@ export default function PortalVerify() {
     if (!token) {
       setStatus('error');
       setError('No verification token provided');
+      return;
+    }
+
+    // If already authenticated, just redirect (QR code reuse case)
+    if (isAuthenticated) {
+      setStatus('success');
+      setTimeout(() => {
+        setLocation('/portal/threads');
+      }, 500);
       return;
     }
 
@@ -39,7 +48,7 @@ export default function PortalVerify() {
         setStatus('error');
         setError(err.message || 'Verification failed');
       });
-  }, [login, setLocation]);
+  }, [login, setLocation, isAuthenticated]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">

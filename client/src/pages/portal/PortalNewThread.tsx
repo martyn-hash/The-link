@@ -8,6 +8,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { useToast } from '@/hooks/use-toast';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
+import PortalBottomNav from '@/components/portal-bottom-nav';
 
 export default function PortalNewThread() {
   const [location, setLocation] = useLocation();
@@ -66,7 +67,7 @@ export default function PortalNewThread() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-3">
@@ -117,6 +118,7 @@ export default function PortalNewThread() {
           </Card>
         </div>
       </div>
+      <PortalBottomNav />
     </div>
   );
 }

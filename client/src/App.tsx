@@ -37,6 +37,8 @@ import PortalVerify from "@/pages/portal/PortalVerify";
 import PortalThreadList from "@/pages/portal/PortalThreadList";
 import PortalThreadDetail from "@/pages/portal/PortalThreadDetail";
 import PortalNewThread from "@/pages/portal/PortalNewThread";
+import PortalTasks from "@/pages/portal/PortalTasks";
+import PortalProfile from "@/pages/portal/PortalProfile";
 import Messages from "@/pages/messages";
 
 function Router() {
@@ -61,6 +63,8 @@ function Router() {
       <Route path="/portal/threads/new" component={PortalNewThread} />
       <Route path="/portal/threads/:id" component={PortalThreadDetail} />
       <Route path="/portal/threads" component={PortalThreadList} />
+      <Route path="/portal/tasks" component={PortalTasks} />
+      <Route path="/portal/profile" component={PortalProfile} />
       <Route path="/portal">
         <Redirect to="/portal/threads" />
       </Route>

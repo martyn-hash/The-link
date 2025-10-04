@@ -124,16 +124,67 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
     // Generate magic link URL
     const magicLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/portal/verify?token=${magicToken}`;
     
-    // Send email
+    // Send branded email
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1759469504917.png`;
+    
     await sendEmail({
       to: email,
-      subject: 'Your Portal Login Link',
+      from: `The Link <${process.env.FROM_EMAIL || 'link@growth-accountants.com'}>`,
+      subject: 'Your Client Portal Login Link - The Link',
       html: `
-        <h2>Welcome to the Client Portal</h2>
-        <p>Click the link below to log in to your client portal:</p>
-        <p><a href="${magicLink}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Log In to Portal</a></p>
-        <p>This link will expire in 15 minutes.</p>
-        <p>If you didn't request this login link, please ignore this email.</p>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f8fafc; }
+            .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+            .header { background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center; }
+            .logo { max-width: 200px; height: auto; margin-bottom: 20px; }
+            .content { padding: 40px 30px; }
+            .button { display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 30px 0; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3); }
+            .button:hover { background: linear-gradient(135deg, #0869A3 0%, #065580 100%); }
+            .footer { background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px; }
+            .accent { color: #0A7BBF; font-weight: 600; }
+            .warning { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0; border-radius: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <img src="${logoUrl}" alt="The Link" class="logo" />
+              <h1 style="color: white; margin: 0; font-size: 24px;">Client Portal Access</h1>
+            </div>
+            <div class="content">
+              <h2 style="color: #1e293b; margin-top: 0;">Welcome to Your Client Portal</h2>
+              <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+                You've requested access to your secure client portal. Click the button below to log in instantly:
+              </p>
+              <div style="text-align: center;">
+                <a href="${magicLink}" class="button">Access Portal Now</a>
+              </div>
+              <div class="warning">
+                <p style="margin: 0; color: #92400e; font-size: 14px;">
+                  <strong>⏰ Important:</strong> This secure link will expire in <strong>15 minutes</strong> for your security.
+                </p>
+              </div>
+              <p style="color: #64748b; font-size: 14px; line-height: 1.6;">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                <span style="word-break: break-all; font-family: monospace; background-color: #f1f5f9; padding: 8px; border-radius: 4px; display: inline-block; margin-top: 8px; font-size: 12px;">${magicLink}</span>
+              </p>
+            </div>
+            <div class="footer">
+              <p style="margin: 0 0 10px 0;">
+                <strong class="accent">The Link</strong> - Your Financial Partner
+              </p>
+              <p style="margin: 0; font-size: 13px;">
+                If you didn't request this login link, please ignore this email and your account will remain secure.
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
       `
     });
     

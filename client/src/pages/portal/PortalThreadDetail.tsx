@@ -11,6 +11,7 @@ import { portalApi } from '@/lib/portalApi';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
+import PortalBottomNav from '@/components/portal-bottom-nav';
 
 interface Message {
   id: string;
@@ -126,7 +127,7 @@ export default function PortalThreadDetail() {
   const config = statusConfig[thread.status];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col pb-20">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-3">
@@ -237,6 +238,7 @@ export default function PortalThreadDetail() {
           </form>
         </div>
       </div>
+      <PortalBottomNav />
     </div>
   );
 }
