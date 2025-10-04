@@ -300,9 +300,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== CLIENT PORTAL AUTHENTICATION ROUTES (Public - No Auth Required) =====
-  const { sendMagicLink, verifyMagicLink } = await import('./portalAuth');
+  const { sendMagicLink, verifyMagicLink, sendVerificationCode, verifyCode } = await import('./portalAuth');
 
-  // Request magic link (only for pre-existing portal users)
+  // Request verification code (email-based login)
+  app.post('/api/portal/auth/request-code', async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: 'Email is required' });
+      }
+
+      const result = await sendVerificationCode(email);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error || 'Failed to send code' });
+      }
+
+      // Always return success to prevent email enumeration
+      res.json({ message: 'If a portal account exists for this email, a code has been sent' });
+    } catch (error) {
+      console.error('Error requesting code:', error);
+      res.status(500).json({ message: 'Failed to send code' });
+    }
+  });
+
+  // Verify code and get JWT
+  app.post('/api/portal/auth/verify-code', async (req, res) => {
+    try {
+      const { email, code } = req.body;
+
+      if (!email || !code) {
+        return res.status(400).json({ message: 'Email and code are required' });
+      }
+
+      const result = await verifyCode(email, code);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error || 'Invalid code' });
+      }
+
+      res.json({ jwt: result.jwt });
+    } catch (error) {
+      console.error('Error verifying code:', error);
+      res.status(500).json({ message: 'Verification failed' });
+    }
+  });
+
+  // DEPRECATED: Request magic link (only for pre-existing portal users)
   app.post('/api/portal/auth/request-magic-link', async (req, res) => {
     try {
       const { email } = req.body;
@@ -325,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Verify magic link and get JWT
+  // DEPRECATED: Verify magic link and get JWT
   app.get('/api/portal/auth/verify', async (req, res) => {
     try {
       const { token } = req.query;
