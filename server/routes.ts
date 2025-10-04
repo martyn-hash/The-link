@@ -8917,24 +8917,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Generate magic link token
-      const token = crypto.randomBytes(32).toString('hex');
-      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
-      // Update portal user with magic link token
-      await db
-        .update(clientPortalUsers)
-        .set({ 
-          magicLinkToken: token, 
-          tokenExpiry 
-        })
-        .where(eq(clientPortalUsers.id, portalUser.id));
-      
-      // Generate magic link URL
-      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/verify?token=${token}`;
+      // Generate portal install page URL (no authentication - just installation instructions)
+      const installUrl = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/install`;
       
       // Generate QR code as data URL
-      const qrCodeDataUrl = await QRCode.toDataURL(magicLink, {
+      const qrCodeDataUrl = await QRCode.toDataURL(installUrl, {
         width: 300,
         margin: 2,
         color: {
@@ -8943,7 +8930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
       
-      res.json({ qrCodeDataUrl, magicLink, portalUser });
+      res.json({ qrCodeDataUrl, installUrl, portalUser });
     } catch (error) {
       console.error("Error generating QR code:", error);
       res.status(500).json({ message: "Failed to generate QR code" });
