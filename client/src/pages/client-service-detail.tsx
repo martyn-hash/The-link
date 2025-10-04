@@ -466,14 +466,13 @@ export default function ClientServiceDetail() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Service Owner</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
                       <FormControl>
                         <SelectTrigger data-testid="select-service-owner">
-                          <SelectValue placeholder="Select service owner" />
+                          <SelectValue placeholder="Select service owner (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {users.map((user) => (
                           <SelectItem key={user.id} value={user.id}>
                             {user.firstName} {user.lastName}
