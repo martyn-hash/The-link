@@ -4,12 +4,16 @@ import multer from "multer";
 import Papa from "papaparse";
 import { storage } from "./storage";
 import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { setupAuth, isAuthenticated, type AuthenticatedRequest } from "./auth";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { sendTaskAssignmentEmail } from "./emailService";
 import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "./push-service";
 import fetch from 'node-fetch';
+import QRCode from 'qrcode';
+import sgMail from '@sendgrid/mail';
+import crypto from 'crypto';
 import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "./utils/userOutlookClient";
 import { 
   generateUserRingCentralAuthUrl, 
@@ -8867,7 +8871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If portal user doesn't exist, create one
       if (!portalUser) {
         // Fetch person to get their email and client ID
-        const person = await storage.getPerson(personId);
+        const person = await storage.getPersonById(personId);
         if (!person) {
           return res.status(404).json({ message: "Person not found" });
         }
@@ -8920,7 +8924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate magic link token
-      const token = require('crypto').randomBytes(32).toString('hex');
+      const token = crypto.randomBytes(32).toString('hex');
       const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       
       // Update portal user with magic link token
@@ -8945,7 +8949,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/portal-user/generate-qr-code - Generate QR code for a person
   app.post("/api/portal-user/generate-qr-code", isAuthenticated, async (req: any, res: any) => {
     try {
-      const QRCode = require('qrcode');
       const { personId, clientId, email, name } = req.body;
       
       if (!personId || !clientId || !email) {
@@ -8966,7 +8969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate magic link token
-      const token = require('crypto').randomBytes(32).toString('hex');
+      const token = crypto.randomBytes(32).toString('hex');
       const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       
       // Update portal user with magic link token
@@ -9001,7 +9004,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/portal-user/send-invitation - Send invitation email with magic link
   app.post("/api/portal-user/send-invitation", isAuthenticated, async (req: any, res: any) => {
     try {
-      const sgMail = require('@sendgrid/mail');
       const { personId, clientId, email, name, clientName } = req.body;
       
       if (!personId || !clientId || !email) {
@@ -9022,7 +9024,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate magic link token
-      const token = require('crypto').randomBytes(32).toString('hex');
+      const token = crypto.randomBytes(32).toString('hex');
       const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       
       // Update portal user with magic link token
