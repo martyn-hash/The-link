@@ -6,6 +6,14 @@ This full-stack project management application aims to provide a comprehensive s
 
 ### Recent Updates (October 2025)
 - **Data Import System**: Added comprehensive CSV import functionality at `/admin/import` for bulk importing client data, people, services, and role assignments. Supports multi-step workflow with validation, preview, and execution phases. System successfully creates clients, people, client-person relationships, service mappings, and role assignments from CSV files.
+- **Client Portal Enhancements** (October 4, 2025):
+  - Branded email templates for magic links using "The Link" sender name with professional styling, logo, and brand colors (Primary #0A7BBF, Accent #76CA23)
+  - Improved QR code login UX: already-authenticated users are immediately redirected without re-verification errors
+  - New 5-button bottom navigation: Hamburger menu (future features), Tasks, Chats (center position for messaging), Profile, and TBD placeholder
+  - Portal Tasks page (`/portal/tasks`) with coming soon placeholder for task management and organizers
+  - Portal Profile page (`/portal/profile`) displaying user email, client ID, and logout functionality
+  - PWA installation prompt with OS-specific instructions for iOS 16.4+ (including iOS 26) and Android 8+ devices
+  - Device detection utility supporting iOS Safari and Android Chrome for optimal PWA experience
 
 ## User Preferences
 - Mobile-first responsive design
