@@ -823,12 +823,12 @@ export default function PersonDetail() {
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={editForm.control}
-                      name="telephone"
+                      name="primaryPhone"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Primary Phone</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-telephone" />
+                            <Input {...field} data-testid="input-primaryPhone" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -853,12 +853,12 @@ export default function PersonDetail() {
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={editForm.control}
-                      name="email"
+                      name="primaryEmail"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Primary Email</FormLabel>
                           <FormControl>
-                            <Input type="email" {...field} data-testid="input-email" />
+                            <Input type="email" {...field} data-testid="input-primaryEmail" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

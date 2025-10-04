@@ -1979,8 +1979,8 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                               {clientPeople.map((clientPerson) => (
                                 <SelectItem key={clientPerson.person.id} value={clientPerson.person.id}>
                                   {formatPersonName(clientPerson.person.fullName)}
-                                  {clientPerson.person.email && (
-                                    <span className="text-muted-foreground ml-2">({clientPerson.person.email})</span>
+                                  {(clientPerson.person.primaryEmail || clientPerson.person.email) && (
+                                    <span className="text-muted-foreground ml-2">({clientPerson.person.primaryEmail || clientPerson.person.email})</span>
                                   )}
                                 </SelectItem>
                               ))}
@@ -4059,10 +4059,10 @@ function PersonTabbedView({
                   <h6 className="text-sm font-medium text-muted-foreground">Primary Contact Details</h6>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
+                      <span className="font-medium">Email:</span> {clientPerson.person.primaryEmail || clientPerson.person.email || "Not provided"}
                     </div>
                     <div>
-                      <span className="font-medium">Phone:</span> {clientPerson.person.telephone || "Not provided"}
+                      <span className="font-medium">Phone:</span> {clientPerson.person.primaryPhone || clientPerson.person.telephone || "Not provided"}
                     </div>
                   </div>
                 </div>
@@ -5286,17 +5286,26 @@ function PersonEditForm({
             </div>
 
             {/* Legacy contact info - read only display for reference */}
-            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-              <h6 className="text-sm font-medium text-muted-foreground">Legacy Contact Details</h6>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium">Email:</span> {clientPerson.person.email || "Not provided"}
+            {(clientPerson.person.email || clientPerson.person.telephone) && (
+              <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                <h6 className="text-sm font-medium text-muted-foreground">Legacy Contact Details</h6>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {clientPerson.person.email && (
+                    <div>
+                      <span className="font-medium">Legacy Email:</span> {clientPerson.person.email}
+                    </div>
+                  )}
+                  {clientPerson.person.telephone && (
+                    <div>
+                      <span className="font-medium">Legacy Phone:</span> {clientPerson.person.telephone}
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="font-medium">Phone:</span> {clientPerson.person.telephone || "Not provided"}
-                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  These are legacy fields. Use the Primary fields above for current contact information.
+                </p>
               </div>
-            </div>
+            )}
 
             {/* Secondary contact fields */}
             <div className="space-y-4">
