@@ -6662,7 +6662,7 @@ export default function ClientDetail() {
                               {/* Column 3: Portal Access Status */}
                               <PortalStatusColumn 
                                 personId={clientPerson.person.id}
-                                personEmail={clientPerson.person.email}
+                                personEmail={clientPerson.person.primaryEmail || clientPerson.person.email}
                                 personName={clientPerson.person.fullName}
                                 clientId={id!}
                                 clientName={client?.name || ''}
