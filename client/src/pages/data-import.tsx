@@ -191,11 +191,11 @@ export default function DataImport() {
     const clientsTemplate = `client_ref,client_name,client_type,client_email,company_number,person_ref,person_full_name,person_email,person_telephone,person_primary_phone,person_primary_email,officer_role,is_primary_contact
 CLI001,Example Ltd,company,info@example.com,12345678,PER001,John Doe,john@example.com,01234567890,+447123456789,john@example.com,director,yes`;
 
-    const servicesTemplate = `client_ref,service_name,frequency,next_start_date,next_due_date,service_owner_email,is_active
-CLI001,Monthly Bookkeeping,monthly,01/12/2024,15/12/2024,admin@example.com,yes`;
+    const servicesTemplate = `client_ref,service_name,service_owner_email,frequency,next_start_date,next_due_date,is_active
+CLI001,Monthly Bookkeeping Service,admin@example.com,monthly,01/12/2024,15/12/2024,yes`;
 
     const rolesTemplate = `client_ref,service_name,work_role_name,assigned_user_email,is_active
-CLI001,Monthly Bookkeeping,Bookkeeper,admin@example.com,yes`;
+CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
 
     // Create download links
     const downloadCSV = (content: string, filename: string) => {

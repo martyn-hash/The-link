@@ -9115,7 +9115,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (row.service_name) {
           const service = await storage.getServiceByName(row.service_name);
           if (!service) {
-            errors.push(`Service "${row.service_name}" not found in system`);
+            const allServices = await storage.getAllServices();
+            const serviceNames = allServices.map(s => s.name).slice(0, 5).join(', ');
+            errors.push(`Service "${row.service_name}" not found in system. Available services include: ${serviceNames}...`);
           }
         }
         
@@ -9142,7 +9144,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (row.work_role_name) {
           const workRole = await storage.getWorkRoleByName(row.work_role_name);
           if (!workRole) {
-            errors.push(`Work role "${row.work_role_name}" not found in system`);
+            const allWorkRoles = await storage.getAllWorkRoles();
+            const roleNames = allWorkRoles.map(r => r.name).slice(0, 5).join(', ');
+            errors.push(`Work role "${row.work_role_name}" not found in system. Available roles include: ${roleNames}...`);
           }
         }
         
