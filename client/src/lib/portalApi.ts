@@ -52,6 +52,29 @@ async function portalRequest(url: string, options: RequestInit = {}) {
 
 export const portalApi = {
   auth: {
+    requestCode: (email: string) =>
+      fetch('/api/portal/auth/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+        credentials: 'include',
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to request code');
+        return res.json();
+      }),
+
+    verifyCode: (email: string, code: string) =>
+      fetch('/api/portal/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+        credentials: 'include',
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to verify code');
+        return res.json();
+      }),
+
+    // DEPRECATED: Use requestCode instead
     requestMagicLink: (email: string) =>
       fetch('/api/portal/auth/request-magic-link', {
         method: 'POST',
@@ -63,6 +86,7 @@ export const portalApi = {
         return res.json();
       }),
 
+    // DEPRECATED: Use verifyCode instead
     verifyMagicLink: (token: string) =>
       fetch(`/api/portal/auth/verify?token=${token}`, {
         credentials: 'include',
