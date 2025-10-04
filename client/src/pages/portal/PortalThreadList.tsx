@@ -11,7 +11,6 @@ import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import PortalBottomNav from '@/components/portal-bottom-nav';
 import PWAInstallPrompt from '@/components/pwa-install-prompt';
-import { usePortalManifest } from '@/hooks/usePortalManifest';
 
 interface MessageThread {
   id: string;
@@ -30,7 +29,6 @@ const statusConfig = {
 };
 
 export default function PortalThreadList() {
-  usePortalManifest();
   const [location, setLocation] = useLocation();
   const { user, logout, isAuthenticated, isLoading } = usePortalAuth();
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);

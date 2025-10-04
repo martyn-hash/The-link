@@ -8,10 +8,12 @@ import { sendSchedulingSummaryEmail } from "./emailService";
 import { storage } from "./storage";
 import fs from "fs";
 import path from "path";
+import cookieParser from "cookie-parser";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -54,6 +56,29 @@ app.use((req, res, next) => {
     throw err;
   });
 
+  // Dynamic manifest route - serves portal or staff manifest based on cookie
+  // MUST be before Vite setup to intercept the manifest request
+  app.get('/manifest.json', async (req, res) => {
+    const manifestType = req.cookies?.pwa_manifest || 'staff';
+    const manifestPath = manifestType === 'portal' 
+      ? path.resolve(import.meta.dirname, "..", "client", "public", "portal-manifest.json")
+      : path.resolve(import.meta.dirname, "..", "client", "public", "manifest.json");
+    
+    try {
+      const manifest = await fs.promises.readFile(manifestPath, 'utf-8');
+      res.set('Content-Type', 'application/json');
+      res.send(manifest);
+    } catch (error) {
+      // Fallback to staff manifest
+      const staffManifest = await fs.promises.readFile(
+        path.resolve(import.meta.dirname, "..", "client", "public", "manifest.json"),
+        'utf-8'
+      );
+      res.set('Content-Type', 'application/json');
+      res.send(staffManifest);
+    }
+  });
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -61,31 +86,6 @@ app.use((req, res, next) => {
     await setupVite(app, server);
   } else {
     serveStatic(app);
-    
-    // Portal manifest fix for PRODUCTION ONLY
-    // In production, intercept portal routes and swap manifest in built HTML
-    app.use('/portal/*', async (req, res, next) => {
-      const acceptsHtml = req.accepts('html') || req.accepts('*/*');
-      const isApiRoute = req.path.startsWith('/api');
-      
-      if (acceptsHtml && !isApiRoute) {
-        try {
-          const builtHtmlPath = path.resolve(import.meta.dirname, "public", "index.html");
-          let html = await fs.promises.readFile(builtHtmlPath, "utf-8");
-          
-          // Swap manifest for portal PWA
-          html = html.replace(
-            '<link rel="manifest" href="/manifest.json" />',
-            '<link rel="manifest" href="/portal-manifest.json" />'
-          );
-          
-          return res.status(200).set({ "Content-Type": "text/html" }).send(html);
-        } catch (error) {
-          return next(error);
-        }
-      }
-      next();
-    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT

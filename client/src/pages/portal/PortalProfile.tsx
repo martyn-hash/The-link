@@ -6,10 +6,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { User, Mail, LogOut } from 'lucide-react';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import PortalBottomNav from '@/components/portal-bottom-nav';
-import { usePortalManifest } from '@/hooks/usePortalManifest';
 
 export default function PortalProfile() {
-  usePortalManifest();
   const [, setLocation] = useLocation();
   const { user, logout, isAuthenticated, isLoading } = usePortalAuth();
 

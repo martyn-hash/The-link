@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <meta name="theme-color" content="#0c7cba" />
     <meta name="description" content="Bookkeeping workflow management" />
+    <script>
+      // Set manifest type cookie BEFORE manifest is loaded for PWA installation
+      if (location.pathname.startsWith('/portal')) {
+        document.cookie = 'pwa_manifest=portal; path=/; max-age=60';
+      } else {
+        document.cookie = 'pwa_manifest=staff; path=/; max-age=60';
+      }
+    </script>
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />

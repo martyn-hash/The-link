@@ -5,10 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { MessageCircle, Send } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { useToast } from '@/hooks/use-toast';
-import { usePortalManifest } from '@/hooks/usePortalManifest';
 
 export default function PortalLogin() {
-  usePortalManifest();
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailSent, setEmailSent] = useState(false);

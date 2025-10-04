@@ -4,10 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { CheckSquare, Construction } from 'lucide-react';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import PortalBottomNav from '@/components/portal-bottom-nav';
-import { usePortalManifest } from '@/hooks/usePortalManifest';
 
 export default function PortalTasks() {
-  usePortalManifest();
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = usePortalAuth();
 

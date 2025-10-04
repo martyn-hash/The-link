@@ -12,7 +12,6 @@ import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import PortalBottomNav from '@/components/portal-bottom-nav';
-import { usePortalManifest } from '@/hooks/usePortalManifest';
 
 interface Message {
   id: string;
@@ -42,7 +41,6 @@ const statusConfig = {
 };
 
 export default function PortalThreadDetail() {
-  usePortalManifest();
   const params = useParams();
   const threadId = params.id as string;
   const [location, setLocation] = useLocation();
