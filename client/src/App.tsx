@@ -34,6 +34,7 @@ import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
 import PortalLogin from "@/pages/portal/PortalLogin";
 import PortalVerify from "@/pages/portal/PortalVerify";
+import PortalInstall from "@/pages/portal/PortalInstall";
 import PortalThreadList from "@/pages/portal/PortalThreadList";
 import PortalThreadDetail from "@/pages/portal/PortalThreadDetail";
 import PortalNewThread from "@/pages/portal/PortalNewThread";
@@ -58,6 +59,7 @@ function Router() {
   return (
     <Switch>
       {/* Portal routes - separate auth system */}
+      <Route path="/portal/install" component={PortalInstall} />
       <Route path="/portal/login" component={PortalLogin} />
       <Route path="/portal/verify" component={PortalVerify} />
       <Route path="/portal/threads/new" component={PortalNewThread} />
