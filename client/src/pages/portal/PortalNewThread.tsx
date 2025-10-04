@@ -9,8 +9,10 @@ import { portalApi } from '@/lib/portalApi';
 import { useToast } from '@/hooks/use-toast';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import PortalBottomNav from '@/components/portal-bottom-nav';
+import { usePortalManifest } from '@/hooks/usePortalManifest';
 
 export default function PortalNewThread() {
+  usePortalManifest();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
