@@ -1762,8 +1762,10 @@ export const clientPortalUsers = pgTable("client_portal_users", {
   personId: text("person_id").references(() => people.id, { onDelete: "cascade" }), // Optional link to person
   email: varchar("email").notNull(),
   name: varchar("name"),
-  magicLinkToken: text("magic_link_token"),
-  tokenExpiry: timestamp("token_expiry"),
+  magicLinkToken: text("magic_link_token"), // Deprecated - keeping for backwards compatibility
+  tokenExpiry: timestamp("token_expiry"), // Deprecated - keeping for backwards compatibility
+  verificationCode: varchar("verification_code", { length: 6 }), // 6-digit code for login
+  codeExpiry: timestamp("code_expiry"), // Expiry time for verification code
   lastLogin: timestamp("last_login"),
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(false),
   notificationPreferences: jsonb("notification_preferences"), // Email, SMS preferences
