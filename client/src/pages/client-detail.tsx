@@ -335,6 +335,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isCreatingMessage, setIsCreatingMessage] = useState(false);
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
   const [emailPersonId, setEmailPersonId] = useState<string | undefined>();
   const [emailContent, setEmailContent] = useState<string>('');
@@ -343,11 +344,18 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [isCallingPerson, setIsCallingPerson] = useState(false);
   const [callPersonId, setCallPersonId] = useState<string | undefined>();
   const [callPhoneNumber, setCallPhoneNumber] = useState<string | undefined>();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Fetch communications for this client
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
     queryKey: ['/api/communications/client', clientId],
+    enabled: !!clientId,
+  });
+
+  // Fetch message threads for this client
+  const { data: messageThreads, isLoading: isLoadingThreads } = useQuery<any[]>({
+    queryKey: ['/api/internal/messages/threads/client', clientId],
     enabled: !!clientId,
   });
 
@@ -438,6 +446,29 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
     },
   });
 
+  // Create message thread mutation
+  const createMessageThreadMutation = useMutation({
+    mutationFn: (data: { subject: string; content: string; clientId: string }) =>
+      apiRequest('POST', '/api/internal/messages/threads', data),
+    onSuccess: (data: any) => {
+      setIsCreatingMessage(false);
+      toast({
+        title: "Message thread created",
+        description: "Redirecting to messages...",
+      });
+      setTimeout(() => {
+        setLocation('/messages');
+      }, 500);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create message thread",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmitCommunication = (values: any) => {
     // Handle SMS sending separately - now requires person selection
     if (values.type === 'sms_sent') {
@@ -520,6 +551,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return <Mail className="h-4 w-4" />;
       case 'email_received':
         return <Inbox className="h-4 w-4" />;
+      case 'message_thread':
+        return <MessageSquare className="h-4 w-4" />;
       default:
         return <MessageSquare className="h-4 w-4" />;
     }
@@ -539,6 +572,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return 'Email Sent';
       case 'email_received':
         return 'Email Received';
+      case 'message_thread':
+        return 'Instant Message';
       default:
         return 'Communication';
     }
@@ -558,12 +593,24 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
       case 'email_received':
         return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+      case 'message_thread':
+        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
     }
   };
 
-  if (isLoading) {
+  // Merge communications and message threads
+  const allItems = [...(communications || []), ...(messageThreads || []).map(thread => ({
+    ...thread,
+    type: 'message_thread',
+    loggedAt: thread.createdAt,
+    content: thread.lastMessage?.content || '',
+  }))].sort((a, b) => 
+    new Date(b.loggedAt || b.createdAt).getTime() - new Date(a.loggedAt || a.createdAt).getTime()
+  );
+
+  if (isLoading || isLoadingThreads) {
     return (
       <Card>
         <CardHeader>
@@ -626,6 +673,15 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
               Send Email
             </Button>
             <Button
+              onClick={() => setIsCreatingMessage(true)}
+              size="sm"
+              variant="default"
+              data-testid="button-instant-message"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Instant Message
+            </Button>
+            <Button
               onClick={() => setIsAddingCommunication(true)}
               size="sm"
               data-testid="button-add-communication"
@@ -637,7 +693,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         </div>
       </CardHeader>
       <CardContent>
-        {!communications || communications.length === 0 ? (
+        {!allItems || allItems.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No communications recorded yet</p>
@@ -649,63 +705,89 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
               <TableRow>
                 <TableHead>Type</TableHead>
                 <TableHead>Date/Time</TableHead>
-                <TableHead>Person</TableHead>
+                <TableHead>Subject/Content</TableHead>
                 <TableHead>Created By</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {communications.map((comm: CommunicationWithRelations) => (
-                <TableRow key={comm.id} data-testid={`communication-row-${comm.id}`}>
-                  <TableCell data-testid={`cell-type-${comm.id}`}>
+              {allItems.map((item: any) => (
+                <TableRow key={item.id} data-testid={`communication-row-${item.id}`}>
+                  <TableCell data-testid={`cell-type-${item.id}`}>
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                        {getIcon(comm.type)}
+                        {getIcon(item.type)}
                       </div>
-                      <Badge variant="secondary" className={getTypeColor(comm.type)} data-testid={`badge-type-${comm.id}`}>
-                        {getTypeLabel(comm.type)}
+                      <Badge variant="secondary" className={getTypeColor(item.type)} data-testid={`badge-type-${item.id}`}>
+                        {getTypeLabel(item.type)}
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell data-testid={`cell-date-${comm.id}`}>
+                  <TableCell data-testid={`cell-date-${item.id}`}>
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm" data-testid={`text-date-${comm.id}`}>
-                        {comm.loggedAt ? new Date(comm.loggedAt).toLocaleString() : 'No date'}
+                      <span className="text-sm" data-testid={`text-date-${item.id}`}>
+                        {item.loggedAt ? new Date(item.loggedAt).toLocaleString() : 
+                         item.createdAt ? new Date(item.createdAt).toLocaleString() : 'No date'}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell data-testid={`cell-person-${comm.id}`}>
-                    {comm.person ? (
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm" data-testid={`text-person-${comm.id}`}>{formatPersonName(comm.person.fullName)}</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground" data-testid={`text-no-person-${comm.id}`}>—</span>
-                    )}
+                  <TableCell data-testid={`cell-content-${item.id}`}>
+                    <div className="max-w-md">
+                      {item.type === 'message_thread' ? (
+                        <div>
+                          <div className="font-medium text-sm">{item.subject}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {item.messageCount || 0} message{(item.messageCount || 0) !== 1 ? 's' : ''}
+                            {item.unreadCount > 0 && (
+                              <Badge variant="destructive" className="ml-2">
+                                {item.unreadCount} unread
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm truncate">
+                          {item.subject && <div className="font-medium">{item.subject}</div>}
+                          {item.content && <div className="text-muted-foreground text-xs">{item.content.substring(0, 50)}...</div>}
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell data-testid={`cell-user-${comm.id}`}>
+                  <TableCell data-testid={`cell-user-${item.id}`}>
                     <div className="flex items-center gap-2">
                       <UserIcon className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm" data-testid={`text-user-${comm.id}`}>
-                        {comm.user.firstName} {comm.user.lastName}
+                      <span className="text-sm" data-testid={`text-user-${item.id}`}>
+                        {item.user ? `${item.user.firstName} ${item.user.lastName}` : 
+                         item.createdBy ? `User ${item.createdBy}` : 'System'}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedCommunication(comm);
-                        setIsViewingCommunication(true);
-                      }}
-                      data-testid={`button-view-communication-${comm.id}`}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View
-                    </Button>
+                    {item.type === 'message_thread' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLocation(`/messages?thread=${item.id}`)}
+                        data-testid={`button-view-thread-${item.id}`}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Thread
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCommunication(item);
+                          setIsViewingCommunication(true);
+                        }}
+                        data-testid={`button-view-communication-${item.id}`}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -1160,6 +1242,63 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Instant Message Dialog */}
+      <Dialog open={isCreatingMessage} onOpenChange={setIsCreatingMessage}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Create Instant Message
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Start a new secure message thread with the client
+            </p>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            createMessageThreadMutation.mutate({
+              subject: formData.get('subject') as string,
+              content: formData.get('content') as string,
+              clientId: clientId,
+            });
+          }}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="subject" className="text-sm font-medium">Subject</label>
+                <Input
+                  id="subject"
+                  name="subject"
+                  placeholder="e.g., Document request, Account update..."
+                  required
+                  data-testid="input-message-subject"
+                />
+              </div>
+              <div>
+                <label htmlFor="content" className="text-sm font-medium">Initial Message</label>
+                <textarea
+                  id="content"
+                  name="content"
+                  className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Type your message here..."
+                  required
+                  data-testid="input-message-content"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <Button type="button" variant="outline" onClick={() => setIsCreatingMessage(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMessageThreadMutation.isPending} data-testid="button-send-message">
+                {createMessageThreadMutation.isPending ? 'Creating...' : 'Create & Send'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 

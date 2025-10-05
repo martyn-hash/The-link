@@ -541,6 +541,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate presigned URL for message attachment upload (portal)
+  app.post('/api/portal/attachments/upload-url', authenticatePortal, async (req: any, res) => {
+    try {
+      const { fileName, fileType } = req.body;
+      
+      if (!fileName || !fileType) {
+        return res.status(400).json({ message: 'fileName and fileType are required' });
+      }
+      
+      const objectStorageService = new ObjectStorageService();
+      const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+      
+      res.json({ 
+        url: uploadURL, 
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error('Error generating upload URL:', error);
+      res.status(500).json({ message: 'Failed to generate upload URL' });
+    }
+  });
+
   // Middleware to resolve effective user (for impersonation)
   const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {
@@ -7511,6 +7535,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching unread count:", error);
       res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  // Archive thread (staff only)
+  app.put("/api/internal/messages/threads/:threadId/archive", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const updatedThread = await storage.updateMessageThread(threadId, {
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedBy: effectiveUserId,
+      });
+      res.json(updatedThread);
+    } catch (error) {
+      console.error("Error archiving thread:", error);
+      res.status(500).json({ message: "Failed to archive thread" });
+    }
+  });
+
+  // Unarchive thread (staff only)
+  app.put("/api/internal/messages/threads/:threadId/unarchive", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const updatedThread = await storage.updateMessageThread(threadId, {
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+      });
+      res.json(updatedThread);
+    } catch (error) {
+      console.error("Error unarchiving thread:", error);
+      res.status(500).json({ message: "Failed to unarchive thread" });
+    }
+  });
+
+  // Generate presigned URL for message attachment upload (staff)
+  app.post("/api/internal/messages/attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType } = req.body;
+      
+      if (!fileName || !fileType) {
+        return res.status(400).json({ message: "fileName and fileType are required" });
+      }
+      
+      const objectStorageService = new ObjectStorageService();
+      const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+      
+      res.json({ 
+        url: uploadURL, 
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
     }
   });
 

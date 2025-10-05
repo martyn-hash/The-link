@@ -5,6 +5,14 @@
 This full-stack project management application aims to provide a comprehensive solution for managing projects, clients, and services. It focuses on delivering a seamless, app-like experience across devices, with a strong emphasis on mobile responsiveness and intuitive user interfaces. The application integrates with various third-party services to streamline communication, document management, and compliance tracking, offering a robust platform for efficient business operations.
 
 ### Recent Updates (October 2025)
+- **Messaging System Enhancements** (October 5, 2025):
+  - **Archive Functionality**: Staff can archive/unarchive message threads with full audit trail (archivedAt, archivedBy)
+  - **File Attachments**: Support for images, PDFs with presigned URL upload to object storage (10MB limit per file)
+  - **Communications Tab Integration**: Message threads now appear in client detail Communications tab alongside other communications (calls, emails, SMS)
+  - **Staff Messages Page**: New `/messages` page with Active/Archived tabs, status filters (Open/In Progress/Resolved), unread badges, and quick thread navigation
+  - **Instant Message Button**: Communications tab includes "Instant Message" button to create new threads directly from client detail page
+  - **Enhanced UI**: File upload with preview, attachment display in messages, and responsive mobile design
+  - **Testing Credentials**: Staff login at `/login` using `admin@example.com` / `admin123`
 - **Data Import System**: Added comprehensive CSV import functionality at `/admin/import` for bulk importing client data, people, services, and role assignments. Supports multi-step workflow with validation, preview, and execution phases. System successfully creates clients, people, client-person relationships, service mappings, and role assignments from CSV files.
 - **Client Portal Authentication Upgrade** (October 4, 2025):
   - **Code-based authentication**: Replaced magic links with secure 6-digit email verification codes
@@ -106,6 +114,7 @@ The messaging system provides a comprehensive client portal with instant messagi
 **Message Threads** (`message_threads`)
 - Topic-based conversation organization
 - Status tracking: `new`, `in_progress`, `resolved`, `closed`
+- **Archive Support**: `isArchived`, `archivedAt`, `archivedBy` fields for staff workflow management
 - Creator tracking (staff user OR portal client)
 - Optional project/service association for context
 - Automatic `lastMessageAt` timestamp updates
@@ -115,6 +124,7 @@ The messaging system provides a comprehensive client portal with instant messagi
 - Thread-based message storage
 - Dual authorship: `userId` (staff) OR `clientPortalUserId` (client)
 - Separate read receipts for staff and clients (`isReadByStaff`, `isReadByClient`)
+- **File Attachments**: JSONB field storing attachment metadata (name, type, size, url, key)
 - Timestamps for message creation and read tracking
 - Enforces: exactly one author type per message
 
@@ -156,10 +166,44 @@ The messaging system provides a comprehensive client portal with instant messagi
 - Automatic `lastMessageAt` updates on message creation
 - Read receipt tracking separate for staff and clients
 
+### Testing Credentials
+**Staff Access**:
+- URL: `/login`
+- Email: `admin@example.com`
+- Password: `admin123`
+- Access: Full admin access to all messaging features, client data, and archive functionality
+
+**Client Portal Access**:
+- Generate 6-digit code via portal login page
+- Alternatively, use deprecated magic link token from client portal users table
+- Access: Client-scoped messages, profile, and tasks (coming soon)
+
+### API Endpoints
+**Staff Routes** (`/api/internal/messages/*`):
+- `GET /threads` - List all message threads with filters
+- `POST /threads` - Create new thread
+- `GET /threads/:id/messages` - Get thread messages
+- `POST /threads/:id/messages` - Send message with optional attachments
+- `PATCH /threads/:id/status` - Update thread status
+- `PUT /threads/:id/archive` - Archive thread (staff only)
+- `PUT /threads/:id/unarchive` - Restore archived thread
+- `POST /upload-url` - Generate presigned URL for file upload
+- `GET /threads/client/:clientId` - Get threads for specific client
+
+**Portal Routes** (`/api/portal/messages/*`):
+- `GET /threads` - List client's threads
+- `POST /threads` - Create new thread
+- `GET /threads/:id/messages` - Get messages
+- `POST /threads/:id/messages` - Send message with attachments
+- `POST /upload-url` - Generate presigned URL for file upload
+
 ### Future Extensibility
 The schema supports planned portal features:
-- Document e-signing (file attachments in messages)
-- Task management (task references in threads)
-- Calendly booking (meeting scheduling via threads)
-- Document uploads (GCS integration via messages)
-- Key dates and organizers (thread-based reminders)
+- ✅ File attachments (images, PDFs) - IMPLEMENTED
+- ⏳ Voice notes via MediaRecorder API
+- ⏳ Push notifications with email fallback
+- ⏳ PWA share target for bank statements
+- ⏳ Task templates for clients
+- ⏳ Document e-signing
+- ⏳ Calendly booking integration
+- ⏳ Key dates and organizers

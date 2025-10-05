@@ -1791,6 +1791,9 @@ export const messageThreads = pgTable("message_threads", {
   createdByClientPortalUserId: varchar("created_by_client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "set null" }),
   projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }), // Optional link to project
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }), // Optional link to service
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -1798,6 +1801,8 @@ export const messageThreads = pgTable("message_threads", {
   clientIdLastMessageIdx: index("message_threads_client_id_last_message_idx").on(table.clientId, table.lastMessageAt),
   // Index for status filtering
   statusIdx: index("message_threads_status_idx").on(table.status),
+  // Index for archived status
+  isArchivedIdx: index("message_threads_is_archived_idx").on(table.isArchived),
 }));
 
 // Messages - individual messages within threads
