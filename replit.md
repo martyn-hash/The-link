@@ -62,6 +62,20 @@ The application is built with a modern tech stack designed for scalability and p
 - **Portal Messaging Routes**: Corrected thread status enum values and method names throughout portal API
 - **Portal Login Persistence (PWA)**: Fixed authentication persistence issues in PWA by adding token expiry validation, visibility change handler for iOS Safari, and proper React hook dependencies
 - **Staff-to-Portal Push Notifications**: Added push notification logic to staff message route - portal users now receive instant push notifications when staff sends them messages
+- **N+1 Query Performance Issue**: Replaced per-thread message fetching with single optimized SQL query using LEFT JOIN and COUNT - eliminates performance bottleneck for large thread lists
+
+### Latest Enhancements
+- **Enhanced Push Notifications**: Added icon and badge images to push notification payloads for richer visual experience
+- **Staff Name Display**: Portal messages now show actual staff member names instead of generic "Staff" label
+- **Thread Titles**: Portal thread list displays subject/title instead of just status for better context
+- **PWA App Badge**: Implemented navigator.setAppBadge() to show unread message count on PWA app icon
+- **Visual Unread Indicators**: Threads display unread count badges with responsive styling (blue dot + count)
+- **Auto Mark-as-Read**: Messages automatically marked as read when portal user views a thread
+- **Push Notification Templates**: Created database schema for admin-configurable notification templates (foundation for future admin UI)
+
+### Performance Optimizations
+- **getMessageThreadsWithUnreadCount()**: Single SQL query with LEFT JOIN replaces N+1 pattern for calculating unread counts
+- **Query Efficiency**: Handles thousands of threads efficiently with grouped COUNT and proper filtering
 
 ### ✅ Comprehensive E2E Testing Completed
 Successfully tested full messaging flow from portal user (Sergei Jelissenko - martyn@accountantmatch.uk) to staff dashboard:
