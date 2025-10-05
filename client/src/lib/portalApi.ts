@@ -4,7 +4,54 @@ function getPortalToken(): string | null {
   return localStorage.getItem(PORTAL_TOKEN_KEY);
 }
 
-async function portalRequest(url: string, options: RequestInit = {}) {
+export async function portalRequest(method: string, url: string, data?: unknown): Promise<any> {
+  const token = getPortalToken();
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: 'include',
+  });
+
+  if (response.status === 401) {
+    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    window.location.href = '/portal/login';
+    throw new Error('Unauthorized');
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = 'Request failed';
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMessage = errorJson.message || errorJson.error || errorText;
+    } catch {
+      errorMessage = errorText || 'Request failed';
+    }
+    throw new Error(errorMessage);
+  }
+
+  const text = await response.text();
+  if (!text) return null;
+  
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+// Legacy internal function for portalApi methods
+async function portalRequestLegacy(url: string, options: RequestInit = {}) {
   const token = getPortalToken();
   
   const headers: Record<string, string> = {
@@ -98,34 +145,34 @@ export const portalApi = {
 
   threads: {
     list: (status?: string) =>
-      portalRequest(`/api/portal/threads${status ? `?status=${status}` : ''}`),
+      portalRequestLegacy(`/api/portal/threads${status ? `?status=${status}` : ''}`),
 
     get: (threadId: string) =>
-      portalRequest(`/api/portal/threads/${threadId}`),
+      portalRequestLegacy(`/api/portal/threads/${threadId}`),
 
     create: (topic: string, projectId?: string, serviceId?: string) =>
-      portalRequest('/api/portal/threads', {
+      portalRequestLegacy('/api/portal/threads', {
         method: 'POST',
         body: JSON.stringify({ topic, projectId, serviceId }),
       }),
 
     markRead: (threadId: string) =>
-      portalRequest(`/api/portal/threads/${threadId}/mark-read`, {
+      portalRequestLegacy(`/api/portal/threads/${threadId}/mark-read`, {
         method: 'PUT',
       }),
   },
 
   messages: {
     list: (threadId: string) =>
-      portalRequest(`/api/portal/threads/${threadId}/messages`),
+      portalRequestLegacy(`/api/portal/threads/${threadId}/messages`),
 
     send: (threadId: string, content: string) =>
-      portalRequest(`/api/portal/threads/${threadId}/messages`, {
+      portalRequestLegacy(`/api/portal/threads/${threadId}/messages`, {
         method: 'POST',
         body: JSON.stringify({ content }),
       }),
   },
 
   unreadCount: () =>
-    portalRequest('/api/portal/unread-count'),
+    portalRequestLegacy('/api/portal/unread-count'),
 };

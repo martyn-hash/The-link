@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiRequest } from '@/lib/queryClient';
+import { portalRequest } from '@/lib/portalApi';
 
 interface PushSubscriptionState {
   isSupported: boolean;
@@ -19,6 +20,9 @@ export function usePushNotifications() {
   });
 
   const isPortal = window.location.pathname.startsWith('/portal');
+  
+  // Use the appropriate request function based on context
+  const makeRequest = isPortal ? portalRequest : apiRequest;
 
   useEffect(() => {
     checkPushSupport();
@@ -104,7 +108,7 @@ export function usePushNotifications() {
 
       const subscriptionJSON = subscription.toJSON();
       const subscribeEndpoint = isPortal ? '/api/portal/push/subscribe' : '/api/push/subscribe';
-      await apiRequest('POST', subscribeEndpoint, {
+      await makeRequest('POST', subscribeEndpoint, {
         endpoint: subscription.endpoint,
         keys: subscriptionJSON.keys,
         userAgent: navigator.userAgent
@@ -138,7 +142,7 @@ export function usePushNotifications() {
 
       if (subscription) {
         const unsubscribeEndpoint = isPortal ? '/api/portal/push/unsubscribe' : '/api/push/unsubscribe';
-        await apiRequest('DELETE', unsubscribeEndpoint, {
+        await makeRequest('DELETE', unsubscribeEndpoint, {
           endpoint: subscription.endpoint
         });
         await subscription.unsubscribe();

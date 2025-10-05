@@ -17,7 +17,10 @@ This full-stack project management application aims to provide a comprehensive s
   - **Push Subscriptions Schema**: Extended `push_subscriptions` table to support both staff users (`userId`) and portal users (`clientPortalUserId`)
   - **Bug Fixes**: 
     - Fixed portal messaging routes (thread status enum, method names), now using correct 'open', 'closed', 'archived' statuses
-    - Fixed push notification authentication - portal users can now successfully subscribe to push notifications via dedicated endpoints
+    - Fixed push notification authentication for portal users:
+      - Root cause: Portal uses JWT tokens in Authorization header, but push hook was using cookie-based auth
+      - Solution: Updated `usePushNotifications` hook to use `portalRequest()` for portal users (includes JWT) and `apiRequest()` for staff
+      - Exported `portalRequest()` from `portalApi.ts` with matching signature to `apiRequest()`
   - **Testing Credentials**: Staff login at `/login` using `admin@example.com` / `admin123`
 - **Data Import System**: Added comprehensive CSV import functionality at `/admin/import` for bulk importing client data, people, services, and role assignments. Supports multi-step workflow with validation, preview, and execution phases. System successfully creates clients, people, client-person relationships, service mappings, and role assignments from CSV files.
 - **Client Portal Authentication Upgrade** (October 4, 2025):
