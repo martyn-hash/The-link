@@ -581,6 +581,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Serve message attachments with thread access check (portal)
+  app.get("/api/portal/attachments/*", authenticatePortal, async (req: any, res: any) => {
+    try {
+      // Extract the object path from the URL
+      const objectPath = req.path.replace('/api/portal/attachments', '/objects');
+      
+      // Get the thread ID from query params
+      const threadId = req.query.threadId;
+      if (!threadId) {
+        return res.status(400).json({ message: "threadId query parameter is required" });
+      }
+      
+      // Check if the thread exists and user has access
+      const clientId = req.portalUser!.clientId;
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread || thread.clientId !== clientId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Fetch the object from GCS and stream it
+      try {
+        const objectStorageService = new ObjectStorageService();
+        const blob = await objectStorageService.getObjectEntity(objectPath);
+        
+        if (!blob) {
+          return res.status(404).json({ message: "Attachment not found" });
+        }
+        
+        // Set appropriate headers
+        const contentType = blob.metadata?.contentType || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        
+        // Stream the blob to response
+        const stream = blob.createReadStream();
+        stream.pipe(res);
+      } catch (error) {
+        console.error("Error serving attachment:", error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: "Attachment not found" });
+        }
+        return res.status(500).json({ message: "Error serving attachment" });
+      }
+    } catch (error) {
+      console.error("Error serving portal message attachment:", error);
+      res.status(500).json({ message: "Failed to serve attachment" });
+    }
+  });
+
   // ===== CLIENT PORTAL PUSH NOTIFICATION ROUTES (JWT Auth Required) =====
   
   // POST /api/portal/push/subscribe - Portal user push notification subscription
