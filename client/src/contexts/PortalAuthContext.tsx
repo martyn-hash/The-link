@@ -19,12 +19,60 @@ const PortalAuthContext = createContext<PortalAuthContextType | undefined>(undef
 
 const PORTAL_TOKEN_KEY = 'portal_jwt';
 
+// Dual storage for iOS Safari PWA persistence
+function saveToken(token: string) {
+  try {
+    localStorage.setItem(PORTAL_TOKEN_KEY, token);
+    sessionStorage.setItem(PORTAL_TOKEN_KEY, token);
+    console.log('[Portal Auth] Token saved to both localStorage and sessionStorage');
+  } catch (error) {
+    console.error('[Portal Auth] Failed to save token:', error);
+  }
+}
+
+function getToken(): string | null {
+  try {
+    // Try localStorage first
+    let token = localStorage.getItem(PORTAL_TOKEN_KEY);
+    
+    // Fallback to sessionStorage if localStorage fails (iOS Safari PWA issue)
+    if (!token) {
+      token = sessionStorage.getItem(PORTAL_TOKEN_KEY);
+      if (token) {
+        console.log('[Portal Auth] Token recovered from sessionStorage, restoring to localStorage');
+        localStorage.setItem(PORTAL_TOKEN_KEY, token);
+      }
+    }
+    
+    return token;
+  } catch (error) {
+    console.error('[Portal Auth] Failed to get token:', error);
+    return null;
+  }
+}
+
+function removeToken() {
+  try {
+    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    sessionStorage.removeItem(PORTAL_TOKEN_KEY);
+    console.log('[Portal Auth] Token removed from both storages');
+  } catch (error) {
+    console.error('[Portal Auth] Failed to remove token:', error);
+  }
+}
+
 function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     if (!payload.exp) return false;
-    return Date.now() >= payload.exp * 1000;
-  } catch {
+    const isExpired = Date.now() >= payload.exp * 1000;
+    if (isExpired) {
+      const expiryDate = new Date(payload.exp * 1000);
+      console.log('[Portal Auth] Token expired at:', expiryDate.toISOString());
+    }
+    return isExpired;
+  } catch (error) {
+    console.error('[Portal Auth] Failed to check token expiry:', error);
     return true;
   }
 }
@@ -52,10 +100,10 @@ function parseTokenUser(token: string): PortalUser | null {
 
 export function PortalAuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => {
-    const storedToken = localStorage.getItem(PORTAL_TOKEN_KEY);
+    const storedToken = getToken();
     if (storedToken && isTokenExpired(storedToken)) {
-      console.log('[Portal Auth] Removing expired token from localStorage');
-      localStorage.removeItem(PORTAL_TOKEN_KEY);
+      console.log('[Portal Auth] Removing expired token on init');
+      removeToken();
       return null;
     }
     console.log('[Portal Auth] Initialized with token:', storedToken ? 'present' : 'none');
@@ -63,7 +111,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   });
   
   const [user, setUser] = useState<PortalUser | null>(() => {
-    const storedToken = localStorage.getItem(PORTAL_TOKEN_KEY);
+    const storedToken = getToken();
     if (!storedToken) return null;
     
     if (isTokenExpired(storedToken)) {
@@ -80,7 +128,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     console.log('[Portal Auth] Logging out');
-    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    removeToken();
     setToken(null);
     setUser(null);
     setIsLoading(false);
@@ -117,19 +165,19 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('[Portal Auth] App became visible, checking token...');
-        const storedToken = localStorage.getItem(PORTAL_TOKEN_KEY);
+        const storedToken = getToken();
         
         if (!storedToken && token) {
-          // Token was cleared from localStorage (iOS Safari PWA issue)
-          console.log('[Portal Auth] Token lost from localStorage, logging out');
+          // Token was cleared from both storages (rare but handle it)
+          console.log('[Portal Auth] Token lost from storage, logging out');
           logout();
         } else if (storedToken && isTokenExpired(storedToken)) {
           // Token expired while app was backgrounded
           console.log('[Portal Auth] Token expired while backgrounded');
           logout();
         } else if (storedToken && !token) {
-          // Token appeared in localStorage (shouldn't happen but handle it)
-          console.log('[Portal Auth] Token reappeared in localStorage');
+          // Token recovered from storage (sessionStorage fallback worked)
+          console.log('[Portal Auth] Token recovered from storage');
           setToken(storedToken);
         }
       }
@@ -140,9 +188,9 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   }, [token, logout]);
 
   const login = (jwt: string) => {
-    console.log('[Portal Auth] Logging in');
+    console.log('[Portal Auth] Logging in with new token');
     setIsLoading(true);
-    localStorage.setItem(PORTAL_TOKEN_KEY, jwt);
+    saveToken(jwt);
     setToken(jwt);
   };
 

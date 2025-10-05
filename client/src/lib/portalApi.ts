@@ -1,7 +1,33 @@
 const PORTAL_TOKEN_KEY = 'portal_jwt';
 
 function getPortalToken(): string | null {
-  return localStorage.getItem(PORTAL_TOKEN_KEY);
+  try {
+    // Try localStorage first
+    let token = localStorage.getItem(PORTAL_TOKEN_KEY);
+    
+    // Fallback to sessionStorage if localStorage fails (iOS Safari PWA issue)
+    if (!token) {
+      token = sessionStorage.getItem(PORTAL_TOKEN_KEY);
+      if (token) {
+        console.log('[Portal API] Token recovered from sessionStorage');
+        localStorage.setItem(PORTAL_TOKEN_KEY, token);
+      }
+    }
+    
+    return token;
+  } catch (error) {
+    console.error('[Portal API] Failed to get token:', error);
+    return null;
+  }
+}
+
+function removePortalToken() {
+  try {
+    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    sessionStorage.removeItem(PORTAL_TOKEN_KEY);
+  } catch (error) {
+    console.error('[Portal API] Failed to remove token:', error);
+  }
 }
 
 export async function portalRequest(method: string, url: string, data?: unknown): Promise<any> {
@@ -23,7 +49,7 @@ export async function portalRequest(method: string, url: string, data?: unknown)
   });
 
   if (response.status === 401) {
-    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    removePortalToken();
     window.location.href = '/portal/login';
     throw new Error('Unauthorized');
   }
@@ -70,7 +96,7 @@ async function portalRequestLegacy(url: string, options: RequestInit = {}) {
   });
 
   if (response.status === 401) {
-    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    removePortalToken();
     window.location.href = '/portal/login';
     throw new Error('Unauthorized');
   }
