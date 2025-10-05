@@ -63,12 +63,11 @@ interface Message {
   clientPortalUserId: string | null;
   content: string;
   attachments?: Array<{
-    name: string;
-    type: string;
-    size: number;
-    url: string;
-    key: string;
-  }>;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    objectPath: string;
+  }> | null;
   isRead: boolean;
   createdAt: string;
   user?: {
@@ -88,6 +87,7 @@ const statusConfig = {
   in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200', icon: Clock },
   resolved: { label: 'Resolved', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200', icon: CheckCircle },
   closed: { label: 'Closed', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200', icon: XCircle },
+  archived: { label: 'Archived', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200', icon: Archive },
 };
 
 export default function Messages() {
@@ -250,14 +250,14 @@ export default function Messages() {
     
     for (const file of files) {
       try {
-        const uploadUrlResponse = await apiRequest('POST', '/api/internal/messages/upload-url', {
+        const uploadUrlResponse = await apiRequest('POST', '/api/internal/messages/attachments/upload-url', {
           fileName: file.name,
           fileType: file.type,
         });
         
-        const { uploadUrl, publicUrl, key } = uploadUrlResponse as any;
+        const { url, objectPath } = uploadUrlResponse as any;
         
-        await fetch(uploadUrl, {
+        await fetch(url, {
           method: 'PUT',
           body: file,
           headers: {
@@ -266,11 +266,10 @@ export default function Messages() {
         });
         
         uploadedAttachments.push({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          url: publicUrl,
-          key,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          objectPath,
         });
       } catch (error) {
         console.error('Error uploading file:', file.name, error);
@@ -286,7 +285,7 @@ export default function Messages() {
     
     try {
       setUploadingFiles(true);
-      let attachments = [];
+      let attachments: Array<{ fileName: string; fileType: string; fileSize: number; objectPath: string; }> = [];
       
       if (selectedFiles.length > 0) {
         attachments = await uploadFiles(selectedFiles);
@@ -548,14 +547,13 @@ export default function Messages() {
                                     {message.attachments.map((attachment, idx) => (
                                       <a
                                         key={idx}
-                                        href={attachment.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        href={`/objects${attachment.objectPath}`}
+                                        download={attachment.fileName}
                                         className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
                                         data-testid={`attachment-${message.id}-${idx}`}
                                       >
                                         <File className="h-4 w-4 flex-shrink-0" />
-                                        <span className="truncate">{attachment.name}</span>
+                                        <span className="truncate">{attachment.fileName}</span>
                                       </a>
                                     ))}
                                   </div>
@@ -805,14 +803,13 @@ export default function Messages() {
                                     {message.attachments.map((attachment, idx) => (
                                       <a
                                         key={idx}
-                                        href={attachment.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        href={`/objects${attachment.objectPath}`}
+                                        download={attachment.fileName}
                                         className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
                                         data-testid={`attachment-${message.id}-${idx}`}
                                       >
                                         <File className="h-4 w-4 flex-shrink-0" />
-                                        <span className="truncate">{attachment.name}</span>
+                                        <span className="truncate">{attachment.fileName}</span>
                                       </a>
                                     ))}
                                   </div>

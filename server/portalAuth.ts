@@ -289,6 +289,11 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
     const verificationCode = generateVerificationCode();
     const expiresAt = new Date(Date.now() + VERIFICATION_CODE_EXPIRY);
     
+    // Log code in development for testing
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Portal Auth] Verification code for ${email}: ${verificationCode}`);
+    }
+    
     // Update portal user with verification code
     await storage.updateClientPortalUser(portalUser.id, {
       verificationCode,

@@ -6,12 +6,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Send, User, Building } from 'lucide-react';
+import { ArrowLeft, Send, User, Building, Paperclip, X, File, Image as ImageIcon, FileAudio, Download } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import PortalBottomNav from '@/components/portal-bottom-nav';
+
+interface Attachment {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  objectPath: string;
+}
 
 interface Message {
   id: string;
@@ -21,6 +28,7 @@ interface Message {
   clientPortalUserId: string | null;
   isReadByStaff: boolean;
   isReadByClient: boolean;
+  attachments?: Attachment[] | null;
   createdAt: string;
 }
 
@@ -47,6 +55,9 @@ export default function PortalThreadDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,11 +89,23 @@ export default function PortalThreadDetail() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: (content: string) => portalApi.messages.send(threadId, content),
+    mutationFn: async ({ content, attachments }: { content: string; attachments?: Attachment[] }) => {
+      const response = await fetch(`/api/portal/threads/${threadId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('portalAuthToken')}`,
+        },
+        body: JSON.stringify({ content, attachments }),
+      });
+      if (!response.ok) throw new Error('Failed to send message');
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/portal/threads', threadId, 'messages'] });
       queryClient.invalidateQueries({ queryKey: ['/api/portal/threads'] });
       setNewMessage('');
+      setSelectedFiles([]);
     },
     onError: () => {
       toast({
@@ -113,10 +136,72 @@ export default function PortalThreadDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFile = async (file: File): Promise<Attachment> => {
+    const urlResponse = await fetch('/api/portal/attachments/upload-url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('portalAuthToken')}`,
+      },
+      body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+    });
+    
+    if (!urlResponse.ok) throw new Error('Failed to get upload URL');
+    const { url, objectPath } = await urlResponse.json();
+    
+    const uploadResponse = await fetch(url, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    });
+    
+    if (!uploadResponse.ok) throw new Error('Failed to upload file');
+    
+    return {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      objectPath,
+    };
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
-    sendMessageMutation.mutate(newMessage.trim());
+    
+    if (!newMessage.trim() && selectedFiles.length === 0) return;
+    
+    try {
+      let attachments: Attachment[] = [];
+      
+      if (selectedFiles.length > 0) {
+        setUploading(true);
+        attachments = await Promise.all(selectedFiles.map(uploadFile));
+      }
+      
+      sendMessageMutation.mutate({ 
+        content: newMessage.trim(), 
+        attachments: attachments.length > 0 ? attachments : undefined 
+      });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: 'Failed to upload attachments',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (!thread) {
@@ -187,9 +272,33 @@ export default function PortalThreadDetail() {
                           {isFromClient ? 'You' : (message as any).staffUserName || 'Staff'}
                         </span>
                       </div>
-                      <p className={`text-sm ${isFromMe ? 'text-white' : 'text-gray-900 dark:text-white'} whitespace-pre-wrap break-words`}>
-                        {message.content}
-                      </p>
+                      {message.content && (
+                        <p className={`text-sm ${isFromMe ? 'text-white' : 'text-gray-900 dark:text-white'} whitespace-pre-wrap break-words`}>
+                          {message.content}
+                        </p>
+                      )}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {message.attachments.map((attachment, idx) => {
+                            const isImage = attachment.fileType.startsWith('image/');
+                            const isAudio = attachment.fileType.startsWith('audio/');
+                            return (
+                              <div key={idx} className={`flex items-center gap-2 p-2 rounded ${isFromMe ? 'bg-blue-700' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                {isImage ? <ImageIcon className="h-4 w-4" /> : isAudio ? <FileAudio className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                                <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
+                                <a
+                                  href={`/objects${attachment.objectPath}`}
+                                  download={attachment.fileName}
+                                  className={`text-xs ${isFromMe ? 'text-blue-100 hover:text-white' : 'text-blue-600 hover:text-blue-800'}`}
+                                  data-testid={`download-attachment-${idx}`}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       <p className={`text-xs mt-2 ${isFromMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}`}>
                         {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                       </p>
@@ -209,7 +318,46 @@ export default function PortalThreadDetail() {
 
       <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
         <div className="max-w-3xl mx-auto">
+          {selectedFiles.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {selectedFiles.map((file, idx) => (
+                <div key={idx} className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                  <File className="h-4 w-4" />
+                  <span className="text-sm flex-1 truncate">{file.name}</span>
+                  <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)}KB</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveFile(idx)}
+                    data-testid={`remove-file-${idx}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
           <form onSubmit={handleSendMessage} className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="input-file"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || sendMessageMutation.isPending}
+              data-testid="button-attach-file"
+              className="h-[60px] w-[60px]"
+            >
+              <Paperclip className="h-5 w-5" />
+            </Button>
             <Textarea
               placeholder="Type your message..."
               value={newMessage}
@@ -220,7 +368,7 @@ export default function PortalThreadDetail() {
                   handleSendMessage(e);
                 }
               }}
-              disabled={sendMessageMutation.isPending}
+              disabled={sendMessageMutation.isPending || uploading}
               data-testid="input-message"
               className="min-h-[60px] resize-none"
               rows={2}
@@ -228,11 +376,15 @@ export default function PortalThreadDetail() {
             <Button
               type="submit"
               size="icon"
-              disabled={sendMessageMutation.isPending || !newMessage.trim()}
+              disabled={sendMessageMutation.isPending || uploading || (!newMessage.trim() && selectedFiles.length === 0)}
               data-testid="button-send-message"
               className="h-[60px] w-[60px]"
             >
-              <Send className="h-5 w-5" />
+              {uploading || sendMessageMutation.isPending ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
             </Button>
           </form>
         </div>
