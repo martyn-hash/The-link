@@ -55,10 +55,11 @@ export default function PortalThreadDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ file: File; previewUrl?: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previewUrlsRef = useRef<Set<string>>(new Set());
   
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -115,7 +116,7 @@ export default function PortalThreadDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/portal/threads', threadId, 'messages'] });
       queryClient.invalidateQueries({ queryKey: ['/api/portal/threads'] });
       setNewMessage('');
-      setSelectedFiles([]);
+      clearAllFiles();
     },
     onError: () => {
       toast({
@@ -146,13 +147,56 @@ export default function PortalThreadDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Cleanup all preview URLs on unmount only
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+      previewUrlsRef.current.clear();
+    };
+  }, []);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setSelectedFiles(prev => [...prev, ...files]);
+    
+    // Create file objects with preview URLs for images
+    const newFileItems = files.map(file => {
+      if (file.type.startsWith('image/')) {
+        const previewUrl = URL.createObjectURL(file);
+        previewUrlsRef.current.add(previewUrl);
+        return {
+          file,
+          previewUrl
+        };
+      }
+      return { file };
+    });
+    
+    setSelectedFiles(prev => [...prev, ...newFileItems]);
   };
 
   const handleRemoveFile = (index: number) => {
+    const fileItem = selectedFiles[index];
+    
+    // Revoke the preview URL if it exists
+    if (fileItem.previewUrl) {
+      URL.revokeObjectURL(fileItem.previewUrl);
+      previewUrlsRef.current.delete(fileItem.previewUrl);
+    }
+    
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const clearAllFiles = () => {
+    // Revoke all preview URLs
+    selectedFiles.forEach(item => {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+        previewUrlsRef.current.delete(item.previewUrl);
+      }
+    });
+    setSelectedFiles([]);
   };
 
   const startRecording = async () => {
@@ -255,11 +299,11 @@ export default function PortalThreadDetail() {
       setUploading(true);
       
       // Convert blob to file
-      const audioFile = new File(
+      const audioFile = new (File as any)(
         [recordedAudio], 
         `voice-note-${Date.now()}.webm`, 
         { type: 'audio/webm' }
-      );
+      ) as File;
       
       // Upload the audio file
       const attachment = await uploadFile(audioFile);
@@ -330,7 +374,7 @@ export default function PortalThreadDetail() {
       
       if (selectedFiles.length > 0) {
         setUploading(true);
-        attachments = await Promise.all(selectedFiles.map(uploadFile));
+        attachments = await Promise.all(selectedFiles.map(item => uploadFile(item.file)));
       }
       
       sendMessageMutation.mutate({ 
@@ -509,22 +553,34 @@ export default function PortalThreadDetail() {
         <div className="max-w-3xl mx-auto">
           {selectedFiles.length > 0 && (
             <div className="mb-3 space-y-2">
-              {selectedFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
-                  <File className="h-4 w-4" />
-                  <span className="text-sm flex-1 truncate">{file.name}</span>
-                  <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)}KB</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveFile(idx)}
-                    data-testid={`remove-file-${idx}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+              {selectedFiles.map((fileItem, idx) => {
+                const isImage = fileItem.file.type.startsWith('image/');
+                
+                return (
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                    {isImage && fileItem.previewUrl ? (
+                      <img 
+                        src={fileItem.previewUrl} 
+                        alt={fileItem.file.name}
+                        className="h-12 w-12 object-cover rounded"
+                      />
+                    ) : (
+                      <File className="h-4 w-4" />
+                    )}
+                    <span className="text-sm flex-1 truncate">{fileItem.file.name}</span>
+                    <span className="text-xs text-gray-500">{(fileItem.file.size / 1024).toFixed(1)}KB</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveFile(idx)}
+                      data-testid={`remove-file-${idx}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
           

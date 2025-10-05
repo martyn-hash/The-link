@@ -605,6 +605,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: userAgent || req.headers['user-agent'] || null
       });
 
+      // Set pushNotificationsEnabled to true when user subscribes
+      await storage.updateClientPortalUser(portalUserId, {
+        pushNotificationsEnabled: true
+      });
+
       res.status(201).json(subscription);
     } catch (error) {
       console.error("Error subscribing portal user to push notifications:", error);
@@ -615,6 +620,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DELETE /api/portal/push/unsubscribe - Portal user push notification unsubscribe
   app.delete("/api/portal/push/unsubscribe", authenticatePortal, async (req: any, res: any) => {
     try {
+      const portalUserId = req.portalUser.id;
+      
       const validationResult = pushUnsubscribeSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ 
@@ -625,6 +632,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { endpoint } = validationResult.data;
       await storage.deletePushSubscription(endpoint);
+      
+      // Check if user has any remaining subscriptions
+      const remainingSubscriptions = await storage.getPushSubscriptionsByClientPortalUserId(portalUserId);
+      
+      // If no subscriptions left, set pushNotificationsEnabled to false
+      if (remainingSubscriptions.length === 0) {
+        await storage.updateClientPortalUser(portalUserId, {
+          pushNotificationsEnabled: false
+        });
+      }
+      
       res.json({ message: "Unsubscribed successfully" });
     } catch (error) {
       console.error("Error unsubscribing portal user from push notifications:", error);
@@ -7548,8 +7566,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const allSubscriptions: any[] = [];
         
         for (const portalUser of portalUsers) {
-          const subs = await storage.getPushSubscriptionsByClientPortalUserId(portalUser.id);
-          allSubscriptions.push(...subs);
+          // Only send to users who have push notifications enabled
+          if (portalUser.pushNotificationsEnabled) {
+            const subs = await storage.getPushSubscriptionsByClientPortalUserId(portalUser.id);
+            allSubscriptions.push(...subs);
+          }
         }
         
         if (allSubscriptions.length > 0) {
