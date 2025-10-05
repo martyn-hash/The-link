@@ -1856,10 +1856,11 @@ export const userActivityTracking = pgTable("user_activity_tracking", {
   uniqueUserEntityView: unique("unique_user_entity_view").on(table.userId, table.entityType, table.entityId),
 }));
 
-// Push subscriptions table - stores browser push notification subscriptions
+// Push subscriptions table - stores browser push notification subscriptions (for staff and portal users)
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }),
   endpoint: text("endpoint").notNull(),
   keys: jsonb("keys").notNull(), // {p256dh: string, auth: string}
   userAgent: text("user_agent"),
@@ -1868,6 +1869,7 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 }, (table) => ({
   // Index for efficient user subscription lookups
   userIdIdx: index("push_subscriptions_user_id_idx").on(table.userId),
+  clientPortalUserIdIdx: index("push_subscriptions_client_portal_user_id_idx").on(table.clientPortalUserId),
   // Unique constraint to prevent duplicate subscriptions for same endpoint
   uniqueEndpoint: unique("unique_push_subscription_endpoint").on(table.endpoint),
 }));

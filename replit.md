@@ -13,7 +13,11 @@ This full-stack project management application aims to provide a comprehensive s
   - **Instant Message Button**: Communications tab includes "Instant Message" button to create new threads directly from client detail page
   - **Enhanced UI**: File upload with preview, attachment display in messages, and responsive mobile design
   - **Portal Push Notifications**: Full-screen branded prompt for portal users to enable push notifications with Growth Accountants branding
-  - **Bug Fixes**: Fixed portal messaging routes (thread status enum, method names), now using correct 'open', 'closed', 'archived' statuses
+  - **Portal Push API**: Added portal-specific push notification endpoints (`/api/portal/push/subscribe`, `/api/portal/push/unsubscribe`) with JWT authentication support
+  - **Push Subscriptions Schema**: Extended `push_subscriptions` table to support both staff users (`userId`) and portal users (`clientPortalUserId`)
+  - **Bug Fixes**: 
+    - Fixed portal messaging routes (thread status enum, method names), now using correct 'open', 'closed', 'archived' statuses
+    - Fixed push notification authentication - portal users can now successfully subscribe to push notifications via dedicated endpoints
   - **Testing Credentials**: Staff login at `/login` using `admin@example.com` / `admin123`
 - **Data Import System**: Added comprehensive CSV import functionality at `/admin/import` for bulk importing client data, people, services, and role assignments. Supports multi-step workflow with validation, preview, and execution phases. System successfully creates clients, people, client-person relationships, service mappings, and role assignments from CSV files.
 - **Client Portal Authentication Upgrade** (October 4, 2025):

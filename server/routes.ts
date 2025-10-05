@@ -565,6 +565,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== CLIENT PORTAL PUSH NOTIFICATION ROUTES (JWT Auth Required) =====
+  
+  // POST /api/portal/push/subscribe - Portal user push notification subscription
+  app.post("/api/portal/push/subscribe", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const portalUserId = req.portalUser.id;
+      
+      const validationResult = pushSubscribeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid subscription data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const { endpoint, keys, userAgent } = validationResult.data;
+
+      const subscription = await storage.createPushSubscription({
+        clientPortalUserId: portalUserId,
+        endpoint,
+        keys,
+        userAgent: userAgent || req.headers['user-agent'] || null
+      });
+
+      res.status(201).json(subscription);
+    } catch (error) {
+      console.error("Error subscribing portal user to push notifications:", error);
+      res.status(500).json({ message: "Failed to subscribe to push notifications" });
+    }
+  });
+
+  // DELETE /api/portal/push/unsubscribe - Portal user push notification unsubscribe
+  app.delete("/api/portal/push/unsubscribe", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const validationResult = pushUnsubscribeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid unsubscribe data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const { endpoint } = validationResult.data;
+      await storage.deletePushSubscription(endpoint);
+      res.json({ message: "Unsubscribed successfully" });
+    } catch (error) {
+      console.error("Error unsubscribing portal user from push notifications:", error);
+      res.status(500).json({ message: "Failed to unsubscribe" });
+    }
+  });
+
+  // GET /api/portal/push/subscriptions - Get portal user's push subscriptions
+  app.get("/api/portal/push/subscriptions", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const portalUserId = req.portalUser.id;
+      const subscriptions = await storage.getPushSubscriptionsByClientPortalUserId(portalUserId);
+      res.json(subscriptions);
+    } catch (error) {
+      console.error("Error fetching portal user push subscriptions:", error);
+      res.status(500).json({ message: "Failed to fetch subscriptions" });
+    }
+  });
+
   // Middleware to resolve effective user (for impersonation)
   const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {

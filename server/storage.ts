@@ -601,6 +601,7 @@ export interface IStorage {
   // Push subscription operations
   createPushSubscription(subscription: InsertPushSubscription): Promise<PushSubscription>;
   getPushSubscriptionsByUserId(userId: string): Promise<PushSubscription[]>;
+  getPushSubscriptionsByClientPortalUserId(clientPortalUserId: string): Promise<PushSubscription[]>;
   deletePushSubscription(endpoint: string): Promise<void>;
   deletePushSubscriptionsByUserId(userId: string): Promise<void>;
 
@@ -7781,7 +7782,8 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoUpdate({
         target: pushSubscriptions.endpoint,
         set: {
-          userId: subscription.userId,
+          userId: subscription.userId || null,
+          clientPortalUserId: subscription.clientPortalUserId || null,
           keys: subscription.keys,
           userAgent: subscription.userAgent,
           updatedAt: new Date(),
@@ -7796,6 +7798,13 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.userId, userId));
+  }
+
+  async getPushSubscriptionsByClientPortalUserId(clientPortalUserId: string): Promise<PushSubscription[]> {
+    return await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.clientPortalUserId, clientPortalUserId));
   }
 
   async deletePushSubscription(endpoint: string): Promise<void> {
