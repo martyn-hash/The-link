@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,7 +26,12 @@ import {
   ArchiveRestore,
   Paperclip,
   X,
-  File
+  File,
+  Mic,
+  Square,
+  Trash2,
+  FileAudio,
+  Image as ImageIcon
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -100,6 +105,15 @@ export default function Messages() {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
+  const isCancelledRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -304,6 +318,136 @@ export default function Messages() {
     } finally {
       setUploadingFiles(false);
     }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { 
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      const audioChunks: Blob[] = [];
+      isCancelledRef.current = false;
+      
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        // Only create audio blob if not cancelled
+        if (!isCancelledRef.current && audioChunks.length > 0) {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          setRecordedAudio(audioBlob);
+          const url = URL.createObjectURL(audioBlob);
+          setAudioUrl(url);
+        }
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Start timer
+      const interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      setRecordingInterval(interval);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      toast({
+        title: 'Recording failed',
+        description: 'Unable to access microphone. Please check permissions.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+        setRecordingInterval(null);
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorder && isRecording) {
+      // Mark as cancelled BEFORE stopping
+      isCancelledRef.current = true;
+      
+      mediaRecorder.stop();
+      setIsRecording(false);
+      
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+        setRecordingInterval(null);
+      }
+    }
+    
+    // Clean up state
+    setRecordedAudio(null);
+    setRecordingTime(0);
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
+  };
+
+  const discardRecording = () => {
+    setRecordedAudio(null);
+    setRecordingTime(0);
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
+  };
+
+  const sendVoiceNote = async () => {
+    if (!recordedAudio) return;
+    
+    try {
+      setUploadingFiles(true);
+      
+      // Convert blob to file
+      const audioFile = new (File as any)([recordedAudio], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' }) as File;
+      
+      // Upload the audio file
+      const attachments = await uploadFiles([audioFile]);
+      
+      // Send as message
+      sendMessageMutation.mutate({ 
+        content: '(Voice Note)', 
+        attachments 
+      });
+      
+      // Clean up
+      discardRecording();
+    } catch (error) {
+      toast({
+        title: 'Failed to send voice note',
+        description: 'Unable to upload audio. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (authLoading) {
@@ -543,19 +687,68 @@ export default function Messages() {
                                   {message.content}
                                 </div>
                                 {message.attachments && message.attachments.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {message.attachments.map((attachment, idx) => (
-                                      <a
-                                        key={idx}
-                                        href={`/objects${attachment.objectPath}`}
-                                        download={attachment.fileName}
-                                        className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
-                                        data-testid={`attachment-${message.id}-${idx}`}
-                                      >
-                                        <File className="h-4 w-4 flex-shrink-0" />
-                                        <span className="truncate">{attachment.fileName}</span>
-                                      </a>
-                                    ))}
+                                  <div className="mt-2 space-y-2">
+                                    {message.attachments.map((attachment, idx) => {
+                                      const isImage = attachment.fileType.startsWith('image/');
+                                      const isAudio = attachment.fileType.startsWith('audio/');
+                                      const objectUrl = `/objects${attachment.objectPath}`;
+                                      
+                                      if (isImage) {
+                                        return (
+                                          <div key={idx} className="mt-2">
+                                            <a 
+                                              href={objectUrl} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer"
+                                              className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity"
+                                              data-testid={`image-attachment-${idx}`}
+                                            >
+                                              <img 
+                                                src={objectUrl} 
+                                                alt={attachment.fileName}
+                                                className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
+                                                loading="lazy"
+                                              />
+                                            </a>
+                                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                              <ImageIcon className="h-3 w-3" />
+                                              <span className="truncate">{attachment.fileName}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      if (isAudio) {
+                                        return (
+                                          <div key={idx} className="p-3 rounded-lg bg-muted">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <FileAudio className="h-4 w-4" />
+                                              <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
+                                            </div>
+                                            <audio 
+                                              src={objectUrl} 
+                                              controls 
+                                              className="w-full max-w-xs"
+                                              preload="metadata"
+                                              data-testid={`audio-attachment-${idx}`}
+                                            />
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <a
+                                          key={idx}
+                                          href={objectUrl}
+                                          download={attachment.fileName}
+                                          className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
+                                          data-testid={`attachment-${message.id}-${idx}`}
+                                        >
+                                          <File className="h-4 w-4 flex-shrink-0" />
+                                          <span className="truncate">{attachment.fileName}</span>
+                                        </a>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>
@@ -595,17 +788,105 @@ export default function Messages() {
                         ))}
                       </div>
                     )}
+                    
+                    {/* Recording indicator */}
+                    {isRecording && (
+                      <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                              <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-ping opacity-75" />
+                            </div>
+                            <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                              Recording... {formatTime(recordingTime)}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelRecording}
+                              data-testid="button-cancel-recording"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={stopRecording}
+                              data-testid="button-stop-recording"
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              <Square className="h-4 w-4 mr-1" />
+                              Stop
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Recorded audio preview */}
+                    {recordedAudio && !isRecording && (
+                      <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <FileAudio className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Voice Note</p>
+                              <p className="text-xs text-blue-600 dark:text-blue-400">{formatTime(recordingTime)}</p>
+                              {audioUrl && (
+                                <audio src={audioUrl} controls className="mt-2 w-full max-w-xs" data-testid="audio-preview" />
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={discardRecording}
+                              data-testid="button-discard-recording"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={sendVoiceNote}
+                              disabled={uploadingFiles}
+                              data-testid="button-send-voice-note"
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {uploadingFiles ? (
+                                <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                              ) : (
+                                <>
+                                  <Send className="h-4 w-4 mr-1" />
+                                  Send
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="flex gap-2">
                       <Textarea
                         placeholder="Type your message..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey && !uploadingFiles) {
+                          if (e.key === 'Enter' && !e.shiftKey && !uploadingFiles && !isRecording && !recordedAudio) {
                             e.preventDefault();
                             handleSendMessage();
                           }
                         }}
+                        disabled={isRecording || !!recordedAudio || uploadingFiles}
                         className="flex-1"
                         rows={3}
                         data-testid="input-message"
@@ -616,6 +897,7 @@ export default function Messages() {
                             size="sm"
                             variant="outline"
                             asChild
+                            disabled={isRecording || !!recordedAudio || uploadingFiles}
                             data-testid="button-attach-file"
                           >
                             <span className="cursor-pointer">
@@ -630,11 +912,21 @@ export default function Messages() {
                           accept="image/*,.pdf"
                           onChange={handleFileSelect}
                           className="hidden"
+                          disabled={isRecording || !!recordedAudio}
                           data-testid="input-file-upload"
                         />
                         <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={startRecording}
+                          disabled={isRecording || !!recordedAudio || uploadingFiles}
+                          data-testid="button-start-recording"
+                        >
+                          <Mic className="h-4 w-4" />
+                        </Button>
+                        <Button
                           onClick={handleSendMessage}
-                          disabled={(!newMessage.trim() && selectedFiles.length === 0) || uploadingFiles || sendMessageMutation.isPending}
+                          disabled={(!newMessage.trim() && selectedFiles.length === 0) || uploadingFiles || sendMessageMutation.isPending || isRecording || !!recordedAudio}
                           data-testid="button-send-message"
                         >
                           {uploadingFiles ? (
@@ -799,19 +1091,68 @@ export default function Messages() {
                                   {message.content}
                                 </div>
                                 {message.attachments && message.attachments.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {message.attachments.map((attachment, idx) => (
-                                      <a
-                                        key={idx}
-                                        href={`/objects${attachment.objectPath}`}
-                                        download={attachment.fileName}
-                                        className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
-                                        data-testid={`attachment-${message.id}-${idx}`}
-                                      >
-                                        <File className="h-4 w-4 flex-shrink-0" />
-                                        <span className="truncate">{attachment.fileName}</span>
-                                      </a>
-                                    ))}
+                                  <div className="mt-2 space-y-2">
+                                    {message.attachments.map((attachment, idx) => {
+                                      const isImage = attachment.fileType.startsWith('image/');
+                                      const isAudio = attachment.fileType.startsWith('audio/');
+                                      const objectUrl = `/objects${attachment.objectPath}`;
+                                      
+                                      if (isImage) {
+                                        return (
+                                          <div key={idx} className="mt-2">
+                                            <a 
+                                              href={objectUrl} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer"
+                                              className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity"
+                                              data-testid={`image-attachment-${idx}`}
+                                            >
+                                              <img 
+                                                src={objectUrl} 
+                                                alt={attachment.fileName}
+                                                className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
+                                                loading="lazy"
+                                              />
+                                            </a>
+                                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                              <ImageIcon className="h-3 w-3" />
+                                              <span className="truncate">{attachment.fileName}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      if (isAudio) {
+                                        return (
+                                          <div key={idx} className="p-3 rounded-lg bg-muted">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <FileAudio className="h-4 w-4" />
+                                              <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
+                                            </div>
+                                            <audio 
+                                              src={objectUrl} 
+                                              controls 
+                                              className="w-full max-w-xs"
+                                              preload="metadata"
+                                              data-testid={`audio-attachment-${idx}`}
+                                            />
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <a
+                                          key={idx}
+                                          href={objectUrl}
+                                          download={attachment.fileName}
+                                          className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
+                                          data-testid={`attachment-${message.id}-${idx}`}
+                                        >
+                                          <File className="h-4 w-4 flex-shrink-0" />
+                                          <span className="truncate">{attachment.fileName}</span>
+                                        </a>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>

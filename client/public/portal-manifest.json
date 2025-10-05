@@ -1,7 +1,7 @@
 {
-  "name": "The Link - Client Portal",
-  "short_name": "The Link",
-  "description": "Your secure client portal for The Link",
+  "name": "Growth Accountants Client Portal",
+  "short_name": "Growth Portal",
+  "description": "The World's Most Advanced Client Portal - Your secure gateway to Growth Accountants",
   "theme_color": "#0A7BBF",
   "background_color": "#ffffff",
   "display": "standalone",

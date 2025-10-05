@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Send, User, Building, Paperclip, X, File, Image as ImageIcon, FileAudio, Download } from 'lucide-react';
+import { ArrowLeft, Send, User, Building, Paperclip, X, File, Image as ImageIcon, FileAudio, Download, Mic, Square, Trash2 } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -59,6 +59,16 @@ export default function PortalThreadDetail() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isCancelledRef = useRef(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -143,6 +153,140 @@ export default function PortalThreadDetail() {
 
   const handleRemoveFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { 
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      audioChunksRef.current = [];
+      isCancelledRef.current = false;
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        // Only create audio blob if not cancelled
+        if (!isCancelledRef.current && audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          setRecordedAudio(audioBlob);
+          const url = URL.createObjectURL(audioBlob);
+          setAudioUrl(url);
+        }
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Start timer
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      toast({
+        title: 'Recording failed',
+        description: 'Unable to access microphone. Please check permissions.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      // Mark as cancelled BEFORE stopping
+      isCancelledRef.current = true;
+      
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+    
+    // Clean up state
+    setRecordedAudio(null);
+    setRecordingTime(0);
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
+    audioChunksRef.current = [];
+  };
+
+  const discardRecording = () => {
+    setRecordedAudio(null);
+    setRecordingTime(0);
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
+  };
+
+  const sendVoiceNote = async () => {
+    if (!recordedAudio) return;
+    
+    try {
+      setUploading(true);
+      
+      // Convert blob to file
+      const audioFile = new File(
+        [recordedAudio], 
+        `voice-note-${Date.now()}.webm`, 
+        { type: 'audio/webm' }
+      );
+      
+      // Upload the audio file
+      const attachment = await uploadFile(audioFile);
+      
+      // Send as message
+      sendMessageMutation.mutate({ 
+        content: '', 
+        attachments: [attachment]
+      });
+      
+      // Clean up
+      discardRecording();
+    } catch (error) {
+      toast({
+        title: 'Failed to send voice note',
+        description: 'Unable to upload audio. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const uploadFile = async (file: File): Promise<Attachment> => {
@@ -282,12 +426,57 @@ export default function PortalThreadDetail() {
                           {message.attachments.map((attachment, idx) => {
                             const isImage = attachment.fileType.startsWith('image/');
                             const isAudio = attachment.fileType.startsWith('audio/');
+                            const objectUrl = `/objects${attachment.objectPath}`;
+                            
+                            if (isImage) {
+                              return (
+                                <div key={idx} className="mt-2">
+                                  <a 
+                                    href={objectUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity"
+                                    data-testid={`image-attachment-${idx}`}
+                                  >
+                                    <img 
+                                      src={objectUrl} 
+                                      alt={attachment.fileName}
+                                      className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                  <div className={`flex items-center gap-2 mt-1 text-xs ${isFromMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}`}>
+                                    <ImageIcon className="h-3 w-3" />
+                                    <span className="truncate">{attachment.fileName}</span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            if (isAudio) {
+                              return (
+                                <div key={idx} className={`p-3 rounded-lg ${isFromMe ? 'bg-blue-700' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <FileAudio className="h-4 w-4" />
+                                    <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
+                                  </div>
+                                  <audio 
+                                    src={objectUrl} 
+                                    controls 
+                                    className="w-full max-w-xs"
+                                    preload="metadata"
+                                    data-testid={`audio-attachment-${idx}`}
+                                  />
+                                </div>
+                              );
+                            }
+                            
                             return (
                               <div key={idx} className={`flex items-center gap-2 p-2 rounded ${isFromMe ? 'bg-blue-700' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                {isImage ? <ImageIcon className="h-4 w-4" /> : isAudio ? <FileAudio className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                                <File className="h-4 w-4" />
                                 <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
                                 <a
-                                  href={`/objects${attachment.objectPath}`}
+                                  href={objectUrl}
                                   download={attachment.fileName}
                                   className={`text-xs ${isFromMe ? 'text-blue-100 hover:text-white' : 'text-blue-600 hover:text-blue-800'}`}
                                   data-testid={`download-attachment-${idx}`}
@@ -338,6 +527,94 @@ export default function PortalThreadDetail() {
               ))}
             </div>
           )}
+          
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="mb-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
+                    <div className="absolute inset-0 w-4 h-4 bg-red-500 rounded-full animate-ping opacity-75" />
+                  </div>
+                  <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                    Recording... {formatTime(recordingTime)}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={cancelRecording}
+                    data-testid="button-cancel-recording"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/40"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={stopRecording}
+                    data-testid="button-stop-recording"
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    <Square className="h-4 w-4 mr-1" />
+                    Stop
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Recorded audio preview */}
+          {recordedAudio && !isRecording && (
+            <div className="mb-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <FileAudio className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Voice Note</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">{formatTime(recordingTime)}</p>
+                    {audioUrl && (
+                      <audio src={audioUrl} controls className="mt-2 w-full max-w-xs" data-testid="audio-preview" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={discardRecording}
+                    data-testid="button-discard-recording"
+                    className="text-gray-600 hover:text-gray-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={sendVoiceNote}
+                    disabled={uploading}
+                    data-testid="button-send-voice-note"
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {uploading ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-1" />
+                        Send
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
               ref={fileInputRef}
@@ -352,11 +629,22 @@ export default function PortalThreadDetail() {
               variant="outline"
               size="icon"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || sendMessageMutation.isPending}
+              disabled={uploading || sendMessageMutation.isPending || isRecording || !!recordedAudio}
               data-testid="button-attach-file"
               className="h-[60px] w-[60px]"
             >
               <Paperclip className="h-5 w-5" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={startRecording}
+              disabled={uploading || sendMessageMutation.isPending || isRecording || !!recordedAudio}
+              data-testid="button-start-recording"
+              className="h-[60px] w-[60px]"
+            >
+              <Mic className="h-5 w-5" />
             </Button>
             <Textarea
               placeholder="Type your message..."
@@ -368,7 +656,7 @@ export default function PortalThreadDetail() {
                   handleSendMessage(e);
                 }
               }}
-              disabled={sendMessageMutation.isPending || uploading}
+              disabled={sendMessageMutation.isPending || uploading || isRecording || !!recordedAudio}
               data-testid="input-message"
               className="min-h-[60px] resize-none"
               rows={2}
@@ -376,7 +664,7 @@ export default function PortalThreadDetail() {
             <Button
               type="submit"
               size="icon"
-              disabled={sendMessageMutation.isPending || uploading || (!newMessage.trim() && selectedFiles.length === 0)}
+              disabled={sendMessageMutation.isPending || uploading || (!newMessage.trim() && selectedFiles.length === 0) || isRecording || !!recordedAudio}
               data-testid="button-send-message"
               className="h-[60px] w-[60px]"
             >
