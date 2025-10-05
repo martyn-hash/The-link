@@ -11,6 +11,7 @@ import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import PortalBottomNav from '@/components/portal-bottom-nav';
 import PWAInstallPrompt from '@/components/pwa-install-prompt';
+import { useAppBadge } from '@/hooks/useAppBadge';
 
 interface MessageThread {
   id: string;
@@ -19,6 +20,7 @@ interface MessageThread {
   clientId: string;
   lastMessageAt: string | null;
   createdAt: string;
+  unreadCount?: number;
 }
 
 const statusConfig = {
@@ -60,6 +62,9 @@ export default function PortalThreadList() {
     queryFn: () => portalApi.unreadCount(),
     refetchInterval: 5000,
   });
+
+  // Update app badge with unread count
+  useAppBadge(unreadData?.count);
 
   const handleLogout = () => {
     logout();
@@ -131,16 +136,23 @@ export default function PortalThreadList() {
               return (
                 <Card
                   key={thread.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  className={`cursor-pointer hover:shadow-md transition-shadow ${thread.unreadCount && thread.unreadCount > 0 ? 'border-2 border-blue-500 dark:border-blue-400' : ''}`}
                   onClick={() => setLocation(`/portal/threads/${thread.id}`)}
                   data-testid={`thread-${thread.id}`}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 dark:text-white truncate mb-1">
-                          {thread.topic}
-                        </h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className={`font-semibold truncate ${thread.unreadCount && thread.unreadCount > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
+                            {thread.topic}
+                          </h3>
+                          {thread.unreadCount && thread.unreadCount > 0 && (
+                            <Badge variant="destructive" className="ml-auto shrink-0">
+                              {thread.unreadCount}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                           <StatusIcon className="h-4 w-4" />
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.color}`}>

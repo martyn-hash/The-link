@@ -643,6 +643,7 @@ export interface IStorage {
   createMessageThread(thread: InsertMessageThread): Promise<MessageThread>;
   getMessageThreadById(id: string): Promise<MessageThread | undefined>;
   getMessageThreadsByClientId(clientId: string, filters?: { status?: string }): Promise<MessageThread[]>;
+  getMessageThreadsWithUnreadCount(clientId: string, status?: string): Promise<(MessageThread & { unreadCount: number })[]>;
   getAllMessageThreads(filters?: { status?: string; clientId?: string }): Promise<MessageThread[]>;
   updateMessageThread(id: string, thread: Partial<InsertMessageThread>): Promise<MessageThread>;
   deleteMessageThread(id: string): Promise<void>;
@@ -8088,6 +8089,29 @@ export class DatabaseStorage implements IStorage {
       .from(messageThreads)
       .where(and(...conditions))
       .orderBy(desc(messageThreads.lastMessageAt));
+  }
+
+  async getMessageThreadsWithUnreadCount(clientId: string, status?: string): Promise<(MessageThread & { unreadCount: number })[]> {
+    const conditions = [eq(messageThreads.clientId, clientId)];
+    if (status) {
+      conditions.push(sql`${messageThreads.status} = ${status}`);
+    }
+
+    const result = await db
+      .select({
+        ...messageThreads,
+        unreadCount: sql<number>`COALESCE(COUNT(CASE WHEN ${messages.isReadByClient} = false AND ${messages.clientPortalUserId} IS NULL THEN 1 END), 0)::int`
+      })
+      .from(messageThreads)
+      .leftJoin(messages, eq(messageThreads.id, messages.threadId))
+      .where(and(...conditions))
+      .groupBy(messageThreads.id)
+      .orderBy(desc(messageThreads.lastMessageAt));
+
+    return result.map(row => ({
+      ...row,
+      unreadCount: row.unreadCount || 0
+    })) as (MessageThread & { unreadCount: number })[];
   }
 
   async getAllMessageThreads(filters?: { status?: string; clientId?: string }): Promise<MessageThread[]> {

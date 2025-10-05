@@ -401,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = req.portalUser!.clientId;
       const status = req.query.status as string | undefined;
       
-      const threads = await storage.getMessageThreadsByClientId(clientId, { status });
+      const threads = await storage.getMessageThreadsWithUnreadCount(clientId, status);
       res.json(threads);
     } catch (error) {
       console.error('Error fetching threads:', error);
@@ -471,7 +471,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const messages = await storage.getMessagesByThreadId(threadId);
-      res.json(messages);
+      
+      // Enrich messages with staff user names
+      const enrichedMessages = await Promise.all(
+        messages.map(async (message: any) => {
+          if (message.userId) {
+            const staffUser = await storage.getUser(message.userId);
+            return {
+              ...message,
+              staffUserName: staffUser?.name || 'Staff'
+            };
+          }
+          return message;
+        })
+      );
+      
+      res.json(enrichedMessages);
     } catch (error) {
       console.error('Error fetching messages:', error);
       res.status(500).json({ message: 'Failed to fetch messages' });
@@ -7543,6 +7558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: `New message from ${senderName}`,
             body: content.length > 100 ? content.substring(0, 100) + '...' : content,
             icon: '/pwa-icon-192.png',
+            badge: '/pwa-icon-192.png',
             tag: `message-${message.id}`,
             url: `/portal/threads/${threadId}`
           };

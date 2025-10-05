@@ -1874,6 +1874,32 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   uniqueEndpoint: unique("unique_push_subscription_endpoint").on(table.endpoint),
 }));
 
+// Push notification template type enum
+export const pushTemplateTypeEnum = pgEnum("push_template_type", [
+  "new_message",
+  "document_request", 
+  "task_assigned",
+  "status_update",
+  "reminder"
+]);
+
+// Push notification templates table - admin configurable notification templates
+export const pushNotificationTemplates = pgTable("push_notification_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateType: pushTemplateTypeEnum("template_type").notNull(),
+  name: varchar("name").notNull(), // Display name for admin
+  titleTemplate: varchar("title_template").notNull(), // Template with placeholders like {staffName}, {clientName}
+  bodyTemplate: text("body_template").notNull(), // Template with placeholders
+  iconUrl: varchar("icon_url"), // Optional custom icon URL
+  badgeUrl: varchar("badge_url"), // Optional custom badge URL
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  templateTypeIdx: index("push_templates_type_idx").on(table.templateType),
+  uniqueTemplateType: unique("unique_template_type").on(table.templateType),
+}));
+
 // Document folders table - organizes documents into folders (batches)
 export const documentFolders = pgTable("document_folders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1946,6 +1972,12 @@ export const insertUserActivityTrackingSchema = createInsertSchema(userActivityT
 });
 
 export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPushNotificationTemplateSchema = createInsertSchema(pushNotificationTemplates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -2056,6 +2088,8 @@ export type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
 export type InsertUserOauthAccount = z.infer<typeof insertUserOauthAccountSchema>;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type PushNotificationTemplate = typeof pushNotificationTemplates.$inferSelect;
+export type InsertPushNotificationTemplate = z.infer<typeof insertPushNotificationTemplateSchema>;
 export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;

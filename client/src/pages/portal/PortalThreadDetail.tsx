@@ -184,7 +184,7 @@ export default function PortalThreadDetail() {
                           )}
                         </div>
                         <span className={`text-xs font-medium ${isFromMe ? 'text-blue-100' : 'text-gray-600 dark:text-gray-400'}`}>
-                          {isFromClient ? 'You' : 'Staff'}
+                          {isFromClient ? 'You' : (message as any).staffUserName || 'Staff'}
                         </span>
                       </div>
                       <p className={`text-sm ${isFromMe ? 'text-white' : 'text-gray-900 dark:text-white'} whitespace-pre-wrap break-words`}>
