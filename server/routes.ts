@@ -603,7 +603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch the object from GCS and stream it
       try {
         const objectStorageService = new ObjectStorageService();
-        const blob = await objectStorageService.getObjectEntity(objectPath);
+        const blob = await objectStorageService.getObjectEntityFile(objectPath);
         
         if (!blob) {
           return res.status(404).json({ message: "Attachment not found" });
@@ -4562,7 +4562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData = updateProjectTypeSchema.parse(req.body);
       
       // Check if we're trying to deactivate the project type
-      if (updateData.active !== undefined && updateData.active === false) {
+      if (updateData.active !== undefined && !updateData.active) {
         // Get the current project type to check if it's currently active
         const allProjectTypes = await storage.getAllProjectTypes();
         const projectType = allProjectTypes.find(pt => pt.id === req.params.id);
