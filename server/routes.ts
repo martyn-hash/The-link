@@ -401,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = req.portalUser!.clientId;
       const status = req.query.status as string | undefined;
       
-      const threads = await storage.getMessageThreadsByClient(clientId, status);
+      const threads = await storage.getMessageThreadsByClientId(clientId, { status });
       res.json(threads);
     } catch (error) {
       console.error('Error fetching threads:', error);
@@ -444,12 +444,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const thread = await storage.createMessageThread({
-        topic,
+        subject: topic,
         clientId,
-        clientPortalUserId: portalUserId,
+        createdByClientPortalUserId: portalUserId,
         projectId: projectId || null,
         serviceId: serviceId || null,
-        status: 'new'
+        status: 'open'
       });
       
       res.status(201).json(thread);
@@ -7356,7 +7356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const status = req.query.status as string | undefined;
       
       // Get all threads - filtering will be done based on user's project assignments
-      const allThreads = await storage.getAllMessageThreads(status);
+      const allThreads = await storage.getAllMessageThreads({ status });
       
       // Filter threads based on user access
       let accessibleThreads = allThreads;

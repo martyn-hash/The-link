@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
+import { PortalPushNotificationPrompt } from "@/components/PortalPushNotificationPrompt";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
 import { PortalAuthProvider, usePortalAuth } from "@/contexts/PortalAuthContext";
 import NotFound from "@/pages/not-found";
@@ -131,6 +132,7 @@ function App() {
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
+  const { isAuthenticated: isPortalAuthenticated } = usePortalAuth();
 
   return (
     <>
@@ -138,6 +140,7 @@ function AppContent() {
       <Router />
       <PWAUpdatePrompt />
       {isAuthenticated && <PushNotificationPrompt />}
+      {isPortalAuthenticated && <PortalPushNotificationPrompt />}
     </>
   );
 }
