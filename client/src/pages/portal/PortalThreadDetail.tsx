@@ -51,7 +51,7 @@ export default function PortalThreadDetail() {
   const params = useParams();
   const threadId = params.id as string;
   const [location, setLocation] = useLocation();
-  const { user, isAuthenticated, isLoading } = usePortalAuth();
+  const { user, token, isAuthenticated, isLoading } = usePortalAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newMessage, setNewMessage] = useState('');
@@ -94,7 +94,7 @@ export default function PortalThreadDetail() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('portalAuthToken')}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ content, attachments }),
       });
@@ -150,7 +150,7 @@ export default function PortalThreadDetail() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('portalAuthToken')}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ fileName: file.name, fileType: file.type }),
     });
