@@ -581,42 +581,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Serve message attachments with thread access check (portal)
-  app.get('/api/portal/attachments/*', authenticatePortal, async (req: any, res) => {
-    try {
-      // Extract the object path from the URL
-      const objectPath = req.path.replace('/api/portal/attachments', '/objects');
-      
-      // Get the thread ID from query params
-      const threadId = req.query.threadId;
-      if (!threadId) {
-        return res.status(400).json({ message: 'threadId query parameter is required' });
-      }
-      
-      // Check if the thread exists and belongs to the portal user's client
-      const thread = await storage.getMessageThreadById(threadId);
-      if (!thread) {
-        return res.status(404).json({ message: 'Thread not found' });
-      }
-      
-      // Verify the portal user has access to this thread via their client
-      const clientId = req.portalUser!.clientId;
-      if (thread.clientId !== clientId) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-      
-      // Serve the file
-      const objectStorageService = new ObjectStorageService();
-      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-      await objectStorageService.downloadObject(objectFile, res);
-    } catch (error) {
-      console.error('Error serving portal attachment:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ message: 'Failed to serve attachment' });
-      }
-    }
-  });
-
   // ===== CLIENT PORTAL PUSH NOTIFICATION ROUTES (JWT Auth Required) =====
   
   // POST /api/portal/push/subscribe - Portal user push notification subscription
