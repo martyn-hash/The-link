@@ -6,7 +6,7 @@ import { storage } from './storage';
 const JWT_SECRET = process.env.JWT_SECRET || 'portal-jwt-secret-change-in-production';
 const MAGIC_LINK_EXPIRY = 15 * 60 * 1000; // 15 minutes
 const VERIFICATION_CODE_EXPIRY = 10 * 60 * 1000; // 10 minutes
-const JWT_EXPIRY = '30d'; // 30 days (extended for better PWA persistence)
+const JWT_EXPIRY = '180d'; // 6 months (180 days)
 
 interface PortalUser {
   id: string;
