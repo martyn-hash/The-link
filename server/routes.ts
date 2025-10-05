@@ -479,7 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const staffUser = await storage.getUser(message.userId);
             return {
               ...message,
-              staffUserName: staffUser?.name || 'Staff'
+              staffUserName: staffUser ? `${staffUser.firstName || ''} ${staffUser.lastName || ''}`.trim() || staffUser.email : 'Staff'
             };
           }
           return message;
@@ -4524,7 +4524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Only check for active projects if we're changing from active to inactive
-        if (projectType.active !== false) {
+        if (projectType.active === true) {
           const activeProjectCount = await storage.countActiveProjectsUsingProjectType(req.params.id);
           
           if (activeProjectCount > 0) {
@@ -7575,7 +7575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (allSubscriptions.length > 0) {
           const sender = await storage.getUser(effectiveUserId);
-          const senderName = sender?.name || 'Staff';
+          const senderName = sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || sender.email : 'Staff';
           
           let body = content || '';
           if (attachments && attachments.length > 0) {
@@ -7831,7 +7831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const portalUsers = await storage.getClientPortalUsersByClient(clientId);
+      const portalUsers = await storage.getClientPortalUsersByClientId(clientId);
       res.json(portalUsers);
     } catch (error) {
       console.error("Error fetching portal users:", error);
@@ -7843,7 +7843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/clients/:clientId/portal-users", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { clientId } = req.params;
-      const { email, name, phone } = req.body;
+      const { email, name } = req.body;
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
       
@@ -7865,7 +7865,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const portalUser = await storage.createClientPortalUser({
         email,
         name,
-        phone: phone || null,
         clientId
       });
       
@@ -7880,7 +7879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/portal-users/:portalUserId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { portalUserId } = req.params;
-      const { name, phone } = req.body;
+      const { name } = req.body;
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
       
@@ -7894,7 +7893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const updated = await storage.updateClientPortalUser(portalUserId, { name, phone });
+      const updated = await storage.updateClientPortalUser(portalUserId, { name });
       res.json(updated);
     } catch (error) {
       console.error("Error updating portal user:", error);
@@ -8895,12 +8894,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sipProvision = await getSIPProvisionCredentials(effectiveUserId);
       
       console.log('[SERVER] ✓ SIP provision SUCCESS');
-      console.log('[SERVER] Device ID:', sipProvision?.device?.id);
-      console.log('[SERVER] Extension:', sipProvision?.device?.extension?.extensionNumber);
-      console.log('[SERVER] SIP Username:', sipProvision?.sipInfo?.[0]?.username);
-      console.log('[SERVER] SIP Domain:', sipProvision?.sipInfo?.[0]?.domain);
-      console.log('[SERVER] Transport:', sipProvision?.sipInfo?.[0]?.transport);
-      console.log('[SERVER] Outbound Proxy:', sipProvision?.sipInfo?.[0]?.outboundProxy);
+      // Device and extension info may not be present in the type
+      console.log('[SERVER] SIP Username:', (sipProvision as any)?.username);
+      console.log('[SERVER] SIP Domain:', (sipProvision as any)?.domain);
+      console.log('[SERVER] Transport:', (sipProvision as any)?.transport);
       console.log('[SERVER] Full response available - ready for WebPhone initialization');
       console.log('====================================================\n');
       
@@ -9610,13 +9607,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return null;
           };
           
+          const nextStartDate = parseDate(row.next_start_date);
+          const nextDueDate = parseDate(row.next_due_date);
+          
           const clientServiceData = {
             clientId,
             serviceId: service.id,
             serviceOwnerId,
             frequency: row.frequency,
-            nextStartDate: parseDate(row.next_start_date),
-            nextDueDate: parseDate(row.next_due_date),
+            nextStartDate: nextStartDate ? nextStartDate.toISOString() : null,
+            nextDueDate: nextDueDate ? nextDueDate.toISOString() : null,
             isActive: row.is_active?.toLowerCase() !== 'no',
           };
           

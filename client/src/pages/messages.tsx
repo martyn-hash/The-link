@@ -693,7 +693,7 @@ export default function Messages() {
                                       const isImage = attachment.fileType.startsWith('image/');
                                       const isAudio = attachment.fileType.startsWith('audio/');
                                       // Use the authorized endpoint for staff to access attachments
-                                      const objectUrl = attachment.objectPath.replace('/objects/', `/api/internal/messages/attachments/`) + `?threadId=${threadId}`;
+                                      const objectUrl = attachment.objectPath.replace('/objects/', `/api/internal/messages/attachments/`) + `?threadId=${selectedThreadId}`;
                                       
                                       if (isImage) {
                                         return (
@@ -1096,7 +1096,7 @@ export default function Messages() {
                                       const isImage = attachment.fileType.startsWith('image/');
                                       const isAudio = attachment.fileType.startsWith('audio/');
                                       // Use the authorized endpoint for staff to access attachments
-                                      const objectUrl = attachment.objectPath.replace('/objects/', `/api/internal/messages/attachments/`) + `?threadId=${threadId}`;
+                                      const objectUrl = attachment.objectPath.replace('/objects/', `/api/internal/messages/attachments/`) + `?threadId=${selectedThreadId}`;
                                       
                                       if (isImage) {
                                         return (
