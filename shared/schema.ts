@@ -1919,18 +1919,21 @@ export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   folderId: varchar("folder_id").references(() => documentFolders.id, { onDelete: "cascade" }), // nullable for migration
-  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  uploadedBy: varchar("uploaded_by").references(() => users.id), // nullable - portal users use clientPortalUserId
+  clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }), // for portal uploads
   uploadName: varchar("upload_name"), // kept temporarily for migration
   source: varchar("source").default('direct upload'), // kept temporarily for migration
   fileName: varchar("file_name").notNull(),
   fileSize: integer("file_size").notNull(), // in bytes
   fileType: varchar("file_type").notNull(), // MIME type
   objectPath: text("object_path").notNull(), // path in object storage (/objects/...)
+  isPortalVisible: boolean("is_portal_visible").default(true), // whether visible to portal users
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 }, (table) => [
   index("idx_documents_client_id").on(table.clientId),
   index("idx_documents_folder_id").on(table.folderId),
   index("idx_documents_uploaded_at").on(table.uploadedAt),
+  index("idx_documents_client_portal_user_id").on(table.clientPortalUserId),
 ]);
 
 // Zod schemas for communications
