@@ -7772,6 +7772,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Serve message attachments with thread access check (staff)
+  app.get("/api/internal/messages/attachments/*", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Extract the object path from the URL
+      const objectPath = req.path.replace('/api/internal/messages/attachments', '/objects');
+      
+      // Get the thread ID from query params
+      const threadId = req.query.threadId;
+      if (!threadId) {
+        return res.status(400).json({ message: "threadId query parameter is required" });
+      }
+      
+      // Check if the thread exists
+      const thread = await storage.getMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Check if the user has access to the client
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const hasAccess = await userHasClientAccess(effectiveUserId, thread.clientId, isAdmin);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Serve the file without ACL check since we verified thread access
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error("Error serving attachment:", error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: "Attachment not found" });
+        }
+        return res.status(500).json({ message: "Error serving attachment" });
+      }
+    } catch (error) {
+      console.error("Error serving message attachment:", error);
+      res.status(500).json({ message: "Failed to serve attachment" });
+    }
+  });
+
   // ===== PORTAL USER MANAGEMENT ROUTES (Staff Only) =====
   
   // Get portal users for a client
