@@ -26,7 +26,7 @@ interface Message {
 
 interface MessageThread {
   id: string;
-  topic: string;
+  subject: string;
   status: 'open' | 'closed' | 'archived';
   clientId: string;
   lastMessageAt: string | null;
@@ -140,7 +140,7 @@ export default function PortalThreadDetail() {
             </Button>
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                {thread.topic}
+                {thread.subject}
               </h1>
             </div>
           </div>

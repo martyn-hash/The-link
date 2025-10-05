@@ -176,10 +176,10 @@ export const portalApi = {
     get: (threadId: string) =>
       portalRequestLegacy(`/api/portal/threads/${threadId}`),
 
-    create: (topic: string, projectId?: string, serviceId?: string) =>
+    create: (subject: string, projectId?: string, serviceId?: string) =>
       portalRequestLegacy('/api/portal/threads', {
         method: 'POST',
-        body: JSON.stringify({ topic, projectId, serviceId }),
+        body: JSON.stringify({ subject, projectId, serviceId }),
       }),
 
     markRead: (threadId: string) =>

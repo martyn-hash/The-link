@@ -15,7 +15,7 @@ import { useAppBadge } from '@/hooks/useAppBadge';
 
 interface MessageThread {
   id: string;
-  topic: string;
+  subject: string;
   status: 'open' | 'closed' | 'archived';
   clientId: string;
   lastMessageAt: string | null;
@@ -145,7 +145,7 @@ export default function PortalThreadList() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className={`font-semibold truncate ${thread.unreadCount && thread.unreadCount > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
-                            {thread.topic}
+                            {thread.subject}
                           </h3>
                           {thread.unreadCount && thread.unreadCount > 0 && (
                             <Badge variant="destructive" className="ml-auto shrink-0">

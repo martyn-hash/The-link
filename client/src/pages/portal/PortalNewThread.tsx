@@ -15,7 +15,7 @@ export default function PortalNewThread() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading } = usePortalAuth();
-  const [topic, setTopic] = useState('');
+  const [subject, setSubject] = useState('');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -35,12 +35,12 @@ export default function PortalNewThread() {
   }
 
   const createThreadMutation = useMutation({
-    mutationFn: (topic: string) => portalApi.threads.create(topic),
+    mutationFn: (subject: string) => portalApi.threads.create(subject),
     onSuccess: (thread) => {
       queryClient.invalidateQueries({ queryKey: ['/api/portal/threads'] });
       toast({
         title: 'Thread created',
-        description: 'Your message has been sent',
+        description: 'Your conversation has been started',
       });
       setLocation(`/portal/threads/${thread.id}`);
     },
@@ -55,15 +55,15 @@ export default function PortalNewThread() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topic.trim()) {
+    if (!subject.trim()) {
       toast({
-        title: 'Topic required',
-        description: 'Please enter a topic for your message',
+        title: 'Subject required',
+        description: 'Please enter a subject for your message',
         variant: 'destructive',
       });
       return;
     }
-    createThreadMutation.mutate(topic.trim());
+    createThreadMutation.mutate(subject.trim());
   };
 
   return (
@@ -92,14 +92,14 @@ export default function PortalNewThread() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Topic
+                    Subject
                   </label>
                   <Input
                     placeholder="What would you like to discuss?"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
                     disabled={createThreadMutation.isPending}
-                    data-testid="input-topic"
+                    data-testid="input-subject"
                     autoFocus
                     className="text-base"
                   />

@@ -437,14 +437,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const portalUserId = req.portalUser!.id;
       const clientId = req.portalUser!.clientId;
-      const { topic, projectId, serviceId } = req.body;
+      const { subject, projectId, serviceId } = req.body;
       
-      if (!topic) {
-        return res.status(400).json({ message: 'Topic is required' });
+      if (!subject) {
+        return res.status(400).json({ message: 'Subject is required' });
       }
       
       const thread = await storage.createMessageThread({
-        subject: topic,
+        subject,
         clientId,
         createdByClientPortalUserId: portalUserId,
         projectId: projectId || null,
