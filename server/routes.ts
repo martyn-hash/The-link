@@ -499,10 +499,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { threadId } = req.params;
       const portalUserId = req.portalUser!.id;
       const clientId = req.portalUser!.clientId;
-      const { content } = req.body;
+      const { content, attachments } = req.body;
       
-      if (!content) {
-        return res.status(400).json({ message: 'Content is required' });
+      if (!content && (!attachments || attachments.length === 0)) {
+        return res.status(400).json({ message: 'Content or attachments are required' });
       }
       
       const thread = await storage.getMessageThreadById(threadId);
@@ -512,8 +512,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const message = await storage.createMessage({
         threadId,
-        content,
+        content: content || '',
         clientPortalUserId: portalUserId,
+        attachments: attachments || null,
         isReadByStaff: false,
         isReadByClient: true
       });
@@ -7516,10 +7517,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { threadId } = req.params;
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
-      const { content } = req.body;
+      const { content, attachments } = req.body;
       
-      if (!content) {
-        return res.status(400).json({ message: "Content is required" });
+      if (!content && (!attachments || attachments.length === 0)) {
+        return res.status(400).json({ message: "Content or attachments are required" });
       }
       
       const thread = await storage.getMessageThreadById(threadId);
@@ -7534,8 +7535,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const message = await storage.createMessage({
         threadId,
-        content,
+        content: content || '',
         userId: effectiveUserId,
+        attachments: attachments || null,
         isReadByStaff: true,
         isReadByClient: false
       });
@@ -7554,9 +7556,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const sender = await storage.getUser(effectiveUserId);
           const senderName = sender?.name || 'Staff';
           
+          let body = content || '';
+          if (attachments && attachments.length > 0) {
+            body = body ? `${body} (${attachments.length} attachment${attachments.length > 1 ? 's' : ''})` : `Sent ${attachments.length} attachment${attachments.length > 1 ? 's' : ''}`;
+          }
+          body = body.length > 100 ? body.substring(0, 100) + '...' : body;
+          
           const payload: PushNotificationPayload = {
             title: `New message from ${senderName}`,
-            body: content.length > 100 ? content.substring(0, 100) + '...' : content,
+            body,
             icon: '/pwa-icon-192.png',
             badge: '/pwa-icon-192.png',
             tag: `message-${message.id}`,
