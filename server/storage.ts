@@ -618,6 +618,12 @@ export interface IStorage {
   getDocumentsByFolderId(folderId: string): Promise<any[]>;
   deleteDocument(id: string): Promise<void>;
   
+  // Portal document operations
+  listPortalDocuments(clientId: string, clientPortalUserId: string): Promise<Document[]>;
+  createPortalDocument(document: InsertDocument): Promise<Document>;
+  deletePortalDocument(id: string, clientId: string): Promise<void>;
+  getPortalDocumentById(id: string, clientId: string): Promise<Document | undefined>;
+  
   // Risk Assessment operations
   createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment>;
   getRiskAssessmentById(id: string): Promise<RiskAssessment | undefined>;
