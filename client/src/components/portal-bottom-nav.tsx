@@ -62,10 +62,9 @@ export default function PortalBottomNav() {
                 className={`
                   flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]
                   ${active ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}
-                  ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:text-primary'}
+                  hover:text-primary
                 `}
                 data-testid={item.testId}
-                disabled={item.disabled}
               >
                 <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
                 <span className="text-xs font-medium">{item.label}</span>
@@ -78,10 +77,6 @@ export default function PortalBottomNav() {
                   {content}
                 </div>
               );
-            }
-
-            if (item.disabled) {
-              return <div key={item.href}>{content}</div>;
             }
 
             return (
