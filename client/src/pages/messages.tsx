@@ -691,7 +691,7 @@ export default function Messages() {
                                     {message.attachments.map((attachment, idx) => {
                                       const isImage = attachment.fileType.startsWith('image/');
                                       const isAudio = attachment.fileType.startsWith('audio/');
-                                      const objectUrl = `/objects${attachment.objectPath}`;
+                                      const objectUrl = attachment.objectPath;
                                       
                                       if (isImage) {
                                         return (
@@ -1095,7 +1095,7 @@ export default function Messages() {
                                     {message.attachments.map((attachment, idx) => {
                                       const isImage = attachment.fileType.startsWith('image/');
                                       const isAudio = attachment.fileType.startsWith('audio/');
-                                      const objectUrl = `/objects${attachment.objectPath}`;
+                                      const objectUrl = attachment.objectPath;
                                       
                                       if (isImage) {
                                         return (
