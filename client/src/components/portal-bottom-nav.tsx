@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Menu, CheckSquare, MessageCircle, User, HelpCircle } from 'lucide-react';
+import { Menu, CheckSquare, MessageCircle, User, FileText } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import logoPath from '@assets/full_logo_transparent_600_1759469504917.png';
@@ -37,17 +37,16 @@ export default function PortalBottomNav() {
       testId: 'portal-bottom-nav-chats'
     },
     {
+      href: '/portal/documents',
+      label: 'Docs',
+      icon: FileText,
+      testId: 'portal-bottom-nav-documents'
+    },
+    {
       href: '/portal/profile',
       label: 'Profile',
       icon: User,
       testId: 'portal-bottom-nav-profile'
-    },
-    {
-      href: '#',
-      label: 'More',
-      icon: HelpCircle,
-      testId: 'portal-bottom-nav-more',
-      disabled: true
     },
   ];
 
