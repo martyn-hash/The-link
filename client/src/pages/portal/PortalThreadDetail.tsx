@@ -27,17 +27,16 @@ interface Message {
 interface MessageThread {
   id: string;
   topic: string;
-  status: 'new' | 'in_progress' | 'resolved' | 'closed';
+  status: 'open' | 'closed' | 'archived';
   clientId: string;
   lastMessageAt: string | null;
   createdAt: string;
 }
 
 const statusConfig = {
-  new: { label: 'New', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
-  in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' },
-  resolved: { label: 'Resolved', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' },
+  open: { label: 'Open', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
   closed: { label: 'Closed', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200' },
+  archived: { label: 'Archived', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' },
 };
 
 export default function PortalThreadDetail() {
