@@ -60,7 +60,6 @@ export default function PortalThreadDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previewUrlsRef = useRef<Set<string>>(new Set());
-  const [previewImage, setPreviewImage] = useState<{ url: string; fileName: string } | null>(null);
   
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -496,15 +495,16 @@ export default function PortalThreadDetail() {
                           {message.attachments.map((attachment, idx) => {
                             const isImage = attachment.fileType.startsWith('image/');
                             const isAudio = attachment.fileType.startsWith('audio/');
-                            // Use the authorized endpoint for portal to access attachments
-                            const objectUrl = attachment.objectPath.replace('/objects/', `/api/portal/attachments/`) + `?threadId=${threadId}`;
+                            const objectUrl = attachment.objectPath;
                             
                             if (isImage) {
                               return (
                                 <div key={idx} className="mt-2">
-                                  <button
-                                    onClick={() => setPreviewImage({ url: objectUrl, fileName: attachment.fileName })}
-                                    className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity cursor-pointer"
+                                  <a 
+                                    href={objectUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity"
                                     data-testid={`image-attachment-${idx}`}
                                   >
                                     <img 
@@ -513,7 +513,7 @@ export default function PortalThreadDetail() {
                                       className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
                                       loading="lazy"
                                     />
-                                  </button>
+                                  </a>
                                   <div className={`flex items-center gap-2 mt-1 text-xs ${isFromMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}`}>
                                     <ImageIcon className="h-3 w-3" />
                                     <span className="truncate">{attachment.fileName}</span>
@@ -759,35 +759,6 @@ export default function PortalThreadDetail() {
         </div>
       </div>
       <PortalBottomNav />
-      
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setPreviewImage(null)}
-          data-testid="image-preview-modal"
-        >
-          <div className="relative max-w-7xl max-h-full">
-            <button
-              className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2 hover:bg-black/70"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPreviewImage(null);
-              }}
-              data-testid="button-close-preview"
-            >
-              <X className="h-6 w-6" />
-            </button>
-            <img 
-              src={previewImage.url}
-              alt={previewImage.fileName}
-              className="max-w-full max-h-[90vh] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <p className="text-white text-center mt-2">{previewImage.fileName}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
