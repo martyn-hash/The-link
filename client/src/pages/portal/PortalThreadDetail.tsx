@@ -334,34 +334,59 @@ export default function PortalThreadDetail() {
   };
 
   const uploadFile = async (file: File): Promise<Attachment> => {
-    const urlResponse = await fetch('/api/portal/attachments/upload-url', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ fileName: file.name, fileType: file.type }),
-    });
-    
-    if (!urlResponse.ok) throw new Error('Failed to get upload URL');
-    const { url, objectPath } = await urlResponse.json();
-    
-    const uploadResponse = await fetch(url, {
-      method: 'PUT',
-      body: file,
-      headers: {
-        'Content-Type': file.type,
-      },
-    });
-    
-    if (!uploadResponse.ok) throw new Error('Failed to upload file');
-    
-    return {
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      objectPath,
-    };
+    try {
+      console.log('[Upload] Starting upload for file:', file.name, file.type, file.size);
+      
+      const urlResponse = await fetch('/api/portal/attachments/upload-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+      });
+      
+      if (!urlResponse.ok) {
+        const errorText = await urlResponse.text();
+        console.error('[Upload] Failed to get upload URL:', urlResponse.status, errorText);
+        throw new Error(`Failed to get upload URL: ${urlResponse.status}`);
+      }
+      
+      const { url, objectPath } = await urlResponse.json();
+      console.log('[Upload] Got signed URL, objectPath:', objectPath);
+      
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('[Upload] GCS upload failed:', {
+          status: uploadResponse.status,
+          statusText: uploadResponse.statusText,
+          error: errorText,
+          fileType: file.type,
+          fileName: file.name
+        });
+        throw new Error(`GCS upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+      }
+      
+      console.log('[Upload] Upload successful for:', file.name);
+      
+      return {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        objectPath,
+      };
+    } catch (error) {
+      console.error('[Upload] Upload error:', error);
+      throw error;
+    }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
