@@ -201,4 +201,29 @@ export const portalApi = {
 
   unreadCount: () =>
     portalRequestLegacy('/api/portal/unread-count'),
+
+  documents: {
+    list: () =>
+      portalRequestLegacy('/api/portal/documents'),
+
+    getUploadUrl: (fileName: string, fileType: string, fileSize: number) =>
+      portalRequestLegacy('/api/portal/documents/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({ fileName, fileType, fileSize }),
+      }),
+
+    confirmUpload: (objectPath: string, fileName: string, fileType: string, fileSize: number) =>
+      portalRequestLegacy('/api/portal/documents/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ objectPath, fileName, fileType, fileSize }),
+      }),
+
+    getDownloadUrl: (documentId: string) =>
+      portalRequestLegacy(`/api/portal/documents/${documentId}/download`),
+
+    delete: (documentId: string) =>
+      portalRequestLegacy(`/api/portal/documents/${documentId}`, {
+        method: 'DELETE',
+      }),
+  },
 };
