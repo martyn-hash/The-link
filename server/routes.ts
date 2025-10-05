@@ -790,9 +790,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/portal/documents/:id/download", authenticatePortal, async (req: any, res: any) => {
     try {
       const { id } = req.params;
+      const portalUserId = req.portalUser.id;
       const clientId = req.portalUser.clientId;
 
-      const document = await storage.getPortalDocumentById(id, clientId);
+      const document = await storage.getPortalDocumentById(id, clientId, portalUserId);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
@@ -820,9 +821,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/portal/documents/:id", authenticatePortal, async (req: any, res: any) => {
     try {
       const { id } = req.params;
+      const portalUserId = req.portalUser.id;
       const clientId = req.portalUser.clientId;
 
-      const document = await storage.getPortalDocumentById(id, clientId);
+      const document = await storage.getPortalDocumentById(id, clientId, portalUserId);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
@@ -838,7 +840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Error deleting file from storage:", storageError);
       }
 
-      await storage.deletePortalDocument(id, clientId);
+      await storage.deletePortalDocument(id, clientId, portalUserId);
       res.json({ message: "Document deleted successfully" });
     } catch (error) {
       console.error("Error deleting portal document:", error);

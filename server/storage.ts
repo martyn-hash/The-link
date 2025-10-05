@@ -621,8 +621,8 @@ export interface IStorage {
   // Portal document operations
   listPortalDocuments(clientId: string, clientPortalUserId: string): Promise<Document[]>;
   createPortalDocument(document: InsertDocument): Promise<Document>;
-  deletePortalDocument(id: string, clientId: string): Promise<void>;
-  getPortalDocumentById(id: string, clientId: string): Promise<Document | undefined>;
+  deletePortalDocument(id: string, clientId: string, clientPortalUserId: string): Promise<void>;
+  getPortalDocumentById(id: string, clientId: string, clientPortalUserId: string): Promise<Document | undefined>;
   
   // Risk Assessment operations
   createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment>;
@@ -7975,18 +7975,19 @@ export class DatabaseStorage implements IStorage {
     return newDocument;
   }
 
-  async deletePortalDocument(id: string, clientId: string): Promise<void> {
+  async deletePortalDocument(id: string, clientId: string, clientPortalUserId: string): Promise<void> {
     await db
       .delete(documents)
       .where(
         and(
           eq(documents.id, id),
-          eq(documents.clientId, clientId)
+          eq(documents.clientId, clientId),
+          eq(documents.clientPortalUserId, clientPortalUserId)
         )
       );
   }
 
-  async getPortalDocumentById(id: string, clientId: string): Promise<Document | undefined> {
+  async getPortalDocumentById(id: string, clientId: string, clientPortalUserId: string): Promise<Document | undefined> {
     const result = await db
       .select()
       .from(documents)
@@ -7994,6 +7995,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(documents.id, id),
           eq(documents.clientId, clientId),
+          eq(documents.clientPortalUserId, clientPortalUserId),
           eq(documents.isPortalVisible, true)
         )
       )
