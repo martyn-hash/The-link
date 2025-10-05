@@ -72,6 +72,7 @@ The application is built with a modern tech stack designed for scalability and p
 - **Visual Unread Indicators**: Threads display unread count badges with responsive styling (blue dot + count)
 - **Auto Mark-as-Read**: Messages automatically marked as read when portal user views a thread
 - **Push Notification Templates**: Created database schema for admin-configurable notification templates (foundation for future admin UI)
+- **Session Persistence Improvements**: Extended JWT expiry to 30 days, implemented dual storage (localStorage + sessionStorage fallback) for iOS Safari PWA compatibility, added comprehensive logging for diagnostics
 
 ### Performance Optimizations
 - **getMessageThreadsWithUnreadCount()**: Single SQL query with LEFT JOIN replaces N+1 pattern for calculating unread counts
