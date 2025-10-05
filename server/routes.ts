@@ -7525,6 +7525,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isReadByClient: false
       });
       
+      // Send push notifications to portal users
+      try {
+        const portalUsers = await storage.getClientPortalUsersByClientId(thread.clientId);
+        const allSubscriptions: any[] = [];
+        
+        for (const portalUser of portalUsers) {
+          const subs = await storage.getPushSubscriptionsByClientPortalUserId(portalUser.id);
+          allSubscriptions.push(...subs);
+        }
+        
+        if (allSubscriptions.length > 0) {
+          const sender = await storage.getUser(effectiveUserId);
+          const senderName = sender?.name || 'Staff';
+          
+          const payload: PushNotificationPayload = {
+            title: `New message from ${senderName}`,
+            body: content.length > 100 ? content.substring(0, 100) + '...' : content,
+            icon: '/pwa-icon-192.png',
+            tag: `message-${message.id}`,
+            url: `/portal/threads/${threadId}`
+          };
+          
+          const result = await sendPushNotificationToMultiple(
+            allSubscriptions.map(sub => ({
+              endpoint: sub.endpoint,
+              keys: sub.keys as { p256dh: string; auth: string }
+            })),
+            payload
+          );
+          
+          console.log(`[Push] Sent notification to ${result.successful}/${allSubscriptions.length} portal user subscriptions`);
+          
+          // Clean up expired subscriptions
+          if (result.expiredSubscriptions.length > 0) {
+            for (const endpoint of result.expiredSubscriptions) {
+              await storage.deletePushSubscription(endpoint);
+            }
+          }
+        }
+      } catch (pushError) {
+        console.error('[Push] Error sending notifications to portal users:', pushError);
+        // Don't fail the message send if push fails
+      }
+      
       res.status(201).json(message);
     } catch (error) {
       console.error("Error sending message:", error);

@@ -60,6 +60,8 @@ The application is built with a modern tech stack designed for scalability and p
 - **Portal Thread Status Runtime Error**: Fixed statusConfig in PortalThreadDetail and PortalThreadList to use correct thread status values ('open'|'closed'|'archived' instead of 'new'|'in_progress'|'resolved'|'closed')
 - **Push Notification Authentication**: Fixed portal push notifications by exporting portalRequest() with JWT token support - portal users can now successfully subscribe to push notifications
 - **Portal Messaging Routes**: Corrected thread status enum values and method names throughout portal API
+- **Portal Login Persistence (PWA)**: Fixed authentication persistence issues in PWA by adding token expiry validation, visibility change handler for iOS Safari, and proper React hook dependencies
+- **Staff-to-Portal Push Notifications**: Added push notification logic to staff message route - portal users now receive instant push notifications when staff sends them messages
 
 ### ✅ Comprehensive E2E Testing Completed
 Successfully tested full messaging flow from portal user (Sergei Jelissenko - martyn@accountantmatch.uk) to staff dashboard:
