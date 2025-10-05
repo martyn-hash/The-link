@@ -662,6 +662,190 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== CLIENT PORTAL DOCUMENT ROUTES (JWT Auth Required) =====
+  
+  // GET /api/portal/documents - List all documents for authenticated portal user
+  app.get("/api/portal/documents", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const portalUserId = req.portalUser.id;
+      const clientId = req.portalUser.clientId;
+      
+      const documents = await storage.listPortalDocuments(clientId, portalUserId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching portal documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  // POST /api/portal/documents/upload-url - Generate presigned URL for portal document upload
+  app.post("/api/portal/documents/upload-url", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType, fileSize } = req.body;
+      const portalUserId = req.portalUser.id;
+      const clientId = req.portalUser.clientId;
+      
+      if (!fileName || !fileType) {
+        return res.status(400).json({ message: "fileName and fileType are required" });
+      }
+
+      const MAX_FILE_SIZE = 25 * 1024 * 1024;
+      if (fileSize && fileSize > MAX_FILE_SIZE) {
+        return res.status(400).json({ message: "File size exceeds 25MB limit" });
+      }
+
+      const allowedTypes = [
+        'image/png', 'image/jpeg', 'image/jpg',
+        'application/pdf',
+        'text/csv',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'video/mp4',
+        'audio/mpeg', 'audio/mp3'
+      ];
+
+      if (!allowedTypes.includes(fileType)) {
+        return res.status(400).json({ message: "File type not allowed" });
+      }
+
+      const timestamp = Date.now();
+      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const objectPath = `portal-uploads/${clientId}/${timestamp}-${sanitizedFileName}`;
+
+      const { Storage } = await import('@google-cloud/storage');
+      const gcs = new Storage();
+      const bucketName = process.env.GCS_BUCKET_NAME || '';
+      const bucket = gcs.bucket(bucketName);
+      const file = bucket.file(objectPath);
+
+      const [url] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 15 * 60 * 1000,
+        contentType: fileType,
+      });
+
+      res.json({
+        uploadUrl: url,
+        objectPath,
+        fileName,
+        fileType,
+        fileSize
+      });
+    } catch (error) {
+      console.error("Error generating portal document upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // POST /api/portal/documents/confirm - Confirm document upload and create database record
+  app.post("/api/portal/documents/confirm", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { objectPath, fileName, fileType, fileSize } = req.body;
+      const portalUserId = req.portalUser.id;
+      const clientId = req.portalUser.clientId;
+
+      if (!objectPath || !fileName || !fileType) {
+        return res.status(400).json({ message: "objectPath, fileName, and fileType are required" });
+      }
+
+      let folderId = null;
+      const existingFolders = await storage.getDocumentFoldersByClientId(clientId);
+      const clientUploadsFolder = existingFolders.find((f: any) => f.name === 'Client Uploads');
+      
+      if (clientUploadsFolder) {
+        folderId = clientUploadsFolder.id;
+      } else {
+        const newFolder = await storage.createDocumentFolder({
+          clientId,
+          name: 'Client Uploads',
+          createdBy: null,
+          source: 'portal_upload'
+        });
+        folderId = newFolder.id;
+      }
+
+      const document = await storage.createPortalDocument({
+        clientId,
+        clientPortalUserId: portalUserId,
+        folderId,
+        fileName,
+        fileType,
+        fileSize: fileSize || 0,
+        objectPath,
+        uploadName: fileName,
+        source: 'portal_upload',
+        isPortalVisible: true,
+        uploadedBy: null
+      });
+
+      res.json(document);
+    } catch (error) {
+      console.error("Error confirming portal document upload:", error);
+      res.status(500).json({ message: "Failed to confirm upload" });
+    }
+  });
+
+  // GET /api/portal/documents/:id/download - Get presigned download URL for portal document
+  app.get("/api/portal/documents/:id/download", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const clientId = req.portalUser.clientId;
+
+      const document = await storage.getPortalDocumentById(id, clientId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const { Storage } = await import('@google-cloud/storage');
+      const gcs = new Storage();
+      const bucketName = process.env.GCS_BUCKET_NAME || '';
+      const bucket = gcs.bucket(bucketName);
+      const file = bucket.file(document.objectPath);
+
+      const [url] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'read',
+        expires: Date.now() + 60 * 60 * 1000,
+      });
+
+      res.json({ downloadUrl: url });
+    } catch (error) {
+      console.error("Error generating portal document download URL:", error);
+      res.status(500).json({ message: "Failed to generate download URL" });
+    }
+  });
+
+  // DELETE /api/portal/documents/:id - Delete portal document
+  app.delete("/api/portal/documents/:id", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const clientId = req.portalUser.clientId;
+
+      const document = await storage.getPortalDocumentById(id, clientId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      try {
+        const { Storage } = await import('@google-cloud/storage');
+        const gcs = new Storage();
+        const bucketName = process.env.GCS_BUCKET_NAME || '';
+        const bucket = gcs.bucket(bucketName);
+        const file = bucket.file(document.objectPath);
+        await file.delete();
+      } catch (storageError) {
+        console.error("Error deleting file from storage:", storageError);
+      }
+
+      await storage.deletePortalDocument(id, clientId);
+      res.json({ message: "Document deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting portal document:", error);
+      res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
   // Middleware to resolve effective user (for impersonation)
   const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {
