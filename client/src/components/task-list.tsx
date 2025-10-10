@@ -254,8 +254,30 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   // Apply saved preferences on load
   useEffect(() => {
     if (savedPreferences) {
-      if (savedPreferences.columnOrder) setColumnOrder(savedPreferences.columnOrder);
-      if (savedPreferences.visibleColumns) setVisibleColumns(savedPreferences.visibleColumns);
+      // Merge new columns from ALL_COLUMNS that don't exist in saved preferences
+      if (savedPreferences.columnOrder) {
+        const allColumnIds = ALL_COLUMNS.map(col => col.id);
+        const savedColumnIds = savedPreferences.columnOrder;
+        
+        // Find any new columns that weren't in the saved order
+        const newColumns = allColumnIds.filter(id => !savedColumnIds.includes(id));
+        
+        // Add new columns to the end of the order
+        const mergedOrder = [...savedColumnIds, ...newColumns];
+        setColumnOrder(mergedOrder);
+      }
+      
+      if (savedPreferences.visibleColumns) {
+        // Also merge any newly added columns that should be visible by default
+        const savedVisibleIds = savedPreferences.visibleColumns;
+        const newDefaultVisibleColumns = ALL_COLUMNS
+          .filter(col => col.defaultVisible && !savedVisibleIds.includes(col.id))
+          .map(col => col.id);
+        
+        const mergedVisible = [...savedVisibleIds, ...newDefaultVisibleColumns];
+        setVisibleColumns(mergedVisible);
+      }
+      
       if (savedPreferences.columnWidths) setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
     }
   }, [savedPreferences]);
