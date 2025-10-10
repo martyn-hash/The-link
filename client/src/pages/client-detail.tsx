@@ -736,7 +736,14 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                     <div className="max-w-md">
                       {item.type === 'message_thread' ? (
                         <div>
-                          <div className="font-medium text-sm">{item.subject}</div>
+                          <div className="font-medium text-sm flex items-center gap-2">
+                            {item.subject}
+                            {item.attachmentCount > 0 && (
+                              <span className="inline-flex items-center text-xs text-muted-foreground">
+                                📎 {item.attachmentCount}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {item.messageCount || 0} message{(item.messageCount || 0) !== 1 ? 's' : ''}
                             {item.unreadCount > 0 && (

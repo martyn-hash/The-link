@@ -1,5 +1,19 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Helper to check if error is a server restart/unavailable error
+function isServerUnavailableError(error: any): boolean {
+  if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+    return true;
+  }
+  if (error?.message?.includes('502') || error?.message?.includes('503')) {
+    return true;
+  }
+  if (error?.message?.includes('ECONNREFUSED') || error?.message?.includes('Network request failed')) {
+    return true;
+  }
+  return false;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -77,10 +91,44 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: true, // Refetch when user returns to tab
       refetchOnReconnect: true, // Refetch when network reconnects
       staleTime: 5000, // Data becomes stale after 5 seconds
-      retry: false,
+      // Smart retry logic: retry on server errors, but not on client errors
+      retry: (failureCount, error) => {
+        // Don't retry on client errors (4xx except 401 which might be session timeout)
+        if (error?.message?.includes('400') ||
+            error?.message?.includes('403') ||
+            error?.message?.includes('404')) {
+          return false;
+        }
+
+        // Retry on server unavailable errors (server restart scenario)
+        if (isServerUnavailableError(error)) {
+          return failureCount < 5; // Retry up to 5 times for server errors
+        }
+
+        // Retry on 401 (might be session expired during server restart)
+        if (error?.message?.includes('401')) {
+          return failureCount < 2; // Retry twice for auth errors
+        }
+
+        // Don't retry other errors
+        return false;
+      },
+      retryDelay: (attemptIndex) => {
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        return Math.min(1000 * 2 ** attemptIndex, 16000);
+      },
     },
     mutations: {
-      retry: false,
+      // Retry mutations only on server unavailable errors
+      retry: (failureCount, error) => {
+        if (isServerUnavailableError(error)) {
+          return failureCount < 3; // Retry up to 3 times
+        }
+        return false;
+      },
+      retryDelay: (attemptIndex) => {
+        return Math.min(1000 * 2 ** attemptIndex, 8000);
+      },
     },
   },
 });

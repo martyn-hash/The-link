@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 import {
   MessageCircle,
   Clock,
@@ -31,10 +32,12 @@ import {
   Square,
   Trash2,
   FileAudio,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RefreshCw
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
+import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 
 interface MessageThread {
   id: string;
@@ -96,6 +99,7 @@ const statusConfig = {
 };
 
 export default function Messages() {
+  console.log('[Messages] ===== STAFF MESSAGES PAGE LOADED - VERSION 2.0 =====');
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
@@ -105,8 +109,9 @@ export default function Messages() {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [previewImage, setPreviewImage] = useState<{ url: string; fileName: string } | null>(null);
-  
+
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -242,12 +247,26 @@ export default function Messages() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    handleFilesSelected(files);
+  };
+
+  const handleFilesSelected = (files: File[]) => {
+    // Check if adding these files would exceed the limit
+    if (selectedFiles.length + files.length > 5) {
+      toast({
+        title: "Too many files",
+        description: "You can only attach up to 5 files per message",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const validFiles = files.filter(file => {
-      const isValid = file.size <= 10 * 1024 * 1024; // 10MB limit
+      const isValid = file.size <= 25 * 1024 * 1024; // 25MB limit
       if (!isValid) {
         toast({
           title: "File too large",
-          description: `${file.name} exceeds 10MB limit`,
+          description: `${file.name} exceeds 25MB limit`,
           variant: "destructive",
         });
       }
@@ -262,16 +281,23 @@ export default function Messages() {
 
   const uploadFiles = async (files: File[]) => {
     const uploadedAttachments = [];
-    
-    for (const file of files) {
+    const totalFiles = files.length;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       try {
+        // Update progress
+        const progressPercent = Math.round((i / totalFiles) * 100);
+        setUploadProgress(progressPercent);
+
         const uploadUrlResponse = await apiRequest('POST', '/api/internal/messages/attachments/upload-url', {
           fileName: file.name,
           fileType: file.type,
+          fileSize: file.size,
         });
-        
+
         const { url, objectPath } = uploadUrlResponse as any;
-        
+
         await fetch(url, {
           method: 'PUT',
           body: file,
@@ -279,33 +305,38 @@ export default function Messages() {
             'Content-Type': file.type,
           },
         });
-        
+
         uploadedAttachments.push({
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
           objectPath,
         });
+
+        // Update progress after each file
+        const newProgressPercent = Math.round(((i + 1) / totalFiles) * 100);
+        setUploadProgress(newProgressPercent);
       } catch (error) {
         console.error('Error uploading file:', file.name, error);
         throw new Error(`Failed to upload ${file.name}`);
       }
     }
-    
+
     return uploadedAttachments;
   };
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() && selectedFiles.length === 0) return;
-    
+
     try {
       setUploadingFiles(true);
+      setUploadProgress(0);
       let attachments: Array<{ fileName: string; fileType: string; fileSize: number; objectPath: string; }> = [];
-      
+
       if (selectedFiles.length > 0) {
         attachments = await uploadFiles(selectedFiles);
       }
-      
+
       sendMessageMutation.mutate({
         content: newMessage || '(Attachment)',
         attachments: attachments.length > 0 ? attachments : undefined,
@@ -318,6 +349,7 @@ export default function Messages() {
       });
     } finally {
       setUploadingFiles(false);
+      setUploadProgress(0);
     }
   };
 
@@ -414,30 +446,57 @@ export default function Messages() {
     }
   };
 
+  const reRecord = async () => {
+    // Discard current recording
+    discardRecording();
+    // Start a new recording
+    await startRecording();
+  };
+
   const sendVoiceNote = async () => {
     if (!recordedAudio) return;
-    
+
     try {
       setUploadingFiles(true);
-      
-      // Convert blob to file
-      const audioFile = new (File as any)([recordedAudio], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' }) as File;
-      
-      // Upload the audio file
-      const attachments = await uploadFiles([audioFile]);
-      
-      // Send as message
-      sendMessageMutation.mutate({ 
-        content: '(Voice Note)', 
-        attachments 
+
+      // Convert blob to file-like object for browser compatibility
+      const fileName = `voice-note-${Date.now()}.webm`;
+
+      // Create a File-like object that works in all browsers
+      // Some browsers don't support the File constructor, so we extend the Blob
+      const audioFile = Object.assign(recordedAudio, {
+        name: fileName,
+        lastModified: Date.now()
       });
-      
+
+      // Verify file has size
+      console.log('Voice note file:', {
+        name: (audioFile as any).name,
+        size: audioFile.size,
+        type: audioFile.type,
+        lastModified: (audioFile as any).lastModified
+      });
+
+      if (!audioFile.size || audioFile.size === 0) {
+        throw new Error('Voice note has no audio data');
+      }
+
+      // Upload the audio file
+      const attachments = await uploadFiles([audioFile as File]);
+
+      // Send as message
+      sendMessageMutation.mutate({
+        content: '(Voice Note)',
+        attachments
+      });
+
       // Clean up
       discardRecording();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Voice note upload error:', error);
       toast({
         title: 'Failed to send voice note',
-        description: 'Unable to upload audio. Please try again.',
+        description: error.message || 'Unable to upload audio. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -765,27 +824,36 @@ export default function Messages() {
                   </div>
 
                   <div className="border-t p-4">
+                    {/* Upload Progress */}
+                    {uploadingFiles && uploadProgress > 0 && (
+                      <div className="mb-3 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Uploading files...</span>
+                          <span className="font-medium">{uploadProgress}%</span>
+                        </div>
+                        <Progress value={uploadProgress} className="h-2" />
+                      </div>
+                    )}
+
+                    {/* File Upload Zone */}
+                    {!isRecording && !recordedAudio && selectedFiles.length < 5 && (
+                      <div className="mb-3">
+                        <FileUploadZone
+                          onFilesSelected={handleFilesSelected}
+                          maxFiles={5 - selectedFiles.length}
+                          maxSize={25 * 1024 * 1024}
+                          acceptedTypes={['image/*', '.pdf', 'audio/*', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']}
+                        />
+                      </div>
+                    )}
+
+                    {/* Attachment List */}
                     {selectedFiles.length > 0 && (
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {selectedFiles.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center gap-2 bg-muted px-3 py-2 rounded-md text-sm"
-                            data-testid={`selected-file-${index}`}
-                          >
-                            <File className="h-4 w-4" />
-                            <span className="max-w-[200px] truncate">{file.name}</span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 w-5 p-0"
-                              onClick={() => removeFile(index)}
-                              data-testid={`button-remove-file-${index}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
+                      <div className="mb-3">
+                        <AttachmentList
+                          attachments={selectedFiles}
+                          onRemove={removeFile}
+                        />
                       </div>
                     )}
                     
@@ -848,7 +916,18 @@ export default function Messages() {
                               type="button"
                               variant="ghost"
                               size="sm"
+                              onClick={reRecord}
+                              title="Re-record"
+                              data-testid="button-rerecord"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
                               onClick={discardRecording}
+                              title="Discard"
                               data-testid="button-discard-recording"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -909,7 +988,7 @@ export default function Messages() {
                           id="file-upload"
                           type="file"
                           multiple
-                          accept="image/*,.pdf"
+                          accept="image/*,.pdf,audio/*,.doc,.docx,.xls,.xlsx,.txt,.csv"
                           onChange={handleFileSelect}
                           className="hidden"
                           disabled={isRecording || !!recordedAudio}

@@ -1905,7 +1905,7 @@ export const documentFolders = pgTable("document_folders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   name: varchar("name").notNull(), // folder name (e.g., "ID Documents", "Bank Statements")
-  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id), // nullable for system-generated folders
   source: varchar("source").notNull().default('direct upload'), // where the upload came from
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1922,7 +1922,12 @@ export const documents = pgTable("documents", {
   uploadedBy: varchar("uploaded_by").references(() => users.id), // nullable - portal users use clientPortalUserId
   clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }), // for portal uploads
   uploadName: varchar("upload_name"), // kept temporarily for migration
-  source: varchar("source").default('direct upload'), // kept temporarily for migration
+  source: varchar("source", {
+    enum: ['direct_upload', 'message_attachment', 'task_upload', 'portal_upload']
+  }).notNull().default('direct_upload'), // source of the document
+  messageId: varchar("message_id").references(() => messages.id, { onDelete: "cascade" }), // link to source message if from message attachment
+  threadId: varchar("thread_id").references(() => messageThreads.id, { onDelete: "cascade" }), // link to thread if from message attachment
+  taskId: varchar("task_id"), // for future task integration
   fileName: varchar("file_name").notNull(),
   fileSize: integer("file_size").notNull(), // in bytes
   fileType: varchar("file_type").notNull(), // MIME type
@@ -1934,6 +1939,10 @@ export const documents = pgTable("documents", {
   index("idx_documents_folder_id").on(table.folderId),
   index("idx_documents_uploaded_at").on(table.uploadedAt),
   index("idx_documents_client_portal_user_id").on(table.clientPortalUserId),
+  index("idx_documents_message_id").on(table.messageId),
+  index("idx_documents_thread_id").on(table.threadId),
+  index("idx_documents_task_id").on(table.taskId),
+  index("idx_documents_source").on(table.source),
 ]);
 
 // Zod schemas for communications

@@ -68,35 +68,41 @@ export async function authenticatePortal(
   next: NextFunction
 ) {
   try {
+    // Try to get token from Authorization header first
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-    
+    let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+    // If no header token, try query parameter (for image/audio src attributes)
+    if (!token && req.query.token) {
+      token = req.query.token as string;
+    }
+
     if (!token) {
       return res.status(401).json({ message: 'No authentication token provided' });
     }
-    
+
     const payload = verifyJWT(token);
     if (!payload) {
       return res.status(401).json({ message: 'Invalid or expired token' });
     }
-    
+
     // Verify the portal user still exists
     const portalUser = await storage.getClientPortalUserById(payload.userId);
     if (!portalUser) {
       return res.status(401).json({ message: 'Portal user not found' });
     }
-    
+
     // Verify client match for extra security
     if (portalUser.clientId !== payload.clientId) {
       return res.status(401).json({ message: 'Invalid client association' });
     }
-    
+
     req.portalUser = {
       id: portalUser.id,
       clientId: portalUser.clientId,
       email: portalUser.email
     };
-    
+
     next();
   } catch (error) {
     console.error('Portal authentication error:', error);

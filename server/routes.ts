@@ -28,6 +28,9 @@ import {
 import { companiesHouseService } from "./companies-house-service";
 import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling, runProjectSchedulingEnhanced, getOverdueServicesAnalysis, seedTestServices, resetTestData, buildSchedulingPreview, type SchedulingRunResult } from "./project-scheduler";
+import { validateFileUpload, MAX_FILE_SIZE, MAX_VOICE_NOTE_SIZE } from "./utils/fileValidation";
+import { createDocumentsFromAttachments } from "./utils/documentHelpers";
+import { verifyMessageAttachmentAccess, verifyThreadAccess } from "./middleware/attachmentAccess";
 // Import protected core modules
 import * as serviceMapper from "./core/service-mapper";
 import * as projectCreator from "./core/project-creator";
@@ -299,6 +302,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
+  // ===== HEALTH CHECK ENDPOINT (Public - No Auth Required) =====
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // ===== CLIENT PORTAL AUTHENTICATION ROUTES (Public - No Auth Required) =====
   const { sendMagicLink, verifyMagicLink, sendVerificationCode, verifyCode } = await import('./portalAuth');
 
@@ -500,16 +511,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const portalUserId = req.portalUser!.id;
       const clientId = req.portalUser!.clientId;
       const { content, attachments } = req.body;
-      
+
       if (!content && (!attachments || attachments.length === 0)) {
         return res.status(400).json({ message: 'Content or attachments are required' });
       }
-      
+
       const thread = await storage.getMessageThreadById(threadId);
       if (!thread || thread.clientId !== clientId) {
         return res.status(403).json({ message: 'Access denied' });
       }
-      
+
       const message = await storage.createMessage({
         threadId,
         content: content || '',
@@ -518,7 +529,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isReadByStaff: false,
         isReadByClient: true
       });
-      
+
+      // Auto-create document records for attachments
+      if (attachments && attachments.length > 0) {
+        await createDocumentsFromAttachments({
+          clientId,
+          messageId: message.id,
+          threadId,
+          attachments,
+          clientPortalUserId: portalUserId,
+        });
+      }
+
       res.status(201).json(message);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -560,17 +582,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate presigned URL for message attachment upload (portal)
   app.post('/api/portal/attachments/upload-url', authenticatePortal, async (req: any, res) => {
     try {
-      const { fileName, fileType } = req.body;
-      
+      const { fileName, fileType, fileSize } = req.body;
+
       if (!fileName || !fileType) {
         return res.status(400).json({ message: 'fileName and fileType are required' });
       }
-      
+
+      // Server-side validation
+      const validation = validateFileUpload(fileName, fileType, fileSize || 0, MAX_FILE_SIZE);
+      if (!validation.isValid) {
+        return res.status(400).json({ message: validation.error });
+      }
+
       const objectStorageService = new ObjectStorageService();
       const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
-      
-      res.json({ 
-        url: uploadURL, 
+
+      res.json({
+        url: uploadURL,
         objectPath,
         fileName,
         fileType,
@@ -578,6 +606,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error generating upload URL:', error);
       res.status(500).json({ message: 'Failed to generate upload URL' });
+    }
+  });
+
+  // GET /api/portal/attachments/* - Serve attachment files with authentication
+  app.get('/api/portal/attachments/*', authenticatePortal, async (req: any, res) => {
+    try {
+      // Extract the object path from the URL
+      const objectPath = req.path.replace('/api/portal/attachments', '/objects');
+
+      // Get the thread ID from query params
+      const threadId = req.query.threadId;
+      if (!threadId) {
+        return res.status(400).json({ message: 'threadId query parameter is required' });
+      }
+
+      // Verify thread access
+      const portalUserId = req.portalUser.id;
+      const { hasAccess } = await verifyThreadAccess(undefined, portalUserId, threadId);
+
+      if (!hasAccess) {
+        console.log(`[Portal File Access Denied] User: ${portalUserId}, Thread: ${threadId}, Path: ${objectPath}`);
+        return res.status(403).json({ message: 'Access denied to this file' });
+      }
+
+      // Serve the file without ACL check since we verified thread access
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error('Error serving portal attachment:', error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: 'Attachment not found' });
+        }
+        return res.status(500).json({ message: 'Error serving attachment' });
+      }
+    } catch (error) {
+      console.error('Error serving portal attachment:', error);
+      res.status(500).json({ message: 'Failed to serve attachment' });
     }
   });
 
@@ -684,28 +751,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fileName, fileType, fileSize } = req.body;
       const portalUserId = req.portalUser.id;
       const clientId = req.portalUser.clientId;
-      
+
       if (!fileName || !fileType) {
         return res.status(400).json({ message: "fileName and fileType are required" });
       }
 
-      const MAX_FILE_SIZE = 25 * 1024 * 1024;
-      if (fileSize && fileSize > MAX_FILE_SIZE) {
-        return res.status(400).json({ message: "File size exceeds 25MB limit" });
-      }
-
-      const allowedTypes = [
-        'image/png', 'image/jpeg', 'image/jpg',
-        'application/pdf',
-        'text/csv',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'video/mp4',
-        'audio/mpeg', 'audio/mp3'
-      ];
-
-      if (!allowedTypes.includes(fileType)) {
-        return res.status(400).json({ message: "File type not allowed" });
+      // Server-side validation using utility
+      const validation = validateFileUpload(fileName, fileType, fileSize || 0, MAX_FILE_SIZE);
+      if (!validation.isValid) {
+        return res.status(400).json({ message: validation.error });
       }
 
       const timestamp = Date.now();
@@ -3382,29 +3436,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Import attachment access middleware for dual authentication
+  const { authenticateStaffOrPortal, verifyAttachmentAccess } = await import('./middleware/attachmentAccess');
+
   // Serve/download private documents (with ACL check)
-  app.get("/objects/:objectPath(*)", isAuthenticated, async (req: any, res: any) => {
+  // Supports both staff (session) and portal (JWT) authentication
+  app.get("/objects/:objectPath(*)", authenticateStaffOrPortal, async (req: any, res: any) => {
     const userId = req.user?.id;
-    const objectStorageService = new ObjectStorageService();
+    const portalUserId = req.portalUser?.id;
+    const objectPath = req.path; // Full path like /objects/uploads/...
+
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(
-        req.path,
-      );
-      const canAccess = await objectStorageService.canAccessObjectEntity({
-        objectFile,
-        userId: userId,
-        requestedPermission: ObjectPermission.READ,
-      });
-      if (!canAccess) {
-        return res.sendStatus(401);
+      // Check attachment-specific access control (for message attachments and documents)
+      const { hasAccess } = await verifyAttachmentAccess(userId, portalUserId, objectPath);
+
+      if (!hasAccess) {
+        console.log(`[Access Denied] Staff: ${userId || 'none'}, Portal: ${portalUserId || 'none'}, Path: ${objectPath}`);
+        return res.status(403).json({ message: 'You do not have permission to access this file' });
       }
+
+      // Use object storage service for actual file retrieval
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+
+      // Additional check using object storage service (for staff users)
+      if (userId) {
+        const canAccess = await objectStorageService.canAccessObjectEntity({
+          objectFile,
+          userId: userId,
+          requestedPermission: ObjectPermission.READ,
+        });
+
+        if (!canAccess) {
+          console.log(`[Object Storage Denied] Staff: ${userId}, Path: ${objectPath}`);
+          return res.status(403).json({ message: 'You do not have permission to access this file' });
+        }
+      }
+
+      // Download the file
       objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error checking object access:", error);
       if (error instanceof ObjectNotFoundError) {
-        return res.sendStatus(404);
+        return res.status(404).json({ message: 'File not found' });
       }
-      return res.sendStatus(500);
+      return res.status(500).json({ message: 'Error accessing file' });
     }
   });
 
@@ -7745,7 +7821,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isReadByStaff: true,
         isReadByClient: false
       });
-      
+
+      // Auto-create document records for attachments
+      if (attachments && attachments.length > 0) {
+        await createDocumentsFromAttachments({
+          clientId: thread.clientId,
+          messageId: message.id,
+          threadId,
+          attachments,
+          uploadedBy: effectiveUserId,
+        });
+      }
+
       // Send push notifications to portal users
       try {
         const portalUsers = await storage.getClientPortalUsersByClientId(thread.clientId);
@@ -7937,17 +8024,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate presigned URL for message attachment upload (staff)
   app.post("/api/internal/messages/attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const { fileName, fileType } = req.body;
-      
+      const { fileName, fileType, fileSize } = req.body;
+
       if (!fileName || !fileType) {
         return res.status(400).json({ message: "fileName and fileType are required" });
       }
-      
+
+      // Server-side validation
+      const validation = validateFileUpload(fileName, fileType, fileSize || 0, MAX_FILE_SIZE);
+      if (!validation.isValid) {
+        return res.status(400).json({ message: validation.error });
+      }
+
       const objectStorageService = new ObjectStorageService();
       const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
-      
-      res.json({ 
-        url: uploadURL, 
+
+      res.json({
+        url: uploadURL,
         objectPath,
         fileName,
         fileType,

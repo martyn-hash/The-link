@@ -226,4 +226,7 @@ export const portalApi = {
         method: 'DELETE',
       }),
   },
+
+  // Attachments are now served directly via /api/portal/attachments/* endpoints
+  // No API methods needed - just use the direct URL pattern
 };

@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'the-link-static-v2';
-const API_CACHE = 'the-link-api-v2';
+const STATIC_CACHE = 'the-link-static-v3';
+const API_CACHE = 'the-link-api-v3';
 const NETWORK_TIMEOUT = 3000; // 3 seconds
 
 const staticAssets = [
@@ -41,18 +41,33 @@ function isApiRequest(url) {
   return url.pathname.startsWith('/api/');
 }
 
+// Helper: Check if request is HTTP(S)
+function isHttpScheme(url) {
+  return url.protocol === 'http:' || url.protocol === 'https:';
+}
+
 // Helper: Check if request should bypass cache
 function shouldBypassCache(request) {
+  // Never cache non-HTTP(S) requests (chrome-extension://, etc)
+  const url = new URL(request.url);
+  if (!isHttpScheme(url)) {
+    return true;
+  }
+
   // Never cache mutations
   if (request.method !== 'GET') {
     return true;
   }
-  
+
   // Never cache auth-sensitive endpoints
-  if (request.url.includes('/auth/') || request.url.includes('/login')) {
+  if (request.url.includes('/auth/') ||
+      request.url.includes('/login') ||
+      request.url.includes('/api/portal/attachments/') ||
+      request.url.includes('/api/internal/messages/attachments/') ||
+      request.url.includes('/objects/')) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -80,22 +95,33 @@ function shouldCacheResponse(response) {
 // Network-first strategy with timeout for API requests
 async function networkFirstWithTimeout(request, timeout = NETWORK_TIMEOUT) {
   const cacheName = API_CACHE;
-  
+
+  // Only cache HTTP(S) requests
+  const url = new URL(request.url);
+  if (!isHttpScheme(url)) {
+    return fetch(request);
+  }
+
   try {
     // Race between network request and timeout
     const networkPromise = fetch(request);
-    const timeoutPromise = new Promise((_, reject) => 
+    const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Network timeout')), timeout)
     );
-    
+
     const response = await Promise.race([networkPromise, timeoutPromise]);
-    
+
     // Update cache with fresh response if cacheable
     if (shouldCacheResponse(response)) {
       const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
+      try {
+        cache.put(request, response.clone());
+      } catch (error) {
+        // Silently ignore cache put errors
+        console.warn('Failed to cache API response:', request.url, error);
+      }
     }
-    
+
     return response;
   } catch (error) {
     // Network failed or timed out - try cache
@@ -104,14 +130,14 @@ async function networkFirstWithTimeout(request, timeout = NETWORK_TIMEOUT) {
       // Add header to indicate stale data
       const headers = new Headers(cachedResponse.headers);
       headers.set('X-From-Cache', 'true');
-      
+
       return new Response(cachedResponse.body, {
         status: cachedResponse.status,
         statusText: cachedResponse.statusText,
         headers: headers
       });
     }
-    
+
     // No cache available - return error
     throw error;
   }
@@ -119,18 +145,29 @@ async function networkFirstWithTimeout(request, timeout = NETWORK_TIMEOUT) {
 
 // Cache-first strategy for static assets
 async function cacheFirst(request) {
+  // Only cache HTTP(S) requests
+  const url = new URL(request.url);
+  if (!isHttpScheme(url)) {
+    return fetch(request);
+  }
+
   const cachedResponse = await caches.match(request);
   if (cachedResponse) {
     return cachedResponse;
   }
-  
+
   const response = await fetch(request);
-  
+
   if (shouldCacheResponse(response)) {
     const cache = await caches.open(STATIC_CACHE);
-    cache.put(request, response.clone());
+    try {
+      cache.put(request, response.clone());
+    } catch (error) {
+      // Silently ignore cache put errors (e.g., invalid schemes)
+      console.warn('Failed to cache:', request.url, error);
+    }
   }
-  
+
   return response;
 }
 

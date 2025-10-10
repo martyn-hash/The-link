@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { PortalPushNotificationPrompt } from "@/components/PortalPushNotificationPrompt";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { PortalAuthProvider, usePortalAuth } from "@/contexts/PortalAuthContext";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
@@ -141,6 +142,7 @@ function AppContent() {
       <Toaster />
       <Router />
       <PWAUpdatePrompt />
+      <ConnectionStatus />
       {isAuthenticated && <PushNotificationPrompt />}
       {isPortalAuthenticated && <PortalPushNotificationPrompt />}
     </>

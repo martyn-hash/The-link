@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,7 @@ const statusConfig = {
 };
 
 export default function PortalThreadDetail() {
+  console.log('[PortalThreadDetail] ===== COMPONENT LOADED - VERSION 3.0 (Direct URLs) =====');
   const params = useParams();
   const threadId = params.id as string;
   const [location, setLocation] = useLocation();
@@ -60,9 +61,14 @@ export default function PortalThreadDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previewUrlsRef = useRef<Set<string>>(new Set());
-  
+
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
+
+  // Helper function to create authenticated media URLs with JWT token
+  const getAuthenticatedUrl = (objectPath: string) => {
+    return objectPath.replace('/objects/', '/api/portal/attachments/') + `?threadId=${threadId}&token=${token}`;
+  };
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -201,44 +207,68 @@ export default function PortalThreadDetail() {
 
   const startRecording = async () => {
     try {
+      console.log('[Voice Note] Starting recording...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { 
+      console.log('[Voice Note] Got media stream:', stream.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        muted: t.muted
+      })));
+
+      const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       });
-      
+      console.log('[Voice Note] MediaRecorder created with state:', mediaRecorder.state);
+
       audioChunksRef.current = [];
       isCancelledRef.current = false;
-      
+
       mediaRecorder.ondataavailable = (event) => {
+        console.log('[Voice Note] Data available, size:', event.data.size);
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          console.log('[Voice Note] Total chunks collected:', audioChunksRef.current.length);
         }
       };
-      
+
       mediaRecorder.onstop = () => {
+        console.log('[Voice Note] Recording stopped. Cancelled:', isCancelledRef.current, 'Chunks:', audioChunksRef.current.length);
+
         // Only create audio blob if not cancelled
         if (!isCancelledRef.current && audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          console.log('[Voice Note] Created blob, size:', audioBlob.size, 'type:', audioBlob.type);
           setRecordedAudio(audioBlob);
           const url = URL.createObjectURL(audioBlob);
+          console.log('[Voice Note] Created object URL:', url);
           setAudioUrl(url);
+        } else {
+          console.log('[Voice Note] Not creating blob - cancelled or no chunks');
         }
-        
+
         // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(track => {
+          console.log('[Voice Note] Stopping track:', track.kind);
+          track.stop();
+        });
       };
-      
+
+      mediaRecorder.onerror = (event) => {
+        console.error('[Voice Note] MediaRecorder error:', event);
+      };
+
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
+      console.log('[Voice Note] Recording started, state:', mediaRecorder.state);
       setIsRecording(true);
       setRecordingTime(0);
-      
+
       // Start timer
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      console.error('[Voice Note] Failed to start recording:', error);
       toast({
         title: 'Recording failed',
         description: 'Unable to access microphone. Please check permissions.',
@@ -248,32 +278,38 @@ export default function PortalThreadDetail() {
   };
 
   const stopRecording = () => {
+    console.log('[Voice Note] Stop recording called. isRecording:', isRecording);
     if (mediaRecorderRef.current && isRecording) {
+      console.log('[Voice Note] Stopping MediaRecorder, current state:', mediaRecorderRef.current.state);
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      
+
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
       }
+      console.log('[Voice Note] Recording stopped successfully');
     }
   };
 
   const cancelRecording = () => {
+    console.log('[Voice Note] Cancel recording called');
     if (mediaRecorderRef.current && isRecording) {
       // Mark as cancelled BEFORE stopping
       isCancelledRef.current = true;
-      
+      console.log('[Voice Note] Marked as cancelled, stopping recording');
+
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      
+
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
       }
     }
-    
+
     // Clean up state
+    console.log('[Voice Note] Cleaning up cancelled recording state');
     setRecordedAudio(null);
     setRecordingTime(0);
     if (audioUrl) {
@@ -284,45 +320,82 @@ export default function PortalThreadDetail() {
   };
 
   const discardRecording = () => {
+    console.log('[Voice Note] Discard recording called');
     setRecordedAudio(null);
     setRecordingTime(0);
     if (audioUrl) {
+      console.log('[Voice Note] Revoking object URL:', audioUrl);
       URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
     }
   };
 
   const sendVoiceNote = async () => {
-    if (!recordedAudio) return;
-    
+    console.log('[Voice Note] Send voice note called');
+    console.log('[Voice Note] recordedAudio exists:', !!recordedAudio);
+    console.log('[Voice Note] recordedAudio details:', recordedAudio ? {
+      size: recordedAudio.size,
+      type: recordedAudio.type
+    } : null);
+
+    if (!recordedAudio) {
+      console.error('[Voice Note] No recorded audio to send!');
+      return;
+    }
+
     try {
+      console.log('[Voice Note] Starting upload process...');
       setUploading(true);
-      
-      // Convert blob to file
-      const audioFile = new (File as any)(
-        [recordedAudio], 
-        `voice-note-${Date.now()}.webm`, 
-        { type: 'audio/webm' }
-      ) as File;
-      
+
+      // Convert blob to file-like object for browser compatibility
+      const fileName = `voice-note-${Date.now()}.webm`;
+      console.log('[Voice Note] Creating File-like object with name:', fileName);
+
+      // Create a File-like object that works in all browsers
+      // Some browsers don't support the File constructor, so we extend the Blob
+      const audioFile = Object.assign(recordedAudio, {
+        name: fileName,
+        lastModified: Date.now()
+      });
+
+      // Verify file has size
+      console.log('[Voice Note] File-like object created:', {
+        name: (audioFile as any).name,
+        size: audioFile.size,
+        type: audioFile.type,
+        lastModified: (audioFile as any).lastModified
+      });
+
+      if (!audioFile.size || audioFile.size === 0) {
+        console.error('[Voice Note] File has no data!');
+        throw new Error('Voice note has no audio data');
+      }
+
+      console.log('[Voice Note] Calling uploadFile...');
       // Upload the audio file
       const attachment = await uploadFile(audioFile);
-      
+      console.log('[Voice Note] Upload successful, attachment:', attachment);
+
+      console.log('[Voice Note] Sending message with attachment...');
       // Send as message
-      sendMessageMutation.mutate({ 
-        content: '', 
+      sendMessageMutation.mutate({
+        content: '',
         attachments: [attachment]
       });
-      
+
+      console.log('[Voice Note] Message mutation called, cleaning up...');
       // Clean up
       discardRecording();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[Voice Note] Upload error:', error);
+      console.error('[Voice Note] Error stack:', error.stack);
       toast({
         title: 'Failed to send voice note',
-        description: 'Unable to upload audio. Please try again.',
+        description: error.message || 'Unable to upload audio. Please try again.',
         variant: 'destructive',
       });
     } finally {
+      console.log('[Voice Note] Upload process finished, setUploading(false)');
       setUploading(false);
     }
   };
@@ -335,8 +408,15 @@ export default function PortalThreadDetail() {
 
   const uploadFile = async (file: File): Promise<Attachment> => {
     try {
-      console.log('[Upload] Starting upload for file:', file.name, file.type, file.size);
-      
+      console.log('[Upload] ========== STARTING FILE UPLOAD ==========');
+      console.log('[Upload] File details:', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified
+      });
+
+      console.log('[Upload] Step 1: Requesting upload URL from /api/portal/attachments/upload-url');
       const urlResponse = await fetch('/api/portal/attachments/upload-url', {
         method: 'POST',
         headers: {
@@ -345,16 +425,27 @@ export default function PortalThreadDetail() {
         },
         body: JSON.stringify({ fileName: file.name, fileType: file.type }),
       });
-      
+
+      console.log('[Upload] Upload URL response status:', urlResponse.status, urlResponse.statusText);
+
       if (!urlResponse.ok) {
         const errorText = await urlResponse.text();
-        console.error('[Upload] Failed to get upload URL:', urlResponse.status, errorText);
-        throw new Error(`Failed to get upload URL: ${urlResponse.status}`);
+        console.error('[Upload] Failed to get upload URL:', {
+          status: urlResponse.status,
+          statusText: urlResponse.statusText,
+          error: errorText
+        });
+        throw new Error(`Failed to get upload URL: ${urlResponse.status} - ${errorText}`);
       }
-      
-      const { url, objectPath } = await urlResponse.json();
-      console.log('[Upload] Got signed URL, objectPath:', objectPath);
-      
+
+      const responseData = await urlResponse.json();
+      console.log('[Upload] Got upload URL response:', responseData);
+      const { url, objectPath } = responseData;
+
+      console.log('[Upload] Step 2: Uploading file to GCS signed URL');
+      console.log('[Upload] Signed URL length:', url?.length || 0);
+      console.log('[Upload] Object path:', objectPath);
+
       const uploadResponse = await fetch(url, {
         method: 'PUT',
         body: file,
@@ -362,7 +453,9 @@ export default function PortalThreadDetail() {
           'Content-Type': file.type,
         },
       });
-      
+
+      console.log('[Upload] GCS upload response status:', uploadResponse.status, uploadResponse.statusText);
+
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
         console.error('[Upload] GCS upload failed:', {
@@ -370,21 +463,30 @@ export default function PortalThreadDetail() {
           statusText: uploadResponse.statusText,
           error: errorText,
           fileType: file.type,
-          fileName: file.name
+          fileName: file.name,
+          fileSize: file.size
         });
-        throw new Error(`GCS upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+        throw new Error(`GCS upload failed: ${uploadResponse.status} ${uploadResponse.statusText} - ${errorText}`);
       }
-      
-      console.log('[Upload] Upload successful for:', file.name);
-      
+
+      console.log('[Upload] ✓ Upload successful!');
+      console.log('[Upload] Returning attachment:', {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        objectPath
+      });
+
       return {
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
         objectPath,
       };
-    } catch (error) {
-      console.error('[Upload] Upload error:', error);
+    } catch (error: any) {
+      console.error('[Upload] ✗ Upload error:', error);
+      console.error('[Upload] Error message:', error.message);
+      console.error('[Upload] Error stack:', error.stack);
       throw error;
     }
   };
@@ -495,20 +597,19 @@ export default function PortalThreadDetail() {
                           {message.attachments.map((attachment, idx) => {
                             const isImage = attachment.fileType.startsWith('image/');
                             const isAudio = attachment.fileType.startsWith('audio/');
-                            const objectUrl = attachment.objectPath;
-                            
+
                             if (isImage) {
+                              const imageUrl = getAuthenticatedUrl(attachment.objectPath);
                               return (
-                                <div key={idx} className="mt-2">
-                                  <a 
-                                    href={objectUrl} 
-                                    target="_blank" 
+                                <div key={idx} className="mt-2" data-testid={`image-attachment-${idx}`}>
+                                  <a
+                                    href={imageUrl}
+                                    target="_blank"
                                     rel="noopener noreferrer"
                                     className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity"
-                                    data-testid={`image-attachment-${idx}`}
                                   >
-                                    <img 
-                                      src={objectUrl} 
+                                    <img
+                                      src={imageUrl}
                                       alt={attachment.fileName}
                                       className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
                                       loading="lazy"
@@ -521,31 +622,34 @@ export default function PortalThreadDetail() {
                                 </div>
                               );
                             }
-                            
+
                             if (isAudio) {
+                              const audioUrl = getAuthenticatedUrl(attachment.objectPath);
                               return (
-                                <div key={idx} className={`p-3 rounded-lg ${isFromMe ? 'bg-blue-700' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                <div key={idx} className={`p-3 rounded-lg ${isFromMe ? 'bg-blue-700' : 'bg-gray-100 dark:bg-gray-700'}`} data-testid={`audio-attachment-${idx}`}>
                                   <div className="flex items-center gap-2 mb-2">
                                     <FileAudio className="h-4 w-4" />
                                     <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
                                   </div>
-                                  <audio 
-                                    src={objectUrl} 
-                                    controls 
+                                  <audio
+                                    src={audioUrl}
+                                    controls
                                     className="w-full max-w-xs"
                                     preload="metadata"
-                                    data-testid={`audio-attachment-${idx}`}
                                   />
                                 </div>
                               );
                             }
-                            
+
+                            // Convert object path to authenticated API endpoint for download
+                            const downloadUrl = getAuthenticatedUrl(attachment.objectPath);
+
                             return (
                               <div key={idx} className={`flex items-center gap-2 p-2 rounded ${isFromMe ? 'bg-blue-700' : 'bg-gray-100 dark:bg-gray-700'}`}>
                                 <File className="h-4 w-4" />
                                 <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
                                 <a
-                                  href={objectUrl}
+                                  href={downloadUrl}
                                   download={attachment.fileName}
                                   className={`text-xs ${isFromMe ? 'text-blue-100 hover:text-white' : 'text-blue-600 hover:text-blue-800'}`}
                                   data-testid={`download-attachment-${idx}`}
