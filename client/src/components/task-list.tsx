@@ -18,11 +18,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, Clock, User as UserIcon, Calendar, Building2, Columns3, Settings2, GripVertical, AlertCircle } from "lucide-react";
+import { Eye, Clock, User as UserIcon, Calendar, Building2, Columns3, Settings2, GripVertical, AlertCircle, Timer } from "lucide-react";
 import { useLocation } from "wouter";
-import type { ProjectWithRelations, User } from "@shared/schema";
+import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { calculateCurrentInstanceTime } from "@shared/businessTime";
+import { useMemo } from "react";
 import {
   DndContext,
   closestCenter,
@@ -65,6 +67,7 @@ const ALL_COLUMNS: ColumnConfig[] = [
   { id: "status", label: "Status", sortable: true, defaultVisible: true, minWidth: 180 },
   { id: "assignedTo", label: "Assigned To", sortable: false, defaultVisible: true, minWidth: 150 },
   { id: "timeInStage", label: "Time in Stage", sortable: true, defaultVisible: true, minWidth: 120 },
+  { id: "stageTimer", label: "Stage Timer", sortable: true, defaultVisible: true, minWidth: 160 },
   { id: "createdDate", label: "Created Date", sortable: true, defaultVisible: false, minWidth: 120 },
   { id: "lastUpdated", label: "Last Updated", sortable: true, defaultVisible: false, minWidth: 120 },
   { id: "daysUntilDue", label: "Days Until Due", sortable: true, defaultVisible: false, minWidth: 120 },
@@ -170,6 +173,52 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   const [sortBy, setSortBy] = useState<string>("timeInStage");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Fetch stage configurations for all unique project types
+  const uniqueProjectTypeIds = useMemo(() => {
+    return Array.from(new Set(projects.map(p => p.projectTypeId).filter(Boolean)));
+  }, [projects]);
+
+  // Fetch stages for all project types
+  const stageQueries = useQuery({
+    queryKey: ['/api/config/project-types', 'all-stages', uniqueProjectTypeIds],
+    queryFn: async () => {
+      const stagesByType: Record<string, KanbanStage[]> = {};
+      await Promise.all(
+        uniqueProjectTypeIds.map(async (projectTypeId) => {
+          if (projectTypeId) {
+            try {
+              const response = await fetch(`/api/config/project-types/${projectTypeId}/stages`);
+              if (response.ok) {
+                const stages = await response.json();
+                stagesByType[projectTypeId] = stages;
+              }
+            } catch (error) {
+              console.error(`Failed to fetch stages for project type ${projectTypeId}:`, error);
+            }
+          }
+        })
+      );
+      return stagesByType;
+    },
+    enabled: uniqueProjectTypeIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Create a map of project ID to stage config for quick lookup
+  const projectStageConfigMap = useMemo(() => {
+    const map = new Map<string, KanbanStage | undefined>();
+    if (!stageQueries.data) return map;
+
+    projects.forEach((project) => {
+      if (project.projectTypeId && stageQueries.data[project.projectTypeId]) {
+        const stages = stageQueries.data[project.projectTypeId];
+        const stageConfig = stages.find(s => s.name === project.currentStatus);
+        map.set(project.id, stageConfig);
+      }
+    });
+    return map;
+  }, [projects, stageQueries.data]);
 
   // Type for saved preferences
   interface SavedPreferences {
@@ -315,6 +364,109 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     return `${hours}h`;
   };
 
+  // Calculate business hours in current stage for a project
+  const getBusinessHoursInStage = (project: ProjectWithRelations) => {
+    const createdAt = project.createdAt 
+      ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
+      : undefined;
+    
+    const transformedChronology = (project.chronology || [])
+      .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
+        return entry.timestamp !== null && entry.timestamp !== undefined;
+      })
+      .map((entry) => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date 
+          ? entry.timestamp.toISOString() 
+          : typeof entry.timestamp === 'string'
+          ? entry.timestamp
+          : new Date(entry.timestamp).toISOString()
+      }));
+    
+    try {
+      return calculateCurrentInstanceTime(
+        transformedChronology,
+        project.currentStatus,
+        createdAt
+      );
+    } catch (error) {
+      console.error("Error calculating business hours in stage:", error);
+      return 0;
+    }
+  };
+
+  // Calculate stage timer (remaining or overdue time)
+  const getStageTimerInfo = (project: ProjectWithRelations) => {
+    const stageConfig = projectStageConfigMap.get(project.id);
+    const currentHours = getBusinessHoursInStage(project);
+    
+    if (!stageConfig?.maxInstanceTime || stageConfig.maxInstanceTime === 0) {
+      return { 
+        hasLimit: false, 
+        remainingHours: 0, 
+        isOverdue: false,
+        maxHours: 0,
+        currentHours 
+      };
+    }
+
+    const maxHours = stageConfig.maxInstanceTime;
+    const remainingHours = maxHours - currentHours;
+    const isOverdue = currentHours >= maxHours;
+
+    return {
+      hasLimit: true,
+      remainingHours,
+      isOverdue,
+      maxHours,
+      currentHours
+    };
+  };
+
+  // Format stage timer for display
+  const formatStageTimer = (project: ProjectWithRelations) => {
+    const timerInfo = getStageTimerInfo(project);
+    
+    if (!timerInfo.hasLimit) {
+      return { text: "No limit set", color: "text-gray-500" };
+    }
+
+    const hours = Math.abs(timerInfo.remainingHours);
+    const days = Math.floor(hours / 24);
+    const remainingHours = Math.floor(hours % 24);
+    const minutes = Math.round((hours % 1) * 60);
+
+    let formattedTime = "";
+    if (days > 0) {
+      formattedTime = `${days}d ${remainingHours}h`;
+    } else if (remainingHours > 0) {
+      formattedTime = minutes > 0 ? `${remainingHours}h ${minutes}m` : `${remainingHours}h`;
+    } else {
+      formattedTime = `${minutes}m`;
+    }
+
+    if (timerInfo.isOverdue) {
+      return { 
+        text: `${formattedTime} behind schedule`, 
+        color: "text-red-600 font-semibold" 
+      };
+    } else {
+      // Color coding based on remaining time percentage
+      const percentRemaining = (timerInfo.remainingHours / timerInfo.maxHours) * 100;
+      let color = "text-green-600";
+      if (percentRemaining < 25) {
+        color = "text-orange-600 font-semibold";
+      } else if (percentRemaining < 50) {
+        color = "text-orange-500";
+      }
+      
+      return { 
+        text: `${formattedTime} to go`, 
+        color 
+      };
+    }
+  };
+
   const formatDate = (date: Date | string | null) => {
     if (!date) return "N/A";
     return new Date(date).toLocaleDateString('en-US', {
@@ -392,6 +544,37 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
         break;
       case "currentStage":
         comparison = a.currentStatus.localeCompare(b.currentStatus);
+        break;
+      case "stageTimer":
+        const aTimerInfo = getStageTimerInfo(a);
+        const bTimerInfo = getStageTimerInfo(b);
+        
+        // Note: The final return inverts based on sortOrder (desc = -comparison)
+        // So for desc (default), we want overdue first, which means comparison should be POSITIVE
+        // For asc, we want overdue last, which means comparison should be POSITIVE
+        // Therefore, overdue should always have positive comparison
+        
+        // Projects with no limit go to the end in desc, beginning in asc
+        if (!aTimerInfo.hasLimit && !bTimerInfo.hasLimit) {
+          comparison = 0;
+        } else if (!aTimerInfo.hasLimit) {
+          comparison = -1; // No limit goes to end in desc (after inversion)
+        } else if (!bTimerInfo.hasLimit) {
+          comparison = 1; // No limit goes to end in desc (after inversion)
+        } else {
+          // Sort by overdue status first, then by remaining hours
+          if (aTimerInfo.isOverdue !== bTimerInfo.isOverdue) {
+            // In desc mode: overdue first means comparison should be positive (so -comparison is negative)
+            // In asc mode: overdue last means comparison should be positive (so comparison is positive)
+            // So overdue always gets positive comparison
+            comparison = aTimerInfo.isOverdue ? 1 : -1;
+          } else {
+            // Both overdue or both on-time: sort by remaining hours
+            // Less remaining (more urgent) should come first in desc mode
+            // So we reverse: b - a instead of a - b
+            comparison = bTimerInfo.remainingHours - aTimerInfo.remainingHours;
+          }
+        }
         break;
     }
 
@@ -482,6 +665,16 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
           <div className="flex items-center space-x-2">
             <Clock className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm">{formatTimeInStage(project)}</span>
+          </div>
+        );
+      case "stageTimer":
+        const timerDisplay = formatStageTimer(project);
+        return (
+          <div className="flex items-center space-x-2">
+            <Timer className="w-4 h-4 text-muted-foreground" />
+            <span className={`text-sm ${timerDisplay.color}`} data-testid={`text-stage-timer-${project.id}`}>
+              {timerDisplay.text}
+            </span>
           </div>
         );
       case "createdDate":
