@@ -840,34 +840,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/portal/documents/:id/download - Get presigned download URL for portal document
-  app.get("/api/portal/documents/:id/download", authenticatePortal, async (req: any, res: any) => {
+  // GET /api/portal/documents/:id/file - Serve portal document file directly
+  app.get("/api/portal/documents/:id/file", authenticatePortal, async (req: any, res: any) => {
     try {
       const { id } = req.params;
       const portalUserId = req.portalUser.id;
       const clientId = req.portalUser.clientId;
 
+      // Verify document access - user must own the document (same clientId)
       const document = await storage.getPortalDocumentById(id, clientId, portalUserId);
       if (!document) {
+        console.log(`[Portal Document Access Denied] User: ${portalUserId}, Document: ${id}`);
         return res.status(404).json({ message: "Document not found" });
       }
 
-      const { Storage } = await import('@google-cloud/storage');
-      const gcs = new Storage();
-      const bucketName = process.env.GCS_BUCKET_NAME || '';
-      const bucket = gcs.bucket(bucketName);
-      const file = bucket.file(document.objectPath);
-
-      const [url] = await file.getSignedUrl({
-        version: 'v4',
-        action: 'read',
-        expires: Date.now() + 60 * 60 * 1000,
-      });
-
-      res.json({ downloadUrl: url });
+      // Serve the file using ObjectStorageService
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(document.objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error('Error serving portal document:', error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: 'Document file not found' });
+        }
+        return res.status(500).json({ message: 'Error serving document' });
+      }
     } catch (error) {
-      console.error("Error generating portal document download URL:", error);
-      res.status(500).json({ message: "Failed to generate download URL" });
+      console.error("Error serving portal document:", error);
+      res.status(500).json({ message: "Failed to serve document" });
     }
   });
 

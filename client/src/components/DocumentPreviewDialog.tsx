@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Eye, FileText, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { VoiceNotePlayer } from "@/components/attachments/VoiceNotePlayer";
 
 interface DocumentPreviewDialogProps {
   document: {
@@ -28,7 +29,8 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
     return (
       type.includes('image') ||
       type.includes('pdf') ||
-      type === 'application/pdf'
+      type === 'application/pdf' ||
+      type.includes('audio')
     );
   };
 
@@ -171,6 +173,18 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
           title={document.fileName}
           data-testid="preview-pdf"
         />
+      );
+    }
+
+    if (fileType.includes('audio')) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <VoiceNotePlayer
+            audioUrl={blobUrl}
+            fileName={document.fileName}
+            className="w-full max-w-2xl"
+          />
+        </div>
       );
     }
 

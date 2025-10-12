@@ -7955,7 +7955,6 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(documents.clientId, clientId),
-          eq(documents.clientPortalUserId, clientPortalUserId),
           eq(documents.isPortalVisible, true)
         )
       )
@@ -7995,7 +7994,6 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(documents.id, id),
           eq(documents.clientId, clientId),
-          eq(documents.clientPortalUserId, clientPortalUserId),
           eq(documents.isPortalVisible, true)
         )
       )

@@ -126,7 +126,8 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
   const canPreview = (fileType: string): boolean => {
     const previewableTypes = [
       'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp',
-      'application/pdf'
+      'application/pdf',
+      'audio/webm', 'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mp4'
     ];
     return previewableTypes.some(type => fileType.toLowerCase().includes(type.toLowerCase()));
   };

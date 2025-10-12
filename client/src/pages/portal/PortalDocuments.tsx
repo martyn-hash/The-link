@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import PortalBottomNav from '@/components/portal-bottom-nav';
+import { VoiceNotePlayer } from '@/components/attachments/VoiceNotePlayer';
 
 interface Document {
   id: string;
@@ -27,16 +28,19 @@ interface Document {
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 const allowedTypes = [
-  'image/png', 
-  'image/jpeg', 
+  'image/png',
+  'image/jpeg',
   'image/jpg',
   'application/pdf',
   'text/csv',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'video/mp4',
-  'audio/mpeg', 
-  'audio/mp3'
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/webm',
+  'audio/wav',
+  'audio/ogg'
 ];
 
 function formatFileSize(bytes: number): string {
@@ -59,13 +63,18 @@ function getFileIcon(fileType: string) {
 
 export default function PortalDocuments() {
   const [location, setLocation] = useLocation();
-  const { isAuthenticated, isLoading } = usePortalAuth();
+  const { isAuthenticated, isLoading, token } = usePortalAuth();
   const { toast } = useToast();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<Document | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Helper function to get document file URL - uses dedicated document endpoint with JWT token
+  const getDocumentFileUrl = (documentId: string) => {
+    return `/api/portal/documents/${documentId}/file?token=${token}`;
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -123,7 +132,7 @@ export default function PortalDocuments() {
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: 'Error',
-        description: 'File type not allowed. Allowed types: PNG, JPEG, PDF, CSV, XLSX, DOCX, MP4, MP3',
+        description: 'File type not allowed. Allowed types: PNG, JPEG, PDF, CSV, XLSX, DOCX, MP4, MP3, WebM, WAV, OGG',
         variant: 'destructive',
       });
       return;
@@ -182,31 +191,24 @@ export default function PortalDocuments() {
     }
   };
 
-  const handlePreview = async (document: Document) => {
-    try {
-      setPreviewDocument(document);
-      const { downloadUrl } = await portalApi.documents.getDownloadUrl(document.id);
-      setPreviewUrl(downloadUrl);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load document preview',
-        variant: 'destructive',
-      });
-    }
+  const handlePreview = (document: Document) => {
+    setPreviewDocument(document);
+    // Use document file endpoint
+    const fileUrl = getDocumentFileUrl(document.id);
+    setPreviewUrl(fileUrl);
   };
 
-  const handleDownload = async (document: Document) => {
-    try {
-      const { downloadUrl } = await portalApi.documents.getDownloadUrl(document.id);
-      window.open(downloadUrl, '_blank');
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to download document',
-        variant: 'destructive',
-      });
-    }
+  const handleDownload = (document: Document) => {
+    // Use document file endpoint
+    const fileUrl = getDocumentFileUrl(document.id);
+
+    // Create a temporary link to download the file
+    const a = window.document.createElement('a');
+    a.href = fileUrl;
+    a.download = document.fileName;
+    window.document.body.appendChild(a);
+    a.click();
+    window.document.body.removeChild(a);
   };
 
   const handleDelete = (documentId: string) => {
@@ -245,9 +247,13 @@ export default function PortalDocuments() {
               </video>
             )}
             {isAudio && (
-              <audio controls className="w-full" src={previewUrl}>
-                Your browser does not support the audio tag.
-              </audio>
+              <div className="flex items-center justify-center py-8">
+                <VoiceNotePlayer
+                  audioUrl={previewUrl}
+                  fileName={previewDocument.fileName}
+                  className="w-full max-w-2xl"
+                />
+              </div>
             )}
             {!isImage && !isPdf && !isVideo && !isAudio && (
               <div className="text-center py-8">
@@ -286,7 +292,7 @@ export default function PortalDocuments() {
                   <DialogHeader>
                     <DialogTitle>Upload Document</DialogTitle>
                     <DialogDescription>
-                      Choose a file to upload (max 25MB). Allowed types: PNG, JPEG, PDF, CSV, XLSX, DOCX, MP4, MP3
+                      Choose a file to upload (max 25MB). Allowed types: PNG, JPEG, PDF, CSV, XLSX, DOCX, MP4, MP3, WebM, WAV, OGG
                     </DialogDescription>
                   </DialogHeader>
                   <div className="mt-4">
