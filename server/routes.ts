@@ -3856,8 +3856,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project status" });
       }
 
-      // Get the change reason by name first
-      const reasons = await storage.getAllChangeReasons();
+      // Get the change reason by name, scoped to the project's project type
+      const reasons = await storage.getChangeReasonsByProjectTypeId(project.projectTypeId);
       const changeReason = reasons.find(reason => reason.reason === updateData.changeReason);
       if (!changeReason) {
         return res.status(400).json({ message: "Invalid change reason" });
