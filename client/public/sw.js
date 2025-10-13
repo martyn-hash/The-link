@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'the-link-static-v3';
-const API_CACHE = 'the-link-api-v3';
+const STATIC_CACHE = 'the-link-static-v7';
+const API_CACHE = 'the-link-api-v7';
 const NETWORK_TIMEOUT = 3000; // 3 seconds
 
 const staticAssets = [
@@ -63,6 +63,8 @@ function shouldBypassCache(request) {
   if (request.url.includes('/auth/') ||
       request.url.includes('/login') ||
       request.url.includes('/api/portal/attachments/') ||
+      request.url.includes('/api/portal/documents/') ||
+      request.url.includes('/api/documents/') ||
       request.url.includes('/api/internal/messages/attachments/') ||
       request.url.includes('/objects/')) {
     return true;

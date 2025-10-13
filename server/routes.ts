@@ -3567,6 +3567,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Serve a document file for admin users
+  app.get("/api/documents/:id/file", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+
+      // Get the document
+      const document = await storage.getDocumentById(id);
+      if (!document) {
+        console.log(`[Admin Document Access Denied] Document not found: ${id}`);
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Serve the file using ObjectStorageService
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(document.objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error('Error serving admin document:', error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: 'Document file not found' });
+        }
+        return res.status(500).json({ message: 'Error serving document' });
+      }
+    } catch (error) {
+      console.error("Error serving admin document:", error);
+      res.status(500).json({ message: "Failed to serve document" });
+    }
+  });
+
   // Delete a document
   app.delete("/api/documents/:id", isAuthenticated, async (req: any, res: any) => {
     try {

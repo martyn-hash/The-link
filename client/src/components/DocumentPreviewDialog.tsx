@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, Eye, FileText, X } from "lucide-react";
+import { Download, Eye, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VoiceNotePlayer } from "@/components/attachments/VoiceNotePlayer";
@@ -36,7 +36,7 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
 
   useEffect(() => {
     return () => {
-      if (blobUrl) {
+      if (blobUrl && blobUrl.startsWith('blob:')) {
         URL.revokeObjectURL(blobUrl);
       }
     };
@@ -49,25 +49,37 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
       setError(null);
 
       try {
-        const response = await fetch(document.objectPath, {
-          credentials: 'include',
-        });
+        const fileType = document.fileType.toLowerCase();
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch document');
+        // For PDFs, use direct URL (like portal) - blob URLs have rendering issues in iframes
+        if (fileType.includes('pdf') || fileType === 'application/pdf') {
+          const directUrl = `/api/documents/${document.id}/file`;
+          console.log('Using direct URL for PDF:', directUrl);
+          setBlobUrl(directUrl);
+          setIsLoading(false);
+        } else {
+          // For images and audio, use blob URLs
+          const response = await fetch(`/api/documents/${document.id}/file`, {
+            credentials: 'include',
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch document');
+          }
+
+          const blob = await response.blob();
+          console.log('Blob created:', {
+            type: blob.type,
+            size: blob.size,
+            fileName: document.fileName,
+            expectedType: document.fileType
+          });
+
+          const url = URL.createObjectURL(blob);
+          console.log('Blob URL created:', url);
+          setBlobUrl(url);
+          setIsLoading(false);
         }
-
-        const blob = await response.blob();
-        console.log('Blob created:', { 
-          type: blob.type, 
-          size: blob.size,
-          fileName: document.fileName,
-          expectedType: document.fileType 
-        });
-        
-        const url = URL.createObjectURL(blob);
-        console.log('Blob URL created:', url);
-        setBlobUrl(url);
       } catch (err) {
         console.error('Error loading preview:', err);
         setError('Failed to load document preview');
@@ -76,14 +88,13 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
           description: 'Failed to load document preview',
           variant: 'destructive',
         });
-      } finally {
         setIsLoading(false);
       }
     } else {
-      if (blobUrl) {
+      if (blobUrl && blobUrl.startsWith('blob:')) {
         URL.revokeObjectURL(blobUrl);
-        setBlobUrl(null);
       }
+      setBlobUrl(null);
       setIsOpen(false);
       setError(null);
     }
@@ -91,7 +102,7 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(document.objectPath, {
+      const response = await fetch(`/api/documents/${document.id}/file`, {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -224,11 +235,6 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
                 <Download className="w-4 h-4 mr-2" />
                 Download
               </Button>
-              <DialogClose asChild>
-                <Button variant="ghost" size="sm" data-testid="button-close-preview">
-                  <X className="h-4 w-4" />
-                </Button>
-              </DialogClose>
             </div>
           </div>
           <DialogDescription>

@@ -89,7 +89,7 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
 
   const handleDownload = async (doc: any) => {
     try {
-      const response = await fetch(doc.objectPath, {
+      const response = await fetch(`/api/documents/${doc.id}/file`, {
         credentials: 'include',
       });
 
