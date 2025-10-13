@@ -267,6 +267,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               <TableHead>From Stage</TableHead>
               <TableHead>To Stage</TableHead>
               <TableHead>Assigned To</TableHead>
+              <TableHead>Changed By</TableHead>
               <TableHead>Time in Stage</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -311,6 +312,14 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     </div>
                   </div>
                 </TableCell>
+                <TableCell data-testid={`cell-changed-by-${entry.id}`}>
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-changed-by-${entry.id}`}>
+                      {entry.changedBy ? `${entry.changedBy.firstName} ${entry.changedBy.lastName}` : <span className="text-muted-foreground">System</span>}
+                    </span>
+                  </div>
+                </TableCell>
                 <TableCell data-testid={`cell-time-${entry.id}`}>
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
@@ -353,7 +362,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           {selectedEntry && (
             <div className="space-y-4">
               {/* Header Information */}
-              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
                 <div>
                   <span className="text-xs text-muted-foreground">Timestamp</span>
                   <div className="mt-1 flex items-center gap-2">
@@ -372,6 +381,17 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     <div data-testid={`text-modal-assignee-${selectedEntry.entry.id}`}>
                       <ChronologyAssignee projectId={project.id} stageName={selectedEntry.entry.toStatus} />
                     </div>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Changed By</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-modal-changed-by-${selectedEntry.entry.id}`}>
+                      {selectedEntry.entry.changedBy 
+                        ? `${selectedEntry.entry.changedBy.firstName} ${selectedEntry.entry.changedBy.lastName}`
+                        : <span className="text-muted-foreground">System</span>}
+                    </span>
                   </div>
                 </div>
               </div>

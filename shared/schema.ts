@@ -323,6 +323,7 @@ export const projectChronology = pgTable("project_chronology", {
   fromStatus: varchar("from_status"),
   toStatus: varchar("to_status").notNull(),
   assigneeId: varchar("assignee_id").references(() => users.id),
+  changedById: varchar("changed_by_id").references(() => users.id), // User who made the stage change
   changeReason: varchar("change_reason"),
   notes: text("notes"),
   timestamp: timestamp("timestamp").defaultNow(),
@@ -772,6 +773,12 @@ export const projectChronologyRelations = relations(projectChronology, ({ one, m
   assignee: one(users, {
     fields: [projectChronology.assigneeId],
     references: [users.id],
+    relationName: "assignee",
+  }),
+  changedBy: one(users, {
+    fields: [projectChronology.changedById],
+    references: [users.id],
+    relationName: "changedBy",
   }),
   fieldResponses: many(reasonFieldResponses),
 }));
@@ -2123,7 +2130,8 @@ export type ProjectWithRelations = Project & {
     service?: Service;
   };
   chronology: (ProjectChronology & { 
-    assignee?: User; 
+    assignee?: User;
+    changedBy?: User;
     fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
   })[];
   progressMetrics?: {

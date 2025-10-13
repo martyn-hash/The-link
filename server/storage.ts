@@ -270,7 +270,7 @@ export interface IStorage {
   
   // Chronology operations
   createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology>;
-  getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]>;
+  getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; changedBy?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]>;
   
   // Client chronology operations
   createClientChronologyEntry(entry: InsertClientChronology): Promise<SelectClientChronology>;
@@ -2595,6 +2595,7 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            changedBy: true,
             fieldResponses: {
               with: {
                 customField: true,
@@ -2617,6 +2618,7 @@ export class DatabaseStorage implements IStorage {
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
           fieldResponses: c.fieldResponses || [],
         })),
       };
@@ -2775,6 +2777,7 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            changedBy: true,
             fieldResponses: {
               with: {
                 customField: true,
@@ -2797,6 +2800,7 @@ export class DatabaseStorage implements IStorage {
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
           fieldResponses: c.fieldResponses || [],
         })),
       };
@@ -2937,6 +2941,7 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            changedBy: true,
             fieldResponses: {
               with: {
                 customField: true,
@@ -2959,6 +2964,7 @@ export class DatabaseStorage implements IStorage {
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
           fieldResponses: c.fieldResponses || [],
         })),
       };
@@ -2984,6 +2990,7 @@ export class DatabaseStorage implements IStorage {
         chronology: {
           with: {
             assignee: true,
+            changedBy: true,
             fieldResponses: {
               with: {
                 customField: true,
@@ -3213,6 +3220,7 @@ export class DatabaseStorage implements IStorage {
         fromStatus: project.currentStatus,
         toStatus: update.newStatus,
         assigneeId: newAssigneeId,
+        changedById: userId,
         changeReason: update.changeReason,
         notes: update.notes,
         timeInPreviousStage,
@@ -3268,11 +3276,12 @@ export class DatabaseStorage implements IStorage {
     return chronology;
   }
 
-  async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]> {
+  async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; changedBy?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]> {
     const results = await db.query.projectChronology.findMany({
       where: eq(projectChronology.projectId, projectId),
       with: {
         assignee: true,
+        changedBy: true,
         fieldResponses: {
           with: {
             customField: true,
@@ -3286,6 +3295,7 @@ export class DatabaseStorage implements IStorage {
     return results.map(c => ({
       ...c,
       assignee: c.assignee || undefined,
+      changedBy: c.changedBy || undefined,
       fieldResponses: c.fieldResponses || [],
     }));
   }
