@@ -3069,8 +3069,13 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Kanban stage '${update.newStatus}' not found`);
     }
 
-    // Look up the change reason to get the reason ID for validation
-    const [reason] = await db.select().from(changeReasons).where(eq(changeReasons.reason, update.changeReason));
+    // Look up the change reason scoped to the project's project type to avoid name collisions
+    const [reason] = await db.select().from(changeReasons).where(
+      and(
+        eq(changeReasons.reason, update.changeReason),
+        eq(changeReasons.projectTypeId, project.projectTypeId)
+      )
+    );
     if (!reason) {
       throw new Error(`Change reason '${update.changeReason}' not found`);
     }
@@ -4380,23 +4385,17 @@ export class DatabaseStorage implements IStorage {
 
   // Helper validation methods
   async validateStageReasonMapping(stageId: string, reasonId: string): Promise<{ isValid: boolean; reason?: string }> {
-    console.log(`[validateStageReasonMapping] Checking mapping for stageId: ${stageId}, reasonId: ${reasonId}`);
-    
     // Check if the stage exists
     const stage = await this.getStageById(stageId);
     if (!stage) {
-      console.log(`[validateStageReasonMapping] Stage not found: ${stageId}`);
       return { isValid: false, reason: "Stage not found" };
     }
-    console.log(`[validateStageReasonMapping] Stage found: ${stage.name}`);
 
     // Check if the reason exists
     const [reason] = await db.select().from(changeReasons).where(eq(changeReasons.id, reasonId));
     if (!reason) {
-      console.log(`[validateStageReasonMapping] Reason not found: ${reasonId}`);
       return { isValid: false, reason: "Change reason not found" };
     }
-    console.log(`[validateStageReasonMapping] Reason found: ${reason.reason}`);
 
     // Check if the mapping exists
     const mapping = await db.query.stageReasonMaps.findFirst({
@@ -4406,17 +4405,13 @@ export class DatabaseStorage implements IStorage {
       ),
     });
 
-    console.log(`[validateStageReasonMapping] Mapping found:`, mapping);
-
     if (!mapping) {
-      console.log(`[validateStageReasonMapping] No mapping found for stage '${stage.name}' and reason '${reason.reason}'`);
       return { 
         isValid: false, 
         reason: `Change reason '${reason.reason}' is not valid for stage '${stage.name}'. Please check the stage-reason mappings.` 
       };
     }
 
-    console.log(`[validateStageReasonMapping] Mapping is valid`);
     return { isValid: true };
   }
 
