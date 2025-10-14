@@ -1,0 +1,65 @@
+Tasks & Task Templates
+
+I want to add an important feature to the app called 'Task Templates'. 
+
+Purpose: 
+
+To allow users to create dynamic forms with different question types for completion by people related to clients. 
+
+In the admin menu (same as project types, services etc). There should be a new menu called 'Task Templates'. 
+
+A task template, would give the admin user the ability to create multiple page forms, that include: 
+
+Here’s the full list of question types currently scoped in the Task Templates feature:
+	1.	Short text — single-line text input
+	2.	Long text — multi-line input
+	3.	Email — validated email format
+	4.	Number — numeric input with optional min/max validation
+	5.	Date — calendar picker, stored as ISO date
+	6.	Single choice (radio) — one option only
+	7.	Multi choice (checkbox) — multiple selections allowed
+	8.	Dropdown (single) — single select from a dropdown list
+	9.	Yes/No — boolean toggle (radio or switch UI)
+	10.	File upload — supports file type and size validation, multiple files optional
+
+
+	•	Signature / e-signature
+	•	Conditional display fields
+
+
+The task template would also include: 
+
+	•	Add/Edit Sections
+	•	Each template is an ordered list of sections (drag-drop reordering).
+	•	Each section has: Title, Description (client-facing), and its own list of questions.
+
+
+The task template feature would be used in various scenarios - for example: 
+
+- When onboarding a new client, there might be task templates for ID collection, payroll information, company details. 
+- When it's time to prepare a set of accounts, we might have a task template for gathering bank statements, loan agreements et. 
+- There might be task templates for all work we carry out for clients. 
+
+
+Other Information: 
+
+- Task templates should have a category (perhaps also defined in this section 'Task Template Categories')
+
+
+
+How will task templates be used? 
+
+- In the client detail screen, in the 'tasks' tab, there should be a 'add tasks' button. 
+- The user can either pick one or multiple task templates (along with previewing them to check it's the one they want).
+
+- The user can also press a 'create tasks' button that allows them to create a task template just for that client - for example, the task templates created at the system level will be relevant for multiple clients (onboarding flows, accounts document flows). But sometimes, we need to request specific things from a client - such as 'upload loan agreement' & 'check this box confirm X is correct' etc. So the ability to quickly put together a 'Client Request' (terminology for a task template made just for that client). 
+
+
+Other Information: 
+
+- Task templates should have a category (perhaps also defined in this section 'Task Template Categories')
+- There'll be a task template table, but I think also a task instance table when the task template is applied to a client / person. 
+- And we'll need some way of storing answers and documents will need to be added to the documents tab as well. 
+
+
+Please scope out this work, ask me any clarification questions, and make a plan for the implementation, 
