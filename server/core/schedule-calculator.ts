@@ -150,10 +150,11 @@ function isLeapYear(year: number): boolean {
 }
 
 /**
- * Check if a service is due today
+ * Check if a service is due today or overdue
  * Normalizes dates to compare only the date portion
+ * Returns true if service date is on or before target date
  */
-export function isServiceDueToday(serviceDate: Date, targetDate: Date): boolean {
+export function isServiceDueOrOverdue(serviceDate: Date, targetDate: Date): boolean {
   // Normalize both dates to midnight UTC for comparison
   const normalizedServiceDate = new Date(serviceDate);
   normalizedServiceDate.setUTCHours(0, 0, 0, 0);
@@ -161,11 +162,12 @@ export function isServiceDueToday(serviceDate: Date, targetDate: Date): boolean 
   const normalizedTargetDate = new Date(targetDate);
   normalizedTargetDate.setUTCHours(0, 0, 0, 0);
   
-  return normalizedServiceDate.getTime() === normalizedTargetDate.getTime();
+  return normalizedServiceDate.getTime() <= normalizedTargetDate.getTime();
 }
 
 /**
- * Find all services that are due on the target date
+ * Find all services that are due on or before the target date
+ * This includes both on-time and overdue services
  */
 export async function findServicesDue(
   clientServices: (ClientService & { service: Service & { projectType: ProjectType } })[],
@@ -181,12 +183,21 @@ export async function findServicesDue(
       continue;
     }
     
-    // Check if service is due
-    if (clientService.nextStartDate && isServiceDueToday(clientService.nextStartDate, targetDate)) {
+    // Check if service is due or overdue
+    if (clientService.nextStartDate && isServiceDueOrOverdue(clientService.nextStartDate, targetDate)) {
       // Validate configuration
       if (!clientService.service.projectType || clientService.service.projectType.id === '') {
         console.error(`[Schedule Calculator] Service '${clientService.service.name}' has no project type`);
         continue;
+      }
+      
+      // Calculate if overdue and log appropriately
+      const daysOverdue = daysBetween(clientService.nextStartDate, targetDate);
+      const isOverdue = clientService.nextStartDate < targetDate;
+      if (isOverdue) {
+        console.log(`[Schedule Calculator] ⚠️ OVERDUE: Client service '${clientService.service.name}' is ${daysOverdue} day(s) overdue (scheduled: ${formatDate(clientService.nextStartDate)})`);
+      } else {
+        console.log(`[Schedule Calculator] ✓ ON-TIME: Client service '${clientService.service.name}' is due today (scheduled: ${formatDate(clientService.nextStartDate)})`);
       }
       
       const isChService = !!clientService.service.isCompaniesHouseConnected;
@@ -212,12 +223,21 @@ export async function findServicesDue(
       continue;
     }
     
-    // Check if service is due
-    if (peopleService.nextStartDate && isServiceDueToday(peopleService.nextStartDate, targetDate)) {
+    // Check if service is due or overdue
+    if (peopleService.nextStartDate && isServiceDueOrOverdue(peopleService.nextStartDate, targetDate)) {
       // Validate configuration
       if (!peopleService.service.projectType || peopleService.service.projectType.id === '') {
         console.error(`[Schedule Calculator] Service '${peopleService.service.name}' has no project type`);
         continue;
+      }
+      
+      // Calculate if overdue and log appropriately
+      const daysOverdue = daysBetween(peopleService.nextStartDate, targetDate);
+      const isOverdue = peopleService.nextStartDate < targetDate;
+      if (isOverdue) {
+        console.log(`[Schedule Calculator] ⚠️ OVERDUE: People service '${peopleService.service.name}' is ${daysOverdue} day(s) overdue (scheduled: ${formatDate(peopleService.nextStartDate)})`);
+      } else {
+        console.log(`[Schedule Calculator] ✓ ON-TIME: People service '${peopleService.service.name}' is due today (scheduled: ${formatDate(peopleService.nextStartDate)})`);
       }
       
       dueServices.push({

@@ -241,7 +241,7 @@ export async function buildProjectData(
     currentStatus: firstStage?.name || 'Pending',
     currentAssigneeId: assigneeId,
     priority: 'medium',
-    dueDate: dueService.nextDueDate.toISOString(),
+    dueDate: dueService.nextDueDate,
     projectMonth,
     archived: false,
     inactive: false
