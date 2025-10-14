@@ -1016,6 +1016,7 @@ async function processService(
   // Note: This is a conceptual transaction - actual implementation would need db.transaction()
   try {
     let project: any = null;
+    let wasExistingProject = false; // Track if we returned an existing project
     
     // Step 1: Create the project (skip in dry-run)
     if (dryRun) {
@@ -1023,15 +1024,38 @@ async function processService(
       // Create a mock project for dry-run logging
       project = { id: `dry-run-project-${Date.now()}` };
     } else {
+      const beforeCount = await storage.getAllProjects().then(p => p.length);
       project = await createProjectFromService(dueService);
-      console.log(`[Project Scheduler] Created project ${project.id} for service ${dueService.service.name}`);
+      const afterCount = await storage.getAllProjects().then(p => p.length);
+      wasExistingProject = (afterCount === beforeCount); // No new project was created
+      
+      if (wasExistingProject) {
+        console.log(`[Project Scheduler] Returned existing project ${project.id} for service ${dueService.service.name} (duplicate prevented)`);
+      } else {
+        console.log(`[Project Scheduler] Created NEW project ${project.id} for service ${dueService.service.name}`);
+      }
     }
-    // Only increment projectsCreated counter for real runs
-    if (!dryRun) {
+    
+    // Only increment projectsCreated counter for NEWLY created projects (not duplicates)
+    if (!dryRun && !wasExistingProject) {
       result.projectsCreated++;
     }
 
-    // Step 2: Reschedule the service (skip for Companies House services and dry-runs)
+    // Step 2: Log the scheduling action IMMEDIATELY (skip in dry-run OR if duplicate)
+    // CRITICAL: Only log history for NEWLY created projects, not for duplicates
+    // If we log history for duplicates, we create duplicate history entries
+    if (dryRun) {
+      const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
+      console.log(`[Project Scheduler] DRY RUN: Would log scheduling action '${action}' for service ${dueService.id}`);
+    } else if (wasExistingProject) {
+      console.log(`[Project Scheduler] ✓ Skipping history log for service ${dueService.id} (duplicate - history already exists)`);
+    } else {
+      const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
+      await logSchedulingAction(dueService, project.id, action, dueService.nextStartDate);
+      console.log(`[Project Scheduler] ✓ Logged scheduling history for service ${dueService.id} (action: ${action})`);
+    }
+
+    // Step 3: Reschedule the service (skip for Companies House services and dry-runs)
     if (dueService.isCompaniesHouseService) {
       // Companies House services don't get rescheduled - their dates come from the API
       if (dryRun) {
@@ -1049,21 +1073,12 @@ async function processService(
         console.log(`[Project Scheduler] DRY RUN: Would reschedule service ${dueService.id} for next period`);
       } else {
         await rescheduleService(dueService, targetDate);
-        console.log(`[Project Scheduler] Rescheduled service ${dueService.id} for next period`);
+        console.log(`[Project Scheduler] ✓ Rescheduled service ${dueService.id} for next period`);
       }
       // Only increment counter for real runs
       if (!dryRun) {
         result.servicesRescheduled++;
       }
-    }
-
-    // Step 3: Log the scheduling action (skip in dry-run)
-    if (dryRun) {
-      const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
-      console.log(`[Project Scheduler] DRY RUN: Would log scheduling action '${action}' for service ${dueService.id}`);
-    } else {
-      const action = dueService.isCompaniesHouseService ? 'created_no_reschedule' : 'created';
-      await logSchedulingAction(dueService, project.id, action, dueService.nextStartDate);
     }
     
     // TODO: When proper transaction support is added, commit here
@@ -1090,57 +1105,51 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     nextDueDate: dueService.nextDueDate
   });
   
-  // IDEMPOTENCY CHECK: Ensure we don't create duplicate projects for the same client, project type, and EXACT DATE
-  // This is date-specific to allow weekly services to create multiple projects per month
+  // DUPLICATE PREVENTION: Check scheduling history for this service on this specific date
+  // This is the primary and authoritative duplicate prevention mechanism
+  // Uses exact date comparison to allow weekly services to create multiple projects per month
   const scheduledDate = dueService.nextStartDate.toISOString().split('T')[0];
-  console.log(`[Project Scheduler] Scheduled date: ${scheduledDate}`);
-  
-  // Check if a project already exists for this client, project type, and exact date
-  console.log(`[Project Scheduler] About to call storage.getAllProjects()...`);
-  const allProjects = await storage.getAllProjects();
-  console.log(`[Project Scheduler] getAllProjects() returned ${allProjects.length} projects`);
-  
-  const duplicateProject = allProjects.find((project: any) => {
-    if (project.clientId !== dueService.clientId || 
-        project.projectTypeId !== dueService.service.projectType?.id) {
-      return false;
-    }
-    // Compare exact dates to allow weekly services multiple projects per month
-    const projectDate = project.createdAt ? project.createdAt.toISOString().split('T')[0] : null;
-    return projectDate === scheduledDate;
-  });
-  
-  if (duplicateProject) {
-    console.log(`[Project Scheduler] Skipping duplicate project creation - project ${duplicateProject.id} already exists for ${dueService.service.name} on ${scheduledDate}`);
-    return duplicateProject;
-  }
+  console.log(`[Project Scheduler] Checking for duplicates - Scheduled date: ${scheduledDate}`);
 
-  // ROBUST SERVICE-BASED SAFEGUARD: Check scheduling history for this service on this specific date
+  // PRIMARY DUPLICATE CHECK: Scheduling history is the source of truth
   // This prevents multiple projects if multiple project types reference the same service for the same scheduled date
   // Critical: Uses exact date comparison, not month, to allow weekly services to create multiple projects per month
   if (dueService.type === 'client') {
-    console.log(`[Project Scheduler] About to call storage.getProjectSchedulingHistoryByServiceId(${dueService.id}, ${dueService.type})...`);
+    console.log(`[Project Scheduler] Querying scheduling history for service ${dueService.id}...`);
     const schedulingHistory = await storage.getProjectSchedulingHistoryByServiceId(dueService.id, dueService.type);
-    console.log(`[Project Scheduler] getProjectSchedulingHistoryByServiceId() returned ${schedulingHistory.length} entries`);
+    console.log(`[Project Scheduler] Found ${schedulingHistory.length} scheduling history entries`);
     
     const existingProjectOnDate = schedulingHistory.find(entry => {
       if (!entry.projectId) return false;
       // Compare exact scheduled dates - critical for weekly services that run multiple times per month
       const entryDate = entry.scheduledDate.toISOString().split('T')[0];
       const targetDate = dueService.nextStartDate.toISOString().split('T')[0];
-      return entryDate === targetDate && (entry.action === 'created' || entry.action === 'created_no_reschedule');
+      const isMatch = entryDate === targetDate && (entry.action === 'created' || entry.action === 'created_no_reschedule');
+      
+      if (isMatch) {
+        console.log(`[Project Scheduler] ✓ DUPLICATE DETECTED - History entry: date=${entryDate}, action=${entry.action}, projectId=${entry.projectId}`);
+      }
+      
+      return isMatch;
     });
 
     if (existingProjectOnDate) {
-      console.log(`[Project Scheduler] Service-based duplicate prevention: Service ${dueService.id} (${dueService.service.name}) already has a project created for ${dueService.nextStartDate.toISOString().split('T')[0]}`);
-      console.log(`[Project Scheduler] Existing project ID: ${existingProjectOnDate.projectId} - This safeguards against multiple project types referencing the same service for the same date`);
+      console.log(`[Project Scheduler] ⚠️ DUPLICATE PREVENTION - Service ${dueService.id} (${dueService.service.name}) already has project ${existingProjectOnDate.projectId} for ${scheduledDate}`);
+      console.log(`[Project Scheduler] Returning existing project instead of creating duplicate`);
       
-      // Return the existing project to maintain consistency
-      const existingProject = allProjects.find(p => p.id === existingProjectOnDate.projectId);
-      if (existingProject) {
-        return existingProject;
+      // Retrieve and return the existing project (only if projectId exists)
+      if (existingProjectOnDate.projectId) {
+        const existingProject = await storage.getProject(existingProjectOnDate.projectId);
+        if (existingProject) {
+          return existingProject;
+        } else {
+          // Project was deleted but history remains - this is unusual but not an error
+          console.warn(`[Project Scheduler] ⚠️ WARNING - History references project ${existingProjectOnDate.projectId} which no longer exists. Will create new project.`);
+        }
       }
     }
+    
+    console.log(`[Project Scheduler] ✓ No duplicate found - proceeding with project creation`);
   }
 
   // Get the project type associated with this service
@@ -1469,7 +1478,7 @@ export async function getOverdueServicesAnalysis(targetDate: Date = new Date()) 
       serviceName: (service as any).serviceName,
       clientName: (service as any).clientName,
       nextStartDate: service.nextStartDate,
-      frequency: service.service.frequency,
+      frequency: service.frequency,
       daysPastDue: service.daysPastDue
     })),
     configurationErrors

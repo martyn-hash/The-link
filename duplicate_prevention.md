@@ -6,6 +6,11 @@ The project scheduling system employs a **multi-layered duplicate prevention str
 
 **Status**: ⚠️ **Duplicate prevention is BROKEN for overdue services**
 
+FOR TESTING: 
+USE PASSWORD TAB
+admin@example.com
+admin123
+
 ---
 
 ## Current Architecture
