@@ -1935,7 +1935,7 @@ export const documents = pgTable("documents", {
   }).notNull().default('direct_upload'), // source of the document
   messageId: varchar("message_id").references(() => messages.id, { onDelete: "cascade" }), // link to source message if from message attachment
   threadId: varchar("thread_id").references(() => messageThreads.id, { onDelete: "cascade" }), // link to thread if from message attachment
-  taskId: varchar("task_id"), // for future task integration
+  taskInstanceId: varchar("task_instance_id"), // link to task instance if uploaded via task template
   fileName: varchar("file_name").notNull(),
   fileSize: integer("file_size").notNull(), // in bytes
   fileType: varchar("file_type").notNull(), // MIME type
@@ -1949,7 +1949,7 @@ export const documents = pgTable("documents", {
   index("idx_documents_client_portal_user_id").on(table.clientPortalUserId),
   index("idx_documents_message_id").on(table.messageId),
   index("idx_documents_thread_id").on(table.threadId),
-  index("idx_documents_task_id").on(table.taskId),
+  index("idx_documents_task_instance_id").on(table.taskInstanceId),
   index("idx_documents_source").on(table.source),
 ]);
 
@@ -2071,6 +2071,127 @@ export const riskAssessmentResponses = pgTable("risk_assessment_responses", {
   unique("unique_assessment_question").on(table.riskAssessmentId, table.questionKey),
 ]);
 
+// Task Templates - Question type enum
+export const questionTypeEnum = pgEnum("question_type", [
+  "short_text",
+  "long_text", 
+  "email",
+  "number",
+  "date",
+  "single_choice",
+  "multi_choice",
+  "dropdown",
+  "yes_no",
+  "file_upload"
+]);
+
+// Task Templates - Instance status enum
+export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
+  "not_started",
+  "in_progress",
+  "submitted",
+  "approved",
+  "cancelled"
+]);
+
+// Task template categories table
+export const taskTemplateCategories = pgTable("task_template_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_template_categories_order").on(table.order),
+]);
+
+// Task templates table
+export const taskTemplates = pgTable("task_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  categoryId: varchar("category_id").references(() => taskTemplateCategories.id, { onDelete: "set null" }),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  status: varchar("status", { enum: ["draft", "active"] }).notNull().default("draft"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_templates_category_id").on(table.categoryId),
+  index("idx_task_templates_status").on(table.status),
+]);
+
+// Task template sections table
+export const taskTemplateSections = pgTable("task_template_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull().references(() => taskTemplates.id, { onDelete: "cascade" }),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_template_sections_template_id").on(table.templateId),
+  index("idx_task_template_sections_order").on(table.templateId, table.order),
+]);
+
+// Task template questions table
+export const taskTemplateQuestions = pgTable("task_template_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sectionId: varchar("section_id").notNull().references(() => taskTemplateSections.id, { onDelete: "cascade" }),
+  questionType: questionTypeEnum("question_type").notNull(),
+  label: text("label").notNull(),
+  helpText: text("help_text"),
+  isRequired: boolean("is_required").notNull().default(false),
+  order: integer("order").notNull().default(0),
+  validationRules: jsonb("validation_rules"), // min, max, pattern, etc. in JSON
+  options: text("options").array(), // for single_choice, multi_choice, dropdown
+  conditionalLogic: jsonb("conditional_logic"), // {showIf: {questionId: "xyz", operator: "equals", value: "yes"}}
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_template_questions_section_id").on(table.sectionId),
+  index("idx_task_template_questions_order").on(table.sectionId, table.order),
+]);
+
+// Task instances table - created when template is applied to a client
+export const taskInstances = pgTable("task_instances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull().references(() => taskTemplates.id),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  personId: varchar("person_id").references(() => people.id, { onDelete: "cascade" }), // related person assigned to complete the task
+  clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }), // portal user who will complete it
+  status: taskInstanceStatusEnum("status").notNull().default("not_started"),
+  assignedBy: varchar("assigned_by").references(() => users.id), // staff member who assigned the task
+  dueDate: timestamp("due_date"), // optional due date
+  submittedAt: timestamp("submitted_at"),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_instances_template_id").on(table.templateId),
+  index("idx_task_instances_client_id").on(table.clientId),
+  index("idx_task_instances_person_id").on(table.personId),
+  index("idx_task_instances_client_portal_user_id").on(table.clientPortalUserId),
+  index("idx_task_instances_status").on(table.status),
+]);
+
+// Task instance responses table - stores answers to questions
+export const taskInstanceResponses = pgTable("task_instance_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskInstanceId: varchar("task_instance_id").notNull().references(() => taskInstances.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id").notNull().references(() => taskTemplateQuestions.id),
+  responseValue: text("response_value"), // text response or JSON for complex types
+  fileUrls: text("file_urls").array(), // for file_upload questions - array of object paths
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_instance_responses_task_instance_id").on(table.taskInstanceId),
+  index("idx_task_instance_responses_question_id").on(table.questionId),
+  unique("unique_task_instance_question").on(table.taskInstanceId, table.questionId),
+]);
+
 // Zod schemas for risk assessments
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
@@ -2089,6 +2210,59 @@ export const updateRiskAssessmentSchema = insertRiskAssessmentSchema.partial();
 export const insertRiskAssessmentResponseSchema = createInsertSchema(riskAssessmentResponses).omit({
   id: true,
   createdAt: true,
+});
+
+// Zod schemas for task templates
+export const insertTaskTemplateCategorySchema = createInsertSchema(taskTemplateCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskTemplateCategorySchema = insertTaskTemplateCategorySchema.partial();
+
+export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskTemplateSchema = insertTaskTemplateSchema.partial();
+
+export const insertTaskTemplateSectionSchema = createInsertSchema(taskTemplateSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskTemplateSectionSchema = insertTaskTemplateSectionSchema.partial();
+
+export const insertTaskTemplateQuestionSchema = createInsertSchema(taskTemplateQuestions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskTemplateQuestionSchema = insertTaskTemplateQuestionSchema.partial();
+
+export const insertTaskInstanceSchema = createInsertSchema(taskInstances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  submittedAt: true,
+  approvedAt: true,
+});
+
+export const updateTaskInstanceSchema = insertTaskInstanceSchema.partial();
+
+export const updateTaskInstanceStatusSchema = z.object({
+  status: z.enum(["not_started", "in_progress", "submitted", "approved", "cancelled"]),
+});
+
+export const insertTaskInstanceResponseSchema = createInsertSchema(taskInstanceResponses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Type exports
@@ -2119,6 +2293,23 @@ export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
 export type UpdateRiskAssessment = z.infer<typeof updateRiskAssessmentSchema>;
 export type RiskAssessmentResponse = typeof riskAssessmentResponses.$inferSelect;
 export type InsertRiskAssessmentResponse = z.infer<typeof insertRiskAssessmentResponseSchema>;
+export type TaskTemplateCategory = typeof taskTemplateCategories.$inferSelect;
+export type InsertTaskTemplateCategory = z.infer<typeof insertTaskTemplateCategorySchema>;
+export type UpdateTaskTemplateCategory = z.infer<typeof updateTaskTemplateCategorySchema>;
+export type TaskTemplate = typeof taskTemplates.$inferSelect;
+export type InsertTaskTemplate = z.infer<typeof insertTaskTemplateSchema>;
+export type UpdateTaskTemplate = z.infer<typeof updateTaskTemplateSchema>;
+export type TaskTemplateSection = typeof taskTemplateSections.$inferSelect;
+export type InsertTaskTemplateSection = z.infer<typeof insertTaskTemplateSectionSchema>;
+export type UpdateTaskTemplateSection = z.infer<typeof updateTaskTemplateSectionSchema>;
+export type TaskTemplateQuestion = typeof taskTemplateQuestions.$inferSelect;
+export type InsertTaskTemplateQuestion = z.infer<typeof insertTaskTemplateQuestionSchema>;
+export type UpdateTaskTemplateQuestion = z.infer<typeof updateTaskTemplateQuestionSchema>;
+export type TaskInstance = typeof taskInstances.$inferSelect;
+export type InsertTaskInstance = z.infer<typeof insertTaskInstanceSchema>;
+export type UpdateTaskInstance = z.infer<typeof updateTaskInstanceSchema>;
+export type TaskInstanceResponse = typeof taskInstanceResponses.$inferSelect;
+export type InsertTaskInstanceResponse = z.infer<typeof insertTaskInstanceResponseSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {

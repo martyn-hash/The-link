@@ -47,6 +47,12 @@ import {
   clientPortalUsers,
   messageThreads,
   messages,
+  taskTemplateCategories,
+  taskTemplates,
+  taskTemplateSections,
+  taskTemplateQuestions,
+  taskInstances,
+  taskInstanceResponses,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -147,6 +153,23 @@ import {
   type InsertMessageThread,
   type Message,
   type InsertMessage,
+  type TaskTemplateCategory,
+  type InsertTaskTemplateCategory,
+  type UpdateTaskTemplateCategory,
+  type TaskTemplate,
+  type InsertTaskTemplate,
+  type UpdateTaskTemplate,
+  type TaskTemplateSection,
+  type InsertTaskTemplateSection,
+  type UpdateTaskTemplateSection,
+  type TaskTemplateQuestion,
+  type InsertTaskTemplateQuestion,
+  type UpdateTaskTemplateQuestion,
+  type TaskInstance,
+  type InsertTaskInstance,
+  type UpdateTaskInstance,
+  type TaskInstanceResponse,
+  type InsertTaskInstanceResponse,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -670,6 +693,59 @@ export interface IStorage {
   getClientPortalSessionByToken(token: string): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date } | undefined>;
   deleteClientPortalSession(id: string): Promise<void>;
   cleanupExpiredSessions(): Promise<void>;
+  
+  // Task Template Category operations
+  createTaskTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory>;
+  getTaskTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined>;
+  getAllTaskTemplateCategories(): Promise<TaskTemplateCategory[]>;
+  updateTaskTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory>;
+  deleteTaskTemplateCategory(id: string): Promise<void>;
+  
+  // Task Template operations
+  createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate>;
+  getTaskTemplateById(id: string): Promise<TaskTemplate | undefined>;
+  getAllTaskTemplates(includeInactive?: boolean): Promise<TaskTemplate[]>;
+  getTaskTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]>;
+  getActiveTaskTemplates(): Promise<TaskTemplate[]>;
+  updateTaskTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate>;
+  deleteTaskTemplate(id: string): Promise<void>;
+  
+  // Task Template Section operations
+  createTaskTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection>;
+  getTaskTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined>;
+  getTaskTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]>;
+  updateTaskTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection>;
+  deleteTaskTemplateSection(id: string): Promise<void>;
+  updateSectionOrders(updates: { id: string; order: number }[]): Promise<void>;
+  
+  // Task Template Question operations
+  createTaskTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
+  getTaskTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined>;
+  getTaskTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]>;
+  getAllTaskTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]>;
+  updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
+  deleteTaskTemplateQuestion(id: string): Promise<void>;
+  updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void>;
+  
+  // Task Instance operations
+  createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
+  getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
+  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template: TaskTemplate; person?: Person; portalUser?: ClientPortalUser })[]>;
+  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
+  getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
+  getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
+  getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
+  updateTaskInstance(id: string, instance: UpdateTaskInstance): Promise<TaskInstance>;
+  deleteTaskInstance(id: string): Promise<void>;
+  getTaskInstanceWithFullData(id: string): Promise<any>;
+  
+  // Task Instance Response operations
+  saveTaskInstanceResponse(response: InsertTaskInstanceResponse): Promise<TaskInstanceResponse>;
+  getTaskInstanceResponseById(id: string): Promise<TaskInstanceResponse | undefined>;
+  getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string): Promise<(TaskInstanceResponse & { question: TaskTemplateQuestion })[]>;
+  updateTaskInstanceResponse(id: string, response: Partial<InsertTaskInstanceResponse>): Promise<TaskInstanceResponse>;
+  deleteTaskInstanceResponse(id: string): Promise<void>;
+  bulkSaveTaskInstanceResponses(taskInstanceId: string, responses: InsertTaskInstanceResponse[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -8390,6 +8466,689 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(sql`${clientPortalUsers.tokenExpiry} < NOW() AND ${clientPortalUsers.tokenExpiry} IS NOT NULL`);
+  }
+
+  // Task Template Category operations
+  async createTaskTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory> {
+    const [created] = await db
+      .insert(taskTemplateCategories)
+      .values(category)
+      .returning();
+    return created;
+  }
+
+  async getTaskTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined> {
+    const [category] = await db
+      .select()
+      .from(taskTemplateCategories)
+      .where(eq(taskTemplateCategories.id, id));
+    return category;
+  }
+
+  async getAllTaskTemplateCategories(): Promise<TaskTemplateCategory[]> {
+    return await db
+      .select()
+      .from(taskTemplateCategories)
+      .orderBy(taskTemplateCategories.order);
+  }
+
+  async updateTaskTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory> {
+    const [updated] = await db
+      .update(taskTemplateCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(taskTemplateCategories.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskTemplateCategory(id: string): Promise<void> {
+    await db
+      .delete(taskTemplateCategories)
+      .where(eq(taskTemplateCategories.id, id));
+  }
+
+  // Task Template operations
+  async createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate> {
+    const [created] = await db
+      .insert(taskTemplates)
+      .values(template)
+      .returning();
+    return created;
+  }
+
+  async getTaskTemplateById(id: string): Promise<TaskTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.id, id));
+    return template;
+  }
+
+  async getAllTaskTemplates(includeInactive: boolean = false): Promise<TaskTemplate[]> {
+    if (includeInactive) {
+      return await db
+        .select()
+        .from(taskTemplates)
+        .orderBy(taskTemplates.createdAt);
+    }
+    
+    return await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.status, "active"))
+      .orderBy(taskTemplates.createdAt);
+  }
+
+  async getTaskTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]> {
+    return await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.categoryId, categoryId))
+      .orderBy(taskTemplates.createdAt);
+  }
+
+  async getActiveTaskTemplates(): Promise<TaskTemplate[]> {
+    return await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.status, "active"))
+      .orderBy(taskTemplates.createdAt);
+  }
+
+  async updateTaskTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate> {
+    const [updated] = await db
+      .update(taskTemplates)
+      .set({ ...template, updatedAt: new Date() })
+      .where(eq(taskTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskTemplate(id: string): Promise<void> {
+    await db
+      .delete(taskTemplates)
+      .where(eq(taskTemplates.id, id));
+  }
+
+  // Task Template Section operations
+  async createTaskTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection> {
+    const [created] = await db
+      .insert(taskTemplateSections)
+      .values(section)
+      .returning();
+    return created;
+  }
+
+  async getTaskTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined> {
+    const [section] = await db
+      .select()
+      .from(taskTemplateSections)
+      .where(eq(taskTemplateSections.id, id));
+    return section;
+  }
+
+  async getTaskTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]> {
+    return await db
+      .select()
+      .from(taskTemplateSections)
+      .where(eq(taskTemplateSections.templateId, templateId))
+      .orderBy(taskTemplateSections.order);
+  }
+
+  async updateTaskTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection> {
+    const [updated] = await db
+      .update(taskTemplateSections)
+      .set({ ...section, updatedAt: new Date() })
+      .where(eq(taskTemplateSections.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskTemplateSection(id: string): Promise<void> {
+    await db
+      .delete(taskTemplateSections)
+      .where(eq(taskTemplateSections.id, id));
+  }
+
+  async updateSectionOrders(updates: { id: string; order: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .update(taskTemplateSections)
+          .set({ order: update.order, updatedAt: new Date() })
+          .where(eq(taskTemplateSections.id, update.id));
+      }
+    });
+  }
+
+  // Task Template Question operations
+  async createTaskTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
+    const [created] = await db
+      .insert(taskTemplateQuestions)
+      .values(question)
+      .returning();
+    return created;
+  }
+
+  async getTaskTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined> {
+    const [question] = await db
+      .select()
+      .from(taskTemplateQuestions)
+      .where(eq(taskTemplateQuestions.id, id));
+    return question;
+  }
+
+  async getTaskTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]> {
+    return await db
+      .select()
+      .from(taskTemplateQuestions)
+      .where(eq(taskTemplateQuestions.sectionId, sectionId))
+      .orderBy(taskTemplateQuestions.order);
+  }
+
+  async getAllTaskTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]> {
+    return await db
+      .select({
+        id: taskTemplateQuestions.id,
+        sectionId: taskTemplateQuestions.sectionId,
+        questionType: taskTemplateQuestions.questionType,
+        label: taskTemplateQuestions.label,
+        helpText: taskTemplateQuestions.helpText,
+        isRequired: taskTemplateQuestions.isRequired,
+        order: taskTemplateQuestions.order,
+        validationRules: taskTemplateQuestions.validationRules,
+        options: taskTemplateQuestions.options,
+        conditionalLogic: taskTemplateQuestions.conditionalLogic,
+        createdAt: taskTemplateQuestions.createdAt,
+        updatedAt: taskTemplateQuestions.updatedAt,
+      })
+      .from(taskTemplateQuestions)
+      .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
+      .where(eq(taskTemplateSections.templateId, templateId))
+      .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+  }
+
+  async updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
+    const [updated] = await db
+      .update(taskTemplateQuestions)
+      .set({ ...question, updatedAt: new Date() })
+      .where(eq(taskTemplateQuestions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskTemplateQuestion(id: string): Promise<void> {
+    await db
+      .delete(taskTemplateQuestions)
+      .where(eq(taskTemplateQuestions.id, id));
+  }
+
+  async updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .update(taskTemplateQuestions)
+          .set({ order: update.order, updatedAt: new Date() })
+          .where(eq(taskTemplateQuestions.id, update.id));
+      }
+    });
+  }
+
+  // Task Instance operations
+  async createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance> {
+    const [created] = await db
+      .insert(taskInstances)
+      .values(instance)
+      .returning();
+    return created;
+  }
+
+  async getTaskInstanceById(id: string): Promise<TaskInstance | undefined> {
+    const [instance] = await db
+      .select()
+      .from(taskInstances)
+      .where(eq(taskInstances.id, id));
+    return instance;
+  }
+
+  async getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template: TaskTemplate; person?: Person; portalUser?: ClientPortalUser })[]> {
+    const instances = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        person: people,
+        portalUser: clientPortalUsers,
+      })
+      .from(taskInstances)
+      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(people, eq(taskInstances.personId, people.id))
+      .leftJoin(clientPortalUsers, eq(taskInstances.clientPortalUserId, clientPortalUsers.id))
+      .where(eq(taskInstances.clientId, clientId))
+      .orderBy(desc(taskInstances.createdAt));
+
+    return instances.map(row => ({
+      id: row.id,
+      templateId: row.templateId,
+      clientId: row.clientId,
+      personId: row.personId,
+      clientPortalUserId: row.clientPortalUserId,
+      status: row.status,
+      assignedBy: row.assignedBy,
+      dueDate: row.dueDate,
+      submittedAt: row.submittedAt,
+      approvedAt: row.approvedAt,
+      approvedBy: row.approvedBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      template: row.template,
+      person: row.person || undefined,
+      portalUser: row.portalUser || undefined,
+    }));
+  }
+
+  async getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]> {
+    const instances = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        client: clients,
+      })
+      .from(taskInstances)
+      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clients, eq(taskInstances.clientId, clients.id))
+      .where(eq(taskInstances.clientPortalUserId, clientPortalUserId))
+      .orderBy(desc(taskInstances.createdAt));
+
+    return instances.map(row => ({
+      id: row.id,
+      templateId: row.templateId,
+      clientId: row.clientId,
+      personId: row.personId,
+      clientPortalUserId: row.clientPortalUserId,
+      status: row.status,
+      assignedBy: row.assignedBy,
+      dueDate: row.dueDate,
+      submittedAt: row.submittedAt,
+      approvedAt: row.approvedAt,
+      approvedBy: row.approvedBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      template: row.template,
+      client: row.client,
+    }));
+  }
+
+  async getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]> {
+    const instances = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        client: clients,
+      })
+      .from(taskInstances)
+      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clients, eq(taskInstances.clientId, clients.id))
+      .where(eq(taskInstances.personId, personId))
+      .orderBy(desc(taskInstances.createdAt));
+
+    return instances.map(row => ({
+      id: row.id,
+      templateId: row.templateId,
+      clientId: row.clientId,
+      personId: row.personId,
+      clientPortalUserId: row.clientPortalUserId,
+      status: row.status,
+      assignedBy: row.assignedBy,
+      dueDate: row.dueDate,
+      submittedAt: row.submittedAt,
+      approvedAt: row.approvedAt,
+      approvedBy: row.approvedBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      template: row.template,
+      client: row.client,
+    }));
+  }
+
+  async getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]> {
+    const instances = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        client: clients,
+        person: people,
+      })
+      .from(taskInstances)
+      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clients, eq(taskInstances.clientId, clients.id))
+      .leftJoin(people, eq(taskInstances.personId, people.id))
+      .where(eq(taskInstances.status, status as any))
+      .orderBy(desc(taskInstances.createdAt));
+
+    return instances.map(row => ({
+      id: row.id,
+      templateId: row.templateId,
+      clientId: row.clientId,
+      personId: row.personId,
+      clientPortalUserId: row.clientPortalUserId,
+      status: row.status,
+      assignedBy: row.assignedBy,
+      dueDate: row.dueDate,
+      submittedAt: row.submittedAt,
+      approvedAt: row.approvedAt,
+      approvedBy: row.approvedBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      template: row.template,
+      client: row.client,
+      person: row.person || undefined,
+    }));
+  }
+
+  async getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]> {
+    const conditions = [];
+    
+    if (filters?.status) {
+      conditions.push(eq(taskInstances.status, filters.status as any));
+    }
+    
+    if (filters?.clientId) {
+      conditions.push(eq(taskInstances.clientId, filters.clientId));
+    }
+
+    const instances = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        client: clients,
+        person: people,
+      })
+      .from(taskInstances)
+      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clients, eq(taskInstances.clientId, clients.id))
+      .leftJoin(people, eq(taskInstances.personId, people.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(taskInstances.createdAt));
+
+    return instances.map(row => ({
+      id: row.id,
+      templateId: row.templateId,
+      clientId: row.clientId,
+      personId: row.personId,
+      clientPortalUserId: row.clientPortalUserId,
+      status: row.status,
+      assignedBy: row.assignedBy,
+      dueDate: row.dueDate,
+      submittedAt: row.submittedAt,
+      approvedAt: row.approvedAt,
+      approvedBy: row.approvedBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      template: row.template,
+      client: row.client,
+      person: row.person || undefined,
+    }));
+  }
+
+  async updateTaskInstance(id: string, instance: UpdateTaskInstance): Promise<TaskInstance> {
+    const [updated] = await db
+      .update(taskInstances)
+      .set({ ...instance, updatedAt: new Date() })
+      .where(eq(taskInstances.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskInstance(id: string): Promise<void> {
+    await db
+      .delete(taskInstances)
+      .where(eq(taskInstances.id, id));
+  }
+
+  async getTaskInstanceWithFullData(id: string): Promise<any> {
+    // Get the instance with template
+    const [instanceData] = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        client: clients,
+        person: people,
+      })
+      .from(taskInstances)
+      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clients, eq(taskInstances.clientId, clients.id))
+      .leftJoin(people, eq(taskInstances.personId, people.id))
+      .where(eq(taskInstances.id, id));
+
+    if (!instanceData) {
+      return undefined;
+    }
+
+    // Get all sections for the template
+    const sections = await db
+      .select()
+      .from(taskTemplateSections)
+      .where(eq(taskTemplateSections.templateId, instanceData.templateId))
+      .orderBy(taskTemplateSections.order);
+
+    // Get all questions for the template
+    const allQuestions = await db
+      .select({
+        question: taskTemplateQuestions,
+        section: taskTemplateSections,
+      })
+      .from(taskTemplateQuestions)
+      .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
+      .where(eq(taskTemplateSections.templateId, instanceData.templateId))
+      .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+
+    // Get all responses for the instance
+    const responses = await db
+      .select()
+      .from(taskInstanceResponses)
+      .where(eq(taskInstanceResponses.taskInstanceId, id));
+
+    // Build sections with questions and responses
+    const sectionsWithQuestions = sections.map(section => {
+      const questionsForSection = allQuestions
+        .filter(q => q.section.id === section.id)
+        .map(q => {
+          const response = responses.find(r => r.questionId === q.question.id);
+          return {
+            ...q.question,
+            response: response || null,
+          };
+        });
+
+      return {
+        ...section,
+        questions: questionsForSection,
+      };
+    });
+
+    return {
+      id: instanceData.id,
+      templateId: instanceData.templateId,
+      clientId: instanceData.clientId,
+      personId: instanceData.personId,
+      clientPortalUserId: instanceData.clientPortalUserId,
+      status: instanceData.status,
+      assignedBy: instanceData.assignedBy,
+      dueDate: instanceData.dueDate,
+      submittedAt: instanceData.submittedAt,
+      approvedAt: instanceData.approvedAt,
+      approvedBy: instanceData.approvedBy,
+      createdAt: instanceData.createdAt,
+      updatedAt: instanceData.updatedAt,
+      template: instanceData.template,
+      client: instanceData.client,
+      person: instanceData.person || undefined,
+      sections: sectionsWithQuestions,
+    };
+  }
+
+  // Task Instance Response operations
+  async saveTaskInstanceResponse(response: InsertTaskInstanceResponse): Promise<TaskInstanceResponse> {
+    const [saved] = await db
+      .insert(taskInstanceResponses)
+      .values(response)
+      .onConflictDoUpdate({
+        target: [taskInstanceResponses.taskInstanceId, taskInstanceResponses.questionId],
+        set: {
+          responseValue: response.responseValue,
+          fileUrls: response.fileUrls,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return saved;
+  }
+
+  async getTaskInstanceResponseById(id: string): Promise<TaskInstanceResponse | undefined> {
+    const [response] = await db
+      .select()
+      .from(taskInstanceResponses)
+      .where(eq(taskInstanceResponses.id, id));
+    return response;
+  }
+
+  async getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string): Promise<(TaskInstanceResponse & { question: TaskTemplateQuestion })[]> {
+    const responses = await db
+      .select({
+        id: taskInstanceResponses.id,
+        taskInstanceId: taskInstanceResponses.taskInstanceId,
+        questionId: taskInstanceResponses.questionId,
+        responseValue: taskInstanceResponses.responseValue,
+        fileUrls: taskInstanceResponses.fileUrls,
+        createdAt: taskInstanceResponses.createdAt,
+        updatedAt: taskInstanceResponses.updatedAt,
+        question: taskTemplateQuestions,
+      })
+      .from(taskInstanceResponses)
+      .innerJoin(taskTemplateQuestions, eq(taskInstanceResponses.questionId, taskTemplateQuestions.id))
+      .where(eq(taskInstanceResponses.taskInstanceId, taskInstanceId))
+      .orderBy(taskTemplateQuestions.order);
+
+    return responses.map(row => ({
+      id: row.id,
+      taskInstanceId: row.taskInstanceId,
+      questionId: row.questionId,
+      responseValue: row.responseValue,
+      fileUrls: row.fileUrls,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      question: row.question,
+    }));
+  }
+
+  async updateTaskInstanceResponse(id: string, response: Partial<InsertTaskInstanceResponse>): Promise<TaskInstanceResponse> {
+    const [updated] = await db
+      .update(taskInstanceResponses)
+      .set({ ...response, updatedAt: new Date() })
+      .where(eq(taskInstanceResponses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskInstanceResponse(id: string): Promise<void> {
+    await db
+      .delete(taskInstanceResponses)
+      .where(eq(taskInstanceResponses.id, id));
+  }
+
+  async bulkSaveTaskInstanceResponses(taskInstanceId: string, responses: InsertTaskInstanceResponse[]): Promise<void> {
+    if (responses.length === 0) return;
+
+    await db.transaction(async (tx) => {
+      for (const response of responses) {
+        await tx
+          .insert(taskInstanceResponses)
+          .values({
+            ...response,
+            taskInstanceId,
+          })
+          .onConflictDoUpdate({
+            target: [taskInstanceResponses.taskInstanceId, taskInstanceResponses.questionId],
+            set: {
+              responseValue: response.responseValue,
+              fileUrls: response.fileUrls,
+              updatedAt: new Date(),
+            },
+          });
+      }
+    });
   }
 }
 
