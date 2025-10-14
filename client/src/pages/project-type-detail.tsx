@@ -951,10 +951,16 @@ export default function ProjectTypeDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
     },
     onError: (error: any) => {
-      // Handle the special 409 error case when trying to deactivate with active projects
+      // Handle specific error cases
       if (error.status === 409 && error.code === "PROJECTS_USING_TYPE") {
         toast({
           title: "Cannot Deactivate Project Type",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else if (error.status === 400 && error.code === "NO_FINAL_STAGE") {
+        toast({
+          title: "Cannot Activate Project Type",
           description: error.message,
           variant: "destructive",
         });
@@ -969,6 +975,18 @@ export default function ProjectTypeDetail() {
   });
 
   const handleActiveToggle = (checked: boolean) => {
+    // If trying to activate, check if there's at least one final stage
+    if (checked && stages) {
+      const hasFinalStage = stages.some((stage: any) => stage.canBeFinalStage === true);
+      if (!hasFinalStage) {
+        toast({
+          title: "Cannot Activate Project Type",
+          description: "At least one stage must be marked as 'Can be final Stage' before activating this project type.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     updateProjectTypeActiveMutation.mutate(checked);
   };
 
