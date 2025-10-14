@@ -74,7 +74,8 @@ export default function ProjectDetail() {
   });
 
   // Find current stage and check if it allows completion
-  const currentStage = stages?.find((stage: any) => stage.id === project?.currentStatus);
+  // Note: project.currentStatus stores the stage name, not the stage ID
+  const currentStage = stages?.find((stage: any) => stage.name === project?.currentStatus);
   const currentStageAllowsCompletion = currentStage?.canBeFinalStage === true;
 
   // Mutation to complete project

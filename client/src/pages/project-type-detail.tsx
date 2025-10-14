@@ -610,10 +610,20 @@ export default function ProjectTypeDetail() {
     enabled: !!projectTypeId && isAuthenticated && !!user,
   });
 
-  // Use service-specific roles if available, otherwise fall back to system roles  
-  const availableRoles = projectTypeRoles && projectTypeRoles.length > 0 
-    ? projectTypeRoles.map(role => ({ value: role.id, label: role.name }))
-    : SYSTEM_ROLE_OPTIONS;
+  // Fetch all users for non-service project types
+  const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: !!projectType && !projectType.serviceId && isAuthenticated && !!user,
+  });
+
+  // Use service-specific roles for service-linked project types, or users for non-service types
+  const availableRoles = projectType?.serviceId
+    ? (projectTypeRoles && projectTypeRoles.length > 0 
+        ? projectTypeRoles.map(role => ({ value: role.id, label: role.name }))
+        : SYSTEM_ROLE_OPTIONS)
+    : (allUsers
+        ? allUsers.map(u => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))
+        : []);
 
   // Helper function to get role label for a stage
   const getStageRoleLabel = (stage: any) => {
@@ -623,10 +633,10 @@ export default function ProjectTypeDetail() {
       return serviceRole ? serviceRole.label : "Unknown Service Role";
     }
     
-    // For non-service project types, we would check assignedUserId (but we need user data for this)
+    // For non-service project types, check assignedUserId
     if (!projectType?.serviceId && stage.assignedUserId) {
-      // For now, return a placeholder - we could fetch user data if needed
-      return "Assigned User";
+      const assignedUser = allUsers?.find(u => u.id === stage.assignedUserId);
+      return assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : "Assigned User";
     }
     
     // Legacy support: check assignedRole for existing stages
@@ -1505,7 +1515,7 @@ export default function ProjectTypeDetail() {
                               }));
                             }
                           }}
-                          disabled={rolesLoading}
+                          disabled={rolesLoading || usersLoading}
                         >
                           <SelectTrigger data-testid="select-stage-role">
                             <SelectValue placeholder={rolesLoading ? "Loading..." : 
