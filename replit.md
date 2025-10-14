@@ -30,6 +30,12 @@ The application is built with a modern tech stack designed for scalability and p
 - **Core Project Management**: Kanban, list, and dashboard views.
 - **Client & Contact Management**: Comprehensive profiles, risk assessment.
 - **Service & Communication Tracking**: Scheduled services, communication logging, document management.
+- **Task Templates (October 14, 2025)**: 
+    - **Admin Interface**: Create reusable form templates with 10+ question types (text, email, number, textarea, date, radio, checkbox, dropdown, yes/no, file upload), organize with categories, multiple visual sections with drag-drop reordering.
+    - **Client Application**: Staff apply templates to clients/contacts through client detail page Tasks tab, creating task instances assigned to specific persons.
+    - **Portal Completion**: Portal users see assigned tasks in Tasks tab, complete forms with all question types including file uploads, save progress or submit.
+    - **File Upload Integration**: File uploads automatically create documents in "Task Uploads" folder, linked to task responses.
+    - **Staff Review**: Submissions list with status filtering, detailed review page showing all responses, mark-as-reviewed functionality.
 - **Client Portal & Messaging**:
     - **Authentication**: Primary 6-digit email verification codes (10-minute expiry); magic links (deprecated but functional).
     - **Messaging**: Real-time threads with topics, status tracking (new, in_progress, resolved, closed), dual authorship, unread tracking, file attachments, and archive functionality.
@@ -42,7 +48,7 @@ The application is built with a modern tech stack designed for scalability and p
 
 ### System Design Choices
 - **Monorepo Structure**: `client/`, `server/`, and `shared/` directories.
-- **Database Schema**: Relational design for users, clients, projects, services, communications, documents, risk assessments, and messaging entities (`client_portal_users`, `message_threads`, `messages`, `client_portal_sessions`).
+- **Database Schema**: Relational design for users, clients, projects, services, communications, documents, risk assessments, messaging entities (`client_portal_users`, `message_threads`, `messages`, `client_portal_sessions`), and task templates (`task_template_categories`, `task_templates`, `task_template_sections`, `task_template_questions`, `task_instances`, `task_responses`).
 - **API Design**: RESTful API routes with Zod for validation.
 - **Client Portal Architecture**: Dedicated messaging system with separate authentication (`/api/portal/*` routes with JWT/session cookies) from staff OIDC auth (`/api/internal/*` routes).
 - **Security Model**: Tenant isolation by `clientId`, project-based access for staff unread counts, and separate authentication flows for staff and clients.
@@ -55,7 +61,32 @@ The application is built with a modern tech stack designed for scalability and p
 - **Companies House**: UK company data lookup.
 - **Neon**: Managed PostgreSQL database service.
 
-## Recent Fixes & Testing (October 5, 2025)
+## Recent Changes
+
+### Task Templates Feature Implementation (October 14, 2025)
+Complete implementation of dynamic form templates system:
+- **Database Schema**: 7 tables (`task_template_categories`, `task_templates`, `task_template_sections`, `task_template_questions`, `task_instances`, `task_responses`, plus "Task Uploads" folder integration)
+- **Backend**: 39+ storage methods, 30+ API routes with full CRUD operations
+- **Admin Interface**: 
+  - Category management (`/task-template-categories`)
+  - Template list and editor (`/task-templates`, `/task-templates/:id/edit`)
+  - Visual section builder with drag-drop reordering
+  - Question builder supporting 10 types: text, email, number, textarea, date, radio, checkbox, dropdown, yes/no, file
+- **Client Portal**: 
+  - Task assignment through client detail page Tasks tab
+  - Portal Tasks page (`/portal/tasks`) with status filtering
+  - Dynamic form completion (`/portal/tasks/:id`) with save/submit
+  - File upload integration with presigned GCS URLs
+- **Staff Review**: 
+  - Submissions list (`/task-submissions`) with filtering
+  - Detailed review page with all responses and mark-as-reviewed
+- **Bug Fixes**: 
+  - Fixed queryFn for detail pages to avoid list endpoint calls
+  - Removed empty SelectItem value causing Radix UI error
+
+## Previous Updates
+
+### Recent Fixes & Testing (October 5, 2025)
 ### Fixed Issues
 - **Portal Thread Status Runtime Error**: Fixed statusConfig in PortalThreadDetail and PortalThreadList to use correct thread status values ('open'|'closed'|'archived' instead of 'new'|'in_progress'|'resolved'|'closed')
 - **Push Notification Authentication**: Fixed portal push notifications by exporting portalRequest() with JWT token support - portal users can now successfully subscribe to push notifications
