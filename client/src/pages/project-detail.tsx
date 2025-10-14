@@ -5,7 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -63,6 +65,17 @@ export default function ProjectDetail() {
     enabled: isAuthenticated && !!user && !!projectId && !!project,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // Fetch project type stages to check if current stage allows completion
+  const { data: stages } = useQuery<any[]>({
+    queryKey: ['/api/config/project-types', project?.projectTypeId, 'stages'],
+    enabled: !!project?.projectTypeId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Find current stage and check if it allows completion
+  const currentStage = stages?.find((stage: any) => stage.id === project?.currentStatus);
+  const currentStageAllowsCompletion = currentStage?.canBeFinalStage === true;
 
   // Mutation to complete project
   const completeMutation = useMutation({
@@ -155,12 +168,16 @@ export default function ProjectDetail() {
     }
   };
 
-  const canComplete = project && !project.completionStatus && (
+  // Check if user has permission to complete
+  const hasPermissionToComplete = project && !project.completionStatus && (
     user?.isAdmin ||
     project.currentAssigneeId === user?.id ||
     project.clientManagerId === user?.id ||
     project.bookkeeperId === user?.id
   );
+
+  // User can only complete if they have permission AND current stage allows it
+  const canComplete = hasPermissionToComplete && currentStageAllowsCompletion;
 
   // Loading state
   if (authLoading || !user) {
@@ -320,35 +337,79 @@ export default function ProjectDetail() {
           </div>
           
           <div className="flex items-start justify-between gap-4">
-            <h1 className="text-3xl font-bold text-foreground" data-testid="text-project-title">
-              {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-            </h1>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-project-title">
+                {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+              </h1>
+              
+              {/* Stage Completion Status Indicator */}
+              {hasPermissionToComplete && currentStage && (
+                <div className="flex items-center gap-2 mt-2">
+                  {currentStageAllowsCompletion ? (
+                    <Badge variant="default" className="bg-green-600 hover:bg-green-700" data-testid="badge-completion-allowed">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Completion allowed at this stage
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-900 dark:text-orange-200" data-testid="badge-completion-blocked">
+                      <Info className="w-3 h-3 mr-1" />
+                      Completion not allowed at this stage
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
             
             {/* Complete Project Buttons */}
-            {canComplete && (
-              <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleCompleteClick('completed_successfully')}
-                  disabled={completeMutation.isPending}
-                  data-testid="button-complete-success"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Mark as Successfully Completed
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleCompleteClick('completed_unsuccessfully')}
-                  disabled={completeMutation.isPending}
-                  data-testid="button-complete-fail"
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Mark as Unsuccessfully Completed
-                </Button>
-              </div>
+            {hasPermissionToComplete && (
+              <TooltipProvider>
+                <div className="flex gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleCompleteClick('completed_successfully')}
+                          disabled={!currentStageAllowsCompletion || completeMutation.isPending}
+                          data-testid="button-complete-success"
+                          className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Mark as Successfully Completed
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    {!currentStageAllowsCompletion && (
+                      <TooltipContent>
+                        <p>Cannot complete project at this stage. Move to a final stage first.</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleCompleteClick('completed_unsuccessfully')}
+                          disabled={!currentStageAllowsCompletion || completeMutation.isPending}
+                          data-testid="button-complete-fail"
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Mark as Unsuccessfully Completed
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    {!currentStageAllowsCompletion && (
+                      <TooltipContent>
+                        <p>Cannot complete project at this stage. Move to a final stage first.</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
             )}
           </div>
           
