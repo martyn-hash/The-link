@@ -914,6 +914,290 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Portal Task Instance Routes
+
+  // GET /api/portal/task-instances - Get all task instances for logged-in portal user
+  app.get("/api/portal/task-instances", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const portalUserId = req.portalUser.id;
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!relatedPersonId) {
+        return res.status(400).json({ message: "Portal user has no associated person" });
+      }
+
+      const instances = await storage.getTaskInstancesByPerson(relatedPersonId);
+      res.json(instances);
+    } catch (error) {
+      console.error("Error fetching portal task instances:", error);
+      res.status(500).json({ message: "Failed to fetch task instances" });
+    }
+  });
+
+  // GET /api/portal/task-instances/:id - Get specific task instance with full details
+  app.get("/api/portal/task-instances/:id", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const portalUserId = req.portalUser.id;
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!relatedPersonId) {
+        return res.status(400).json({ message: "Portal user has no associated person" });
+      }
+
+      const instance = await storage.getTaskInstanceFull(id);
+      
+      if (!instance) {
+        return res.status(404).json({ message: "Task instance not found" });
+      }
+
+      // Verify the task is assigned to this portal user
+      if (instance.relatedPersonId !== relatedPersonId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(instance);
+    } catch (error) {
+      console.error("Error fetching portal task instance:", error);
+      res.status(500).json({ message: "Failed to fetch task instance" });
+    }
+  });
+
+  // PATCH /api/portal/task-instances/:id - Update responses (save progress)
+  app.patch("/api/portal/task-instances/:id", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const { responses } = req.body;
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!relatedPersonId) {
+        return res.status(400).json({ message: "Portal user has no associated person" });
+      }
+
+      // Verify the task is assigned to this portal user
+      const instance = await storage.getTaskInstanceFull(id);
+      if (!instance) {
+        return res.status(404).json({ message: "Task instance not found" });
+      }
+      if (instance.relatedPersonId !== relatedPersonId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Don't allow updates to submitted/reviewed tasks
+      if (instance.status === 'submitted' || instance.status === 'reviewed') {
+        return res.status(400).json({ message: "Cannot update a submitted task" });
+      }
+
+      // Update responses
+      for (const [questionId, value] of Object.entries(responses)) {
+        const existingResponse = await storage.getTaskResponseByQuestionAndInstance(questionId, id);
+        if (existingResponse) {
+          await storage.updateTaskResponse(existingResponse.id, { value });
+        } else {
+          await storage.createTaskResponse({
+            instanceId: id,
+            questionId,
+            value,
+          });
+        }
+      }
+
+      // Update status to in_progress if it was draft
+      if (instance.status === 'draft') {
+        await storage.updateTaskInstance(id, { status: 'in_progress' });
+      }
+
+      res.json({ message: "Progress saved successfully" });
+    } catch (error) {
+      console.error("Error updating task responses:", error);
+      res.status(500).json({ message: "Failed to save progress" });
+    }
+  });
+
+  // POST /api/portal/task-instances/:id/submit - Submit the task instance
+  app.post("/api/portal/task-instances/:id/submit", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const { responses } = req.body;
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!relatedPersonId) {
+        return res.status(400).json({ message: "Portal user has no associated person" });
+      }
+
+      // Verify the task is assigned to this portal user
+      const instance = await storage.getTaskInstanceFull(id);
+      if (!instance) {
+        return res.status(404).json({ message: "Task instance not found" });
+      }
+      if (instance.relatedPersonId !== relatedPersonId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Don't allow re-submission
+      if (instance.status === 'submitted' || instance.status === 'reviewed') {
+        return res.status(400).json({ message: "Task already submitted" });
+      }
+
+      // Save all responses
+      for (const [questionId, value] of Object.entries(responses)) {
+        const existingResponse = await storage.getTaskResponseByQuestionAndInstance(questionId, id);
+        if (existingResponse) {
+          await storage.updateTaskResponse(existingResponse.id, { value });
+        } else {
+          await storage.createTaskResponse({
+            instanceId: id,
+            questionId,
+            value,
+          });
+        }
+      }
+
+      // Update status to submitted
+      await storage.updateTaskInstance(id, { 
+        status: 'submitted',
+        submittedAt: new Date().toISOString(),
+      });
+
+      res.json({ message: "Task submitted successfully" });
+    } catch (error) {
+      console.error("Error submitting task:", error);
+      res.status(500).json({ message: "Failed to submit task" });
+    }
+  });
+
+  // POST /api/portal/task-instances/upload-url - Generate presigned URL for task file upload
+  app.post("/api/portal/task-instances/upload-url", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType, fileSize, instanceId, questionId } = req.body;
+      const portalUserId = req.portalUser.id;
+      const clientId = req.portalUser.clientId;
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!fileName || !fileType || !instanceId || !questionId) {
+        return res.status(400).json({ message: "fileName, fileType, instanceId, and questionId are required" });
+      }
+
+      // Verify the task is assigned to this portal user
+      const instance = await storage.getTaskInstanceById(instanceId);
+      if (!instance || instance.relatedPersonId !== relatedPersonId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Server-side validation
+      const validation = validateFileUpload(fileName, fileType, fileSize || 0, MAX_FILE_SIZE);
+      if (!validation.isValid) {
+        return res.status(400).json({ message: validation.error });
+      }
+
+      const timestamp = Date.now();
+      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const objectPath = `task-uploads/${clientId}/${instanceId}/${timestamp}-${sanitizedFileName}`;
+
+      const { Storage } = await import('@google-cloud/storage');
+      const gcs = new Storage();
+      const bucketName = process.env.GCS_BUCKET_NAME || '';
+      const bucket = gcs.bucket(bucketName);
+      const file = bucket.file(objectPath);
+
+      const [url] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 15 * 60 * 1000,
+        contentType: fileType,
+      });
+
+      res.json({
+        uploadUrl: url,
+        objectPath,
+        fileName,
+        fileType,
+        fileSize,
+        instanceId,
+        questionId
+      });
+    } catch (error) {
+      console.error("Error generating task file upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // POST /api/portal/task-instances/confirm-upload - Confirm task file upload and create document record
+  app.post("/api/portal/task-instances/confirm-upload", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const { objectPath, fileName, fileType, fileSize, instanceId, questionId } = req.body;
+      const portalUserId = req.portalUser.id;
+      const clientId = req.portalUser.clientId;
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!objectPath || !fileName || !fileType || !instanceId || !questionId) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Verify the task is assigned to this portal user
+      const instance = await storage.getTaskInstanceById(instanceId);
+      if (!instance || instance.relatedPersonId !== relatedPersonId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Find or create "Task Uploads" folder
+      let folderId = null;
+      const existingFolders = await storage.getDocumentFoldersByClientId(clientId);
+      const taskUploadsFolder = existingFolders.find((f: any) => f.name === 'Task Uploads');
+      
+      if (taskUploadsFolder) {
+        folderId = taskUploadsFolder.id;
+      } else {
+        const newFolder = await storage.createDocumentFolder({
+          clientId,
+          name: 'Task Uploads',
+          createdBy: null,
+          source: 'task_upload'
+        });
+        folderId = newFolder.id;
+      }
+
+      // Create document record
+      const document = await storage.createPortalDocument({
+        clientId,
+        clientPortalUserId: portalUserId,
+        folderId,
+        fileName,
+        fileType,
+        fileSize: fileSize || 0,
+        objectPath,
+        uploadName: fileName,
+        source: 'task_upload',
+        isPortalVisible: true,
+        uploadedBy: null
+      });
+
+      // Store document reference in task response
+      const existingResponse = await storage.getTaskResponseByQuestionAndInstance(questionId, instanceId);
+      const responseValue = JSON.stringify({
+        documentId: document.id,
+        fileName: fileName,
+        fileType: fileType,
+        fileSize: fileSize
+      });
+
+      if (existingResponse) {
+        await storage.updateTaskResponse(existingResponse.id, { value: responseValue });
+      } else {
+        await storage.createTaskResponse({
+          instanceId,
+          questionId,
+          value: responseValue,
+        });
+      }
+
+      res.json({ document, response: { documentId: document.id, fileName } });
+    } catch (error) {
+      console.error("Error confirming task file upload:", error);
+      res.status(500).json({ message: "Failed to confirm upload" });
+    }
+  });
+
   // Middleware to resolve effective user (for impersonation)
   const resolveEffectiveUser = async (req: any, res: any, next: any) => {
     try {

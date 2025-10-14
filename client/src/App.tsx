@@ -35,6 +35,8 @@ import TaskTemplateCategories from "@/pages/task-template-categories";
 import TaskTemplates from "@/pages/task-templates";
 import TaskTemplateEdit from "@/pages/task-template-edit";
 import TaskTemplateSectionQuestions from "@/pages/task-template-section-questions";
+import TaskSubmissions from "@/pages/task-submissions";
+import TaskSubmissionDetail from "@/pages/task-submission-detail";
 import Admin from "@/pages/admin";
 import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
@@ -45,6 +47,7 @@ import PortalThreadList from "@/pages/portal/PortalThreadList";
 import PortalThreadDetail from "@/pages/portal/PortalThreadDetail";
 import PortalNewThread from "@/pages/portal/PortalNewThread";
 import PortalTasks from "@/pages/portal/PortalTasks";
+import PortalTaskComplete from "@/pages/portal/PortalTaskComplete";
 import PortalProfile from "@/pages/portal/PortalProfile";
 import PortalDocuments from "@/pages/portal/PortalDocuments";
 import Messages from "@/pages/messages";
@@ -72,6 +75,7 @@ function Router() {
       <Route path="/portal/threads/new" component={PortalNewThread} />
       <Route path="/portal/threads/:id" component={PortalThreadDetail} />
       <Route path="/portal/threads" component={PortalThreadList} />
+      <Route path="/portal/tasks/:id" component={PortalTaskComplete} />
       <Route path="/portal/tasks" component={PortalTasks} />
       <Route path="/portal/documents" component={PortalDocuments} />
       <Route path="/portal/profile" component={PortalProfile} />
@@ -118,6 +122,8 @@ function Router() {
       <Route path="/task-templates/:templateId/sections/:sectionId/questions" component={TaskTemplateSectionQuestions} />
       <Route path="/task-templates/:id/edit" component={TaskTemplateEdit} />
       <Route path="/task-templates" component={TaskTemplates} />
+      <Route path="/task-submissions/:id" component={TaskSubmissionDetail} />
+      <Route path="/task-submissions" component={TaskSubmissions} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/import" component={DataImport} />
