@@ -4806,8 +4806,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const updateData = updateProjectTypeSchema.parse(req.body);
       
+      // Check if we're trying to activate the project type
+      if (updateData.active === true) {
+        // Verify that at least one stage has canBeFinalStage = true
+        const stages = await storage.getKanbanStagesByProjectTypeId(req.params.id);
+        const hasFinalStage = stages.some(stage => stage.canBeFinalStage === true);
+        
+        if (!hasFinalStage) {
+          return res.status(400).json({ 
+            message: "Cannot activate project type without at least one final stage. Please mark at least one stage as 'Can be final Stage' before activating.",
+            code: "NO_FINAL_STAGE"
+          });
+        }
+      }
+      
       // Check if we're trying to deactivate the project type
-      if (updateData.active !== undefined && updateData.active === false) {
+      if (updateData.active === false) {
         // Get the current project type to check if it's currently active
         const allProjectTypes = await storage.getAllProjectTypes();
         const projectType = allProjectTypes.find(pt => pt.id === req.params.id);
