@@ -43,10 +43,12 @@ interface SortableSection extends TaskTemplateSection {
 
 function SortableSectionCard({ 
   section, 
+  templateId,
   onEdit, 
   onDelete 
 }: { 
   section: SortableSection; 
+  templateId: string;
   onEdit: () => void; 
   onDelete: () => void;
 }) {
@@ -90,6 +92,15 @@ function SortableSectionCard({
           )}
         </div>
         <div className="flex space-x-1">
+          <Link href={`/task-templates/${templateId}/sections/${section.id}/questions`}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid={`button-manage-questions-${section.id}`}
+            >
+              Manage Questions
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"
@@ -626,6 +637,7 @@ export default function TaskTemplateEditPage() {
                           <SortableSectionCard
                             key={section.id}
                             section={section}
+                            templateId={template.id}
                             onEdit={() => setEditingSection(section)}
                             onDelete={() => setDeletingSection(section)}
                           />

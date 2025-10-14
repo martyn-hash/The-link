@@ -34,6 +34,7 @@ import Tags from "@/pages/tags";
 import TaskTemplateCategories from "@/pages/task-template-categories";
 import TaskTemplates from "@/pages/task-templates";
 import TaskTemplateEdit from "@/pages/task-template-edit";
+import TaskTemplateSectionQuestions from "@/pages/task-template-section-questions";
 import Admin from "@/pages/admin";
 import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
@@ -114,6 +115,7 @@ function Router() {
       <Route path="/companies" component={Companies} />
       <Route path="/tags" component={Tags} />
       <Route path="/task-template-categories" component={TaskTemplateCategories} />
+      <Route path="/task-templates/:templateId/sections/:sectionId/questions" component={TaskTemplateSectionQuestions} />
       <Route path="/task-templates/:id/edit" component={TaskTemplateEdit} />
       <Route path="/task-templates" component={TaskTemplates} />
       <Route path="/upload" component={Upload} />
