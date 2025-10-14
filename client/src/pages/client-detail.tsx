@@ -6147,6 +6147,10 @@ export default function ClientDetail() {
   const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
+  const [isNewRequestDialogOpen, setIsNewRequestDialogOpen] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [selectedPersonId, setSelectedPersonId] = useState<string>("");
   
   // Track client view activity when component mounts
   useEffect(() => {
@@ -6354,6 +6358,54 @@ export default function ClientDetail() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  // Fetch task instances for this client
+  const { data: taskInstances, isLoading: taskInstancesLoading } = useQuery<any[]>({
+    queryKey: [`/api/task-instances/client/${id}`],
+    enabled: !!id && !!client,
+  });
+
+  // Fetch task template categories
+  const { data: taskCategories } = useQuery<any[]>({
+    queryKey: ['/api/task-template-categories'],
+    enabled: isNewRequestDialogOpen,
+  });
+
+  // Fetch task templates for selected category
+  const { data: taskTemplates } = useQuery<any[]>({
+    queryKey: ['/api/task-templates', { categoryId: selectedCategoryId }],
+    enabled: isNewRequestDialogOpen && !!selectedCategoryId,
+  });
+
+  // Mutation for creating task instance
+  const createTaskInstanceMutation = useMutation({
+    mutationFn: async (data: { templateId: string; relatedPersonId: string }) => {
+      return await apiRequest("POST", "/api/task-instances", {
+        templateId: data.templateId,
+        clientId: id,
+        relatedPersonId: data.relatedPersonId,
+        status: "draft",
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Client request created successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/task-instances/client/${id}`] });
+      setIsNewRequestDialogOpen(false);
+      setSelectedCategoryId("");
+      setSelectedTemplateId("");
+      setSelectedPersonId("");
+      setActiveTab("tasks"); // Switch to tasks tab to show the new request
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create client request",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Mutation for updating person data
   const updatePersonMutation = useMutation({
@@ -7765,6 +7817,88 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="tasks" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Client Requests
+                  </CardTitle>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setIsNewRequestDialogOpen(true)}
+                    data-testid="button-new-client-request"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Client Request
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {taskInstancesLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : !taskInstances || taskInstances.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No client requests yet. Click "New Client Request" to create one.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {taskInstances.map((instance: any) => (
+                      <div 
+                        key={instance.id} 
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
+                        data-testid={`task-instance-${instance.id}`}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium" data-testid={`task-name-${instance.id}`}>
+                            {instance.template?.name || 'Untitled Request'}
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Assigned to: {instance.relatedPerson ? formatPersonName(instance.relatedPerson.fullName) : 'Unknown'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Created: {formatDate(instance.createdAt)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={
+                              instance.status === 'submitted' ? 'default' : 
+                              instance.status === 'reviewed' ? 'default' : 
+                              'outline'
+                            }
+                            data-testid={`badge-status-${instance.id}`}
+                          >
+                            {instance.status}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              // TODO: Navigate to task instance detail view
+                              toast({
+                                title: "View Request",
+                                description: "Task instance detail view coming soon",
+                              });
+                            }}
+                            data-testid={`button-view-task-${instance.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="risk" className="space-y-6 mt-6">
             <RiskAssessmentTab clientId={id} />
           </TabsContent>
@@ -7815,6 +7949,109 @@ export default function ClientDetail() {
         }}
         isSaving={createPersonMutation.isPending}
       />
+
+      {/* New Client Request Dialog */}
+      <Dialog open={isNewRequestDialogOpen} onOpenChange={setIsNewRequestDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Client Request</DialogTitle>
+            <DialogDescription>
+              Select a template and assign it to a related person
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Category Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Category</label>
+              <Select 
+                value={selectedCategoryId} 
+                onValueChange={(value) => {
+                  setSelectedCategoryId(value);
+                  setSelectedTemplateId(""); // Reset template when category changes
+                }}
+              >
+                <SelectTrigger data-testid="select-category">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(taskCategories || []).map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Template Selection */}
+            {selectedCategoryId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Template</label>
+                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger data-testid="select-template">
+                    <SelectValue placeholder="Select a template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(taskTemplates || []).map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Related Person Selection */}
+            {selectedTemplateId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Assign to Related Person</label>
+                <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
+                  <SelectTrigger data-testid="select-person">
+                    <SelectValue placeholder="Select a person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(relatedPeople || []).map((cp: any) => (
+                      <SelectItem key={cp.person.id} value={cp.person.id}>
+                        {formatPersonName(cp.person.fullName)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsNewRequestDialogOpen(false);
+                setSelectedCategoryId("");
+                setSelectedTemplateId("");
+                setSelectedPersonId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedTemplateId && selectedPersonId) {
+                  createTaskInstanceMutation.mutate({
+                    templateId: selectedTemplateId,
+                    relatedPersonId: selectedPersonId,
+                  });
+                }
+              }}
+              disabled={!selectedTemplateId || !selectedPersonId || createTaskInstanceMutation.isPending}
+              data-testid="button-create-request"
+            >
+              {createTaskInstanceMutation.isPending ? "Creating..." : "Create Request"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile Bottom Navigation */}
       {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
