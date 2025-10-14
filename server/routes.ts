@@ -4022,6 +4022,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not authorized to complete this project" });
       }
 
+      // Verify that the current stage allows project completion
+      if (project.projectTypeId && project.currentStatus) {
+        const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+        const currentStage = stages.find(stage => stage.name === project.currentStatus);
+        
+        // If current stage not found, it may have been deleted or renamed - prevent completion
+        if (!currentStage) {
+          console.warn(`Project ${project.id} has currentStatus '${project.currentStatus}' which doesn't match any stage in project type ${project.projectTypeId}`);
+          return res.status(400).json({ 
+            message: `Cannot complete project: the current stage '${project.currentStatus}' is not configured in the project type. Please update the project to a valid stage before completing.`,
+            code: "INVALID_STAGE_CONFIGURATION"
+          });
+        }
+        
+        // If stage exists but doesn't allow completion, prevent it
+        if (!currentStage.canBeFinalStage) {
+          return res.status(400).json({ 
+            message: `This project cannot be completed at the current stage ('${currentStage.name}'). Please move the project to an appropriate final stage before marking it as complete.`,
+            code: "INVALID_COMPLETION_STAGE",
+            currentStage: currentStage.name
+          });
+        }
+      }
+
       // Update the project: mark as completed, archived, and inactive
       // Set currentStatus to "Archived" to maintain consistency
       const updatedProject = await storage.updateProject(req.params.id, {
