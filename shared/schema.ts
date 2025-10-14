@@ -433,6 +433,7 @@ export const kanbanStages = pgTable("kanban_stages", {
   maxInstanceTime: integer("max_instance_time"), // Maximum hours for a single visit to this stage (optional)
   maxTotalTime: integer("max_total_time"), // Maximum cumulative hours across all visits to this stage (optional)
   stageApprovalId: varchar("stage_approval_id").references(() => stageApprovals.id, { onDelete: "set null" }), // Optional stage approval
+  canBeFinalStage: boolean("can_be_final_stage").default(false), // Whether projects can be marked as complete at this stage
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_kanban_stages_project_type_id").on(table.projectTypeId),
