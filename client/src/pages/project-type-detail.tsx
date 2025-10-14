@@ -41,6 +41,7 @@ interface EditingStage {
   maxInstanceTime?: number;
   maxTotalTime?: number;
   stageApprovalId?: string;
+  canBeFinalStage?: boolean;
 }
 
 interface EditingReason {
@@ -80,6 +81,7 @@ const DEFAULT_STAGE: EditingStage = {
   assignedRole: "client_manager",
   order: 0,
   color: "#6b7280",
+  canBeFinalStage: false,
 };
 
 const DEFAULT_REASON: EditingReason = {
@@ -1364,6 +1366,11 @@ export default function ProjectTypeDetail() {
                           <Badge variant="secondary" data-testid={`badge-stage-role-${stage.id}`}>
                             {getStageRoleLabel(stage)}
                           </Badge>
+                          {(stage as any).canBeFinalStage && (
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700" data-testid={`badge-final-stage-${stage.id}`}>
+                              Final Stage
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center space-x-2">
                           <Button
@@ -1379,7 +1386,8 @@ export default function ProjectTypeDetail() {
                                 order: stage.order,
                                 color: stage.color || "#6b7280",
                                 maxInstanceTime: stage.maxInstanceTime || undefined,
-                                maxTotalTime: stage.maxTotalTime || undefined
+                                maxTotalTime: stage.maxTotalTime || undefined,
+                                canBeFinalStage: (stage as any).canBeFinalStage || false
                               });
                               
                               // Load existing mappings for this stage
@@ -1579,6 +1587,29 @@ export default function ProjectTypeDetail() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    {/* Can be final Stage */}
+                    <div className="space-y-2 col-span-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="can-be-final-stage"
+                          checked={editingStage?.canBeFinalStage || false}
+                          onCheckedChange={(checked) => {
+                            setEditingStage(prev => ({ 
+                              ...prev!, 
+                              canBeFinalStage: checked === true 
+                            }));
+                          }}
+                          data-testid="checkbox-can-be-final-stage"
+                        />
+                        <Label htmlFor="can-be-final-stage" className="text-sm font-normal">
+                          Can be final Stage
+                        </Label>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Allow projects to be marked as complete when in this stage
+                      </p>
                     </div>
 
                     {/* Change Reasons Selection */}
