@@ -266,6 +266,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               <TableHead>Timestamp</TableHead>
               <TableHead>From Stage</TableHead>
               <TableHead>To Stage</TableHead>
+              <TableHead>Change Reason</TableHead>
               <TableHead>Assigned To</TableHead>
               <TableHead>Changed By</TableHead>
               <TableHead>Time in Stage</TableHead>
@@ -302,6 +303,15 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     data-testid={`badge-to-status-${entry.id}`}
                   >
                     {formatStageName(entry.toStatus)}
+                  </Badge>
+                </TableCell>
+                <TableCell data-testid={`cell-change-reason-${entry.id}`}>
+                  <Badge 
+                    variant="secondary" 
+                    className="text-xs"
+                    data-testid={`badge-change-reason-${entry.id}`}
+                  >
+                    {entry.changeReason ? formatChangeReason(entry.changeReason) : 'Not specified'}
                   </Badge>
                 </TableCell>
                 <TableCell data-testid={`cell-assignee-${entry.id}`}>
