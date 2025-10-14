@@ -41,6 +41,8 @@ export default function ProjectDetail() {
   const { toast } = useToast();
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completionType, setCompletionType] = useState<'completed_successfully' | 'completed_unsuccessfully' | null>(null);
+  const [showStageErrorDialog, setShowStageErrorDialog] = useState(false);
+  const [stageErrorMessage, setStageErrorMessage] = useState<{ currentStage: string; validStages: string[] } | null>(null);
 
   // Fetch single project data
   const { 
@@ -95,12 +97,26 @@ export default function ProjectDetail() {
       setShowCompleteDialog(false);
       setCompletionType(null);
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to complete project",
-        description: error.message,
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      // Handle the specific case of trying to complete at non-final stage
+      if (error.code === 'INVALID_COMPLETION_STAGE') {
+        // Find all final stages for a user-friendly message
+        const finalStages = stages?.filter((s: any) => s.canBeFinalStage === true) || [];
+        setStageErrorMessage({
+          currentStage: project?.currentStatus || 'Unknown',
+          validStages: finalStages.map((s: any) => s.name)
+        });
+        setShowStageErrorDialog(true);
+        setShowCompleteDialog(false);
+        setCompletionType(null);
+      } else {
+        // Show generic error for other cases
+        toast({
+          title: "Failed to complete project",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive",
+        });
+      }
     }
   });
 
@@ -492,6 +508,55 @@ export default function ProjectDetail() {
                 : 'bg-destructive hover:bg-destructive/90'}
             >
               {completeMutation.isPending ? 'Processing...' : 'Confirm'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Stage Requirement Error Dialog */}
+      <AlertDialog open={showStageErrorDialog} onOpenChange={setShowStageErrorDialog}>
+        <AlertDialogContent data-testid="dialog-stage-error" className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900">
+                <Info className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <AlertDialogTitle className="text-xl">Project Cannot Be Completed Yet</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-4 text-base">
+              <p>
+                This project is currently at the <strong className="text-foreground">"{stageErrorMessage?.currentStage}"</strong> stage, 
+                which doesn't allow completion.
+              </p>
+              <p>
+                To complete this project, please first move it to one of the following stages:
+              </p>
+              {stageErrorMessage && stageErrorMessage.validStages.length > 0 ? (
+                <ul className="space-y-2 ml-4">
+                  {stageErrorMessage.validStages.map((stageName, index) => (
+                    <li key={index} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                      <span className="text-foreground font-medium">{stageName}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-orange-600 dark:text-orange-400">
+                  No completion stages are configured for this project type. Please contact your administrator.
+                </p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setShowStageErrorDialog(false);
+                setStageErrorMessage(null);
+              }}
+              data-testid="button-close-stage-error"
+              className="bg-primary hover:bg-primary/90"
+            >
+              Got it
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
