@@ -127,10 +127,13 @@ function compareDateOnly(date1: Date, date2: Date): boolean {
 }
 
 /**
- * Check if a service is due today
+ * Check if a service is due today or overdue
+ * Returns true for services scheduled for today OR any past date
  */
 export function isServiceDueToday(nextStartDate: Date, targetDate: Date = new Date()): boolean {
-  return compareDateOnly(nextStartDate, targetDate);
+  const serviceDateStr = nextStartDate.toISOString().slice(0, 10);
+  const targetDateStr = targetDate.toISOString().slice(0, 10);
+  return serviceDateStr <= targetDateStr; // On or before target date
 }
 
 /**

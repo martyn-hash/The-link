@@ -176,10 +176,16 @@ export async function findServicesDue(
 ): Promise<DueService[]> {
   const dueServices: DueService[] = [];
   
+  console.log(`[Schedule Calculator] findServicesDue called with ${clientServices.length} client services and ${peopleServices.length} people services`);
+  console.log(`[Schedule Calculator] Target date: ${formatDate(targetDate)}`);
+  
   // Process client services
   for (const clientService of clientServices) {
+    console.log(`[Schedule Calculator] Checking client service ${clientService.id}, nextStartDate: ${clientService.nextStartDate ? formatDate(clientService.nextStartDate) : 'NULL'}, isActive: ${clientService.isActive}`);
+    
     // Skip inactive services
     if (clientService.isActive === false) {
+      console.log(`[Schedule Calculator] Skipping inactive service ${clientService.id}`);
       continue;
     }
     
