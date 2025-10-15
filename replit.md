@@ -63,6 +63,15 @@ The application is built with a modern tech stack designed for scalability and p
 
 ## Recent Changes
 
+### UI Consistency & Data View Pattern (October 15, 2025)
+- **Data View Guidelines**: Created comprehensive documentation (`data_view_guidelines.md`) for table-based data view pattern used throughout the application
+- **Task Templates UI Refactor**: Converted `/task-templates` from card-based to table-based layout for consistency:
+  - Table columns: Template Name, Category, Number of Questions, Status, Actions
+  - Grouped by category with section headers
+  - Maintains all functionality (toggle status, duplicate, edit, delete)
+  - Uses shadcn Table components with wouter Link
+- **Bug Fix**: Fixed runtime error "Link is not defined" by restoring Link import from wouter in task-templates.tsx
+
 ### Task Templates Feature Implementation (October 14-15, 2025)
 Complete implementation of dynamic form templates system:
 - **Database Schema**: 7 tables (`task_template_categories`, `task_templates`, `task_template_sections`, `task_template_questions`, `task_instances`, `task_responses`, plus "Task Uploads" folder integration)
