@@ -9321,18 +9321,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
 
-      // Verify person exists if provided
+      // Verify person exists if provided and get their portal user if they have one
+      const taskData: any = {
+        ...validationResult.data,
+        assignedBy: req.user.id,
+      };
+      
       if (personId) {
         const person = await storage.getPersonById(personId);
         if (!person) {
           return res.status(404).json({ message: "Person not found" });
         }
+        
+        // Check if this person has a portal user account
+        const portalUser = await storage.getClientPortalUserByPersonId(personId);
+        if (portalUser) {
+          taskData.clientPortalUserId = portalUser.id;
+        }
       }
 
-      const instance = await storage.createTaskInstance({
-        ...validationResult.data,
-        assignedBy: req.user.id,
-      });
+      const instance = await storage.createTaskInstance(taskData);
 
       res.status(201).json(instance);
     } catch (error) {

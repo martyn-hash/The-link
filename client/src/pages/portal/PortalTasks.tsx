@@ -9,10 +9,11 @@ import { CheckSquare, Clock, FileText, CheckCircle, Eye } from 'lucide-react';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import PortalBottomNav from '@/components/portal-bottom-nav';
 import { Skeleton } from '@/components/ui/skeleton';
+import { portalRequest } from '@/lib/portalApi';
 
 interface TaskInstance {
   id: string;
-  status: 'draft' | 'in_progress' | 'submitted' | 'reviewed';
+  status: 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'cancelled';
   createdAt: string;
   submittedAt?: string;
   template: {
@@ -40,6 +41,7 @@ export default function PortalTasks() {
   // Fetch task instances for the logged-in portal user
   const { data: taskInstances, isLoading, error } = useQuery<TaskInstance[]>({
     queryKey: ['/api/portal/task-instances'],
+    queryFn: () => portalRequest('GET', '/api/portal/task-instances'),
     enabled: isAuthenticated && !!user,
     retry: 2,
   });
@@ -57,14 +59,16 @@ export default function PortalTasks() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft':
-        return <Badge variant="outline" data-testid={`badge-status-draft`}>Draft</Badge>;
+      case 'not_started':
+        return <Badge variant="outline" data-testid={`badge-status-not-started`}>Not Started</Badge>;
       case 'in_progress':
         return <Badge variant="secondary" data-testid={`badge-status-in-progress`}>In Progress</Badge>;
       case 'submitted':
         return <Badge variant="default" data-testid={`badge-status-submitted`}>Submitted</Badge>;
-      case 'reviewed':
-        return <Badge variant="default" className="bg-green-600" data-testid={`badge-status-reviewed`}>Reviewed</Badge>;
+      case 'approved':
+        return <Badge variant="default" className="bg-green-600" data-testid={`badge-status-approved`}>Approved</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive" data-testid={`badge-status-cancelled`}>Cancelled</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -72,14 +76,16 @@ export default function PortalTasks() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'draft':
+      case 'not_started':
         return <FileText className="h-5 w-5 text-gray-400" />;
       case 'in_progress':
         return <Clock className="h-5 w-5 text-blue-500" />;
       case 'submitted':
         return <CheckSquare className="h-5 w-5 text-green-500" />;
-      case 'reviewed':
+      case 'approved':
         return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'cancelled':
+        return <FileText className="h-5 w-5 text-red-500" />;
       default:
         return <FileText className="h-5 w-5 text-gray-400" />;
     }
@@ -97,13 +103,13 @@ export default function PortalTasks() {
   // Filter tasks by status
   const filteredTasks = taskInstances?.filter(task => {
     if (activeTab === 'all') return true;
-    if (activeTab === 'pending') return task.status === 'draft' || task.status === 'in_progress';
-    if (activeTab === 'completed') return task.status === 'submitted' || task.status === 'reviewed';
+    if (activeTab === 'pending') return task.status === 'not_started' || task.status === 'in_progress';
+    if (activeTab === 'completed') return task.status === 'submitted' || task.status === 'approved';
     return task.status === activeTab;
   }) || [];
 
-  const pendingCount = taskInstances?.filter(t => t.status === 'draft' || t.status === 'in_progress').length || 0;
-  const completedCount = taskInstances?.filter(t => t.status === 'submitted' || t.status === 'reviewed').length || 0;
+  const pendingCount = taskInstances?.filter(t => t.status === 'not_started' || t.status === 'in_progress').length || 0;
+  const completedCount = taskInstances?.filter(t => t.status === 'submitted' || t.status === 'approved').length || 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
@@ -228,13 +234,13 @@ export default function PortalTasks() {
                     <CardContent>
                       <div className="flex justify-end">
                         <Button
-                          variant={task.status === 'submitted' || task.status === 'reviewed' ? 'outline' : 'default'}
+                          variant={task.status === 'submitted' || task.status === 'approved' ? 'outline' : 'default'}
                           size="sm"
                           onClick={() => setLocation(`/portal/tasks/${task.id}`)}
                           data-testid={`button-view-task-${task.id}`}
                         >
                           <Eye className="h-4 w-4 mr-2" />
-                          {task.status === 'submitted' || task.status === 'reviewed' ? 'View' : 'Complete'}
+                          {task.status === 'submitted' || task.status === 'approved' ? 'View' : 'Complete'}
                         </Button>
                       </div>
                     </CardContent>

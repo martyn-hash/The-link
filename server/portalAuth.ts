@@ -100,7 +100,8 @@ export async function authenticatePortal(
     req.portalUser = {
       id: portalUser.id,
       clientId: portalUser.clientId,
-      email: portalUser.email
+      email: portalUser.email,
+      relatedPersonId: portalUser.personId || null
     };
 
     next();
