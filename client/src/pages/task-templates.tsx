@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Edit, Trash2, Copy, Eye, CheckCircle, XCircle, ClipboardList, Settings } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -201,6 +201,7 @@ function TemplateCard({ template }: { template: TemplateWithDetails }) {
 export default function TaskTemplatesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
 
@@ -249,16 +250,16 @@ export default function TaskTemplatesPage() {
         status: "draft",
       });
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       toast({
         title: "Success",
         description: "Template created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
       setShowCreateDialog(false);
       setNewTemplateName("");
       // Navigate to edit page
-      window.location.href = `/task-templates/${data.id}/edit`;
+      navigate(`/task-templates/${data.id}/edit`);
     },
     onError: (error) => {
       toast({

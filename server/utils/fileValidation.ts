@@ -26,6 +26,8 @@ export const ALLOWED_FILE_TYPES = {
     'audio/webm',
     'audio/mpeg',
     'audio/mp3',
+    'audio/mp4',      // MP4 audio (Safari, Chrome, Firefox, Edge)
+    'audio/aac',      // AAC audio (Safari fallback)
     'audio/wav',
     'audio/ogg',
   ],

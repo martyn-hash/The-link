@@ -356,8 +356,8 @@ export default function Messages() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { 
-        mimeType: 'audio/webm;codecs=opus'
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/mp4'
       });
       
       const audioChunks: Blob[] = [];
@@ -372,7 +372,7 @@ export default function Messages() {
       recorder.onstop = () => {
         // Only create audio blob if not cancelled
         if (!isCancelledRef.current && audioChunks.length > 0) {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const audioBlob = new Blob(audioChunks, { type: 'audio/mp4' });
           setRecordedAudio(audioBlob);
           const url = URL.createObjectURL(audioBlob);
           setAudioUrl(url);
@@ -460,7 +460,7 @@ export default function Messages() {
       setUploadingFiles(true);
 
       // Convert blob to file-like object for browser compatibility
-      const fileName = `voice-note-${Date.now()}.webm`;
+      const fileName = `voice-note-${Date.now()}.mp4`;
 
       // Create a File-like object that works in all browsers
       // Some browsers don't support the File constructor, so we extend the Blob

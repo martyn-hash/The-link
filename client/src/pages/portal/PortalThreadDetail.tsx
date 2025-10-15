@@ -216,7 +216,7 @@ export default function PortalThreadDetail() {
       })));
 
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: 'audio/mp4'
       });
       console.log('[Voice Note] MediaRecorder created with state:', mediaRecorder.state);
 
@@ -236,7 +236,7 @@ export default function PortalThreadDetail() {
 
         // Only create audio blob if not cancelled
         if (!isCancelledRef.current && audioChunksRef.current.length > 0) {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp4' });
           console.log('[Voice Note] Created blob, size:', audioBlob.size, 'type:', audioBlob.type);
           setRecordedAudio(audioBlob);
           const url = URL.createObjectURL(audioBlob);
@@ -348,7 +348,7 @@ export default function PortalThreadDetail() {
       setUploading(true);
 
       // Convert blob to file-like object for browser compatibility
-      const fileName = `voice-note-${Date.now()}.webm`;
+      const fileName = `voice-note-${Date.now()}.mp4`;
       console.log('[Voice Note] Creating File-like object with name:', fileName);
 
       // Create a File-like object that works in all browsers
