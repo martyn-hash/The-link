@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,8 +8,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Copy, Eye, CheckCircle, XCircle, ClipboardList, Settings } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Plus, Edit, Trash2, Copy, CheckCircle, XCircle, ClipboardList, Settings } from "lucide-react";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,9 +34,10 @@ const templateFormSchema = z.object({
 
 type TemplateFormData = z.infer<typeof templateFormSchema>;
 
-function TemplateCard({ template }: { template: TemplateWithDetails }) {
+function TemplateRow({ template }: { template: TemplateWithDetails }) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [, navigate] = useLocation();
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -81,7 +83,6 @@ function TemplateCard({ template }: { template: TemplateWithDetails }) {
 
   const duplicateMutation = useMutation({
     mutationFn: async () => {
-      // Create a duplicate template
       return apiRequest("POST", "/api/task-templates", {
         name: `${template.name} (Copy)`,
         description: template.description,
@@ -107,80 +108,81 @@ function TemplateCard({ template }: { template: TemplateWithDetails }) {
 
   return (
     <>
-      <Card className="hover:shadow-md transition" data-testid={`card-template-${template.id}`}>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center space-x-2 mb-2">
-                <h3 className="text-lg font-semibold" data-testid={`text-template-name-${template.id}`}>
-                  {template.name}
-                </h3>
-                <Badge
-                  variant={template.status === "active" ? "default" : "secondary"}
-                  data-testid={`badge-template-status-${template.id}`}
-                >
-                  {template.status}
-                </Badge>
-              </div>
-              {template.description && (
-                <p className="text-sm text-muted-foreground mb-3" data-testid={`text-template-description-${template.id}`}>
-                  {template.description}
-                </p>
+      <TableRow data-testid={`row-template-${template.id}`}>
+        <TableCell className="font-medium">
+          <span data-testid={`text-template-name-${template.id}`}>
+            {template.name}
+          </span>
+        </TableCell>
+        
+        <TableCell>
+          <span className="text-sm" data-testid={`text-template-category-${template.id}`}>
+            {template.category?.name || '-'}
+          </span>
+        </TableCell>
+        
+        <TableCell>
+          <span className="text-sm" data-testid={`text-template-question-count-${template.id}`}>
+            {template.questionCount} {template.questionCount === 1 ? 'question' : 'questions'}
+          </span>
+        </TableCell>
+        
+        <TableCell>
+          <Badge
+            variant={template.status === "active" ? "default" : "secondary"}
+            data-testid={`badge-template-status-${template.id}`}
+          >
+            {template.status}
+          </Badge>
+        </TableCell>
+        
+        <TableCell className="text-right">
+          <div className="flex items-center justify-end space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleStatusMutation.mutate()}
+              disabled={toggleStatusMutation.isPending}
+              data-testid={`button-toggle-status-${template.id}`}
+              title={template.status === "active" ? "Deactivate" : "Activate"}
+            >
+              {template.status === "active" ? (
+                <XCircle className="w-4 h-4 text-orange-500" />
+              ) : (
+                <CheckCircle className="w-4 h-4 text-green-500" />
               )}
-              <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                {template.category && (
-                  <span data-testid={`text-template-category-${template.id}`}>
-                    Category: {template.category.name}
-                  </span>
-                )}
-                <span data-testid={`text-template-question-count-${template.id}`}>
-                  {template.questionCount} {template.questionCount === 1 ? 'question' : 'questions'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 ml-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleStatusMutation.mutate()}
-                disabled={toggleStatusMutation.isPending}
-                data-testid={`button-toggle-status-${template.id}`}
-                title={template.status === "active" ? "Deactivate" : "Activate"}
-              >
-                {template.status === "active" ? (
-                  <XCircle className="w-4 h-4 text-orange-500" />
-                ) : (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => duplicateMutation.mutate()}
-                disabled={duplicateMutation.isPending}
-                data-testid={`button-duplicate-${template.id}`}
-                title="Duplicate"
-              >
-                <Copy className="w-4 h-4" />
-              </Button>
-              <Link href={`/task-templates/${template.id}/edit`}>
-                <Button variant="ghost" size="sm" data-testid={`button-edit-${template.id}`} title="Edit">
-                  <Edit className="w-4 h-4" />
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDeleteDialogOpen(true)}
-                data-testid={`button-delete-${template.id}`}
-                title="Delete"
-              >
-                <Trash2 className="w-4 h-4 text-red-500" />
-              </Button>
-            </div>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => duplicateMutation.mutate()}
+              disabled={duplicateMutation.isPending}
+              data-testid={`button-duplicate-${template.id}`}
+              title="Duplicate"
+            >
+              <Copy className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/task-templates/${template.id}/edit`)}
+              data-testid={`button-edit-${template.id}`}
+              title="Edit"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(true)}
+              data-testid={`button-delete-${template.id}`}
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4 text-red-500" />
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </TableCell>
+      </TableRow>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
@@ -387,10 +389,23 @@ export default function TaskTemplatesPage() {
                   <h2 className="text-xl font-semibold mb-4" data-testid={`text-category-title-${category.id}`}>
                     {category.name}
                   </h2>
-                  <div className="space-y-3">
-                    {categoryTemplates.map(template => (
-                      <TemplateCard key={template.id} template={template} />
-                    ))}
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Template Name</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Number of Questions</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {categoryTemplates.map(template => (
+                          <TemplateRow key={template.id} template={template} />
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               );
@@ -400,10 +415,23 @@ export default function TaskTemplatesPage() {
             {uncategorized.length > 0 && (
               <div data-testid="section-uncategorized">
                 <h2 className="text-xl font-semibold mb-4">Uncategorized</h2>
-                <div className="space-y-3">
-                  {uncategorized.map(template => (
-                    <TemplateCard key={template.id} template={template} />
-                  ))}
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Template Name</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Number of Questions</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {uncategorized.map(template => (
+                        <TemplateRow key={template.id} template={template} />
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
