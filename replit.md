@@ -78,6 +78,11 @@ Complete implementation of dynamic form templates system:
     - Edit questions inline with pre-populated dialog
     - Delete questions with inline confirmation
     - Section reordering via drag-and-drop
+    - **Question reordering within sections** (October 15, 2025):
+      - Drag questions to reorder within their parent section
+      - Visual drag handles with opacity feedback during drag
+      - Robust error handling with automatic rollback on failed API calls
+      - Nested DndContext for independent question/section drag operations
     - Template header with compact info display and edit button
     - Fixed: Question duplication bug with mutation-based submission and loading states
   - Question types: short_text, long_text, email, number, date, single_choice, multi_choice, dropdown, yes_no, file_upload
