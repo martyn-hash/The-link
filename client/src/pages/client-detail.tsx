@@ -6378,12 +6378,12 @@ export default function ClientDetail() {
 
   // Mutation for creating task instance
   const createTaskInstanceMutation = useMutation({
-    mutationFn: async (data: { templateId: string; relatedPersonId: string }) => {
+    mutationFn: async (data: { templateId: string; personId: string }) => {
       return await apiRequest("POST", "/api/task-instances", {
         templateId: data.templateId,
         clientId: id,
-        relatedPersonId: data.relatedPersonId,
-        status: "draft",
+        personId: data.personId,
+        status: "not_started",
       });
     },
     onSuccess: () => {
@@ -8040,7 +8040,7 @@ export default function ClientDetail() {
                 if (selectedTemplateId && selectedPersonId) {
                   createTaskInstanceMutation.mutate({
                     templateId: selectedTemplateId,
-                    relatedPersonId: selectedPersonId,
+                    personId: selectedPersonId,
                   });
                 }
               }}
