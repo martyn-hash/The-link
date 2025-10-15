@@ -63,6 +63,23 @@ The application is built with a modern tech stack designed for scalability and p
 
 ## Recent Changes
 
+### Portal Task Completion Feature (October 15, 2025)
+- **Bug Fixes & Implementation**: Fixed critical bugs preventing portal users from viewing and completing task instances:
+  - Backend: Corrected storage function names (`getTaskInstanceWithFullData`, `getTaskInstanceResponsesByTaskInstanceId`, `saveTaskInstanceResponse`, `updateTaskInstanceResponse`)
+  - Backend: Fixed field checks from `relatedPersonId` to `personId` throughout portal routes
+  - Frontend: Updated all portal endpoints to use `portalRequest()` with JWT authentication
+  - Frontend: Fixed question type mapping to match database enum values (short_text, long_text, single_choice, multi_choice, yes_no, file_upload)
+  - Frontend: Fixed interface field name from `type` to `questionType` to match API response
+  - Frontend: Added client name display to task detail page header
+  - Backend: Fixed timestamp serialization for `submittedAt` field (use Date object instead of ISO string)
+- **Portal Task Flow**: Portal users can now successfully:
+  - View assigned task instances on `/portal/tasks`
+  - Access task detail pages with proper rendering of all question types
+  - Fill in form responses (text, date, yes/no, radio, checkboxes, file uploads)
+  - Save progress (PATCH with responseValue stored as text)
+  - Submit completed tasks (POST with status update and timestamp)
+- **Testing**: Comprehensive end-to-end test verified full workflow from login to task submission with database confirmation
+
 ### UI Consistency & Data View Pattern (October 15, 2025)
 - **Data View Guidelines**: Created comprehensive documentation (`data_view_guidelines.md`) for table-based data view pattern used throughout the application
 - **Task Templates UI Refactor**: Converted `/task-templates` from card-based to table-based layout for consistency:

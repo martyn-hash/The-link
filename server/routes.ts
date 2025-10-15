@@ -926,7 +926,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Portal user has no associated person" });
       }
 
-      const instances = await storage.getTaskInstancesByPerson(relatedPersonId);
+      const instances = await storage.getTaskInstancesByPersonId(relatedPersonId);
       res.json(instances);
     } catch (error) {
       console.error("Error fetching portal task instances:", error);
@@ -945,14 +945,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Portal user has no associated person" });
       }
 
-      const instance = await storage.getTaskInstanceFull(id);
+      const instance = await storage.getTaskInstanceWithFullData(id);
       
       if (!instance) {
         return res.status(404).json({ message: "Task instance not found" });
       }
 
       // Verify the task is assigned to this portal user
-      if (instance.relatedPersonId !== relatedPersonId) {
+      if (instance.personId !== relatedPersonId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -975,11 +975,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify the task is assigned to this portal user
-      const instance = await storage.getTaskInstanceFull(id);
+      const instance = await storage.getTaskInstanceWithFullData(id);
       if (!instance) {
         return res.status(404).json({ message: "Task instance not found" });
       }
-      if (instance.relatedPersonId !== relatedPersonId) {
+      if (instance.personId !== relatedPersonId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -989,15 +989,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update responses
+      const allResponses = await storage.getTaskInstanceResponsesByTaskInstanceId(id);
       for (const [questionId, value] of Object.entries(responses)) {
-        const existingResponse = await storage.getTaskResponseByQuestionAndInstance(questionId, id);
+        const existingResponse = allResponses.find(r => r.questionId === questionId);
         if (existingResponse) {
-          await storage.updateTaskResponse(existingResponse.id, { value });
+          await storage.updateTaskInstanceResponse(existingResponse.id, { responseValue: value });
         } else {
-          await storage.createTaskResponse({
-            instanceId: id,
+          await storage.saveTaskInstanceResponse({
+            taskInstanceId: id,
             questionId,
-            value,
+            responseValue: value,
           });
         }
       }
@@ -1026,11 +1027,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify the task is assigned to this portal user
-      const instance = await storage.getTaskInstanceFull(id);
+      const instance = await storage.getTaskInstanceWithFullData(id);
       if (!instance) {
         return res.status(404).json({ message: "Task instance not found" });
       }
-      if (instance.relatedPersonId !== relatedPersonId) {
+      if (instance.personId !== relatedPersonId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -1040,15 +1041,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Save all responses
+      const allResponses = await storage.getTaskInstanceResponsesByTaskInstanceId(id);
       for (const [questionId, value] of Object.entries(responses)) {
-        const existingResponse = await storage.getTaskResponseByQuestionAndInstance(questionId, id);
+        const existingResponse = allResponses.find(r => r.questionId === questionId);
         if (existingResponse) {
-          await storage.updateTaskResponse(existingResponse.id, { value });
+          await storage.updateTaskInstanceResponse(existingResponse.id, { responseValue: value });
         } else {
-          await storage.createTaskResponse({
-            instanceId: id,
+          await storage.saveTaskInstanceResponse({
+            taskInstanceId: id,
             questionId,
-            value,
+            responseValue: value,
           });
         }
       }
@@ -1056,7 +1058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update status to submitted
       await storage.updateTaskInstance(id, { 
         status: 'submitted',
-        submittedAt: new Date().toISOString(),
+        submittedAt: new Date(),
       });
 
       res.json({ message: "Task submitted successfully" });
@@ -1080,7 +1082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify the task is assigned to this portal user
       const instance = await storage.getTaskInstanceById(instanceId);
-      if (!instance || instance.relatedPersonId !== relatedPersonId) {
+      if (!instance || instance.personId !== relatedPersonId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -1136,7 +1138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify the task is assigned to this portal user
       const instance = await storage.getTaskInstanceById(instanceId);
-      if (!instance || instance.relatedPersonId !== relatedPersonId) {
+      if (!instance || instance.personId !== relatedPersonId) {
         return res.status(403).json({ message: "Access denied" });
       }
 

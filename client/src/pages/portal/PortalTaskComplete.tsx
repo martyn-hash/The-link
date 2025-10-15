@@ -14,13 +14,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { portalRequest } from "@/lib/portalApi";
 import { format } from "date-fns";
 import { ArrowLeft, Calendar as CalendarIcon, Save, Send, AlertCircle } from "lucide-react";
 
 interface Question {
   id: string;
-  type: string;
+  questionType: string;
   label: string;
   isRequired: boolean;
   options?: string[];
@@ -60,7 +61,7 @@ export default function PortalTaskComplete() {
   // Fetch task instance
   const { data: taskInstance, isLoading, error } = useQuery<TaskInstance>({
     queryKey: ['/api/portal/task-instances', taskId],
-    queryFn: getQueryFn(`/api/portal/task-instances/${taskId}`),
+    queryFn: () => portalRequest('GET', `/api/portal/task-instances/${taskId}`),
     enabled: !!taskId,
     retry: 2,
   });
@@ -75,7 +76,7 @@ export default function PortalTaskComplete() {
   // Save progress mutation
   const saveProgressMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
-      return await apiRequest("PATCH", `/api/portal/task-instances/${taskId}`, {
+      return await portalRequest("PATCH", `/api/portal/task-instances/${taskId}`, {
         responses: data,
       });
     },
@@ -98,7 +99,7 @@ export default function PortalTaskComplete() {
   // Submit task mutation
   const submitTaskMutation = useMutation({
     mutationFn: async (data: Record<string, any>) => {
-      return await apiRequest("POST", `/api/portal/task-instances/${taskId}/submit`, {
+      return await portalRequest("POST", `/api/portal/task-instances/${taskId}/submit`, {
         responses: data,
       });
     },
@@ -138,7 +139,7 @@ export default function PortalTaskComplete() {
       setUploadingFiles(prev => ({ ...prev, [questionId]: true }));
 
       // Request upload URL
-      const uploadUrlResponse = await apiRequest("POST", "/api/portal/task-instances/upload-url", {
+      const uploadUrlResponse = await portalRequest("POST", "/api/portal/task-instances/upload-url", {
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
@@ -160,7 +161,7 @@ export default function PortalTaskComplete() {
       }
 
       // Confirm upload with server
-      const confirmResponse = await apiRequest("POST", "/api/portal/task-instances/confirm-upload", {
+      const confirmResponse = await portalRequest("POST", "/api/portal/task-instances/confirm-upload", {
         objectPath: uploadUrlResponse.objectPath,
         fileName: uploadUrlResponse.fileName,
         fileType: uploadUrlResponse.fileType,
@@ -227,8 +228,8 @@ export default function PortalTaskComplete() {
     const value = formData[question.id];
     const hasError = !!errors[question.id];
 
-    switch (question.type) {
-      case 'text':
+    switch (question.questionType) {
+      case 'short_text':
       case 'email':
       case 'number':
         return (
@@ -253,7 +254,7 @@ export default function PortalTaskComplete() {
           </div>
         );
 
-      case 'textarea':
+      case 'long_text':
         return (
           <div className="space-y-2">
             <Label htmlFor={question.id}>
@@ -311,7 +312,7 @@ export default function PortalTaskComplete() {
           </div>
         );
 
-      case 'radio':
+      case 'single_choice':
         return (
           <div className="space-y-2">
             <Label>
@@ -345,7 +346,7 @@ export default function PortalTaskComplete() {
           </div>
         );
 
-      case 'checkbox':
+      case 'multi_choice':
         return (
           <div className="space-y-2">
             <Label>
@@ -412,7 +413,7 @@ export default function PortalTaskComplete() {
           </div>
         );
 
-      case 'yesno':
+      case 'yes_no':
         return (
           <div className="space-y-2">
             <Label>
@@ -442,7 +443,7 @@ export default function PortalTaskComplete() {
           </div>
         );
 
-      case 'file':
+      case 'file_upload':
         const isUploading = uploadingFiles[question.id];
         let fileInfo = null;
         try {
@@ -509,7 +510,7 @@ export default function PortalTaskComplete() {
       default:
         return (
           <div className="text-sm text-muted-foreground">
-            Unsupported question type: {question.type}
+            Unsupported question type: {question.questionType}
           </div>
         );
     }
@@ -588,6 +589,11 @@ export default function PortalTaskComplete() {
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="text-template-name">
                 {taskInstance.template.name}
               </h1>
+              {taskInstance.client && (
+                <p className="text-lg text-gray-600 dark:text-gray-300 mt-1" data-testid="text-client-name">
+                  {taskInstance.client.name}
+                </p>
+              )}
               {taskInstance.template.description && (
                 <p className="text-gray-500 dark:text-gray-400 mt-2">
                   {taskInstance.template.description}
