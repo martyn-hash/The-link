@@ -221,7 +221,14 @@ function SortableSectionCard({
             >
               <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
               <div className="flex-1">
-                <p className="text-sm font-medium">{question.label}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">{question.label}</p>
+                  {question.isRequired && (
+                    <Badge variant="destructive" className="text-xs px-1 py-0" data-testid={`badge-required-${question.id}`}>
+                      Required
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">{question.questionType}</p>
               </div>
               <Button 
@@ -611,11 +618,19 @@ export default function TaskTemplateEditPage() {
       }
       
       // If dropping a question type from palette into a section
+      // Check if over.id starts with "section-" OR if it matches a section ID directly
+      let targetSectionId: string | null = null;
+      
       if (String(over.id).startsWith("section-")) {
-        const sectionId = over.data?.current?.sectionId;
-        if (sectionId) {
-          setCreatingQuestion({ sectionId, questionType: type });
-        }
+        // Extract from droppable ID format: section-{uuid}
+        targetSectionId = over.data?.current?.sectionId || null;
+      } else if (sections.some(s => s.id === over.id)) {
+        // over.id is a section ID directly (from sortable)
+        targetSectionId = String(over.id);
+      }
+      
+      if (targetSectionId) {
+        setCreatingQuestion({ sectionId: targetSectionId, questionType: type });
         return;
       }
       

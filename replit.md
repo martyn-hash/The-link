@@ -63,15 +63,22 @@ The application is built with a modern tech stack designed for scalability and p
 
 ## Recent Changes
 
-### Task Templates Feature Implementation (October 14, 2025)
+### Task Templates Feature Implementation (October 14-15, 2025)
 Complete implementation of dynamic form templates system:
 - **Database Schema**: 7 tables (`task_template_categories`, `task_templates`, `task_template_sections`, `task_template_questions`, `task_instances`, `task_responses`, plus "Task Uploads" folder integration)
 - **Backend**: 39+ storage methods, 30+ API routes with full CRUD operations
 - **Admin Interface**: 
   - Category management (`/task-template-categories`)
   - Template list and editor (`/task-templates`, `/task-templates/:id/edit`)
-  - Visual section builder with drag-drop reordering
-  - Question builder supporting 10 types: text, email, number, textarea, date, radio, checkbox, dropdown, yes/no, file
+  - **Drag-and-Drop Template Builder** (October 15, 2025):
+    - Left sidebar component palette with Section and 10 question types
+    - Drag Section from palette to create new sections instantly
+    - Drag question types onto sections to open configuration dialog
+    - Visual question display within sections with Required badges
+    - Section reordering via drag-and-drop
+    - Delete questions with inline confirmation
+    - Template header with compact info display and edit button
+  - Question types: short_text, long_text, email, number, date, single_choice, multi_choice, dropdown, yes_no, file_upload
 - **Client Portal**: 
   - Task assignment through client detail page Tasks tab
   - Portal Tasks page (`/portal/tasks`) with status filtering
@@ -83,6 +90,7 @@ Complete implementation of dynamic form templates system:
 - **Bug Fixes**: 
   - Fixed queryFn for detail pages to avoid list endpoint calls
   - Removed empty SelectItem value causing Radix UI error
+  - **Drag-and-Drop Fix (October 15)**: Fixed handleDragEnd to handle both droppable ID formats (section-{id} and direct {id}) when combining useSortable and useDroppable hooks
 
 ## Previous Updates
 
