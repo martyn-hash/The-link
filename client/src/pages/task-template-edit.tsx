@@ -108,12 +108,14 @@ function SortableSectionCard({
   section, 
   templateId,
   onEdit, 
-  onDelete 
+  onDelete,
+  onEditQuestion,
 }: { 
   section: SortableSection; 
   templateId: string;
   onEdit: () => void; 
   onDelete: () => void;
+  onEditQuestion: (question: TaskTemplateQuestion) => void;
 }) {
   const { toast } = useToast();
   const {
@@ -234,12 +236,7 @@ function SortableSectionCard({
               <Button 
                 variant="ghost" 
                 size="sm"
-                onClick={() => {
-                  toast({
-                    title: "Not yet implemented",
-                    description: "Question editing will be added soon",
-                  });
-                }}
+                onClick={() => onEditQuestion(question)}
                 data-testid={`button-edit-question-${question.id}`}
               >
                 <Edit className="w-3 h-3" />
@@ -475,6 +472,7 @@ export default function TaskTemplateEditPage() {
   const [editTemplateDialogOpen, setEditTemplateDialogOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
   const [creatingQuestion, setCreatingQuestion] = useState<{ sectionId: string; questionType: string } | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<TaskTemplateQuestion | null>(null);
 
   const { data: template, isLoading: templateLoading } = useQuery<TaskTemplate>({
     queryKey: ["/api/task-templates", id],
@@ -841,6 +839,7 @@ export default function TaskTemplateEditPage() {
                               templateId={template.id}
                               onEdit={() => setEditingSection(section)}
                               onDelete={() => setDeletingSection(section)}
+                              onEditQuestion={setEditingQuestion}
                             />
                           ))}
                         </div>
@@ -1079,6 +1078,106 @@ export default function TaskTemplateEditPage() {
                   </Button>
                   <Button type="submit" data-testid="button-save-question">
                     Add Question
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Edit Question Dialog */}
+        {editingQuestion && (
+          <Dialog open={true} onOpenChange={() => setEditingQuestion(null)}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Edit {QUESTION_TYPES.find(qt => qt.type === editingQuestion.questionType)?.label} Question</DialogTitle>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  const label = formData.get("label") as string;
+                  const helpText = formData.get("helpText") as string;
+                  const isRequired = formData.get("isRequired") === "on";
+                  
+                  apiRequest("PATCH", `/api/task-template-questions/${editingQuestion.id}`, {
+                    label,
+                    helpText: helpText || undefined,
+                    isRequired,
+                  })
+                    .then(() => {
+                      toast({
+                        title: "Success",
+                        description: "Question updated successfully",
+                      });
+                      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", editingQuestion.sectionId, "questions"] });
+                      setEditingQuestion(null);
+                    })
+                    .catch((error) => {
+                      toast({
+                        title: "Error",
+                        description: error instanceof Error ? error.message : "Failed to update question",
+                        variant: "destructive",
+                      });
+                    });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label htmlFor="edit-question-label" className="text-sm font-medium">
+                    Question Label *
+                  </label>
+                  <Input
+                    id="edit-question-label"
+                    name="label"
+                    required
+                    defaultValue={editingQuestion.label}
+                    placeholder="e.g. What is your full name?"
+                    data-testid="input-edit-question-label"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="edit-question-help" className="text-sm font-medium">
+                    Help Text (Optional)
+                  </label>
+                  <Textarea
+                    id="edit-question-help"
+                    name="helpText"
+                    defaultValue={editingQuestion.helpText || ""}
+                    placeholder="Additional guidance for this question"
+                    data-testid="input-edit-question-help"
+                    className="mt-1"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="edit-question-required"
+                    name="isRequired"
+                    defaultChecked={editingQuestion.isRequired}
+                    className="rounded border-gray-300"
+                    data-testid="checkbox-edit-question-required"
+                  />
+                  <label htmlFor="edit-question-required" className="text-sm font-medium">
+                    Required field
+                  </label>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditingQuestion(null)}
+                    data-testid="button-cancel-edit-question"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" data-testid="button-save-edit-question">
+                    Save Changes
                   </Button>
                 </div>
               </form>

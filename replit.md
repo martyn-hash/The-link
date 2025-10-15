@@ -75,8 +75,9 @@ Complete implementation of dynamic form templates system:
     - Drag Section from palette to create new sections instantly
     - Drag question types onto sections to open configuration dialog
     - Visual question display within sections with Required badges
-    - Section reordering via drag-and-drop
+    - Edit questions inline with pre-populated dialog
     - Delete questions with inline confirmation
+    - Section reordering via drag-and-drop
     - Template header with compact info display and edit button
   - Question types: short_text, long_text, email, number, date, single_choice, multi_choice, dropdown, yes_no, file_upload
 - **Client Portal**: 
