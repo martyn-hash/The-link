@@ -79,6 +79,7 @@ Complete implementation of dynamic form templates system:
     - Delete questions with inline confirmation
     - Section reordering via drag-and-drop
     - Template header with compact info display and edit button
+    - Fixed: Question duplication bug with mutation-based submission and loading states
   - Question types: short_text, long_text, email, number, date, single_choice, multi_choice, dropdown, yes_no, file_upload
 - **Client Portal**: 
   - Task assignment through client detail page Tasks tab

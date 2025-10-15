@@ -577,6 +577,33 @@ export default function TaskTemplateEditPage() {
     },
   });
 
+  const createQuestionMutation = useMutation({
+    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean }) => {
+      return apiRequest("POST", `/api/task-template-sections/${data.sectionId}/questions`, {
+        questionType: data.questionType,
+        label: data.label,
+        helpText: data.helpText,
+        isRequired: data.isRequired,
+        order: 0,
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: "Success",
+        description: "Question added successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+      setCreatingQuestion(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add question",
+        variant: "destructive",
+      });
+    },
+  });
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -627,7 +654,7 @@ export default function TaskTemplateEditPage() {
         targetSectionId = String(over.id);
       }
       
-      if (targetSectionId) {
+      if (targetSectionId && type) {
         setCreatingQuestion({ sectionId: targetSectionId, questionType: type });
         return;
       }
@@ -996,33 +1023,20 @@ export default function TaskTemplateEditPage() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (createQuestionMutation.isPending) return;
+                  
                   const formData = new FormData(e.currentTarget);
                   const label = formData.get("label") as string;
                   const helpText = formData.get("helpText") as string;
                   const isRequired = formData.get("isRequired") === "on";
                   
-                  apiRequest("POST", `/api/task-template-sections/${creatingQuestion.sectionId}/questions`, {
+                  createQuestionMutation.mutate({
+                    sectionId: creatingQuestion.sectionId,
                     questionType: creatingQuestion.questionType,
                     label,
                     helpText: helpText || undefined,
                     isRequired,
-                    order: 0,
-                  })
-                    .then(() => {
-                      toast({
-                        title: "Success",
-                        description: "Question added successfully",
-                      });
-                      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", creatingQuestion.sectionId, "questions"] });
-                      setCreatingQuestion(null);
-                    })
-                    .catch((error) => {
-                      toast({
-                        title: "Error",
-                        description: error instanceof Error ? error.message : "Failed to add question",
-                        variant: "destructive",
-                      });
-                    });
+                  });
                 }}
                 className="space-y-4"
               >
@@ -1072,12 +1086,17 @@ export default function TaskTemplateEditPage() {
                     type="button"
                     variant="outline"
                     onClick={() => setCreatingQuestion(null)}
+                    disabled={createQuestionMutation.isPending}
                     data-testid="button-cancel-question"
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" data-testid="button-save-question">
-                    Add Question
+                  <Button 
+                    type="submit" 
+                    disabled={createQuestionMutation.isPending}
+                    data-testid="button-save-question"
+                  >
+                    {createQuestionMutation.isPending ? "Adding..." : "Add Question"}
                   </Button>
                 </div>
               </form>
