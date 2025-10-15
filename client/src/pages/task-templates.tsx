@@ -472,7 +472,6 @@ export default function TaskTemplatesPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {categories?.map((category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}

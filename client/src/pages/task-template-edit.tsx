@@ -614,7 +614,6 @@ export default function TaskTemplateEditPage() {
       if (String(over.id).startsWith("section-")) {
         const sectionId = over.data?.current?.sectionId;
         if (sectionId) {
-          // Open question dialog with this type and section
           setCreatingQuestion({ sectionId, questionType: type });
         }
         return;
@@ -752,51 +751,51 @@ export default function TaskTemplateEditPage() {
         </div>
 
         {/* Main Content - Sidebar + Sections */}
-        <div className="flex gap-6">
-          {/* Left Sidebar - Component Palette */}
-          <div className="w-80 flex-shrink-0">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle className="text-lg">Components</CardTitle>
-                <p className="text-sm text-muted-foreground">Drag to add</p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Section Item */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Layout</h4>
-                  <PaletteItem
-                    label="Section"
-                    icon={Layers}
-                    type="section"
-                  />
-                </div>
-
-                {/* Question Types */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Question Types</h4>
-                  <div className="space-y-2">
-                    {QUESTION_TYPES.map((qt) => (
-                      <PaletteItem
-                        key={qt.type}
-                        label={qt.label}
-                        icon={qt.icon}
-                        type={qt.type}
-                      />
-                    ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-6">
+            {/* Left Sidebar - Component Palette */}
+            <div className="w-80 flex-shrink-0">
+              <Card className="sticky top-4">
+                <CardHeader>
+                  <CardTitle className="text-lg">Components</CardTitle>
+                  <p className="text-sm text-muted-foreground">Drag to add</p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Section Item */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Layout</h4>
+                    <PaletteItem
+                      label="Section"
+                      icon={Layers}
+                      type="section"
+                    />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
-          {/* Main Content - Sections */}
-          <div className="flex-1">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
+                  {/* Question Types */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Question Types</h4>
+                    <div className="space-y-2">
+                      {QUESTION_TYPES.map((qt) => (
+                        <PaletteItem
+                          key={qt.type}
+                          label={qt.label}
+                          icon={qt.icon}
+                          type={qt.type}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Content - Sections */}
+            <div className="flex-1">
               <DropZone>
                 <Card>
                   <CardHeader>
@@ -838,9 +837,9 @@ export default function TaskTemplateEditPage() {
                   </CardContent>
                 </Card>
               </DropZone>
-            </DndContext>
+            </div>
           </div>
-        </div>
+        </DndContext>
 
         {/* Edit Section Dialog */}
         {editingSection && (
@@ -1133,7 +1132,6 @@ export default function TaskTemplateEditPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
                           {categories?.map((category) => (
                             <SelectItem key={category.id} value={category.id}>
                               {category.name}
