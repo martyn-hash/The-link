@@ -4,8 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Edit, Trash2, Copy, Eye, CheckCircle, XCircle, ClipboardList, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +23,15 @@ interface TemplateWithDetails extends TaskTemplate {
   category?: TaskTemplateCategory;
   questionCount: number;
 }
+
+const templateFormSchema = z.object({
+  name: z.string().min(1, "Template name is required").max(200, "Name is too long"),
+  description: z.string().optional(),
+  categoryId: z.string().optional(),
+  status: z.enum(["draft", "active"]),
+});
+
+type TemplateFormData = z.infer<typeof templateFormSchema>;
 
 function TemplateCard({ template }: { template: TemplateWithDetails }) {
   const { toast } = useToast();
@@ -203,7 +219,6 @@ export default function TaskTemplatesPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newTemplateName, setNewTemplateName] = useState("");
 
   const { data: templates, isLoading: templatesLoading } = useQuery<TaskTemplate[]>({
     queryKey: ["/api/task-templates"],
@@ -213,6 +228,16 @@ export default function TaskTemplatesPage() {
   const { data: categories } = useQuery<TaskTemplateCategory[]>({
     queryKey: ["/api/task-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
+  const form = useForm<TemplateFormData>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      categoryId: "",
+      status: "draft",
+    },
   });
 
   // Get question counts for all templates
@@ -243,11 +268,12 @@ export default function TaskTemplatesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (data: TemplateFormData) => {
       return apiRequest("POST", "/api/task-templates", {
-        name,
-        description: "",
-        status: "draft",
+        name: data.name,
+        description: data.description || "",
+        categoryId: data.categoryId || undefined,
+        status: data.status,
       });
     },
     onSuccess: async (data: any) => {
@@ -257,8 +283,7 @@ export default function TaskTemplatesPage() {
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
       setShowCreateDialog(false);
-      setNewTemplateName("");
-      // Navigate to edit page
+      form.reset();
       navigate(`/task-templates/${data.id}/edit`);
     },
     onError: (error) => {
@@ -269,6 +294,10 @@ export default function TaskTemplatesPage() {
       });
     },
   });
+
+  const handleCreateTemplate = (data: TemplateFormData) => {
+    createMutation.mutate(data);
+  };
 
   if (!user?.isAdmin) {
     return (
@@ -383,51 +412,121 @@ export default function TaskTemplatesPage() {
       </div>
 
       {/* Create Template Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        setShowCreateDialog(open);
+        if (!open) {
+          form.reset();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Create New Template</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="template-name" className="text-sm font-medium">
-                Template Name
-              </label>
-              <input
-                id="template-name"
-                type="text"
-                value={newTemplateName}
-                onChange={(e) => setNewTemplateName(e.target.value)}
-                placeholder="e.g. New Client Onboarding"
-                className="w-full mt-1 px-3 py-2 border rounded-md"
-                data-testid="input-new-template-name"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleCreateTemplate)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Template Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. New Client Onboarding"
+                        data-testid="input-new-template-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowCreateDialog(false);
-                  setNewTemplateName("");
-                }}
-                data-testid="button-cancel-create"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (newTemplateName.trim()) {
-                    createMutation.mutate(newTemplateName.trim());
-                  }
-                }}
-                disabled={!newTemplateName.trim() || createMutation.isPending}
-                data-testid="button-confirm-create"
-              >
-                {createMutation.isPending ? "Creating..." : "Create & Edit"}
-              </Button>
-            </div>
-          </div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe what this template is for..."
+                        rows={3}
+                        data-testid="input-new-template-description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category (Optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-new-template-category">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {categories?.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-new-template-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    form.reset();
+                  }}
+                  data-testid="button-cancel-create"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  data-testid="button-confirm-create"
+                >
+                  {createMutation.isPending ? "Creating..." : "Create & Edit"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

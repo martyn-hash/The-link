@@ -3,12 +3,17 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Save, Plus, Edit, Trash2, GripVertical, FolderPlus } from "lucide-react";
+import { 
+  ArrowLeft, Save, Plus, Edit, Trash2, GripVertical, FolderPlus, Settings,
+  Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, ChevronDown, 
+  ToggleLeft, Upload, Layers
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,6 +44,40 @@ type SectionForm = z.infer<typeof sectionSchema>;
 
 interface SortableSection extends TaskTemplateSection {
   id: string;
+}
+
+const QUESTION_TYPES = [
+  { type: "short_text", label: "Short Text", icon: Type },
+  { type: "long_text", label: "Long Text", icon: FileText },
+  { type: "email", label: "Email", icon: Mail },
+  { type: "number", label: "Number", icon: Hash },
+  { type: "date", label: "Date", icon: Calendar },
+  { type: "single_choice", label: "Single Choice", icon: CircleDot },
+  { type: "multi_choice", label: "Multi Choice", icon: CheckSquare },
+  { type: "dropdown", label: "Dropdown", icon: ChevronDown },
+  { type: "yes_no", label: "Yes/No", icon: ToggleLeft },
+  { type: "file_upload", label: "File Upload", icon: Upload },
+] as const;
+
+function PaletteItem({ 
+  label, 
+  icon: Icon, 
+  type 
+}: { 
+  label: string; 
+  icon: React.ElementType; 
+  type: string;
+}) {
+  return (
+    <div
+      className="flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg cursor-grab hover:bg-accent hover:border-primary transition-colors"
+      draggable
+      data-testid={`palette-item-${type}`}
+    >
+      <Icon className="w-5 h-5 text-muted-foreground" />
+      <span className="text-sm font-medium">{label}</span>
+    </div>
+  );
 }
 
 function SortableSectionCard({ 
@@ -327,6 +366,7 @@ export default function TaskTemplateEditPage() {
   const [sections, setSections] = useState<SortableSection[]>([]);
   const [editingSection, setEditingSection] = useState<TaskTemplateSection | null>(null);
   const [deletingSection, setDeletingSection] = useState<TaskTemplateSection | null>(null);
+  const [editTemplateDialogOpen, setEditTemplateDialogOpen] = useState(false);
 
   const { data: template, isLoading: templateLoading } = useQuery<TaskTemplate>({
     queryKey: ["/api/task-templates", id],
@@ -385,6 +425,7 @@ export default function TaskTemplateEditPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      setEditTemplateDialogOpen(false);
     },
     onError: (error) => {
       toast({
@@ -482,133 +523,112 @@ export default function TaskTemplateEditPage() {
     );
   }
 
+  const category = categories?.find(c => c.id === template.categoryId);
+
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation />
       <div className="container mx-auto py-8">
-        <div className="flex items-center space-x-4 mb-6">
-          <Link href="/task-templates">
-            <Button variant="ghost" size="sm" data-testid="button-back">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+        {/* Compact Header with Template Details */}
+        <div className="mb-6">
+          <div className="flex items-start justify-between mb-4">
+            <Link href="/task-templates">
+              <Button variant="ghost" size="sm" data-testid="button-back">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditTemplateDialogOpen(true)}
+              data-testid="button-edit-template-details"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Edit Template Details
             </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold" data-testid="text-page-title">Edit Template</h1>
-            <p className="text-muted-foreground mt-1">Configure template details and sections</p>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <h1 className="text-3xl font-bold" data-testid="text-template-name">{template.name}</h1>
+              <Badge
+                variant={template.status === "active" ? "default" : "secondary"}
+                data-testid="badge-template-status"
+              >
+                {template.status}
+              </Badge>
+            </div>
+            
+            {template.description && (
+              <p className="text-muted-foreground text-lg" data-testid="text-template-description">
+                {template.description}
+              </p>
+            )}
+            
+            <div className="flex items-center space-x-4">
+              {category && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-muted-foreground">Category:</span>
+                  <Badge variant="outline" data-testid="badge-template-category">
+                    {category.name}
+                  </Badge>
+                </div>
+              )}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground">Sections:</span>
+                <span className="text-sm font-medium" data-testid="text-section-count">
+                  {sections.length}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left column - Template Info */}
-          <div>
-            <Card>
+        {/* Main Content - Sidebar + Sections */}
+        <div className="flex gap-6">
+          {/* Left Sidebar - Component Palette */}
+          <div className="w-80 flex-shrink-0">
+            <Card className="sticky top-4">
               <CardHeader>
-                <CardTitle>Template Information</CardTitle>
+                <CardTitle className="text-lg">Components</CardTitle>
+                <p className="text-sm text-muted-foreground">Drag to add</p>
               </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Template Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="e.g. New Client Onboarding" data-testid="input-template-name" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+              <CardContent className="space-y-6">
+                {/* Section Item */}
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Layout</h4>
+                  <PaletteItem
+                    label="Section"
+                    icon={Layers}
+                    type="section"
+                  />
+                </div>
 
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea 
-                              {...field} 
-                              placeholder="Describe what this template is for"
-                              data-testid="input-template-description"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="categoryId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category (Optional)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-template-category">
-                                <SelectValue placeholder="Select a category" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {categories?.map((category) => (
-                                <SelectItem key={category.id} value={category.id}>
-                                  {category.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-template-status">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="draft">Draft</SelectItem>
-                              <SelectItem value="active">Active</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button
-                      type="submit"
-                      disabled={updateTemplateMutation.isPending}
-                      className="w-full"
-                      data-testid="button-save-template"
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      {updateTemplateMutation.isPending ? "Saving..." : "Save Template Info"}
-                    </Button>
-                  </form>
-                </Form>
+                {/* Question Types */}
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Question Types</h4>
+                  <div className="space-y-2">
+                    {QUESTION_TYPES.map((qt) => (
+                      <PaletteItem
+                        key={qt.type}
+                        label={qt.label}
+                        icon={qt.icon}
+                        type={qt.type}
+                      />
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Right column - Sections */}
-          <div>
+          {/* Main Content - Sections */}
+          <div className="flex-1">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle>Sections</CardTitle>
+                  <CardTitle>Template Builder</CardTitle>
                   <SectionModal templateId={template.id} onSuccess={() => {}} />
                 </div>
               </CardHeader>
@@ -783,6 +803,125 @@ export default function TaskTemplateEditPage() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Edit Template Details Dialog */}
+        <Dialog open={editTemplateDialogOpen} onOpenChange={(open) => {
+          setEditTemplateDialogOpen(open);
+          if (!open) {
+            form.reset();
+          }
+        }}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Template Details</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Template Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. New Client Onboarding"
+                          data-testid="input-edit-template-name"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Describe what this template is for..."
+                          rows={3}
+                          data-testid="input-edit-template-description"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category (Optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-template-category">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {categories?.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-template-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="draft">Draft</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditTemplateDialogOpen(false);
+                      form.reset();
+                    }}
+                    data-testid="button-cancel-edit-template"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={updateTemplateMutation.isPending}
+                    data-testid="button-save-edit-template"
+                  >
+                    {updateTemplateMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
