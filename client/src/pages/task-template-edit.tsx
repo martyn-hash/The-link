@@ -17,7 +17,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Link } from "wouter";
@@ -25,7 +25,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import type { TaskTemplate, TaskTemplateSection, TaskTemplateCategory, InsertTaskTemplateSection } from "@shared/schema";
+import type { TaskTemplate, TaskTemplateSection, TaskTemplateCategory, InsertTaskTemplateSection, TaskTemplateQuestion, InsertTaskTemplateQuestion } from "@shared/schema";
 
 const templateSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name too long"),
@@ -59,6 +59,21 @@ const QUESTION_TYPES = [
   { type: "file_upload", label: "File Upload", icon: Upload },
 ] as const;
 
+function DropZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'sections-dropzone',
+  });
+
+  return (
+    <div 
+      ref={setNodeRef}
+      className={`transition-colors ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function PaletteItem({ 
   label, 
   icon: Icon, 
@@ -68,10 +83,19 @@ function PaletteItem({
   icon: React.ElementType; 
   type: string;
 }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette-${type}`,
+    data: { type, label, icon: Icon },
+  });
+
   return (
     <div
-      className="flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg cursor-grab hover:bg-accent hover:border-primary transition-colors"
-      draggable
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg cursor-grab hover:bg-accent hover:border-primary transition-colors ${
+        isDragging ? 'opacity-50' : ''
+      }`}
       data-testid={`palette-item-${type}`}
     >
       <Icon className="w-5 h-5 text-muted-foreground" />
@@ -91,13 +115,49 @@ function SortableSectionCard({
   onEdit: () => void; 
   onDelete: () => void;
 }) {
+  const { toast } = useToast();
   const {
     attributes,
     listeners,
-    setNodeRef,
+    setNodeRef: setSortableRef,
     transform,
     transition,
   } = useSortable({ id: section.id });
+
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: `section-${section.id}`,
+    data: { sectionId: section.id },
+  });
+
+  const combinedRef = (node: HTMLElement | null) => {
+    setSortableRef(node);
+    setDroppableRef(node);
+  };
+
+  const { data: questions } = useQuery<TaskTemplateQuestion[]>({
+    queryKey: ["/api/task-template-sections", section.id, "questions"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
+  const deleteQuestionMutation = useMutation({
+    mutationFn: async (questionId: string) => {
+      return apiRequest("DELETE", `/api/task-template-questions/${questionId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Question deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", section.id, "questions"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete question",
+        variant: "destructive",
+      });
+    },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -106,12 +166,12 @@ function SortableSectionCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={combinedRef}
       style={style}
-      className="bg-card border rounded-lg p-4 mb-3"
+      className={`bg-card border rounded-lg p-4 mb-3 ${isOver ? 'ring-2 ring-primary' : ''}`}
       data-testid={`section-card-${section.id}`}
     >
-      <div className="flex items-start space-x-3">
+      <div className="flex items-start space-x-3 mb-3">
         <button
           className="cursor-grab active:cursor-grabbing mt-1"
           {...attributes}
@@ -131,15 +191,6 @@ function SortableSectionCard({
           )}
         </div>
         <div className="flex space-x-1">
-          <Link href={`/task-templates/${templateId}/sections/${section.id}/questions`}>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid={`button-manage-questions-${section.id}`}
-            >
-              Manage Questions
-            </Button>
-          </Link>
           <Button
             variant="ghost"
             size="sm"
@@ -157,6 +208,54 @@ function SortableSectionCard({
             <Trash2 className="w-4 h-4 text-red-500" />
           </Button>
         </div>
+      </div>
+
+      {/* Questions List */}
+      <div className="ml-8 space-y-2">
+        {questions && questions.length > 0 ? (
+          questions.map((question) => (
+            <div
+              key={question.id}
+              className="flex items-center gap-2 p-2 bg-muted/30 rounded border"
+              data-testid={`question-item-${question.id}`}
+            >
+              <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">{question.label}</p>
+                <p className="text-xs text-muted-foreground">{question.questionType}</p>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  toast({
+                    title: "Not yet implemented",
+                    description: "Question editing will be added soon",
+                  });
+                }}
+                data-testid={`button-edit-question-${question.id}`}
+              >
+                <Edit className="w-3 h-3" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Delete question "${question.label}"?`)) {
+                    deleteQuestionMutation.mutate(question.id);
+                  }
+                }}
+                data-testid={`button-delete-question-${question.id}`}
+              >
+                <Trash2 className="w-3 h-3 text-red-500" />
+              </Button>
+            </div>
+          ))
+        ) : (
+          <p className="text-xs text-muted-foreground italic py-2">
+            No questions yet. Drag a question type here to add one.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -367,6 +466,8 @@ export default function TaskTemplateEditPage() {
   const [editingSection, setEditingSection] = useState<TaskTemplateSection | null>(null);
   const [deletingSection, setDeletingSection] = useState<TaskTemplateSection | null>(null);
   const [editTemplateDialogOpen, setEditTemplateDialogOpen] = useState(false);
+  const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
+  const [creatingQuestion, setCreatingQuestion] = useState<{ sectionId: string; questionType: string } | null>(null);
 
   const { data: template, isLoading: templateLoading } = useQuery<TaskTemplate>({
     queryKey: ["/api/task-templates", id],
@@ -451,6 +552,26 @@ export default function TaskTemplateEditPage() {
     },
   });
 
+  const createSectionMutation = useMutation({
+    mutationFn: async (sectionData: { title: string; description?: string; sortOrder: number }) => {
+      return apiRequest("POST", `/api/task-templates/${id}/sections`, sectionData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Section created successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create section",
+        variant: "destructive",
+      });
+    },
+  });
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -458,13 +579,58 @@ export default function TaskTemplateEditPage() {
     })
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    if (active.data.current?.type && active.data.current?.label) {
+      setActiveDrag({
+        type: active.data.current.type,
+        label: active.data.current.label,
+      });
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveDrag(null);
 
-    if (over && active.id !== over.id) {
+    if (!over) return;
+
+    // Check if dragging from palette
+    if (String(active.id).startsWith("palette-")) {
+      const type = active.data.current?.type;
+      
+      // If dropping a section from palette
+      if (type === "section") {
+        const sortOrder = sections.length;
+        createSectionMutation.mutate({
+          title: "New Section",
+          description: "",
+          sortOrder,
+        });
+        return;
+      }
+      
+      // If dropping a question type from palette into a section
+      if (String(over.id).startsWith("section-")) {
+        const sectionId = over.data?.current?.sectionId;
+        if (sectionId) {
+          // Open question dialog with this type and section
+          setCreatingQuestion({ sectionId, questionType: type });
+        }
+        return;
+      }
+      
+      return;
+    }
+
+    // Handle section reordering - only if dropping on another section
+    if (active.id !== over.id && sections.some(s => s.id === over.id)) {
       setSections((items) => {
         const oldIndex = items.findIndex((item) => item.id === active.id);
         const newIndex = items.findIndex((item) => item.id === over.id);
+        
+        if (oldIndex === -1 || newIndex === -1) return items;
+        
         const newOrder = arrayMove(items, oldIndex, newIndex);
         
         // Update sort orders and send to server
@@ -625,51 +791,54 @@ export default function TaskTemplateEditPage() {
 
           {/* Main Content - Sections */}
           <div className="flex-1">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>Template Builder</CardTitle>
-                  <SectionModal templateId={template.id} onSuccess={() => {}} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {sections.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <FolderPlus className="w-12 h-12 text-muted-foreground mb-3" />
-                    <p className="text-muted-foreground mb-2">No sections yet</p>
-                    <p className="text-sm text-muted-foreground mb-4 text-center">
-                      Sections help organize your questions into logical groups
-                    </p>
-                  </div>
-                ) : (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={sections.map(s => s.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="space-y-3">
-                        {sections.map((section) => (
-                          <SortableSectionCard
-                            key={section.id}
-                            section={section}
-                            templateId={template.id}
-                            onEdit={() => setEditingSection(section)}
-                            onDelete={() => setDeletingSection(section)}
-                          />
-                        ))}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <DropZone>
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <CardTitle>Template Builder</CardTitle>
+                      <SectionModal templateId={template.id} onSuccess={() => {}} />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {sections.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8">
+                        <FolderPlus className="w-12 h-12 text-muted-foreground mb-3" />
+                        <p className="text-muted-foreground mb-2">No sections yet</p>
+                        <p className="text-sm text-muted-foreground mb-4 text-center">
+                          Drag a Section from the sidebar to get started
+                        </p>
                       </div>
-                    </SortableContext>
-                  </DndContext>
-                )}
-                <p className="text-xs text-muted-foreground mt-4">
-                  Drag sections to reorder them. Questions will be added in the next step.
-                </p>
-              </CardContent>
-            </Card>
+                    ) : (
+                      <SortableContext
+                        items={sections.map(s => s.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-3">
+                          {sections.map((section) => (
+                            <SortableSectionCard
+                              key={section.id}
+                              section={section}
+                              templateId={template.id}
+                              onEdit={() => setEditingSection(section)}
+                              onDelete={() => setDeletingSection(section)}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-4">
+                      Drag sections to reorder them. Drag question types into sections to add questions.
+                    </p>
+                  </CardContent>
+                </Card>
+              </DropZone>
+            </DndContext>
           </div>
         </div>
 
@@ -800,6 +969,105 @@ export default function TaskTemplateEditPage() {
                   Delete
                 </Button>
               </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Create Question Dialog */}
+        {creatingQuestion && (
+          <Dialog open={true} onOpenChange={() => setCreatingQuestion(null)}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Add {QUESTION_TYPES.find(qt => qt.type === creatingQuestion.questionType)?.label} Question</DialogTitle>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  const label = formData.get("label") as string;
+                  const helpText = formData.get("helpText") as string;
+                  const isRequired = formData.get("isRequired") === "on";
+                  
+                  apiRequest("POST", `/api/task-template-sections/${creatingQuestion.sectionId}/questions`, {
+                    questionType: creatingQuestion.questionType,
+                    label,
+                    helpText: helpText || undefined,
+                    isRequired,
+                    order: 0,
+                  })
+                    .then(() => {
+                      toast({
+                        title: "Success",
+                        description: "Question added successfully",
+                      });
+                      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", creatingQuestion.sectionId, "questions"] });
+                      setCreatingQuestion(null);
+                    })
+                    .catch((error) => {
+                      toast({
+                        title: "Error",
+                        description: error instanceof Error ? error.message : "Failed to add question",
+                        variant: "destructive",
+                      });
+                    });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label htmlFor="question-label" className="text-sm font-medium">
+                    Question Label *
+                  </label>
+                  <Input
+                    id="question-label"
+                    name="label"
+                    required
+                    placeholder="e.g. What is your full name?"
+                    data-testid="input-question-label"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="question-help" className="text-sm font-medium">
+                    Help Text (Optional)
+                  </label>
+                  <Textarea
+                    id="question-help"
+                    name="helpText"
+                    placeholder="Additional guidance for this question"
+                    data-testid="input-question-help"
+                    className="mt-1"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="question-required"
+                    name="isRequired"
+                    className="rounded border-gray-300"
+                    data-testid="checkbox-question-required"
+                  />
+                  <label htmlFor="question-required" className="text-sm font-medium">
+                    Required field
+                  </label>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCreatingQuestion(null)}
+                    data-testid="button-cancel-question"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" data-testid="button-save-question">
+                    Add Question
+                  </Button>
+                </div>
+              </form>
             </DialogContent>
           </Dialog>
         )}
