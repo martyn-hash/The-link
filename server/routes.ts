@@ -8889,13 +8889,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/task-templates - Get all templates (with optional ?includeInactive=true)
+  // GET /api/task-templates - Get all templates (defaults to all, use ?activeOnly=true for active only)
   app.get("/api/task-templates", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const includeInactive = req.query.includeInactive === 'true';
-      const templates = includeInactive 
-        ? await storage.getAllTaskTemplates()
-        : await storage.getActiveTaskTemplates();
+      const activeOnly = req.query.activeOnly === 'true';
+      const templates = activeOnly 
+        ? await storage.getActiveTaskTemplates()
+        : await storage.getAllTaskTemplates(true);
       res.json(templates);
     } catch (error) {
       console.error("Error fetching task templates:", error);
