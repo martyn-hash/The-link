@@ -190,7 +190,7 @@ function SortableSectionCard({
   onEdit: () => void; 
   onDelete: () => void;
   onEditQuestion: (question: TaskTemplateQuestion) => void;
-  onReorderQuestions: (sectionId: string, oldIndex: number, newIndex: number) => void;
+  onReorderQuestions: (sectionId: string, oldIndex: number, newIndex: number, onError?: () => void) => void;
 }) {
   const { toast } = useToast();
   const {
@@ -261,9 +261,18 @@ function SortableSectionCard({
     const newIndex = questions.findIndex((q) => q.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
+      // Store original order for rollback on error
+      const originalQuestions = [...questions];
+      
+      // Optimistically update UI
       const reordered = arrayMove(questions, oldIndex, newIndex);
       setQuestions(reordered);
-      onReorderQuestions(section.id, oldIndex, newIndex);
+      
+      // Call reorder with error handling
+      onReorderQuestions(section.id, oldIndex, newIndex, () => {
+        // Rollback on error
+        setQuestions(originalQuestions);
+      });
     }
   };
 
@@ -694,7 +703,7 @@ export default function TaskTemplateEditPage() {
   });
 
   const reorderQuestionsMutation = useMutation({
-    mutationFn: async (data: { sectionId: string; questions: { id: string; sortOrder: number }[] }) => {
+    mutationFn: async (data: { sectionId: string; questions: { id: string; sortOrder: number }[]; onError?: () => void }) => {
       return apiRequest("POST", "/api/task-template-questions/reorder", {
         questions: data.questions,
       });
@@ -702,16 +711,22 @@ export default function TaskTemplateEditPage() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to reorder questions",
         variant: "destructive",
       });
+      // Call rollback callback if provided
+      if (variables.onError) {
+        variables.onError();
+      }
+      // Also invalidate to ensure UI syncs with server state
+      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
     },
   });
 
-  const handleReorderQuestions = (sectionId: string, oldIndex: number, newIndex: number) => {
+  const handleReorderQuestions = (sectionId: string, oldIndex: number, newIndex: number, onError?: () => void) => {
     // Get the questions for this section from the query cache
     const questionsData = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
     if (!questionsData) return;
@@ -722,7 +737,7 @@ export default function TaskTemplateEditPage() {
       sortOrder: index,
     }));
 
-    reorderQuestionsMutation.mutate({ sectionId, questions: updates });
+    reorderQuestionsMutation.mutate({ sectionId, questions: updates, onError });
   };
 
   const sensors = useSensors(
