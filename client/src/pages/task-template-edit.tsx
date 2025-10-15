@@ -104,18 +104,93 @@ function PaletteItem({
   );
 }
 
+function SortableQuestionItem({
+  question,
+  onEdit,
+  onDelete,
+}: {
+  question: TaskTemplateQuestion;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ 
+    id: question.id,
+    data: { type: 'question', question },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 p-2 bg-muted/30 rounded border"
+      data-testid={`question-item-${question.id}`}
+    >
+      <button
+        className="cursor-grab active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+        data-testid={`drag-handle-question-${question.id}`}
+      >
+        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      </button>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium">{question.label}</p>
+          {question.isRequired && (
+            <Badge variant="destructive" className="text-xs px-1 py-0" data-testid={`badge-required-${question.id}`}>
+              Required
+            </Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{question.questionType}</p>
+      </div>
+      <Button 
+        variant="ghost" 
+        size="sm"
+        onClick={onEdit}
+        data-testid={`button-edit-question-${question.id}`}
+      >
+        <Edit className="w-3 h-3" />
+      </Button>
+      <Button 
+        variant="ghost" 
+        size="sm"
+        onClick={onDelete}
+        data-testid={`button-delete-question-${question.id}`}
+      >
+        <Trash2 className="w-3 h-3 text-red-500" />
+      </Button>
+    </div>
+  );
+}
+
 function SortableSectionCard({ 
   section, 
   templateId,
   onEdit, 
   onDelete,
   onEditQuestion,
+  onReorderQuestions,
 }: { 
   section: SortableSection; 
   templateId: string;
   onEdit: () => void; 
   onDelete: () => void;
   onEditQuestion: (question: TaskTemplateQuestion) => void;
+  onReorderQuestions: (sectionId: string, oldIndex: number, newIndex: number) => void;
 }) {
   const { toast } = useToast();
   const {
@@ -136,10 +211,19 @@ function SortableSectionCard({
     setDroppableRef(node);
   };
 
-  const { data: questions } = useQuery<TaskTemplateQuestion[]>({
+  const { data: questionsData } = useQuery<TaskTemplateQuestion[]>({
     queryKey: ["/api/task-template-sections", section.id, "questions"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
+
+  const [questions, setQuestions] = useState<TaskTemplateQuestion[]>([]);
+
+  // Update local questions when data loads
+  useEffect(() => {
+    if (questionsData) {
+      setQuestions(questionsData);
+    }
+  }, [questionsData]);
 
   const deleteQuestionMutation = useMutation({
     mutationFn: async (questionId: string) => {
@@ -160,6 +244,28 @@ function SortableSectionCard({
       });
     },
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = questions.findIndex((q) => q.id === active.id);
+    const newIndex = questions.findIndex((q) => q.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove(questions, oldIndex, newIndex);
+      setQuestions(reordered);
+      onReorderQuestions(section.id, oldIndex, newIndex);
+    }
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -215,46 +321,29 @@ function SortableSectionCard({
       {/* Questions List */}
       <div className="ml-8 space-y-2">
         {questions && questions.length > 0 ? (
-          questions.map((question) => (
-            <div
-              key={question.id}
-              className="flex items-center gap-2 p-2 bg-muted/30 rounded border"
-              data-testid={`question-item-${question.id}`}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={questions.map(q => q.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{question.label}</p>
-                  {question.isRequired && (
-                    <Badge variant="destructive" className="text-xs px-1 py-0" data-testid={`badge-required-${question.id}`}>
-                      Required
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">{question.questionType}</p>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => onEditQuestion(question)}
-                data-testid={`button-edit-question-${question.id}`}
-              >
-                <Edit className="w-3 h-3" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => {
-                  if (confirm(`Delete question "${question.label}"?`)) {
-                    deleteQuestionMutation.mutate(question.id);
-                  }
-                }}
-                data-testid={`button-delete-question-${question.id}`}
-              >
-                <Trash2 className="w-3 h-3 text-red-500" />
-              </Button>
-            </div>
-          ))
+              {questions.map((question) => (
+                <SortableQuestionItem
+                  key={question.id}
+                  question={question}
+                  onEdit={() => onEditQuestion(question)}
+                  onDelete={() => {
+                    if (confirm(`Delete question "${question.label}"?`)) {
+                      deleteQuestionMutation.mutate(question.id);
+                    }
+                  }}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         ) : (
           <p className="text-xs text-muted-foreground italic py-2">
             No questions yet. Drag a question type here to add one.
@@ -604,6 +693,38 @@ export default function TaskTemplateEditPage() {
     },
   });
 
+  const reorderQuestionsMutation = useMutation({
+    mutationFn: async (data: { sectionId: string; questions: { id: string; sortOrder: number }[] }) => {
+      return apiRequest("POST", "/api/task-template-questions/reorder", {
+        questions: data.questions,
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to reorder questions",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleReorderQuestions = (sectionId: string, oldIndex: number, newIndex: number) => {
+    // Get the questions for this section from the query cache
+    const questionsData = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
+    if (!questionsData) return;
+
+    const reordered = arrayMove(questionsData, oldIndex, newIndex);
+    const updates = reordered.map((question, index) => ({
+      id: question.id,
+      sortOrder: index,
+    }));
+
+    reorderQuestionsMutation.mutate({ sectionId, questions: updates });
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -867,6 +988,7 @@ export default function TaskTemplateEditPage() {
                               onEdit={() => setEditingSection(section)}
                               onDelete={() => setDeletingSection(section)}
                               onEditQuestion={setEditingQuestion}
+                              onReorderQuestions={handleReorderQuestions}
                             />
                           ))}
                         </div>
