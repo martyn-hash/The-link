@@ -7,3 +7,4 @@ Password: admin123
 To login to the client poral: 
 Login via /portal
 Add the email (usually martyn@accountantmatch.uk) to get the 6 digit code
+Check the 'client_portal_users' table for the token or 6 digit code to login
