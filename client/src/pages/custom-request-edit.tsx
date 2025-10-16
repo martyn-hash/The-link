@@ -642,7 +642,7 @@ export default function CustomRequestEdit() {
         customRequestId: id,
         clientId: request?.clientId,
         personId: data.personId,
-        dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+        dueDate: data.dueDate || null,
       });
     },
     onSuccess: () => {

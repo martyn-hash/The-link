@@ -9654,18 +9654,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Person not found" });
         }
         
-        // Check for duplicate incomplete task instances
+        // Check for duplicate incomplete task instances (same template OR same custom request)
+        // Note: Schema validation ensures either templateId OR customRequestId is set (not both, not neither)
         const existingInstances = await storage.getTaskInstancesByPersonId(personId);
-        const duplicateInstance = existingInstances.find(instance => 
-          instance.templateId === templateId && 
-          instance.status !== 'submitted' && 
-          instance.status !== 'approved' && 
-          instance.status !== 'cancelled'
-        );
+        const duplicateInstance = existingInstances.find(instance => {
+          const isIncomplete = instance.status !== 'submitted' && 
+                               instance.status !== 'approved' && 
+                               instance.status !== 'cancelled';
+          
+          if (!isIncomplete) return false;
+          
+          // Check if it's the same template (for template-based tasks)
+          if (templateId && instance.templateId === templateId) return true;
+          
+          // Check if it's the same custom request (for custom request-based tasks)
+          if (customRequestId && instance.customRequestId === customRequestId) return true;
+          
+          return false;
+        });
         
         if (duplicateInstance) {
+          // Determine appropriate message based on which ID is set
+          let message = "This person already has an incomplete task. Please complete or cancel the existing task before creating a new one.";
+          if (templateId) {
+            message = "This person already has an incomplete task for this template. Please complete or cancel the existing task before creating a new one.";
+          } else if (customRequestId) {
+            message = "This person already has an incomplete task for this custom request. Please complete or cancel the existing task before creating a new one.";
+          }
+          
           return res.status(400).json({ 
-            message: "This person already has an incomplete task for this template. Please complete or cancel the existing task before creating a new one.",
+            message,
             existingInstanceId: duplicateInstance.id 
           });
         }

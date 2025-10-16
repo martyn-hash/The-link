@@ -2299,6 +2299,12 @@ const baseTaskInstanceSchema = createInsertSchema(taskInstances).omit({
   updatedAt: true,
   submittedAt: true,
   approvedAt: true,
+}).extend({
+  dueDate: z.union([z.string(), z.date()]).optional().nullable().transform(val => {
+    if (!val) return null;
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
 });
 
 export const insertTaskInstanceSchema = baseTaskInstanceSchema.refine(
