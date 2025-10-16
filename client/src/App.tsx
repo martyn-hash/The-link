@@ -37,6 +37,7 @@ import TaskTemplateEdit from "@/pages/task-template-edit";
 import TaskTemplateSectionQuestions from "@/pages/task-template-section-questions";
 import TaskSubmissions from "@/pages/task-submissions";
 import TaskSubmissionDetail from "@/pages/task-submission-detail";
+import TaskInstanceDetail from "@/pages/task-instance-detail";
 import Admin from "@/pages/admin";
 import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
@@ -124,6 +125,7 @@ function Router() {
       <Route path="/task-templates" component={TaskTemplates} />
       <Route path="/task-submissions/:id" component={TaskSubmissionDetail} />
       <Route path="/task-submissions" component={TaskSubmissions} />
+      <Route path="/task-instances/:id" component={TaskInstanceDetail} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/import" component={DataImport} />

@@ -7876,20 +7876,15 @@ export default function ClientDetail() {
                           >
                             {instance.status}
                           </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              // TODO: Navigate to task instance detail view
-                              toast({
-                                title: "View Request",
-                                description: "Task instance detail view coming soon",
-                              });
-                            }}
-                            data-testid={`button-view-task-${instance.id}`}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <Link href={`/task-instances/${instance.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-testid={`button-view-task-${instance.id}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
                         </div>
                       </div>
                     ))}
