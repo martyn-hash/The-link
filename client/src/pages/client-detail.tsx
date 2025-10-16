@@ -7847,47 +7847,62 @@ export default function ClientDetail() {
                     <p className="text-muted-foreground">No client requests yet. Click "New Client Request" to create one.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {taskInstances.map((instance: any) => (
-                      <div 
-                        key={instance.id} 
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
-                        data-testid={`task-instance-${instance.id}`}
-                      >
-                        <div className="flex-1">
-                          <div className="font-medium" data-testid={`task-name-${instance.id}`}>
-                            {instance.template?.name || 'Untitled Request'}
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            Assigned to: {instance.relatedPerson ? formatPersonName(instance.relatedPerson.fullName) : 'Unknown'}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Created: {formatDate(instance.createdAt)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            variant={
-                              instance.status === 'submitted' ? 'default' : 
-                              instance.status === 'reviewed' ? 'default' : 
-                              'outline'
-                            }
-                            data-testid={`badge-status-${instance.id}`}
-                          >
-                            {instance.status}
-                          </Badge>
-                          <Link href={`/task-instances/${instance.id}`}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              data-testid={`button-view-task-${instance.id}`}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Request Name</TableHead>
+                          <TableHead>Assigned To</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {taskInstances.map((instance: any) => (
+                          <TableRow key={instance.id} data-testid={`row-task-${instance.id}`}>
+                            <TableCell className="font-medium">
+                              <span data-testid={`text-name-${instance.id}`}>
+                                {instance.template?.name || 'Untitled Request'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm" data-testid={`text-assignee-${instance.id}`}>
+                                {instance.relatedPerson ? formatPersonName(instance.relatedPerson.fullName) : '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  instance.status === 'submitted' ? 'default' : 
+                                  instance.status === 'approved' ? 'default' : 
+                                  'outline'
+                                }
+                                data-testid={`badge-status-${instance.id}`}
+                              >
+                                {instance.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm" data-testid={`text-created-${instance.id}`}>
+                                {formatDate(instance.createdAt)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => setLocation(`/task-instances/${instance.id}`)}
+                                data-testid={`button-view-${instance.id}`}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </CardContent>
