@@ -38,7 +38,7 @@ const sectionSchema = z.object({
 
 const assignSchema = z.object({
   personId: z.string().min(1, "Please select a person"),
-  dueDate: z.string().optional(),
+  dueDate: z.coerce.date().optional().nullable(),
 });
 
 type RequestForm = z.infer<typeof requestSchema>;
@@ -424,7 +424,7 @@ export default function CustomRequestEdit() {
     resolver: zodResolver(assignSchema),
     defaultValues: {
       personId: "",
-      dueDate: "",
+      dueDate: undefined,
     },
   });
 
@@ -1472,7 +1472,12 @@ export default function CustomRequestEdit() {
                   <FormItem>
                     <FormLabel>Due Date (optional)</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-due-date" />
+                      <Input 
+                        type="date" 
+                        value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value || ''}
+                        onChange={(e) => field.onChange(e.target.value || undefined)}
+                        data-testid="input-due-date" 
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
