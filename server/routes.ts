@@ -96,6 +96,10 @@ import {
   insertTaskInstanceSchema,
   updateTaskInstanceStatusSchema,
   insertTaskInstanceResponseSchema,
+  insertClientCustomRequestSectionSchema,
+  updateClientCustomRequestSectionSchema,
+  insertClientCustomRequestQuestionSchema,
+  updateClientCustomRequestQuestionSchema,
   type User,
   clientPortalUsers,
 } from "@shared/schema";
@@ -9441,6 +9445,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting custom request:", error);
       res.status(500).json({ message: "Failed to delete custom request" });
+    }
+  });
+
+  // POST /api/custom-requests/:requestId/sections - Create section (requireAdmin)
+  app.post("/api/custom-requests/:requestId/sections", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { requestId } = req.params;
+      
+      const validationResult = insertClientCustomRequestSectionSchema.safeParse({
+        ...req.body,
+        requestId
+      });
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid section data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const section = await storage.createClientCustomRequestSection(validationResult.data);
+      res.status(201).json(section);
+    } catch (error) {
+      console.error("Error creating custom request section:", error);
+      res.status(500).json({ message: "Failed to create custom request section" });
+    }
+  });
+
+  // GET /api/custom-requests/:requestId/sections - Get all sections (isAuthenticated)
+  app.get("/api/custom-requests/:requestId/sections", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { requestId } = req.params;
+      const sections = await storage.getClientCustomRequestSectionsByRequestId(requestId);
+      res.json(sections);
+    } catch (error) {
+      console.error("Error fetching custom request sections:", error);
+      res.status(500).json({ message: "Failed to fetch custom request sections" });
+    }
+  });
+
+  // PATCH /api/custom-request-sections/:id - Update section (requireAdmin)
+  app.patch("/api/custom-request-sections/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const validationResult = updateClientCustomRequestSectionSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid section data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const section = await storage.updateClientCustomRequestSection(id, validationResult.data);
+      res.json(section);
+    } catch (error) {
+      console.error("Error updating custom request section:", error);
+      res.status(500).json({ message: "Failed to update custom request section" });
+    }
+  });
+
+  // DELETE /api/custom-request-sections/:id - Delete section (requireAdmin)
+  app.delete("/api/custom-request-sections/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteClientCustomRequestSection(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting custom request section:", error);
+      res.status(500).json({ message: "Failed to delete custom request section" });
+    }
+  });
+
+  // PATCH /api/custom-request-sections/reorder - Reorder sections (requireAdmin)
+  app.patch("/api/custom-request-sections/reorder", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { updates } = req.body;
+      await storage.updateCustomRequestSectionOrders(updates);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error reordering custom request sections:", error);
+      res.status(500).json({ message: "Failed to reorder custom request sections" });
+    }
+  });
+
+  // POST /api/custom-request-sections/:sectionId/questions - Create question (requireAdmin)
+  app.post("/api/custom-request-sections/:sectionId/questions", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { sectionId } = req.params;
+      
+      const validationResult = insertClientCustomRequestQuestionSchema.safeParse({
+        ...req.body,
+        sectionId
+      });
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid question data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const question = await storage.createClientCustomRequestQuestion(validationResult.data);
+      res.status(201).json(question);
+    } catch (error) {
+      console.error("Error creating custom request question:", error);
+      res.status(500).json({ message: "Failed to create custom request question" });
+    }
+  });
+
+  // GET /api/custom-request-sections/:sectionId/questions - Get all questions for section (isAuthenticated)
+  app.get("/api/custom-request-sections/:sectionId/questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { sectionId } = req.params;
+      const questions = await storage.getClientCustomRequestQuestionsBySectionId(sectionId);
+      res.json(questions);
+    } catch (error) {
+      console.error("Error fetching custom request questions:", error);
+      res.status(500).json({ message: "Failed to fetch custom request questions" });
+    }
+  });
+
+  // PATCH /api/custom-request-questions/:id - Update question (requireAdmin)
+  app.patch("/api/custom-request-questions/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const validationResult = updateClientCustomRequestQuestionSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid question data", 
+          errors: validationResult.error.issues 
+        });
+      }
+      
+      const question = await storage.updateClientCustomRequestQuestion(id, validationResult.data);
+      res.json(question);
+    } catch (error) {
+      console.error("Error updating custom request question:", error);
+      res.status(500).json({ message: "Failed to update custom request question" });
+    }
+  });
+
+  // DELETE /api/custom-request-questions/:id - Delete question (requireAdmin)
+  app.delete("/api/custom-request-questions/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteClientCustomRequestQuestion(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting custom request question:", error);
+      res.status(500).json({ message: "Failed to delete custom request question" });
+    }
+  });
+
+  // PATCH /api/custom-request-questions/reorder - Reorder questions (requireAdmin)
+  app.patch("/api/custom-request-questions/reorder", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { updates } = req.body;
+      await storage.updateCustomRequestQuestionOrders(updates);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error reordering custom request questions:", error);
+      res.status(500).json({ message: "Failed to reorder custom request questions" });
     }
   });
 
