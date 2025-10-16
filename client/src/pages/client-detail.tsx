@@ -6148,6 +6148,7 @@ export default function ClientDetail() {
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
   const [isNewRequestDialogOpen, setIsNewRequestDialogOpen] = useState(false);
+  const [requestType, setRequestType] = useState<'template' | 'custom' | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedPersonId, setSelectedPersonId] = useState<string>("");
@@ -7961,105 +7962,165 @@ export default function ClientDetail() {
       />
 
       {/* New Client Request Dialog */}
-      <Dialog open={isNewRequestDialogOpen} onOpenChange={setIsNewRequestDialogOpen}>
+      <Dialog open={isNewRequestDialogOpen} onOpenChange={(open) => {
+        setIsNewRequestDialogOpen(open);
+        if (!open) {
+          setRequestType(null);
+          setSelectedCategoryId("");
+          setSelectedTemplateId("");
+          setSelectedPersonId("");
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New Client Request</DialogTitle>
             <DialogDescription>
-              Select a template and assign it to a related person
+              {!requestType ? "Choose how to create the request" : requestType === 'template' ? "Select a template and assign it to a related person" : "Create a custom one-time request"}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4">
-            {/* Category Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Category</label>
-              <Select 
-                value={selectedCategoryId} 
-                onValueChange={(value) => {
-                  setSelectedCategoryId(value);
-                  setSelectedTemplateId(""); // Reset template when category changes
-                }}
+          {!requestType ? (
+            <div className="grid grid-cols-2 gap-4 py-4">
+              <Card 
+                className="cursor-pointer hover:bg-accent transition-colors p-6"
+                onClick={() => setRequestType('template')}
+                data-testid="card-use-template"
               >
-                <SelectTrigger data-testid="select-category">
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(taskCategories || []).map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <div className="flex flex-col items-center text-center gap-3">
+                  <FileText className="w-12 h-12 text-primary" />
+                  <div>
+                    <h3 className="font-semibold">Use Template</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Select from reusable templates
+                    </p>
+                  </div>
+                </div>
+              </Card>
+              
+              <Card 
+                className="cursor-pointer hover:bg-accent transition-colors p-6"
+                onClick={() => setRequestType('custom')}
+                data-testid="card-create-custom"
+              >
+                <div className="flex flex-col items-center text-center gap-3">
+                  <Plus className="w-12 h-12 text-primary" />
+                  <div>
+                    <h3 className="font-semibold">Create Custom</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Build a one-time request
+                    </p>
+                  </div>
+                </div>
+              </Card>
             </div>
+          ) : requestType === 'template' ? (
+            <>
+              <div className="space-y-4">
+                {/* Category Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Category</label>
+                  <Select 
+                    value={selectedCategoryId} 
+                    onValueChange={(value) => {
+                      setSelectedCategoryId(value);
+                      setSelectedTemplateId("");
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-category">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(taskCategories || []).map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {/* Template Selection */}
-            {selectedCategoryId && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Template</label>
-                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                  <SelectTrigger data-testid="select-template">
-                    <SelectValue placeholder="Select a template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(taskTemplates || []).map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Template Selection */}
+                {selectedCategoryId && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Template</label>
+                    <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                      <SelectTrigger data-testid="select-template">
+                        <SelectValue placeholder="Select a template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(taskTemplates || []).map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Related Person Selection */}
+                {selectedTemplateId && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Assign to Related Person</label>
+                    <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
+                      <SelectTrigger data-testid="select-person">
+                        <SelectValue placeholder="Select a person" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(relatedPeople || []).map((cp: any) => (
+                          <SelectItem key={cp.person.id} value={cp.person.id}>
+                            {formatPersonName(cp.person.fullName)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Related Person Selection */}
-            {selectedTemplateId && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Assign to Related Person</label>
-                <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
-                  <SelectTrigger data-testid="select-person">
-                    <SelectValue placeholder="Select a person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(relatedPeople || []).map((cp: any) => (
-                      <SelectItem key={cp.person.id} value={cp.person.id}>
-                        {formatPersonName(cp.person.fullName)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex justify-end gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setRequestType(null);
+                    setSelectedCategoryId("");
+                    setSelectedTemplateId("");
+                    setSelectedPersonId("");
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (selectedTemplateId && selectedPersonId) {
+                      createTaskInstanceMutation.mutate({
+                        templateId: selectedTemplateId,
+                        personId: selectedPersonId,
+                      });
+                    }
+                  }}
+                  disabled={!selectedTemplateId || !selectedPersonId || createTaskInstanceMutation.isPending}
+                  data-testid="button-create-request"
+                >
+                  {createTaskInstanceMutation.isPending ? "Creating..." : "Create Request"}
+                </Button>
               </div>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsNewRequestDialogOpen(false);
-                setSelectedCategoryId("");
-                setSelectedTemplateId("");
-                setSelectedPersonId("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (selectedTemplateId && selectedPersonId) {
-                  createTaskInstanceMutation.mutate({
-                    templateId: selectedTemplateId,
-                    personId: selectedPersonId,
-                  });
-                }
-              }}
-              disabled={!selectedTemplateId || !selectedPersonId || createTaskInstanceMutation.isPending}
-              data-testid="button-create-request"
-            >
-              {createTaskInstanceMutation.isPending ? "Creating..." : "Create Request"}
-            </Button>
-          </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Custom request builder is coming soon. For now, you can create custom requests through the admin interface.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setRequestType(null)}
+                >
+                  Back
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
