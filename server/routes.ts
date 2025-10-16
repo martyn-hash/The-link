@@ -9353,6 +9353,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Person not found" });
         }
         
+        // Check for duplicate incomplete task instances
+        const existingInstances = await storage.getTaskInstancesByPersonId(personId);
+        const duplicateInstance = existingInstances.find(instance => 
+          instance.templateId === templateId && 
+          instance.status !== 'submitted' && 
+          instance.status !== 'approved' && 
+          instance.status !== 'cancelled'
+        );
+        
+        if (duplicateInstance) {
+          return res.status(400).json({ 
+            message: "This person already has an incomplete task for this template. Please complete or cancel the existing task before creating a new one.",
+            existingInstanceId: duplicateInstance.id 
+          });
+        }
+        
         // Check if this person has a portal user account
         const portalUser = await storage.getClientPortalUserByPersonId(personId);
         if (portalUser) {
