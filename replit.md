@@ -31,6 +31,7 @@ The application is built with a modern tech stack designed for scalability and p
 - **Client & Contact Management**: Comprehensive profiles, risk assessment.
 - **Service & Communication Tracking**: Scheduled services, communication logging, document management.
 - **Task Templates**: Admin interface for creating reusable form templates with 10+ question types, organized by categories and visual sections with drag-and-drop reordering. Staff can apply templates to clients/contacts, creating task instances. Portal users can complete assigned forms, including file uploads, with progress saving and submission. File uploads automatically create documents linked to task responses. Staff can review submissions.
+- **Custom Client Requests**: Staff can create client-specific, one-off requests without using templates. These mirror the template structure (requests → sections → questions) but are client-scoped and non-reusable. Task instances can be created from either templates or custom requests (enforced via database CHECK constraint). Full CRUD API available for managing custom requests.
 - **Client Portal & Messaging**: Primary 6-digit email verification for authentication, real-time messaging threads with topics, status tracking, dual authorship, unread tracking, file attachments, and archive functionality. Includes PWA installation flow.
 - **Advanced Table Features**: Dynamic column management (reorder, resize, show/hide), service owner display, color-coded tags, filtering, bulk selection.
 - **Risk Assessment**: Multi-version assessments with checklists, unique response storage, color-coded risk levels.
@@ -39,7 +40,7 @@ The application is built with a modern tech stack designed for scalability and p
 
 ### System Design Choices
 - **Monorepo Structure**: `client/`, `server/`, and `shared/` directories.
-- **Database Schema**: Relational design for users, clients, projects, services, communications, documents, risk assessments, messaging entities, and task templates.
+- **Database Schema**: Relational design for users, clients, projects, services, communications, documents, risk assessments, messaging entities, task templates, and custom client requests. Task instances support dual sources (template OR custom request) via CHECK constraint.
 - **API Design**: RESTful API routes with Zod for validation.
 - **Client Portal Architecture**: Dedicated messaging system with separate JWT/session cookie authentication (`/api/portal/*` routes) from staff OIDC auth (`/api/internal/*` routes).
 - **Security Model**: Tenant isolation by `clientId`, project-based access for staff unread counts, and separate authentication flows for staff and clients.
