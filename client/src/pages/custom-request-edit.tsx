@@ -302,9 +302,25 @@ function SortableSectionCard({
       <CardContent ref={setDropRef}>
         {questions.length === 0 ? (
           <div className="text-center py-8 border-2 border-dashed rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              Drag question types here to add them to this section
+            <p className="text-sm text-muted-foreground mb-4">
+              Drag question types here or use the menu below
             </p>
+            <Select
+              onValueChange={(type) => {
+                onEditQuestion('CREATE_NEW_' + type + '_' + section.id);
+              }}
+            >
+              <SelectTrigger className="w-[200px] mx-auto" data-testid={`select-add-question-${section.id}`}>
+                <SelectValue placeholder="Add question..." />
+              </SelectTrigger>
+              <SelectContent>
+                {QUESTION_TYPES.map((qt) => (
+                  <SelectItem key={qt.type} value={qt.type} data-testid={`option-question-type-${qt.type}`}>
+                    {qt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -318,6 +334,22 @@ function SortableSectionCard({
                     onDelete={() => onDeleteQuestion(question.id)}
                   />
                 ))}
+                <Select
+                  onValueChange={(type) => {
+                    onEditQuestion('CREATE_NEW_' + type + '_' + section.id);
+                  }}
+                >
+                  <SelectTrigger className="w-full" data-testid={`select-add-question-${section.id}`}>
+                    <SelectValue placeholder="Add another question..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUESTION_TYPES.map((qt) => (
+                      <SelectItem key={qt.type} value={qt.type} data-testid={`option-question-type-${qt.type}`}>
+                        {qt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </SortableContext>
           </DndContext>
@@ -897,9 +929,23 @@ export default function CustomRequestEdit() {
                     <CardContent className="py-12">
                       <div className="text-center">
                         <p className="text-muted-foreground mb-2">No sections yet</p>
-                        <p className="text-sm text-muted-foreground">
-                          Drag the "Section" component from the left to get started
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Drag the "Section" component from the left or click the button below
                         </p>
+                        <Button
+                          onClick={() => {
+                            const order = sections.length;
+                            createSectionMutation.mutate({
+                              title: "New Section",
+                              description: "",
+                              order,
+                            });
+                          }}
+                          data-testid="button-add-first-section"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Section
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -919,10 +965,19 @@ export default function CustomRequestEdit() {
                         }}
                         onDeleteSection={() => deleteSectionMutation.mutate(section.id)}
                         onEditQuestion={(questionId) => {
-                          const question = section.questions?.find((q: any) => q.id === questionId);
-                          if (question) {
-                            setEditQuestionId(questionId);
-                            setEditQuestionOptions(question.options || []);
+                          // Check if this is a request to create a new question
+                          if (questionId.startsWith('CREATE_NEW_')) {
+                            const parts = questionId.split('_');
+                            const questionType = parts.slice(2, -1).join('_'); // Get type between CREATE_NEW_ and last segment
+                            const sectionId = parts[parts.length - 1];
+                            setCreatingQuestion({ sectionId, questionType });
+                            setCreateQuestionOptions([]);
+                          } else {
+                            const question = section.questions?.find((q: any) => q.id === questionId);
+                            if (question) {
+                              setEditQuestionId(questionId);
+                              setEditQuestionOptions(question.options || []);
+                            }
                           }
                         }}
                         onDeleteQuestion={(questionId) => deleteQuestionMutation.mutate(questionId)}
@@ -931,6 +986,22 @@ export default function CustomRequestEdit() {
                         }
                       />
                     ))}
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const order = sections.length;
+                        createSectionMutation.mutate({
+                          title: "New Section",
+                          description: "",
+                          order,
+                        });
+                      }}
+                      className="w-full"
+                      data-testid="button-add-section"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Another Section
+                    </Button>
                   </SortableContext>
                 )}
               </div>
