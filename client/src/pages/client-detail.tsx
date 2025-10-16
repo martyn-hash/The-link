@@ -45,7 +45,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useActivityTracker } from "@/lib/activityTracker";
 import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication, Document, ClientPortalUser } from "@shared/schema";
-import { insertPersonSchema, insertCommunicationSchema } from "@shared/schema";
+import { insertPersonSchema, insertCommunicationSchema, insertClientCustomRequestSchema } from "@shared/schema";
 
 // Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
 function formatPersonName(fullName: string): string {
@@ -6153,6 +6153,21 @@ export default function ClientDetail() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedPersonId, setSelectedPersonId] = useState<string>("");
   
+  // Custom request form schema with validation
+  const customRequestFormSchema = insertClientCustomRequestSchema.extend({
+    name: z.string().min(1, "Request name is required"),
+    description: z.string().optional(),
+  }).omit({ clientId: true });
+  
+  // Custom request form
+  const customRequestForm = useForm<z.infer<typeof customRequestFormSchema>>({
+    resolver: zodResolver(customRequestFormSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+    },
+  });
+  
   // Track client view activity when component mounts
   useEffect(() => {
     if (id) {
@@ -6403,6 +6418,35 @@ export default function ClientDetail() {
       toast({
         title: "Error",
         description: error?.message || "Failed to create client request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for creating custom request
+  const createCustomRequestMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      return await apiRequest("POST", `/api/clients/${id}/custom-requests`, {
+        clientId: id,
+        name: data.name,
+        description: data.description || "",
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Custom request created successfully. You can now add sections and questions in the admin area.",
+      });
+      // Invalidate custom requests query to refresh the list
+      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}/custom-requests`] });
+      setIsNewRequestDialogOpen(false);
+      setRequestType(null);
+      customRequestForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create custom request",
         variant: "destructive",
       });
     },
@@ -7969,6 +8013,7 @@ export default function ClientDetail() {
           setSelectedCategoryId("");
           setSelectedTemplateId("");
           setSelectedPersonId("");
+          customRequestForm.reset();
         }
       }}>
         <DialogContent className="max-w-lg">
@@ -8107,19 +8152,75 @@ export default function ClientDetail() {
               </div>
             </>
           ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Custom request builder is coming soon. For now, you can create custom requests through the admin interface.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setRequestType(null)}
-                >
-                  Back
-                </Button>
-              </div>
-            </div>
+            <Form {...customRequestForm}>
+              <form onSubmit={customRequestForm.handleSubmit((data) => createCustomRequestMutation.mutate(data))} className="space-y-4">
+                <FormField
+                  control={customRequestForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Request Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="e.g., Quarterly Business Review Documents"
+                          data-testid="input-custom-request-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={customRequestForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          placeholder="Describe what information you need from the client..."
+                          rows={4}
+                          data-testid="input-custom-request-description"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Provide details about what this request is for
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="bg-muted/30 border border-dashed rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground">
+                    After creating the custom request, you'll be able to add sections and questions in the builder.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setRequestType(null);
+                      customRequestForm.reset();
+                    }}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createCustomRequestMutation.isPending}
+                    data-testid="button-create-custom-request"
+                  >
+                    {createCustomRequestMutation.isPending ? "Creating..." : "Create Custom Request"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           )}
         </DialogContent>
       </Dialog>
