@@ -9324,6 +9324,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== TASK INSTANCE ROUTES =====
 
+  // Custom Client Request Routes
+  
+  // POST /api/clients/:clientId/custom-requests - Create custom request for a client (requireAdmin)
+  app.post("/api/clients/:clientId/custom-requests", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      const { name, description, sections } = req.body;
+      
+      const requestData = {
+        clientId,
+        name,
+        description,
+        createdBy: req.effectiveUser.id
+      };
+      
+      const request = await storage.createClientCustomRequest(requestData);
+      
+      if (sections && Array.isArray(sections)) {
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i];
+          const createdSection = await storage.createClientCustomRequestSection({
+            requestId: request.id,
+            title: section.title,
+            description: section.description,
+            order: i
+          });
+          
+          if (section.questions && Array.isArray(section.questions)) {
+            for (let j = 0; j < section.questions.length; j++) {
+              const question = section.questions[j];
+              await storage.createClientCustomRequestQuestion({
+                sectionId: createdSection.id,
+                questionType: question.questionType,
+                label: question.label,
+                helpText: question.helpText,
+                isRequired: question.isRequired || false,
+                order: j,
+                options: question.options,
+                validationRules: question.validationRules,
+                conditionalLogic: question.conditionalLogic
+              });
+            }
+          }
+        }
+      }
+      
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating custom request:", error);
+      res.status(500).json({ message: "Failed to create custom request" });
+    }
+  });
+  
+  // GET /api/clients/:clientId/custom-requests - Get all custom requests for a client (isAuthenticated)
+  app.get("/api/clients/:clientId/custom-requests", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      const requests = await storage.getClientCustomRequestsByClientId(clientId);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching custom requests:", error);
+      res.status(500).json({ message: "Failed to fetch custom requests" });
+    }
+  });
+  
+  // GET /api/custom-requests/:id/full - Get custom request with sections and questions (isAuthenticated)
+  app.get("/api/custom-requests/:id/full", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const request = await storage.getClientCustomRequestById(id);
+      if (!request) {
+        return res.status(404).json({ message: "Custom request not found" });
+      }
+      
+      const sections = await storage.getClientCustomRequestSectionsByRequestId(id);
+      
+      const sectionsWithQuestions = await Promise.all(
+        sections.map(async (section) => {
+          const questions = await storage.getClientCustomRequestQuestionsBySectionId(section.id);
+          return { ...section, questions };
+        })
+      );
+      
+      res.json({
+        ...request,
+        sections: sectionsWithQuestions
+      });
+    } catch (error) {
+      console.error("Error fetching custom request details:", error);
+      res.status(500).json({ message: "Failed to fetch custom request details" });
+    }
+  });
+  
+  // PATCH /api/custom-requests/:id - Update custom request (requireAdmin)
+  app.patch("/api/custom-requests/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const { name, description } = req.body;
+      
+      const updated = await storage.updateClientCustomRequest(id, { name, description });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating custom request:", error);
+      res.status(500).json({ message: "Failed to update custom request" });
+    }
+  });
+  
+  // DELETE /api/custom-requests/:id - Delete custom request (requireAdmin)
+  app.delete("/api/custom-requests/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteClientCustomRequest(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting custom request:", error);
+      res.status(500).json({ message: "Failed to delete custom request" });
+    }
+  });
+
   // POST /api/task-instances - Create a new task instance (requireAdmin)
   app.post("/api/task-instances", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
