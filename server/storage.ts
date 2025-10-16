@@ -51,6 +51,9 @@ import {
   taskTemplates,
   taskTemplateSections,
   taskTemplateQuestions,
+  clientCustomRequests,
+  clientCustomRequestSections,
+  clientCustomRequestQuestions,
   taskInstances,
   taskInstanceResponses,
   type User,
@@ -165,6 +168,15 @@ import {
   type TaskTemplateQuestion,
   type InsertTaskTemplateQuestion,
   type UpdateTaskTemplateQuestion,
+  type ClientCustomRequest,
+  type InsertClientCustomRequest,
+  type UpdateClientCustomRequest,
+  type ClientCustomRequestSection,
+  type InsertClientCustomRequestSection,
+  type UpdateClientCustomRequestSection,
+  type ClientCustomRequestQuestion,
+  type InsertClientCustomRequestQuestion,
+  type UpdateClientCustomRequestQuestion,
   type TaskInstance,
   type InsertTaskInstance,
   type UpdateTaskInstance,
@@ -726,6 +738,30 @@ export interface IStorage {
   updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
   deleteTaskTemplateQuestion(id: string): Promise<void>;
   updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void>;
+  
+  // Client Custom Request operations
+  createClientCustomRequest(request: InsertClientCustomRequest): Promise<ClientCustomRequest>;
+  getClientCustomRequestById(id: string): Promise<ClientCustomRequest | undefined>;
+  getClientCustomRequestsByClientId(clientId: string): Promise<ClientCustomRequest[]>;
+  updateClientCustomRequest(id: string, request: UpdateClientCustomRequest): Promise<ClientCustomRequest>;
+  deleteClientCustomRequest(id: string): Promise<void>;
+  
+  // Client Custom Request Section operations
+  createClientCustomRequestSection(section: InsertClientCustomRequestSection): Promise<ClientCustomRequestSection>;
+  getClientCustomRequestSectionById(id: string): Promise<ClientCustomRequestSection | undefined>;
+  getClientCustomRequestSectionsByRequestId(requestId: string): Promise<ClientCustomRequestSection[]>;
+  updateClientCustomRequestSection(id: string, section: UpdateClientCustomRequestSection): Promise<ClientCustomRequestSection>;
+  deleteClientCustomRequestSection(id: string): Promise<void>;
+  updateCustomRequestSectionOrders(updates: { id: string; order: number }[]): Promise<void>;
+  
+  // Client Custom Request Question operations
+  createClientCustomRequestQuestion(question: InsertClientCustomRequestQuestion): Promise<ClientCustomRequestQuestion>;
+  getClientCustomRequestQuestionById(id: string): Promise<ClientCustomRequestQuestion | undefined>;
+  getClientCustomRequestQuestionsBySectionId(sectionId: string): Promise<ClientCustomRequestQuestion[]>;
+  getAllClientCustomRequestQuestionsByRequestId(requestId: string): Promise<ClientCustomRequestQuestion[]>;
+  updateClientCustomRequestQuestion(id: string, question: UpdateClientCustomRequestQuestion): Promise<ClientCustomRequestQuestion>;
+  deleteClientCustomRequestQuestion(id: string): Promise<void>;
+  updateCustomRequestQuestionOrders(updates: { id: string; order: number }[]): Promise<void>;
   
   // Task Instance operations
   createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
@@ -8690,6 +8726,167 @@ export class DatabaseStorage implements IStorage {
           .update(taskTemplateQuestions)
           .set({ order: update.order, updatedAt: new Date() })
           .where(eq(taskTemplateQuestions.id, update.id));
+      }
+    });
+  }
+
+  // Client Custom Request operations
+  async createClientCustomRequest(request: InsertClientCustomRequest): Promise<ClientCustomRequest> {
+    const [created] = await db
+      .insert(clientCustomRequests)
+      .values(request)
+      .returning();
+    return created;
+  }
+
+  async getClientCustomRequestById(id: string): Promise<ClientCustomRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(clientCustomRequests)
+      .where(eq(clientCustomRequests.id, id));
+    return request;
+  }
+
+  async getClientCustomRequestsByClientId(clientId: string): Promise<ClientCustomRequest[]> {
+    return await db
+      .select()
+      .from(clientCustomRequests)
+      .where(eq(clientCustomRequests.clientId, clientId))
+      .orderBy(desc(clientCustomRequests.createdAt));
+  }
+
+  async updateClientCustomRequest(id: string, request: UpdateClientCustomRequest): Promise<ClientCustomRequest> {
+    const [updated] = await db
+      .update(clientCustomRequests)
+      .set({ ...request, updatedAt: new Date() })
+      .where(eq(clientCustomRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientCustomRequest(id: string): Promise<void> {
+    await db.delete(clientCustomRequests).where(eq(clientCustomRequests.id, id));
+  }
+
+  // Client Custom Request Section operations
+  async createClientCustomRequestSection(section: InsertClientCustomRequestSection): Promise<ClientCustomRequestSection> {
+    const [created] = await db
+      .insert(clientCustomRequestSections)
+      .values(section)
+      .returning();
+    return created;
+  }
+
+  async getClientCustomRequestSectionById(id: string): Promise<ClientCustomRequestSection | undefined> {
+    const [section] = await db
+      .select()
+      .from(clientCustomRequestSections)
+      .where(eq(clientCustomRequestSections.id, id));
+    return section;
+  }
+
+  async getClientCustomRequestSectionsByRequestId(requestId: string): Promise<ClientCustomRequestSection[]> {
+    return await db
+      .select()
+      .from(clientCustomRequestSections)
+      .where(eq(clientCustomRequestSections.requestId, requestId))
+      .orderBy(clientCustomRequestSections.order);
+  }
+
+  async updateClientCustomRequestSection(id: string, section: UpdateClientCustomRequestSection): Promise<ClientCustomRequestSection> {
+    const [updated] = await db
+      .update(clientCustomRequestSections)
+      .set({ ...section, updatedAt: new Date() })
+      .where(eq(clientCustomRequestSections.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientCustomRequestSection(id: string): Promise<void> {
+    await db.delete(clientCustomRequestSections).where(eq(clientCustomRequestSections.id, id));
+  }
+
+  async updateCustomRequestSectionOrders(updates: { id: string; order: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .update(clientCustomRequestSections)
+          .set({ order: update.order, updatedAt: new Date() })
+          .where(eq(clientCustomRequestSections.id, update.id));
+      }
+    });
+  }
+
+  // Client Custom Request Question operations
+  async createClientCustomRequestQuestion(question: InsertClientCustomRequestQuestion): Promise<ClientCustomRequestQuestion> {
+    const [created] = await db
+      .insert(clientCustomRequestQuestions)
+      .values(question)
+      .returning();
+    return created;
+  }
+
+  async getClientCustomRequestQuestionById(id: string): Promise<ClientCustomRequestQuestion | undefined> {
+    const [question] = await db
+      .select()
+      .from(clientCustomRequestQuestions)
+      .where(eq(clientCustomRequestQuestions.id, id));
+    return question;
+  }
+
+  async getClientCustomRequestQuestionsBySectionId(sectionId: string): Promise<ClientCustomRequestQuestion[]> {
+    return await db
+      .select()
+      .from(clientCustomRequestQuestions)
+      .where(eq(clientCustomRequestQuestions.sectionId, sectionId))
+      .orderBy(clientCustomRequestQuestions.order);
+  }
+
+  async getAllClientCustomRequestQuestionsByRequestId(requestId: string): Promise<ClientCustomRequestQuestion[]> {
+    return await db
+      .select({
+        id: clientCustomRequestQuestions.id,
+        sectionId: clientCustomRequestQuestions.sectionId,
+        questionType: clientCustomRequestQuestions.questionType,
+        label: clientCustomRequestQuestions.label,
+        helpText: clientCustomRequestQuestions.helpText,
+        isRequired: clientCustomRequestQuestions.isRequired,
+        order: clientCustomRequestQuestions.order,
+        validationRules: clientCustomRequestQuestions.validationRules,
+        options: clientCustomRequestQuestions.options,
+        conditionalLogic: clientCustomRequestQuestions.conditionalLogic,
+        createdAt: clientCustomRequestQuestions.createdAt,
+        updatedAt: clientCustomRequestQuestions.updatedAt,
+      })
+      .from(clientCustomRequestQuestions)
+      .innerJoin(
+        clientCustomRequestSections,
+        eq(clientCustomRequestQuestions.sectionId, clientCustomRequestSections.id)
+      )
+      .where(eq(clientCustomRequestSections.requestId, requestId))
+      .orderBy(clientCustomRequestSections.order, clientCustomRequestQuestions.order);
+  }
+
+  async updateClientCustomRequestQuestion(id: string, question: UpdateClientCustomRequestQuestion): Promise<ClientCustomRequestQuestion> {
+    const [updated] = await db
+      .update(clientCustomRequestQuestions)
+      .set({ ...question, updatedAt: new Date() })
+      .where(eq(clientCustomRequestQuestions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientCustomRequestQuestion(id: string): Promise<void> {
+    await db.delete(clientCustomRequestQuestions).where(eq(clientCustomRequestQuestions.id, id));
+  }
+
+  async updateCustomRequestQuestionOrders(updates: { id: string; order: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .update(clientCustomRequestQuestions)
+          .set({ order: update.order, updatedAt: new Date() })
+          .where(eq(clientCustomRequestQuestions.id, update.id));
       }
     });
   }
