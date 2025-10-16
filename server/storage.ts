@@ -9038,6 +9038,12 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
+    // Build flat responses object for frontend
+    const responsesMap: Record<string, any> = {};
+    responses.forEach(r => {
+      responsesMap[r.questionId] = r.responseValue;
+    });
+
     return {
       id: instanceData.id,
       templateId: instanceData.templateId,
@@ -9056,6 +9062,7 @@ export class DatabaseStorage implements IStorage {
       client: instanceData.client,
       person: instanceData.person || undefined,
       sections: sectionsWithQuestions,
+      responses: responsesMap,
     };
   }
 

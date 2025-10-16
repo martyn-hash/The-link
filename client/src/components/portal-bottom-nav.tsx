@@ -3,11 +3,21 @@ import { Link, useLocation } from 'wouter';
 import { Menu, CheckSquare, MessageCircle, User, FileText } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { portalRequest } from '@/lib/portalApi';
 import logoPath from '@assets/full_logo_transparent_600_1759469504917.png';
 
 export default function PortalBottomNav() {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Fetch incomplete task count
+  const { data: taskCountData } = useQuery<{ count: number }>({
+    queryKey: ['/api/portal/task-instances/count/incomplete'],
+    queryFn: () => portalRequest('GET', '/api/portal/task-instances/count/incomplete'),
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
 
   const isActive = (href: string) => {
     return location === href || location.startsWith(href + '/');
@@ -57,16 +67,29 @@ export default function PortalBottomNav() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = item.href !== '#menu' && item.href !== '#' && isActive(item.href);
+            const showBadge = item.href === '/portal/tasks' && taskCountData && taskCountData.count > 0;
+            
             const content = (
               <button
                 className={`
-                  flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]
+                  flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px] relative
                   ${active ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}
                   hover:text-primary
                 `}
                 data-testid={item.testId}
               >
-                <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
+                <div className="relative">
+                  <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
+                  {showBadge && (
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-2 -right-2 h-4 min-w-4 px-1 flex items-center justify-center text-[10px] font-bold"
+                      data-testid="portal-tasks-badge"
+                    >
+                      {taskCountData.count}
+                    </Badge>
+                  )}
+                </div>
                 <span className="text-xs font-medium">{item.label}</span>
               </button>
             );

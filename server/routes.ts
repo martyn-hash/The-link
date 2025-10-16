@@ -934,6 +934,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/portal/task-instances/count/incomplete - Get count of incomplete tasks
+  app.get("/api/portal/task-instances/count/incomplete", authenticatePortal, async (req: any, res: any) => {
+    try {
+      const relatedPersonId = req.portalUser.relatedPersonId;
+
+      if (!relatedPersonId) {
+        return res.status(400).json({ message: "Portal user has no associated person" });
+      }
+
+      const instances = await storage.getTaskInstancesByPersonId(relatedPersonId);
+      const incompleteCount = instances.filter(i => i.status !== 'submitted' && i.status !== 'approved' && i.status !== 'cancelled').length;
+      res.json({ count: incompleteCount });
+    } catch (error) {
+      console.error("Error counting incomplete task instances:", error);
+      res.status(500).json({ message: "Failed to count incomplete tasks" });
+    }
+  });
+
   // GET /api/portal/task-instances/:id - Get specific task instance with full details
   app.get("/api/portal/task-instances/:id", authenticatePortal, async (req: any, res: any) => {
     try {
