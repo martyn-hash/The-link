@@ -16,7 +16,12 @@ interface TaskInstance {
   status: 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'cancelled';
   createdAt: string;
   submittedAt?: string;
-  template: {
+  template?: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+  customRequest?: {
     id: string;
     name: string;
     description?: string;
@@ -207,11 +212,11 @@ export default function PortalTasks() {
                           {getStatusIcon(task.status)}
                           <div className="flex-1">
                             <CardTitle className="text-lg mb-1" data-testid={`text-task-name-${task.id}`}>
-                              {task.template.name}
+                              {task.template?.name || task.customRequest?.name}
                             </CardTitle>
-                            {task.template.description && (
+                            {(task.template?.description || task.customRequest?.description) && (
                               <CardDescription data-testid={`text-task-description-${task.id}`}>
-                                {task.template.description}
+                                {task.template?.description || task.customRequest?.description}
                               </CardDescription>
                             )}
                             <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">

@@ -39,9 +39,17 @@ interface Section {
 interface TaskInstance {
   id: string;
   status: string;
-  template: {
+  template?: {
     name: string;
     description: string;
+  };
+  customRequest?: {
+    name: string;
+    description: string;
+  };
+  client?: {
+    id: string;
+    name: string;
   };
   sections: Section[];
   responses: Record<string, any>;
@@ -240,7 +248,7 @@ export default function PortalTaskComplete() {
             </Label>
             <Input
               id={question.id}
-              type={question.type}
+              type={question.questionType === 'email' ? 'email' : question.questionType === 'number' ? 'number' : 'text'}
               value={value || ''}
               onChange={(e) => handleFieldChange(question.id, e.target.value)}
               className={hasError ? 'border-red-500' : ''}
@@ -587,16 +595,16 @@ export default function PortalTaskComplete() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="text-template-name">
-                {taskInstance.template.name}
+                {taskInstance.template?.name || taskInstance.customRequest?.name}
               </h1>
               {taskInstance.client && (
                 <p className="text-lg text-gray-600 dark:text-gray-300 mt-1" data-testid="text-client-name">
                   {taskInstance.client.name}
                 </p>
               )}
-              {taskInstance.template.description && (
+              {(taskInstance.template?.description || taskInstance.customRequest?.description) && (
                 <p className="text-gray-500 dark:text-gray-400 mt-2">
-                  {taskInstance.template.description}
+                  {taskInstance.template?.description || taskInstance.customRequest?.description}
                 </p>
               )}
             </div>

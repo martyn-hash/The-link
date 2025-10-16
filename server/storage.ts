@@ -767,7 +767,7 @@ export interface IStorage {
   createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
   getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
   getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
-  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
+  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
   getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
   getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
   getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
@@ -9004,11 +9004,12 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]> {
+  async getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]> {
     const instances = await db
       .select({
         id: taskInstances.id,
         templateId: taskInstances.templateId,
+        customRequestId: taskInstances.customRequestId,
         clientId: taskInstances.clientId,
         personId: taskInstances.personId,
         clientPortalUserId: taskInstances.clientPortalUserId,
@@ -9021,10 +9022,12 @@ export class DatabaseStorage implements IStorage {
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
         template: taskTemplates,
+        customRequest: clientCustomRequests,
         client: clients,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(eq(taskInstances.personId, personId))
       .orderBy(desc(taskInstances.createdAt));
@@ -9032,6 +9035,7 @@ export class DatabaseStorage implements IStorage {
     return instances.map(row => ({
       id: row.id,
       templateId: row.templateId,
+      customRequestId: row.customRequestId,
       clientId: row.clientId,
       personId: row.personId,
       clientPortalUserId: row.clientPortalUserId,
@@ -9043,7 +9047,8 @@ export class DatabaseStorage implements IStorage {
       approvedBy: row.approvedBy,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      template: row.template,
+      template: row.template || undefined,
+      customRequest: row.customRequest || undefined,
       client: row.client,
     }));
   }
