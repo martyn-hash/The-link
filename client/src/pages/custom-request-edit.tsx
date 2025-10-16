@@ -365,7 +365,7 @@ export default function CustomRequestEdit() {
   // Sync sections from request data
   useEffect(() => {
     if (request?.sections) {
-      setSections(request.sections.sort((a: any, b: any) => a.sortOrder - b.sortOrder));
+      setSections(request.sections.sort((a: any, b: any) => a.order - b.order));
     }
   }, [request]);
 
@@ -427,7 +427,7 @@ export default function CustomRequestEdit() {
   });
 
   const createSectionMutation = useMutation({
-    mutationFn: async (data: { title: string; description?: string; sortOrder: number }) => {
+    mutationFn: async (data: { title: string; description?: string; order: number }) => {
       return apiRequest("POST", `/api/custom-requests/${id}/sections`, data);
     },
     onSuccess: () => {
@@ -491,7 +491,7 @@ export default function CustomRequestEdit() {
   });
 
   const reorderSectionsMutation = useMutation({
-    mutationFn: async (updates: { id: string; sortOrder: number }[]) => {
+    mutationFn: async (updates: { id: string; order: number }[]) => {
       return apiRequest("PATCH", "/api/custom-request-sections/reorder", { updates });
     },
     onError: (error) => {
@@ -574,7 +574,7 @@ export default function CustomRequestEdit() {
   });
 
   const reorderQuestionsMutation = useMutation({
-    mutationFn: async (data: { updates: { id: string; sortOrder: number }[]; onError?: () => void }) => {
+    mutationFn: async (data: { updates: { id: string; order: number }[]; onError?: () => void }) => {
       return apiRequest("PATCH", "/api/custom-request-questions/reorder", { updates: data.updates });
     },
     onSuccess: () => {
@@ -596,6 +596,7 @@ export default function CustomRequestEdit() {
   const createTaskInstanceMutation = useMutation({
     mutationFn: async (data: AssignForm) => {
       return apiRequest("POST", "/api/task-instances", {
+        templateId: null,
         customRequestId: id,
         clientId: request?.clientId,
         personId: data.personId,
@@ -626,7 +627,7 @@ export default function CustomRequestEdit() {
     const reordered = arrayMove(section.questions, oldIndex, newIndex);
     const updates = reordered.map((question: any, index: number) => ({
       id: question.id,
-      sortOrder: index,
+      order: index,
     }));
 
     reorderQuestionsMutation.mutate({ updates, onError });
@@ -661,11 +662,11 @@ export default function CustomRequestEdit() {
       
       // If dropping a section from palette
       if (type === "section") {
-        const sortOrder = sections.length;
+        const order = sections.length;
         createSectionMutation.mutate({
           title: "New Section",
           description: "",
-          sortOrder,
+          order,
         });
         return;
       }
@@ -699,7 +700,7 @@ export default function CustomRequestEdit() {
         
         const updates = newOrder.map((section, index) => ({
           id: section.id,
-          sortOrder: index,
+          order: index,
         }));
         reorderSectionsMutation.mutate(updates);
         
@@ -847,37 +848,37 @@ export default function CustomRequestEdit() {
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
-          {/* Palette */}
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Add Components</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium mb-2 text-muted-foreground">Structure</p>
-                  <PaletteItem label="Section" icon={Layers} type="section" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium mb-2 text-muted-foreground">Question Types</p>
-                  <div className="space-y-2">
-                    {QUESTION_TYPES.map((qt) => (
-                      <PaletteItem key={qt.type} {...qt} />
-                    ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+            {/* Palette */}
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Add Components</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium mb-2 text-muted-foreground">Structure</p>
+                    <PaletteItem label="Section" icon={Layers} type="section" />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2 text-muted-foreground">Question Types</p>
+                    <div className="space-y-2">
+                      {QUESTION_TYPES.map((qt) => (
+                        <PaletteItem key={qt.type} {...qt} />
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Sections */}
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
+            {/* Sections */}
             <DropZone>
               <div className="space-y-4">
                 {sections.length === 0 ? (
@@ -922,15 +923,15 @@ export default function CustomRequestEdit() {
                 )}
               </div>
             </DropZone>
-            <DragOverlay>
-              {activeDrag && (
-                <div className="flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg shadow-lg">
-                  <span className="text-sm font-medium">{activeDrag.label}</span>
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
-        </div>
+          </div>
+          <DragOverlay>
+            {activeDrag && (
+              <div className="flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg shadow-lg">
+                <span className="text-sm font-medium">{activeDrag.label}</span>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
       </div>
 
       {/* Edit Request Dialog */}
@@ -1228,9 +1229,9 @@ export default function CustomRequestEdit() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {people.map((person: any) => (
-                          <SelectItem key={person.id} value={person.id} data-testid={`option-person-${person.id}`}>
-                            {person.name}
+                        {people.map((relationship: any) => (
+                          <SelectItem key={relationship.person.id} value={relationship.person.id} data-testid={`option-person-${relationship.person.id}`}>
+                            {relationship.person.fullName}
                           </SelectItem>
                         ))}
                       </SelectContent>

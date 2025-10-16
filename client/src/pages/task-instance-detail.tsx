@@ -10,8 +10,8 @@ import { Separator } from "@/components/ui/separator";
 interface Question {
   id: string;
   questionType: string;
-  questionText: string;
-  required: boolean;
+  label: string;
+  isRequired: boolean;
   options?: string[];
   response?: {
     responseValue: string;
@@ -34,7 +34,12 @@ interface TaskInstanceDetail {
   submittedAt?: string;
   approvedAt?: string;
   createdAt: string;
-  template: {
+  template?: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+  customRequest?: {
     id: string;
     name: string;
     description?: string;
@@ -138,8 +143,8 @@ function QuestionResponse({ question }: { question: Question }) {
     <div className="space-y-2">
       <div className="flex items-start gap-2">
         <span className="font-medium text-sm">
-          {question.questionText}
-          {question.required && <span className="text-destructive ml-1">*</span>}
+          {question.label}
+          {question.isRequired && <span className="text-destructive ml-1">*</span>}
         </span>
       </div>
       <div className="ml-4">
@@ -204,8 +209,12 @@ export default function TaskInstanceDetail() {
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-2xl">{instance.template.name}</CardTitle>
-              <CardDescription>{instance.template.description}</CardDescription>
+              <CardTitle className="text-2xl">
+                {instance.template?.name || instance.customRequest?.name || 'Untitled Request'}
+              </CardTitle>
+              <CardDescription>
+                {instance.template?.description || instance.customRequest?.description || ''}
+              </CardDescription>
             </div>
             <Badge className={statusColor} data-testid="badge-status">
               {instance.status.replace('_', ' ').toUpperCase()}

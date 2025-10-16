@@ -9168,11 +9168,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTaskInstanceWithFullData(id: string): Promise<any> {
-    // Get the instance with template
+    // Get the instance with template or custom request
     const [instanceData] = await db
       .select({
         id: taskInstances.id,
         templateId: taskInstances.templateId,
+        customRequestId: taskInstances.customRequestId,
         clientId: taskInstances.clientId,
         personId: taskInstances.personId,
         clientPortalUserId: taskInstances.clientPortalUserId,
@@ -9185,11 +9186,13 @@ export class DatabaseStorage implements IStorage {
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
         template: taskTemplates,
+        customRequest: clientCustomRequests,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .where(eq(taskInstances.id, id));
@@ -9198,23 +9201,49 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
 
-    // Get all sections for the template
-    const sections = await db
-      .select()
-      .from(taskTemplateSections)
-      .where(eq(taskTemplateSections.templateId, instanceData.templateId))
-      .orderBy(taskTemplateSections.order);
+    let sections: any[] = [];
+    let allQuestions: any[] = [];
 
-    // Get all questions for the template
-    const allQuestions = await db
-      .select({
-        question: taskTemplateQuestions,
-        section: taskTemplateSections,
-      })
-      .from(taskTemplateQuestions)
-      .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
-      .where(eq(taskTemplateSections.templateId, instanceData.templateId))
-      .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+    // If this is a template-based instance
+    if (instanceData.templateId) {
+      // Get all sections for the template
+      sections = await db
+        .select()
+        .from(taskTemplateSections)
+        .where(eq(taskTemplateSections.templateId, instanceData.templateId))
+        .orderBy(taskTemplateSections.order);
+
+      // Get all questions for the template
+      allQuestions = await db
+        .select({
+          question: taskTemplateQuestions,
+          section: taskTemplateSections,
+        })
+        .from(taskTemplateQuestions)
+        .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
+        .where(eq(taskTemplateSections.templateId, instanceData.templateId))
+        .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+    }
+    // If this is a custom request-based instance
+    else if (instanceData.customRequestId) {
+      // Get all sections for the custom request
+      sections = await db
+        .select()
+        .from(clientCustomRequestSections)
+        .where(eq(clientCustomRequestSections.requestId, instanceData.customRequestId))
+        .orderBy(clientCustomRequestSections.order);
+
+      // Get all questions for the custom request
+      allQuestions = await db
+        .select({
+          question: clientCustomRequestQuestions,
+          section: clientCustomRequestSections,
+        })
+        .from(clientCustomRequestQuestions)
+        .innerJoin(clientCustomRequestSections, eq(clientCustomRequestQuestions.sectionId, clientCustomRequestSections.id))
+        .where(eq(clientCustomRequestSections.requestId, instanceData.customRequestId))
+        .orderBy(clientCustomRequestSections.order, clientCustomRequestQuestions.order);
+    }
 
     // Get all responses for the instance
     const responses = await db
@@ -9249,6 +9278,7 @@ export class DatabaseStorage implements IStorage {
     return {
       id: instanceData.id,
       templateId: instanceData.templateId,
+      customRequestId: instanceData.customRequestId,
       clientId: instanceData.clientId,
       personId: instanceData.personId,
       clientPortalUserId: instanceData.clientPortalUserId,
@@ -9260,7 +9290,8 @@ export class DatabaseStorage implements IStorage {
       approvedBy: instanceData.approvedBy,
       createdAt: instanceData.createdAt,
       updatedAt: instanceData.updatedAt,
-      template: instanceData.template,
+      template: instanceData.template || undefined,
+      customRequest: instanceData.customRequest || undefined,
       client: instanceData.client,
       person: instanceData.person || undefined,
       sections: sectionsWithQuestions,
