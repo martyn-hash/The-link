@@ -2154,10 +2154,11 @@ export const taskTemplateQuestions = pgTable("task_template_questions", {
   index("idx_task_template_questions_order").on(table.sectionId, table.order),
 ]);
 
-// Task instances table - created when template is applied to a client
+// Task instances table - created when template is applied to a client OR from custom request
 export const taskInstances = pgTable("task_instances", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  templateId: varchar("template_id").notNull().references(() => taskTemplates.id),
+  templateId: varchar("template_id").references(() => taskTemplates.id), // nullable - either templateId OR customRequestId must be set
+  customRequestId: varchar("custom_request_id").references(() => clientCustomRequests.id, { onDelete: "cascade" }), // nullable - either templateId OR customRequestId must be set
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   personId: varchar("person_id").references(() => people.id, { onDelete: "cascade" }), // related person assigned to complete the task
   clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }), // portal user who will complete it
@@ -2171,17 +2172,18 @@ export const taskInstances = pgTable("task_instances", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_task_instances_template_id").on(table.templateId),
+  index("idx_task_instances_custom_request_id").on(table.customRequestId),
   index("idx_task_instances_client_id").on(table.clientId),
   index("idx_task_instances_person_id").on(table.personId),
   index("idx_task_instances_client_portal_user_id").on(table.clientPortalUserId),
   index("idx_task_instances_status").on(table.status),
 ]);
 
-// Task instance responses table - stores answers to questions
+// Task instance responses table - stores answers to questions (from either templates or custom requests)
 export const taskInstanceResponses = pgTable("task_instance_responses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   taskInstanceId: varchar("task_instance_id").notNull().references(() => taskInstances.id, { onDelete: "cascade" }),
-  questionId: varchar("question_id").notNull().references(() => taskTemplateQuestions.id),
+  questionId: varchar("question_id").notNull(), // references either taskTemplateQuestions.id or clientCustomRequestQuestions.id
   responseValue: text("response_value"), // text response or JSON for complex types
   fileUrls: text("file_urls").array(), // for file_upload questions - array of object paths
   createdAt: timestamp("created_at").defaultNow(),
@@ -2190,6 +2192,52 @@ export const taskInstanceResponses = pgTable("task_instance_responses", {
   index("idx_task_instance_responses_task_instance_id").on(table.taskInstanceId),
   index("idx_task_instance_responses_question_id").on(table.questionId),
   unique("unique_task_instance_question").on(table.taskInstanceId, table.questionId),
+]);
+
+// Client custom requests - one-off forms created by staff for specific clients
+export const clientCustomRequests = pgTable("client_custom_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_client_custom_requests_client_id").on(table.clientId),
+]);
+
+// Client custom request sections
+export const clientCustomRequestSections = pgTable("client_custom_request_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull().references(() => clientCustomRequests.id, { onDelete: "cascade" }),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_client_custom_request_sections_request_id").on(table.requestId),
+  index("idx_client_custom_request_sections_order").on(table.requestId, table.order),
+]);
+
+// Client custom request questions
+export const clientCustomRequestQuestions = pgTable("client_custom_request_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sectionId: varchar("section_id").notNull().references(() => clientCustomRequestSections.id, { onDelete: "cascade" }),
+  questionType: questionTypeEnum("question_type").notNull(),
+  label: text("label").notNull(),
+  helpText: text("help_text"),
+  isRequired: boolean("is_required").notNull().default(false),
+  order: integer("order").notNull().default(0),
+  validationRules: jsonb("validation_rules"),
+  options: text("options").array(),
+  conditionalLogic: jsonb("conditional_logic"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_client_custom_request_questions_section_id").on(table.sectionId),
+  index("idx_client_custom_request_questions_order").on(table.sectionId, table.order),
 ]);
 
 // Zod schemas for risk assessments
@@ -2245,7 +2293,7 @@ export const insertTaskTemplateQuestionSchema = createInsertSchema(taskTemplateQ
 
 export const updateTaskTemplateQuestionSchema = insertTaskTemplateQuestionSchema.partial();
 
-export const insertTaskInstanceSchema = createInsertSchema(taskInstances).omit({
+const baseTaskInstanceSchema = createInsertSchema(taskInstances).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -2253,7 +2301,12 @@ export const insertTaskInstanceSchema = createInsertSchema(taskInstances).omit({
   approvedAt: true,
 });
 
-export const updateTaskInstanceSchema = insertTaskInstanceSchema.partial();
+export const insertTaskInstanceSchema = baseTaskInstanceSchema.refine(
+  (data) => (data.templateId !== null && data.customRequestId === null) || (data.templateId === null && data.customRequestId !== null),
+  { message: "Either templateId or customRequestId must be provided, but not both" }
+);
+
+export const updateTaskInstanceSchema = baseTaskInstanceSchema.partial();
 
 export const updateTaskInstanceStatusSchema = z.object({
   status: z.enum(["not_started", "in_progress", "submitted", "approved", "cancelled"]),
@@ -2264,6 +2317,31 @@ export const insertTaskInstanceResponseSchema = createInsertSchema(taskInstanceR
   createdAt: true,
   updatedAt: true,
 });
+
+// Zod schemas for client custom requests
+export const insertClientCustomRequestSchema = createInsertSchema(clientCustomRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientCustomRequestSchema = insertClientCustomRequestSchema.partial();
+
+export const insertClientCustomRequestSectionSchema = createInsertSchema(clientCustomRequestSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientCustomRequestSectionSchema = insertClientCustomRequestSectionSchema.partial();
+
+export const insertClientCustomRequestQuestionSchema = createInsertSchema(clientCustomRequestQuestions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientCustomRequestQuestionSchema = insertClientCustomRequestQuestionSchema.partial();
 
 // Type exports
 export type Communication = typeof communications.$inferSelect;
@@ -2310,6 +2388,15 @@ export type InsertTaskInstance = z.infer<typeof insertTaskInstanceSchema>;
 export type UpdateTaskInstance = z.infer<typeof updateTaskInstanceSchema>;
 export type TaskInstanceResponse = typeof taskInstanceResponses.$inferSelect;
 export type InsertTaskInstanceResponse = z.infer<typeof insertTaskInstanceResponseSchema>;
+export type ClientCustomRequest = typeof clientCustomRequests.$inferSelect;
+export type InsertClientCustomRequest = z.infer<typeof insertClientCustomRequestSchema>;
+export type UpdateClientCustomRequest = z.infer<typeof updateClientCustomRequestSchema>;
+export type ClientCustomRequestSection = typeof clientCustomRequestSections.$inferSelect;
+export type InsertClientCustomRequestSection = z.infer<typeof insertClientCustomRequestSectionSchema>;
+export type UpdateClientCustomRequestSection = z.infer<typeof updateClientCustomRequestSectionSchema>;
+export type ClientCustomRequestQuestion = typeof clientCustomRequestQuestions.$inferSelect;
+export type InsertClientCustomRequestQuestion = z.infer<typeof insertClientCustomRequestQuestionSchema>;
+export type UpdateClientCustomRequestQuestion = z.infer<typeof updateClientCustomRequestQuestionSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
