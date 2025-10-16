@@ -340,6 +340,8 @@ export default function CustomRequestEdit() {
   const [editQuestionId, setEditQuestionId] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [createQuestionOptions, setCreateQuestionOptions] = useState<string[]>([]);
+  const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
 
   // Fetch custom request with full details
   const { data: request, isLoading: requestLoading } = useQuery<any>({
@@ -505,14 +507,21 @@ export default function CustomRequestEdit() {
   });
 
   const createQuestionMutation = useMutation({
-    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean }) => {
-      return apiRequest("POST", `/api/custom-request-sections/${data.sectionId}/questions`, {
+    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean; options?: string[] }) => {
+      const payload: any = {
         questionType: data.questionType,
         label: data.label,
         helpText: data.helpText,
         isRequired: data.isRequired,
         order: 0,
-      });
+      };
+      
+      // Include options if provided
+      if (data.options && data.options.length > 0) {
+        payload.options = data.options;
+      }
+      
+      return apiRequest("POST", `/api/custom-request-sections/${data.sectionId}/questions`, payload);
     },
     onSuccess: () => {
       toast({
@@ -521,6 +530,7 @@ export default function CustomRequestEdit() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
       setCreatingQuestion(null);
+      setCreateQuestionOptions([]);
     },
     onError: (error) => {
       toast({
@@ -682,6 +692,7 @@ export default function CustomRequestEdit() {
       
       if (targetSectionId && type) {
         setCreatingQuestion({ sectionId: targetSectionId, questionType: type });
+        setCreateQuestionOptions([]);
         return;
       }
       
@@ -911,6 +922,7 @@ export default function CustomRequestEdit() {
                           const question = section.questions?.find((q: any) => q.id === questionId);
                           if (question) {
                             setEditQuestionId(questionId);
+                            setEditQuestionOptions(question.options || []);
                           }
                         }}
                         onDeleteQuestion={(questionId) => deleteQuestionMutation.mutate(questionId)}
@@ -1041,8 +1053,13 @@ export default function CustomRequestEdit() {
       </Dialog>
 
       {/* Create Question Dialog */}
-      <Dialog open={!!creatingQuestion} onOpenChange={(open) => !open && setCreatingQuestion(null)}>
-        <DialogContent data-testid="dialog-create-question">
+      <Dialog open={!!creatingQuestion} onOpenChange={(open) => {
+        if (!open) {
+          setCreatingQuestion(null);
+          setCreateQuestionOptions([]);
+        }
+      }}>
+        <DialogContent data-testid="dialog-create-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Question</DialogTitle>
           </DialogHeader>
@@ -1080,6 +1097,53 @@ export default function CustomRequestEdit() {
                 Required
               </label>
             </div>
+
+            {/* Options for choice questions */}
+            {creatingQuestion && ["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType) && (
+              <div>
+                <label className="text-sm font-medium">Options *</label>
+                <div className="space-y-2 mt-2">
+                  {createQuestionOptions.map((option, index) => (
+                    <div key={index} className="flex space-x-2">
+                      <Input
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...createQuestionOptions];
+                          newOptions[index] = e.target.value;
+                          setCreateQuestionOptions(newOptions);
+                        }}
+                        placeholder={`Option ${index + 1}`}
+                        data-testid={`input-create-option-${index}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const newOptions = createQuestionOptions.filter((_, i) => i !== index);
+                          setCreateQuestionOptions(newOptions);
+                        }}
+                        data-testid={`button-remove-create-option-${index}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCreateQuestionOptions([...createQuestionOptions, ""]);
+                    }}
+                    data-testid="button-add-create-option"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Option
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="flex justify-end space-x-2">
               <Button
                 variant="outline"
@@ -1104,13 +1168,32 @@ export default function CustomRequestEdit() {
                     return;
                   }
 
-                  createQuestionMutation.mutate({
+                  // Validate options for choice questions
+                  if (["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType)) {
+                    if (!createQuestionOptions || createQuestionOptions.length === 0 || createQuestionOptions.every(o => !o.trim())) {
+                      toast({
+                        title: "Error",
+                        description: "At least one option is required for choice questions",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                  }
+
+                  const payload: any = {
                     sectionId: creatingQuestion.sectionId,
                     questionType: creatingQuestion.questionType,
                     label,
                     helpText: helpText || undefined,
                     isRequired: isRequired || false,
-                  });
+                  };
+
+                  // Include options if it's a choice question
+                  if (["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType)) {
+                    payload.options = createQuestionOptions.filter(o => o.trim());
+                  }
+
+                  createQuestionMutation.mutate(payload);
                 }}
                 data-testid="button-save-question"
               >
@@ -1123,8 +1206,13 @@ export default function CustomRequestEdit() {
       </Dialog>
 
       {/* Edit Question Dialog */}
-      <Dialog open={!!editQuestionId} onOpenChange={(open) => !open && setEditQuestionId(null)}>
-        <DialogContent data-testid="dialog-edit-question">
+      <Dialog open={!!editQuestionId} onOpenChange={(open) => {
+        if (!open) {
+          setEditQuestionId(null);
+          setEditQuestionOptions([]);
+        }
+      }}>
+        <DialogContent data-testid="dialog-edit-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Question</DialogTitle>
           </DialogHeader>
@@ -1164,6 +1252,53 @@ export default function CustomRequestEdit() {
                   Required
                 </label>
               </div>
+
+              {/* Options for choice questions */}
+              {["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType) && (
+                <div>
+                  <label className="text-sm font-medium">Options *</label>
+                  <div className="space-y-2 mt-2">
+                    {editQuestionOptions.map((option, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <Input
+                          value={option}
+                          onChange={(e) => {
+                            const newOptions = [...editQuestionOptions];
+                            newOptions[index] = e.target.value;
+                            setEditQuestionOptions(newOptions);
+                          }}
+                          placeholder={`Option ${index + 1}`}
+                          data-testid={`input-edit-option-${index}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newOptions = editQuestionOptions.filter((_, i) => i !== index);
+                            setEditQuestionOptions(newOptions);
+                          }}
+                          data-testid={`button-remove-edit-option-${index}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditQuestionOptions([...editQuestionOptions, ""]);
+                      }}
+                      data-testid="button-add-edit-option"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Option
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex justify-end space-x-2">
                 <Button
                   variant="outline"
@@ -1187,12 +1322,31 @@ export default function CustomRequestEdit() {
                       return;
                     }
 
-                    updateQuestionMutation.mutate({
+                    // Validate options for choice questions
+                    if (["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType)) {
+                      if (!editQuestionOptions || editQuestionOptions.length === 0 || editQuestionOptions.every(o => !o.trim())) {
+                        toast({
+                          title: "Error",
+                          description: "At least one option is required for choice questions",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                    }
+
+                    const payload: any = {
                       id: editQuestion.id,
                       label,
                       helpText: helpText || undefined,
                       isRequired: isRequired || false,
-                    });
+                    };
+
+                    // Include options if it's a choice question
+                    if (["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType)) {
+                      payload.options = editQuestionOptions.filter(o => o.trim());
+                    }
+
+                    updateQuestionMutation.mutate(payload);
                   }}
                   data-testid="button-update-question"
                 >
