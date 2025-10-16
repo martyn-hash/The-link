@@ -8909,13 +8909,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/task-templates - Get all templates (defaults to all, use ?activeOnly=true for active only)
+  // GET /api/task-templates - Get all templates (defaults to all, use ?activeOnly=true for active only, ?categoryId=uuid for category filter)
   app.get("/api/task-templates", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const activeOnly = req.query.activeOnly === 'true';
-      const templates = activeOnly 
+      const categoryId = req.query.categoryId as string | undefined;
+      
+      let templates = activeOnly 
         ? await storage.getActiveTaskTemplates()
         : await storage.getAllTaskTemplates(true);
+      
+      // Filter by category if provided
+      if (categoryId) {
+        templates = templates.filter(t => t.categoryId === categoryId);
+      }
+      
       res.json(templates);
     } catch (error) {
       console.error("Error fetching task templates:", error);
