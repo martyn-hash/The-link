@@ -35,6 +35,7 @@ import TaskTemplateCategories from "@/pages/task-template-categories";
 import TaskTemplates from "@/pages/task-templates";
 import TaskTemplateEdit from "@/pages/task-template-edit";
 import TaskTemplateSectionQuestions from "@/pages/task-template-section-questions";
+import CustomRequestEdit from "@/pages/custom-request-edit";
 import TaskSubmissions from "@/pages/task-submissions";
 import TaskSubmissionDetail from "@/pages/task-submission-detail";
 import TaskInstanceDetail from "@/pages/task-instance-detail";
@@ -123,6 +124,7 @@ function Router() {
       <Route path="/task-templates/:templateId/sections/:sectionId/questions" component={TaskTemplateSectionQuestions} />
       <Route path="/task-templates/:id/edit" component={TaskTemplateEdit} />
       <Route path="/task-templates" component={TaskTemplates} />
+      <Route path="/custom-requests/:id/edit" component={CustomRequestEdit} />
       <Route path="/task-submissions/:id" component={TaskSubmissionDetail} />
       <Route path="/task-submissions" component={TaskSubmissions} />
       <Route path="/task-instances/:id" component={TaskInstanceDetail} />
