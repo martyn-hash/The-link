@@ -6134,6 +6134,7 @@ function ClientServiceRow({
 
 export default function ClientDetail() {
   const { id } = useParams();
+  const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
