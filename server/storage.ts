@@ -766,7 +766,7 @@ export interface IStorage {
   // Task Instance operations
   createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
   getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
-  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template: TaskTemplate; person?: Person; portalUser?: ClientPortalUser })[]>;
+  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
   getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
   getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
   getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
@@ -8908,11 +8908,12 @@ export class DatabaseStorage implements IStorage {
     return instance;
   }
 
-  async getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template: TaskTemplate; person?: Person; portalUser?: ClientPortalUser })[]> {
+  async getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]> {
     const instances = await db
       .select({
         id: taskInstances.id,
         templateId: taskInstances.templateId,
+        customRequestId: taskInstances.customRequestId,
         clientId: taskInstances.clientId,
         personId: taskInstances.personId,
         clientPortalUserId: taskInstances.clientPortalUserId,
@@ -8925,11 +8926,13 @@ export class DatabaseStorage implements IStorage {
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
         template: taskTemplates,
+        customRequest: clientCustomRequests,
         person: people,
         portalUser: clientPortalUsers,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .leftJoin(clientPortalUsers, eq(taskInstances.clientPortalUserId, clientPortalUsers.id))
       .where(eq(taskInstances.clientId, clientId))
@@ -8938,6 +8941,7 @@ export class DatabaseStorage implements IStorage {
     return instances.map(row => ({
       id: row.id,
       templateId: row.templateId,
+      customRequestId: row.customRequestId,
       clientId: row.clientId,
       personId: row.personId,
       clientPortalUserId: row.clientPortalUserId,
@@ -8949,7 +8953,8 @@ export class DatabaseStorage implements IStorage {
       approvedBy: row.approvedBy,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      template: row.template,
+      template: row.template || undefined,
+      customRequest: row.customRequest || undefined,
       person: row.person || undefined,
       portalUser: row.portalUser || undefined,
     }));

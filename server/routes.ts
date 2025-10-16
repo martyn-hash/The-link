@@ -9336,7 +9336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         clientId,
         name,
         description,
-        createdBy: req.effectiveUser.id
+        createdBy: req.user.effectiveUserId
       };
       
       const request = await storage.createClientCustomRequest(requestData);
@@ -9455,12 +9455,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { templateId, clientId, personId, dueDate } = validationResult.data;
+      const { templateId, customRequestId, clientId, personId, dueDate } = validationResult.data;
 
-      // Verify template exists
-      const template = await storage.getTaskTemplateById(templateId);
-      if (!template) {
-        return res.status(404).json({ message: "Task template not found" });
+      // Verify template or custom request exists
+      if (templateId) {
+        const template = await storage.getTaskTemplateById(templateId);
+        if (!template) {
+          return res.status(404).json({ message: "Task template not found" });
+        }
+      } else if (customRequestId) {
+        const customRequest = await storage.getClientCustomRequestById(customRequestId);
+        if (!customRequest) {
+          return res.status(404).json({ message: "Custom request not found" });
+        }
       }
 
       // Verify client exists

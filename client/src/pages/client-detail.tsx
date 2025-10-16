@@ -6423,25 +6423,38 @@ export default function ClientDetail() {
     },
   });
 
-  // Mutation for creating custom request
+  // Mutation for creating custom request with task instance
   const createCustomRequestMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
-      return await apiRequest("POST", `/api/clients/${id}/custom-requests`, {
+      // First, create the custom request
+      const customRequest = await apiRequest("POST", `/api/clients/${id}/custom-requests`, {
         clientId: id,
         name: data.name,
         description: data.description || "",
       });
+      
+      // Then, create a task instance from the custom request
+      await apiRequest("POST", "/api/task-instances", {
+        templateId: null,
+        customRequestId: customRequest.id,
+        clientId: id,
+        status: "not_started",
+      });
+      
+      return customRequest;
     },
     onSuccess: (data) => {
       toast({
         title: "Success",
-        description: "Custom request created successfully. You can now add sections and questions in the admin area.",
+        description: "Custom request created successfully.",
       });
-      // Invalidate custom requests query to refresh the list
+      // Invalidate both queries to refresh the UI
       queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}/custom-requests`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/task-instances/client/${id}`] });
       setIsNewRequestDialogOpen(false);
       setRequestType(null);
       customRequestForm.reset();
+      setActiveTab("tasks"); // Switch to tasks tab to show the new request
     },
     onError: (error: any) => {
       toast({
@@ -7908,7 +7921,7 @@ export default function ClientDetail() {
                           <TableRow key={instance.id} data-testid={`row-task-${instance.id}`}>
                             <TableCell className="font-medium">
                               <span data-testid={`text-name-${instance.id}`}>
-                                {instance.template?.name || 'Untitled Request'}
+                                {instance.template?.name || instance.customRequest?.name || 'Untitled Request'}
                               </span>
                             </TableCell>
                             <TableCell>
