@@ -712,7 +712,7 @@ export default function Messages() {
                   </Tabs>
                 </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-y-auto">
+              <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
                 {threadsLoading ? (
                   <div className="p-4 space-y-3">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -1164,7 +1164,7 @@ export default function Messages() {
               <CardTitle>Archived Conversations</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-y-auto">
+              <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
                 {threadsLoading ? (
                   <div className="p-4 space-y-3">
                     {Array.from({ length: 3 }).map((_, i) => (
