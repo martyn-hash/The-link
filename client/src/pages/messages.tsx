@@ -209,7 +209,7 @@ export default function Messages() {
 
   // Fetch clients for new message search
   const { data: clients } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ['/api/clients', clientSearch],
+    queryKey: ['/api/clients', { search: clientSearch }],
     enabled: showNewMessageModal && clientSearch.length >= 2,
   });
 
@@ -864,9 +864,11 @@ export default function Messages() {
                             </Avatar>
                             <div className={`flex-1 ${isStaff ? 'text-right' : ''}`}>
                               <div className="text-xs text-muted-foreground mb-1">
-                                {isStaff
-                                  ? `${message.user?.firstName || ''} ${message.user?.lastName || ''}`.trim() || message.user?.email
-                                  : message.clientPortalUser?.email}
+                                <span data-testid={`message-sender-${message.id}`}>
+                                  {isStaff
+                                    ? `${message.user?.firstName || ''} ${message.user?.lastName || ''}`.trim() || message.user?.email
+                                    : message.clientPortalUser?.email}
+                                </span>
                                 {' • '}
                                 {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                               </div>
@@ -1306,9 +1308,11 @@ export default function Messages() {
                             </Avatar>
                             <div className={`flex-1 ${isStaff ? 'text-right' : ''}`}>
                               <div className="text-xs text-muted-foreground mb-1">
-                                {isStaff
-                                  ? `${message.user?.firstName || ''} ${message.user?.lastName || ''}`.trim() || message.user?.email
-                                  : message.clientPortalUser?.email}
+                                <span data-testid={`message-sender-${message.id}`}>
+                                  {isStaff
+                                    ? `${message.user?.firstName || ''} ${message.user?.lastName || ''}`.trim() || message.user?.email
+                                    : message.clientPortalUser?.email}
+                                </span>
                                 {' • '}
                                 {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                               </div>

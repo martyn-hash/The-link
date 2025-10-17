@@ -8363,11 +8363,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessagesByThreadId(threadId: string): Promise<Message[]> {
-    return await db
-      .select()
+    const result = await db
+      .select({
+        message: messages,
+        user: users,
+        clientPortalUser: clientPortalUsers,
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.userId, users.id))
+      .leftJoin(clientPortalUsers, eq(messages.clientPortalUserId, clientPortalUsers.id))
       .where(eq(messages.threadId, threadId))
       .orderBy(messages.createdAt);
+    
+    return result.map(row => ({
+      ...row.message,
+      user: row.user || undefined,
+      clientPortalUser: row.clientPortalUser || undefined,
+    })) as Message[];
   }
 
   async updateMessage(id: string, message: Partial<InsertMessage>): Promise<Message> {
