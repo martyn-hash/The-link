@@ -8180,6 +8180,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create a new thread (staff only)
+  app.post("/api/internal/messages/threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const { subject, clientId, projectId, serviceId } = req.body;
+      
+      if (!subject) {
+        return res.status(400).json({ message: "Subject is required" });
+      }
+      
+      if (!clientId) {
+        return res.status(400).json({ message: "Client is required" });
+      }
+      
+      // Verify user has access to this client
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const thread = await storage.createMessageThread({
+        subject,
+        clientId,
+        createdByUserId: effectiveUserId,
+        projectId: projectId || null,
+        serviceId: serviceId || null,
+        status: 'open'
+      });
+      
+      res.status(201).json(thread);
+    } catch (error) {
+      console.error("Error creating thread:", error);
+      res.status(500).json({ message: "Failed to create thread" });
+    }
+  });
+
   // Get messages for a thread (staff)
   app.get("/api/internal/messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

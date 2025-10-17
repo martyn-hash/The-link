@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
@@ -130,6 +131,12 @@ export default function Messages() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
+  // New message modal state
+  const [showNewMessageModal, setShowNewMessageModal] = useState(false);
+  const [newThreadSubject, setNewThreadSubject] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       toast({
@@ -187,6 +194,12 @@ export default function Messages() {
   const { data: taskTemplates } = useQuery<Array<{ id: string; name: string; status: string }>>({
     queryKey: ['/api/task-templates'],
     enabled: showTaskModal,
+  });
+
+  // Fetch clients for new message search
+  const { data: clients } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ['/api/clients', clientSearch],
+    enabled: showNewMessageModal && clientSearch.length >= 2,
   });
 
   const updateStatusMutation = useMutation({
@@ -301,6 +314,31 @@ export default function Messages() {
     },
   });
 
+  const createThreadMutation = useMutation({
+    mutationFn: (data: { subject: string; clientId: string }) =>
+      apiRequest('POST', '/api/internal/messages/threads', data),
+    onSuccess: (newThread: MessageThread) => {
+      setShowNewMessageModal(false);
+      setNewThreadSubject('');
+      setClientSearch('');
+      setSelectedClient(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads'] });
+      // Select the newly created thread
+      setSelectedThreadId(newThread.id);
+      toast({
+        title: "Success",
+        description: "New conversation started",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create conversation",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     handleFilesSelected(files);
@@ -400,6 +438,22 @@ export default function Messages() {
       templateId: selectedTemplate,
       clientId,
       personId,
+    });
+  };
+
+  const handleCreateNewThread = () => {
+    if (!newThreadSubject.trim() || !selectedClient) {
+      toast({
+        title: "Error",
+        description: "Please enter a subject and select a client",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createThreadMutation.mutate({
+      subject: newThreadSubject,
+      clientId: selectedClient.id,
     });
   };
 
@@ -615,11 +669,21 @@ export default function Messages() {
               Manage conversations with your clients
             </p>
           </div>
-          {unreadCount && unreadCount.count > 0 && (
-            <Badge variant="destructive" className="text-lg px-3 py-1" data-testid="badge-unread-count">
-              {unreadCount.count} unread
-            </Badge>
-          )}
+          <div className="flex items-center gap-3">
+            {unreadCount && unreadCount.count > 0 && (
+              <Badge variant="destructive" className="text-lg px-3 py-1" data-testid="badge-unread-count">
+                {unreadCount.count} unread
+              </Badge>
+            )}
+            <Button 
+              onClick={() => setShowNewMessageModal(true)}
+              className="gap-2"
+              data-testid="button-new-message"
+            >
+              <MessageCircle className="h-4 w-4" />
+              New Message
+            </Button>
+          </div>
         </div>
 
         {/* Outer Active/Archived Tabs */}
@@ -1323,6 +1387,82 @@ export default function Messages() {
       </main>
 
       <BottomNav onSearchClick={() => {}} />
+
+      {/* New Message Modal */}
+      <Dialog open={showNewMessageModal} onOpenChange={setShowNewMessageModal}>
+        <DialogContent data-testid="dialog-new-message">
+          <DialogHeader>
+            <DialogTitle>New Message</DialogTitle>
+            <DialogDescription>
+              Start a new conversation with a client
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Subject</label>
+              <Input 
+                value={newThreadSubject}
+                onChange={(e) => setNewThreadSubject(e.target.value)}
+                placeholder="Enter message subject"
+                data-testid="input-thread-subject"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Client</label>
+              <Input 
+                value={selectedClient ? selectedClient.name : clientSearch}
+                onChange={(e) => {
+                  setClientSearch(e.target.value);
+                  setSelectedClient(null);
+                }}
+                placeholder="Search for a client..."
+                data-testid="input-client-search"
+              />
+              {clientSearch.length >= 2 && !selectedClient && clients && clients.length > 0 && (
+                <div className="mt-2 border rounded-md max-h-48 overflow-y-auto">
+                  {clients.map((client) => (
+                    <button
+                      key={client.id}
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setClientSearch(client.name);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
+                      data-testid={`client-option-${client.id}`}
+                    >
+                      {client.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {clientSearch.length >= 2 && !selectedClient && clients && clients.length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2">No clients found</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowNewMessageModal(false);
+                  setNewThreadSubject('');
+                  setClientSearch('');
+                  setSelectedClient(null);
+                }}
+                data-testid="button-cancel-new-message"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreateNewThread}
+                disabled={!newThreadSubject.trim() || !selectedClient || createThreadMutation.isPending}
+                data-testid="button-create-thread"
+              >
+                {createThreadMutation.isPending ? 'Creating...' : 'Start Conversation'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Task Creation Modal */}
       <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
