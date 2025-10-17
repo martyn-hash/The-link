@@ -16,6 +16,7 @@ interface TaskInstance {
   status: 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'cancelled';
   createdAt: string;
   submittedAt?: string;
+  dueDate?: string;
   template?: {
     id: string;
     name: string;
@@ -35,7 +36,7 @@ interface TaskInstance {
 export default function PortalTasks() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: authLoading, user } = usePortalAuth();
-  const [activeTab, setActiveTab] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<string>('pending');
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -67,7 +68,7 @@ export default function PortalTasks() {
       case 'not_started':
         return <Badge variant="outline" data-testid={`badge-status-not-started`}>Not Started</Badge>;
       case 'in_progress':
-        return <Badge variant="secondary" data-testid={`badge-status-in-progress`}>In Progress</Badge>;
+        return <Badge className="bg-yellow-500 text-white hover:bg-yellow-600" data-testid={`badge-status-in-progress`}>In Progress</Badge>;
       case 'submitted':
         return <Badge variant="default" data-testid={`badge-status-submitted`}>Submitted</Badge>;
       case 'approved':
@@ -107,7 +108,6 @@ export default function PortalTasks() {
 
   // Filter tasks by status
   const filteredTasks = taskInstances?.filter(task => {
-    if (activeTab === 'all') return true;
     if (activeTab === 'pending') return task.status === 'not_started' || task.status === 'in_progress';
     if (activeTab === 'completed') return task.status === 'submitted' || task.status === 'approved';
     return task.status === activeTab;
@@ -129,10 +129,7 @@ export default function PortalTasks() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="all" data-testid="tab-all">
-              All ({taskInstances?.length || 0})
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Pending ({pendingCount})
             </TabsTrigger>
@@ -188,9 +185,7 @@ export default function PortalTasks() {
                     <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-600 dark:text-gray-400 mb-2">No requests found</p>
                     <p className="text-sm text-gray-500 dark:text-gray-500">
-                      {activeTab === 'all' 
-                        ? 'You have no requests at this time.'
-                        : activeTab === 'pending'
+                      {activeTab === 'pending'
                         ? 'You have no pending requests.'
                         : 'You have no completed requests.'}
                     </p>
