@@ -8122,7 +8122,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         accessibleThreads = allThreads.filter(t => accessibleThreadIds.has(t.id));
       }
       
-      res.json(accessibleThreads);
+      // Enrich threads with client portal user and client information
+      const enrichedThreads = await Promise.all(
+        accessibleThreads.map(async (thread) => {
+          const client = await storage.getClientById(thread.clientId);
+          let clientPortalUser = null;
+          
+          if (thread.createdByClientPortalUserId) {
+            const cpUser = await storage.getClientPortalUserById(thread.createdByClientPortalUserId);
+            if (cpUser) {
+              clientPortalUser = {
+                id: cpUser.id,
+                email: cpUser.email,
+                clientId: cpUser.clientId,
+                personId: cpUser.personId,
+                client: client ? { id: client.id, name: client.name } : undefined
+              };
+            }
+          }
+          
+          return {
+            ...thread,
+            clientPortalUser,
+          };
+        })
+      );
+      
+      res.json(enrichedThreads);
     } catch (error) {
       console.error("Error fetching threads:", error);
       res.status(500).json({ message: "Failed to fetch threads" });

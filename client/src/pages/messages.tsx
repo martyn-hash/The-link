@@ -263,8 +263,11 @@ export default function Messages() {
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: (data: { templateId: string; clientId: string; personId?: string }) =>
-      apiRequest('POST', '/api/task-instances', data),
+    mutationFn: (data: { templateId: string; clientId: string; personId?: string | null }) =>
+      apiRequest('POST', '/api/task-instances', {
+        ...data,
+        customRequestId: null, // Required by schema - either templateId or customRequestId must be provided
+      }),
     onSuccess: () => {
       setShowTaskModal(false);
       setSelectedTemplate('');
