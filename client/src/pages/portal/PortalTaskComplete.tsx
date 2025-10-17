@@ -18,6 +18,7 @@ import { queryClient } from "@/lib/queryClient";
 import { portalRequest } from "@/lib/portalApi";
 import { format } from "date-fns";
 import { ArrowLeft, Calendar as CalendarIcon, Save, Send, AlertCircle } from "lucide-react";
+import PortalBottomNav from "@/components/portal-bottom-nav";
 
 interface Question {
   id: string;
@@ -526,7 +527,7 @@ export default function PortalTaskComplete() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8 pb-20">
         <div className="max-w-4xl mx-auto space-y-6">
           <Skeleton className="h-12 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
@@ -541,13 +542,14 @@ export default function PortalTaskComplete() {
             </CardContent>
           </Card>
         </div>
+        <PortalBottomNav />
       </div>
     );
   }
 
   if (error || !taskInstance) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8 pb-20">
         <div className="max-w-4xl mx-auto">
           <Card>
             <CardContent className="pt-6">
@@ -571,6 +573,7 @@ export default function PortalTaskComplete() {
             </CardContent>
           </Card>
         </div>
+        <PortalBottomNav />
       </div>
     );
   }
@@ -578,7 +581,7 @@ export default function PortalTaskComplete() {
   const isSubmitted = taskInstance.status === 'submitted' || taskInstance.status === 'reviewed';
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8 pb-20">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div>
@@ -672,6 +675,7 @@ export default function PortalTaskComplete() {
           </div>
         )}
       </div>
+      <PortalBottomNav />
     </div>
   );
 }
