@@ -137,6 +137,9 @@ export default function Messages() {
   const [clientSearch, setClientSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
 
+  // Thread list search state
+  const [threadSearchTerm, setThreadSearchTerm] = useState('');
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       toast({
@@ -173,6 +176,14 @@ export default function Messages() {
       // Filter by who replied last
       if (statusFilter === 'client_replied' && thread.lastMessageByStaff !== false) return false;
       // 'open' shows all non-archived threads
+    }
+    
+    // Filter by search term
+    if (threadSearchTerm.trim()) {
+      const clientName = thread.clientPortalUser?.client?.name || '';
+      if (!clientName.toLowerCase().includes(threadSearchTerm.toLowerCase())) {
+        return false;
+      }
     }
     
     return true;
@@ -704,6 +715,15 @@ export default function Messages() {
               <Card className="lg:col-span-1">
                 <CardHeader>
                   <CardTitle>Conversations</CardTitle>
+                  <div className="mt-3">
+                    <Input 
+                      value={threadSearchTerm}
+                      onChange={(e) => setThreadSearchTerm(e.target.value)}
+                      placeholder="Search by client name..."
+                      className="w-full"
+                      data-testid="input-thread-search"
+                    />
+                  </div>
                   <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="open" data-testid="filter-open">All Open</TabsTrigger>
@@ -1162,6 +1182,15 @@ export default function Messages() {
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle>Archived Conversations</CardTitle>
+              <div className="mt-3">
+                <Input 
+                  value={threadSearchTerm}
+                  onChange={(e) => setThreadSearchTerm(e.target.value)}
+                  placeholder="Search by client name..."
+                  className="w-full"
+                  data-testid="input-thread-search-archived"
+                />
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
