@@ -8429,10 +8429,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnreadMessageCountForStaff(userId: string, isAdmin: boolean = false): Promise<number> {
-    // If admin, count all unread messages from clients
+    // Count distinct threads with unread messages (not individual messages)
+    // If admin, count all threads with unread messages from clients
     if (isAdmin) {
       const result = await db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: sql<number>`count(DISTINCT ${messages.threadId})::int` })
         .from(messages)
         .where(and(
           eq(messages.isReadByStaff, false),
@@ -8441,9 +8442,9 @@ export class DatabaseStorage implements IStorage {
       return result[0]?.count || 0;
     }
     
-    // For non-admin users, only count unread messages from clients where the user has project assignments
+    // For non-admin users, only count threads with unread messages from clients where the user has project assignments
     const result = await db
-      .select({ count: sql<number>`count(DISTINCT ${messages.id})::int` })
+      .select({ count: sql<number>`count(DISTINCT ${messages.threadId})::int` })
       .from(messages)
       .innerJoin(messageThreads, eq(messages.threadId, messageThreads.id))
       .innerJoin(projects, eq(messageThreads.clientId, projects.clientId))
