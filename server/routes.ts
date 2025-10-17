@@ -1025,8 +1025,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Update status to in_progress if it was draft
-      if (instance.status === 'draft') {
+      // Update status to in_progress if it was draft or not_started
+      if (instance.status === 'draft' || instance.status === 'not_started') {
         await storage.updateTaskInstance(id, { status: 'in_progress' });
       }
 
