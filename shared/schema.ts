@@ -1795,6 +1795,7 @@ export const messageThreads = pgTable("message_threads", {
   subject: varchar("subject").notNull(),
   status: threadStatusEnum("status").notNull().default('open'),
   lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  lastMessageByStaff: boolean("last_message_by_staff").default(false), // Track if last message was from staff
   createdByUserId: varchar("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
   createdByClientPortalUserId: varchar("created_by_client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "set null" }),
   projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }), // Optional link to project
@@ -1811,6 +1812,8 @@ export const messageThreads = pgTable("message_threads", {
   statusIdx: index("message_threads_status_idx").on(table.status),
   // Index for archived status
   isArchivedIdx: index("message_threads_is_archived_idx").on(table.isArchived),
+  // Index for filtering by who replied last
+  lastMessageByStaffIdx: index("message_threads_last_message_by_staff_idx").on(table.lastMessageByStaff),
 }));
 
 // Messages - individual messages within threads

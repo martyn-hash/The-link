@@ -21,6 +21,7 @@ interface MessageThread {
   lastMessageAt: string | null;
   createdAt: string;
   unreadCount?: number;
+  lastMessageByStaff?: boolean;
 }
 
 const statusConfig = {
@@ -158,6 +159,15 @@ export default function PortalThreadList() {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
                             {config.label}
                           </span>
+                          {thread.lastMessageByStaff !== undefined && (
+                            <Badge 
+                              variant={thread.lastMessageByStaff ? "secondary" : "default"}
+                              className="text-xs"
+                              data-testid={`badge-last-reply-${thread.id}`}
+                            >
+                              {thread.lastMessageByStaff ? 'Staff replied' : 'You replied'}
+                            </Badge>
+                          )}
                           {thread.lastMessageAt && (
                             <span className="text-xs">
                               {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}

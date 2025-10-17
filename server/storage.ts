@@ -8341,10 +8341,14 @@ export class DatabaseStorage implements IStorage {
       .values(message)
       .returning();
     
-    // Update thread's lastMessageAt
+    // Update thread's lastMessageAt and lastMessageByStaff
+    const lastMessageByStaff = !!message.userId; // true if message is from staff, false if from client
     await db
       .update(messageThreads)
-      .set({ lastMessageAt: new Date() })
+      .set({ 
+        lastMessageAt: new Date(),
+        lastMessageByStaff
+      })
       .where(eq(messageThreads.id, message.threadId));
     
     return newMessage;

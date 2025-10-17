@@ -14,6 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   MessageCircle,
   Clock,
@@ -33,7 +35,8 @@ import {
   Trash2,
   FileAudio,
   Image as ImageIcon,
-  RefreshCw
+  RefreshCw,
+  ClipboardList
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -50,10 +53,12 @@ interface MessageThread {
   archivedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  lastMessageByStaff?: boolean; // Track if last message was from staff
   clientPortalUser?: {
     id: string;
     email: string;
     clientId: string;
+    personId?: string;
     client?: {
       id: string;
       name: string;
@@ -120,6 +125,10 @@ export default function Messages() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
   const isCancelledRef = useRef(false);
+  
+  // Task creation modal state
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -146,8 +155,10 @@ export default function Messages() {
     
     if (!matchesArchiveFilter) return false;
     
-    if (archiveFilter === 'active' && statusFilter) {
-      return thread.status === statusFilter;
+    if (archiveFilter === 'active') {
+      // Filter by who replied last
+      if (statusFilter === 'client_replied' && thread.lastMessageByStaff !== false) return false;
+      // 'open' shows all non-archived threads
     }
     
     return true;
@@ -163,6 +174,12 @@ export default function Messages() {
     queryKey: ['/api/internal/messages/unread-count'],
     enabled: isAuthenticated && !!user,
     refetchInterval: 5000,
+  });
+
+  // Fetch task templates for task creation
+  const { data: taskTemplates } = useQuery<Array<{ id: string; name: string; status: string }>>({
+    queryKey: ['/api/task-templates'],
+    enabled: showTaskModal,
   });
 
   const updateStatusMutation = useMutation({
@@ -240,6 +257,26 @@ export default function Messages() {
       toast({
         title: "Error",
         description: error.message || "Failed to unarchive thread",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: (data: { templateId: string; clientId: string; personId?: string }) =>
+      apiRequest('POST', '/api/task-instances', data),
+    onSuccess: () => {
+      setShowTaskModal(false);
+      setSelectedTemplate('');
+      toast({
+        title: "Success",
+        description: "Client request created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create client request",
         variant: "destructive",
       });
     },
@@ -323,6 +360,28 @@ export default function Messages() {
     }
 
     return uploadedAttachments;
+  };
+
+  const handleCreateTask = () => {
+    if (!selectedTemplate || !selectedThread) return;
+
+    const clientId = selectedThread.clientPortalUser?.clientId;
+    const personId = selectedThread.clientPortalUser?.personId;
+
+    if (!clientId) {
+      toast({
+        title: "Error",
+        description: "Unable to determine client for this thread",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createTaskMutation.mutate({
+      templateId: selectedTemplate,
+      clientId,
+      personId,
+    });
   };
 
   const handleSendMessage = async () => {
@@ -564,8 +623,8 @@ export default function Messages() {
                   <CardTitle>Conversations</CardTitle>
                   <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="open" data-testid="filter-open">Open</TabsTrigger>
-                      <TabsTrigger value="resolved" data-testid="filter-resolved">Resolved</TabsTrigger>
+                      <TabsTrigger value="open" data-testid="filter-open">All Open</TabsTrigger>
+                      <TabsTrigger value="client_replied" data-testid="filter-client-replied">Awaiting Reply</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </CardHeader>
@@ -609,9 +668,16 @@ export default function Messages() {
                               <p className="text-sm text-muted-foreground truncate" data-testid={`thread-client-${thread.id}`}>
                                 {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
                               </p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
-                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
+                                </p>
+                                {thread.lastMessageByStaff === false && (
+                                  <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300" data-testid={`thread-client-replied-${thread.id}`}>
+                                    Client replied
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </button>
@@ -642,50 +708,16 @@ export default function Messages() {
                     </div>
                     <div className="flex gap-2">
                       {!selectedThread.isArchived && (
-                        <>
-                          {selectedThread.status === 'open' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateStatusMutation.mutate({ threadId: selectedThread.id, status: 'in_progress' })}
-                              disabled={updateStatusMutation.isPending}
-                              data-testid="button-mark-in-progress"
-                            >
-                              Mark In Progress
-                            </Button>
-                          )}
-                          {selectedThread.status === 'in_progress' && (
-                            <Button
-                              size="sm"
-                              onClick={() => updateStatusMutation.mutate({ threadId: selectedThread.id, status: 'resolved' })}
-                              disabled={updateStatusMutation.isPending}
-                              data-testid="button-mark-resolved"
-                            >
-                              Mark Resolved
-                            </Button>
-                          )}
-                          {selectedThread.status === 'resolved' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateStatusMutation.mutate({ threadId: selectedThread.id, status: 'open' })}
-                              disabled={updateStatusMutation.isPending}
-                              data-testid="button-reopen"
-                            >
-                              Reopen
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
-                            disabled={archiveThreadMutation.isPending}
-                            data-testid="button-archive"
-                          >
-                            <Archive className="h-4 w-4 mr-2" />
-                            Archive
-                          </Button>
-                        </>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
+                          disabled={archiveThreadMutation.isPending}
+                          data-testid="button-archive"
+                        >
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archive
+                        </Button>
                       )}
                       {selectedThread.isArchived && (
                         <Button
@@ -971,6 +1003,16 @@ export default function Messages() {
                         data-testid="input-message"
                       />
                       <div className="flex flex-col gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowTaskModal(true)}
+                          disabled={isRecording || !!recordedAudio || uploadingFiles}
+                          data-testid="button-create-task"
+                          title="Create task from message"
+                        >
+                          <ClipboardList className="h-4 w-4" />
+                        </Button>
                         <label htmlFor="file-upload">
                           <Button
                             size="sm"
@@ -1262,6 +1304,47 @@ export default function Messages() {
       </main>
 
       <BottomNav onSearchClick={() => {}} />
+
+      {/* Task Creation Modal */}
+      <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
+        <DialogContent data-testid="dialog-create-task">
+          <DialogHeader>
+            <DialogTitle>Create Client Request</DialogTitle>
+            <DialogDescription>
+              Select a task template to create a new client request for {selectedThread?.clientPortalUser?.client?.name || 'this client'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Task Template</label>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger data-testid="select-task-template">
+                  <SelectValue placeholder="Select a template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {taskTemplates?.filter(t => t.status === 'active').map((template) => (
+                    <SelectItem key={template.id} value={template.id} data-testid={`template-${template.id}`}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setShowTaskModal(false); setSelectedTemplate(''); }} data-testid="button-cancel-task">
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreateTask}
+                disabled={!selectedTemplate || createTaskMutation.isPending}
+                data-testid="button-confirm-create-task"
+              >
+                {createTaskMutation.isPending ? 'Creating...' : 'Create Request'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Image Preview Modal */}
       {previewImage && (
