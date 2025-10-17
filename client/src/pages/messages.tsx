@@ -143,6 +143,13 @@ export default function Messages() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
+  // Mark messages as read when a thread is selected
+  useEffect(() => {
+    if (selectedThreadId) {
+      markAsReadMutation.mutate(selectedThreadId);
+    }
+  }, [selectedThreadId]);
+
   const { data: allThreads, isLoading: threadsLoading } = useQuery<MessageThread[]>({
     queryKey: ['/api/internal/messages/threads'],
     enabled: isAuthenticated && !!user,
@@ -282,6 +289,15 @@ export default function Messages() {
         description: error.message || "Failed to create client request",
         variant: "destructive",
       });
+    },
+  });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: (threadId: string) =>
+      apiRequest('PUT', `/api/internal/messages/threads/${threadId}/mark-read`),
+    onSuccess: () => {
+      // Invalidate unread count to refresh the badge
+      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/unread-count'] });
     },
   });
 
