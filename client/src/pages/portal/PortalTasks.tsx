@@ -214,13 +214,17 @@ export default function PortalTasks() {
                                 {task.template?.description || task.customRequest?.description}
                               </CardDescription>
                             )}
-                            <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                              <span>From: {task.client.name}</span>
-                              <span>•</span>
+                            <div className="flex items-center gap-2 mt-2 text-sm text-gray-500 dark:text-gray-400">
                               <span>Created: {formatDate(task.createdAt)}</span>
+                              {task.dueDate && (
+                                <>
+                                  <span>•</span>
+                                  <span>Due: {formatDate(task.dueDate)}</span>
+                                </>
+                              )}
                             </div>
                             {task.submittedAt && (
-                              <div className="text-sm text-gray-500 mt-1">
+                              <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                                 Submitted: {formatDate(task.submittedAt)}
                               </div>
                             )}
