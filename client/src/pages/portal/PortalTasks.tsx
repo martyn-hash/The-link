@@ -240,7 +240,11 @@ export default function PortalTasks() {
                           data-testid={`button-view-task-${task.id}`}
                         >
                           <Eye className="h-4 w-4 mr-2" />
-                          {task.status === 'submitted' || task.status === 'approved' ? 'View' : 'Complete'}
+                          {task.status === 'submitted' || task.status === 'approved' 
+                            ? 'View' 
+                            : task.status === 'in_progress' 
+                            ? 'Continue' 
+                            : 'Start'}
                         </Button>
                       </div>
                     </CardContent>
