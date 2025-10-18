@@ -281,12 +281,12 @@ export default function ClientRequests() {
               </div>
               
               <div className="flex gap-2 flex-wrap">
-                <Select value={clientFilter} onValueChange={setClientFilter}>
+                <Select value={clientFilter || "all"} onValueChange={(val) => setClientFilter(val === "all" ? "" : val)}>
                   <SelectTrigger className="w-[180px]" data-testid="select-client-filter">
                     <SelectValue placeholder="Filter by client" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Clients</SelectItem>
+                    <SelectItem value="all">All Clients</SelectItem>
                     {uniqueClients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
@@ -295,12 +295,12 @@ export default function ClientRequests() {
                   </SelectContent>
                 </Select>
 
-                <Select value={personFilter} onValueChange={setPersonFilter}>
+                <Select value={personFilter || "all"} onValueChange={(val) => setPersonFilter(val === "all" ? "" : val)}>
                   <SelectTrigger className="w-[180px]" data-testid="select-person-filter">
                     <SelectValue placeholder="Filter by person" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All People</SelectItem>
+                    <SelectItem value="all">All People</SelectItem>
                     {uniquePeople.map((person) => (
                       <SelectItem key={person.id} value={person.id}>
                         {person.name}
@@ -309,12 +309,12 @@ export default function ClientRequests() {
                   </SelectContent>
                 </Select>
 
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <Select value={categoryFilter || "all"} onValueChange={(val) => setCategoryFilter(val === "all" ? "" : val)}>
                   <SelectTrigger className="w-[180px]" data-testid="select-category-filter">
                     <SelectValue placeholder="Filter by category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Categories</SelectItem>
+                    <SelectItem value="all">All Categories</SelectItem>
                     {uniqueCategories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
