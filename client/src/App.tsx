@@ -53,6 +53,7 @@ import PortalTaskComplete from "@/pages/portal/PortalTaskComplete";
 import PortalProfile from "@/pages/portal/PortalProfile";
 import PortalDocuments from "@/pages/portal/PortalDocuments";
 import Messages from "@/pages/messages";
+import ClientRequests from "@/pages/client-requests";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -99,6 +100,7 @@ function Router() {
       
       {/* Protected routes - render regardless of auth state, let components handle auth */}
       <Route path="/messages" component={Messages} />
+      <Route path="/client-requests" component={ClientRequests} />
       <Route path="/projects" component={Projects} />
       <Route path="/projects/:id" component={ProjectDetail} />
       {/* Redirect old /all-projects route to new /projects route */}

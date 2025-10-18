@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
@@ -156,7 +156,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       )}
                     </div>
 
-                    {/* Column 2: Messages, Companies, People */}
+                    {/* Column 2: Messages, Client Requests, Companies, People */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/messages" className="w-full">
@@ -166,6 +166,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Messages</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/client-requests" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-client-requests-menu">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
+                              <ClipboardList className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Client Requests</div>
                             </div>
                           </div>
                         </Link>

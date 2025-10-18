@@ -9673,6 +9673,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/task-instances - Get all task instances with enriched data (isAuthenticated)
+  app.get("/api/task-instances", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { status, clientId, personId, categoryId, search, page = '1', limit = '50' } = req.query;
+      
+      // Parse status filter - can be comma-separated list
+      const statusFilters = status ? (status as string).split(',').map(s => s.trim()) : undefined;
+      
+      // Get all task instances - we'll need to fetch without status filter first, then filter
+      const allInstances = await storage.getAllTaskInstances({ 
+        clientId: clientId as string | undefined 
+      });
+      
+      // Filter by status if provided (supports multiple statuses)
+      let filteredInstances = allInstances;
+      if (statusFilters && statusFilters.length > 0) {
+        filteredInstances = allInstances.filter(instance => statusFilters.includes(instance.status));
+      }
+      
+      // Filter by personId if provided
+      if (personId) {
+        filteredInstances = filteredInstances.filter(instance => instance.personId === personId);
+      }
+      
+      // Enrich instances with related data
+      const enrichedInstances = await Promise.all(
+        filteredInstances.map(async (instance) => {
+          const [client, person, assignedByUser, template, customRequest] = await Promise.all([
+            instance.clientId ? storage.getClientById(instance.clientId) : null,
+            instance.personId ? storage.getPersonById(instance.personId) : null,
+            instance.assignedBy ? storage.getUser(instance.assignedBy) : null,
+            instance.templateId ? storage.getTaskTemplateById(instance.templateId) : null,
+            instance.customRequestId ? storage.getClientCustomRequestById(instance.customRequestId) : null,
+          ]);
+          
+          // Get category from template
+          let category = null;
+          if (template?.categoryId) {
+            category = await storage.getTaskTemplateCategoryById(template.categoryId);
+          }
+          
+          // Calculate progress if in_progress
+          let progressData = null;
+          if (instance.status === 'in_progress') {
+            const responses = await storage.getTaskInstanceResponsesByTaskInstanceId(instance.id);
+            const fullData = await storage.getTaskInstanceWithFullData(instance.id);
+            const totalQuestions = fullData?.questions?.length || 0;
+            const answeredQuestions = responses.length;
+            progressData = {
+              total: totalQuestions,
+              completed: answeredQuestions,
+              percentage: totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0
+            };
+          }
+          
+          return {
+            ...instance,
+            clientName: client?.name || 'Unknown Client',
+            personName: person?.fullName || null,
+            assignedByName: assignedByUser ? `${assignedByUser.firstName || ''} ${assignedByUser.lastName || ''}`.trim() : null,
+            requestName: template?.name || customRequest?.name || 'Unnamed Request',
+            categoryName: category?.name || null,
+            categoryId: category?.id || null,
+            progress: progressData
+          };
+        })
+      );
+      
+      // Filter by category if provided
+      let finalInstances = enrichedInstances;
+      if (categoryId) {
+        finalInstances = enrichedInstances.filter(instance => instance.categoryId === categoryId);
+      }
+      
+      // Filter by search term if provided
+      if (search) {
+        const searchLower = (search as string).toLowerCase();
+        finalInstances = finalInstances.filter(instance => 
+          instance.requestName?.toLowerCase().includes(searchLower) ||
+          instance.clientName?.toLowerCase().includes(searchLower) ||
+          instance.personName?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Sort by created date, newest first
+      finalInstances.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      
+      // Apply pagination
+      const pageNum = parseInt(page as string, 10);
+      const limitNum = parseInt(limit as string, 10);
+      const startIndex = (pageNum - 1) * limitNum;
+      const endIndex = startIndex + limitNum;
+      const paginatedInstances = finalInstances.slice(startIndex, endIndex);
+      
+      // Extract unique filter options from ALL instances (before pagination)
+      const uniqueClients = new Map<string, string>();
+      const uniquePeople = new Map<string, string>();
+      const uniqueCategories = new Map<string, string>();
+      
+      finalInstances.forEach(instance => {
+        if (instance.clientId && instance.clientName) {
+          uniqueClients.set(instance.clientId, instance.clientName);
+        }
+        if (instance.personId && instance.personName) {
+          uniquePeople.set(instance.personId, instance.personName);
+        }
+        if (instance.categoryId && instance.categoryName) {
+          uniqueCategories.set(instance.categoryId, instance.categoryName);
+        }
+      });
+      
+      res.json({
+        data: paginatedInstances,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: finalInstances.length,
+          totalPages: Math.ceil(finalInstances.length / limitNum)
+        },
+        filterOptions: {
+          clients: Array.from(uniqueClients.entries()).map(([id, name]) => ({ id, name })),
+          people: Array.from(uniquePeople.entries()).map(([id, name]) => ({ id, name })),
+          categories: Array.from(uniqueCategories.entries()).map(([id, name]) => ({ id, name }))
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching task instances:", error);
+      res.status(500).json({ message: "Failed to fetch task instances" });
+    }
+  });
+
   // POST /api/task-instances - Create a new task instance (requireAdmin)
   app.post("/api/task-instances", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
