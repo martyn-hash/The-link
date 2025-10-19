@@ -196,7 +196,6 @@ function SortableSectionCard({
   onDelete,
   onEditQuestion,
   onDeleteQuestion,
-  onReorderQuestions,
 }: { 
   section: SortableSection; 
   templateId: string;
@@ -204,7 +203,6 @@ function SortableSectionCard({
   onDelete: () => void;
   onEditQuestion: (questionId: string) => void;
   onDeleteQuestion: (questionId: string) => void;
-  onReorderQuestions: (oldIndex: number, newIndex: number, onError?: () => void) => void;
 }) {
   const {
     attributes,
@@ -235,28 +233,6 @@ function SortableSectionCard({
   });
 
   const questions = questionsData || [];
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = questions.findIndex((q) => q.id === active.id);
-    const newIndex = questions.findIndex((q) => q.id === over.id);
-
-    if (oldIndex !== -1 && newIndex !== -1) {
-      const rollback = () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", section.id, "questions"] });
-      };
-      onReorderQuestions(oldIndex, newIndex, rollback);
-    }
-  };
 
   return (
     <Card
@@ -331,36 +307,34 @@ function SortableSectionCard({
             </Select>
           </div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {questions.map((question) => (
-                  <SortableQuestionItem
-                    key={question.id}
-                    question={question}
-                    onEdit={() => onEditQuestion(question.id)}
-                    onDelete={() => onDeleteQuestion(question.id)}
-                  />
-                ))}
-                <Select
-                  onValueChange={(type) => {
-                    onEditQuestion('CREATE_NEW_' + type + '_' + section.id);
-                  }}
-                >
-                  <SelectTrigger className="w-full" data-testid={`select-add-question-${section.id}`}>
-                    <SelectValue placeholder="Add another question..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUESTION_TYPES.map((qt) => (
-                      <SelectItem key={qt.type} value={qt.type} data-testid={`option-question-type-${qt.type}`}>
-                        {qt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </SortableContext>
-          </DndContext>
+          <SortableContext items={questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {questions.map((question) => (
+                <SortableQuestionItem
+                  key={question.id}
+                  question={question}
+                  onEdit={() => onEditQuestion(question.id)}
+                  onDelete={() => onDeleteQuestion(question.id)}
+                />
+              ))}
+              <Select
+                onValueChange={(type) => {
+                  onEditQuestion('CREATE_NEW_' + type + '_' + section.id);
+                }}
+              >
+                <SelectTrigger className="w-full" data-testid={`select-add-question-${section.id}`}>
+                  <SelectValue placeholder="Add another question..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUESTION_TYPES.map((qt) => (
+                    <SelectItem key={qt.type} value={qt.type} data-testid={`option-question-type-${qt.type}`}>
+                      {qt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </SortableContext>
         )}
       </CardContent>
     </Card>
@@ -575,6 +549,7 @@ export default function TaskTemplateEditPage() {
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
   const [creatingQuestion, setCreatingQuestion] = useState<{ sectionId: string; questionType: string } | null>(null);
   const [editQuestionId, setEditQuestionId] = useState<string | null>(null);
+  const [editQuestionSectionId, setEditQuestionSectionId] = useState<string | null>(null);
   const [createQuestionOptions, setCreateQuestionOptions] = useState<string[]>([]);
   const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
 
@@ -717,17 +692,31 @@ export default function TaskTemplateEditPage() {
   });
 
   const updateQuestionMutation = useMutation({
-    mutationFn: async (data: { id: string; [key: string]: any }) => {
-      const { id: questionId, ...updateData } = data;
+    mutationFn: async (data: { id: string; sectionId?: string; [key: string]: any }) => {
+      const { id: questionId, sectionId, ...updateData } = data;
       return apiRequest("PATCH", `/api/task-template-questions/${questionId}`, updateData);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast({
         title: "Success",
         description: "Question updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+      // Invalidate the specific section's questions if we know the section
+      if (variables.sectionId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+      } else {
+        // Otherwise invalidate all section questions
+        queryClient.invalidateQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey;
+            return Array.isArray(key) && 
+                   key[0] === "/api/task-template-sections" && 
+                   key[2] === "questions";
+          }
+        });
+      }
       setEditQuestionId(null);
+      setEditQuestionSectionId(null);
       setEditQuestionOptions([]);
     },
     onError: (error) => {
@@ -748,7 +737,15 @@ export default function TaskTemplateEditPage() {
         title: "Success",
         description: "Question deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+      // Invalidate all section questions to refresh the UI
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return Array.isArray(key) && 
+                 key[0] === "/api/task-template-sections" && 
+                 key[2] === "questions";
+        }
+      });
     },
     onError: (error) => {
       toast({
@@ -847,8 +844,29 @@ export default function TaskTemplateEditPage() {
       return;
     }
 
+    // Check if dragging a question (reordering within a section)
+    if (active.data.current?.type === 'question' && over.data.current?.type === 'question') {
+      const activeQuestion = active.data.current.question;
+      const overQuestion = over.data.current.question;
+      
+      // Make sure they're in the same section
+      if (activeQuestion.sectionId === overQuestion.sectionId) {
+        const sectionId = activeQuestion.sectionId;
+        const questionsData = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
+        if (questionsData) {
+          const oldIndex = questionsData.findIndex((q) => q.id === active.id);
+          const newIndex = questionsData.findIndex((q) => q.id === over.id);
+          
+          if (oldIndex !== -1 && newIndex !== -1) {
+            handleReorderQuestions(sectionId, oldIndex, newIndex);
+          }
+        }
+      }
+      return;
+    }
+
     // Handle section reordering
-    if (active.id !== over.id) {
+    if (active.id !== over.id && sections.some(s => s.id === active.id) && sections.some(s => s.id === over.id)) {
       setSections((items) => {
         const oldIndex = items.findIndex((item) => item.id === active.id);
         const newIndex = items.findIndex((item) => item.id === over.id);
@@ -1079,14 +1097,12 @@ export default function TaskTemplateEditPage() {
                                   const question = sectionQuestions?.find((q: any) => q.id === questionId);
                                   if (question) {
                                     setEditQuestionId(questionId);
+                                    setEditQuestionSectionId(section.id);
                                     setEditQuestionOptions(question.options || []);
                                   }
                                 }
                               }}
                               onDeleteQuestion={(questionId) => deleteQuestionMutation.mutate(questionId)}
-                              onReorderQuestions={(oldIndex, newIndex, onError) => 
-                                handleReorderQuestions(section.id, oldIndex, newIndex, onError)
-                              }
                             />
                           ))}
                         </div>
@@ -1524,6 +1540,7 @@ export default function TaskTemplateEditPage() {
 
                       const payload: any = {
                         id: editQuestion.id,
+                        sectionId: editQuestionSectionId,
                         label,
                         helpText: helpText || undefined,
                         isRequired: isRequired || false,
