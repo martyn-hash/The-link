@@ -92,14 +92,12 @@ export async function authenticatePortal(
       return res.status(401).json({ message: 'Portal user not found' });
     }
 
-    // Verify client match for extra security
-    if (portalUser.clientId !== payload.clientId) {
-      return res.status(401).json({ message: 'Invalid client association' });
-    }
-
+    // Use the clientId from the JWT payload (supports company switching)
+    // The clientId in the database is the default/primary company, but users
+    // can switch to other companies they're connected to via JWT claims
     req.portalUser = {
       id: portalUser.id,
-      clientId: portalUser.clientId,
+      clientId: payload.clientId, // Use JWT's clientId, not database's
       email: portalUser.email,
       relatedPersonId: portalUser.personId || null
     };
