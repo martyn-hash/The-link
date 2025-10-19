@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import AddressLookup from "@/components/address-lookup";
 import AddressMap from "@/components/address-map";
 import TagManager from "@/components/tag-manager";
@@ -7903,9 +7904,12 @@ export default function ClientDetail() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Request Name</TableHead>
+                          <TableHead>Category</TableHead>
                           <TableHead>Assigned To</TableHead>
-                          <TableHead>Status</TableHead>
                           <TableHead>Created</TableHead>
+                          <TableHead>Due Date</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Progress</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -7918,26 +7922,51 @@ export default function ClientDetail() {
                               </span>
                             </TableCell>
                             <TableCell>
+                              <span className="text-sm">{instance.categoryName || '-'}</span>
+                            </TableCell>
+                            <TableCell>
                               <span className="text-sm" data-testid={`text-assignee-${instance.id}`}>
                                 {instance.relatedPerson ? formatPersonName(instance.relatedPerson.fullName) : '-'}
                               </span>
                             </TableCell>
                             <TableCell>
+                              <span className="text-sm text-muted-foreground" data-testid={`text-created-${instance.id}`}>
+                                {formatDate(instance.createdAt)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {instance.dueDate ? formatDate(instance.dueDate) : '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
                               <Badge 
                                 variant={
-                                  instance.status === 'submitted' ? 'default' : 
+                                  instance.status === 'submitted' ? 'outline' : 
                                   instance.status === 'approved' ? 'default' : 
-                                  'outline'
+                                  instance.status === 'in_progress' ? 'default' :
+                                  'secondary'
                                 }
                                 data-testid={`badge-status-${instance.id}`}
                               >
-                                {instance.status}
+                                {instance.status === 'not_started' ? 'Not Started' :
+                                 instance.status === 'in_progress' ? 'In Progress' :
+                                 instance.status === 'submitted' ? 'Submitted' :
+                                 instance.status === 'approved' ? 'Approved' :
+                                 instance.status}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <span className="text-sm" data-testid={`text-created-${instance.id}`}>
-                                {formatDate(instance.createdAt)}
-                              </span>
+                              {instance.status === 'in_progress' && instance.progress ? (
+                                <div className="flex items-center gap-2 min-w-[120px]">
+                                  <Progress value={instance.progress.percentage} className="h-2 flex-1" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {instance.progress.completed}/{instance.progress.total} ({instance.progress.percentage}%)
+                                  </span>
+                                </div>
+                              ) : (
+                                '-'
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
                               <Button

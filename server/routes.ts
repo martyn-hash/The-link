@@ -9920,7 +9920,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { clientId } = req.params;
 
       const instances = await storage.getTaskInstancesByClientId(clientId);
-      res.json(instances);
+      
+      // Enrich instances with category and progress data
+      const enrichedInstances = await Promise.all(
+        instances.map(async (instance) => {
+          const [person, template, customRequest] = await Promise.all([
+            instance.personId ? storage.getPersonById(instance.personId) : null,
+            instance.templateId ? storage.getTaskTemplateById(instance.templateId) : null,
+            instance.customRequestId ? storage.getClientCustomRequestById(instance.customRequestId) : null,
+          ]);
+          
+          // Get category from template
+          let category = null;
+          if (template?.categoryId) {
+            category = await storage.getTaskTemplateCategoryById(template.categoryId);
+          }
+          
+          // Calculate progress if in_progress
+          let progressData = null;
+          if (instance.status === 'in_progress') {
+            const responses = await storage.getTaskInstanceResponsesByTaskInstanceId(instance.id);
+            const fullData = await storage.getTaskInstanceWithFullData(instance.id);
+            // Count total questions from all sections
+            const totalQuestions = fullData?.sections?.reduce((total: number, section: any) => {
+              return total + (section.questions?.length || 0);
+            }, 0) || 0;
+            const answeredQuestions = responses.length;
+            const percentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+            progressData = {
+              total: totalQuestions,
+              completed: answeredQuestions,
+              percentage: percentage
+            };
+          }
+          
+          return {
+            ...instance,
+            relatedPerson: person,
+            template,
+            customRequest,
+            categoryName: category?.name || null,
+            categoryId: category?.id || null,
+            progress: progressData
+          };
+        })
+      );
+      
+      res.json(enrichedInstances);
     } catch (error) {
       console.error("Error fetching task instances by client:", error);
       res.status(500).json({ message: "Failed to fetch task instances" });
