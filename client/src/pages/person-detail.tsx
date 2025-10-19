@@ -24,6 +24,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import type { Person, Client, ClientPerson, ClientPortalUser, PeopleService } from "@shared/schema";
 import { insertPersonSchema } from "@shared/schema";
+import { useActivityTracker } from "@/lib/activityTracker";
 
 type PersonWithDetails = Person & {
   relatedCompanies: Array<ClientPerson & { client: Client }>;
@@ -107,11 +108,19 @@ export default function PersonDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { trackPersonView } = useActivityTracker();
   
   const [revealedNI, setRevealedNI] = useState(false);
   const [revealedUTR, setRevealedUTR] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+
+  // Track person view activity when component mounts
+  useEffect(() => {
+    if (id) {
+      trackPersonView(id);
+    }
+  }, [id, trackPersonView]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 

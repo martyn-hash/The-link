@@ -26,6 +26,7 @@ import ProjectChronology from "@/components/project-chronology";
 import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useActivityTracker } from "@/lib/activityTracker";
 
 interface RoleAssigneeResponse {
   user: User | null;
@@ -39,10 +40,18 @@ export default function ProjectDetail() {
   const [, setLocation] = useLocation();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { trackProjectView } = useActivityTracker();
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completionType, setCompletionType] = useState<'completed_successfully' | 'completed_unsuccessfully' | null>(null);
   const [showStageErrorDialog, setShowStageErrorDialog] = useState(false);
   const [stageErrorMessage, setStageErrorMessage] = useState<{ currentStage: string; validStages: string[] } | null>(null);
+
+  // Track project view activity when component mounts
+  useEffect(() => {
+    if (projectId) {
+      trackProjectView(projectId);
+    }
+  }, [projectId, trackProjectView]);
 
   // Fetch single project data
   const { 
