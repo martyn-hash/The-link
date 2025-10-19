@@ -13,10 +13,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Separator } from '@/components/ui/separator';
 import {
   MessageCircle,
   Clock,
@@ -37,7 +40,9 @@ import {
   FileAudio,
   Image as ImageIcon,
   RefreshCw,
-  ClipboardList
+  ClipboardList,
+  Filter,
+  Calendar
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -113,8 +118,10 @@ export default function Messages() {
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived'>('active');
-  const [statusFilter, setStatusFilter] = useState<string>('open');
+  const [archiveFilter, setArchiveFilter] = useState<'all' | 'open' | 'archived'>('open');
+  const [readFilter, setReadFilter] = useState<'all' | 'unread'>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [newMessage, setNewMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -171,22 +178,40 @@ export default function Messages() {
 
   const threads = allThreads?.filter(thread => {
     const isArchived = thread.isArchived === true;
-    const matchesArchiveFilter = archiveFilter === 'archived' ? isArchived : !isArchived;
     
-    if (!matchesArchiveFilter) return false;
+    // Archive filter
+    if (archiveFilter === 'open' && isArchived) return false;
+    if (archiveFilter === 'archived' && !isArchived) return false;
     
-    if (archiveFilter === 'active') {
-      // Filter by who replied last
-      if (statusFilter === 'client_replied' && thread.lastMessageByStaff !== false) return false;
-      // 'open' shows all non-archived threads
+    // Read/Unread filter
+    if (readFilter === 'unread' && !thread.hasUnreadMessages) return false;
+    
+    // Date range filter
+    if (dateFrom) {
+      const threadDate = new Date(thread.updatedAt);
+      const fromDate = new Date(dateFrom);
+      if (threadDate < fromDate) return false;
+    }
+    if (dateTo) {
+      const threadDate = new Date(thread.updatedAt);
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999); // End of day
+      if (threadDate > toDate) return false;
     }
     
-    // Filter by search term
+    // Enhanced search: client name, person email, message content
     if (threadSearchTerm.trim()) {
+      const searchLower = threadSearchTerm.toLowerCase();
       const clientName = thread.clientPortalUser?.client?.name || '';
-      if (!clientName.toLowerCase().includes(threadSearchTerm.toLowerCase())) {
-        return false;
-      }
+      const personEmail = thread.clientPortalUser?.email || '';
+      const messageContent = thread.lastMessageContent || '';
+      
+      const matches = 
+        clientName.toLowerCase().includes(searchLower) ||
+        personEmail.toLowerCase().includes(searchLower) ||
+        messageContent.toLowerCase().includes(searchLower);
+      
+      if (!matches) return false;
     }
     
     return true;
@@ -675,14 +700,9 @@ export default function Messages() {
 
       <main className="container mx-auto py-6 px-4">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">
-              Client Messages
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage conversations with your clients
-            </p>
-          </div>
+          <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">
+            Client Messages
+          </h1>
           <div className="flex items-center gap-3">
             {unreadCount && unreadCount.count > 0 && (
               <Badge variant="destructive" className="text-lg px-3 py-1" data-testid="badge-unread-count">
@@ -700,40 +720,123 @@ export default function Messages() {
           </div>
         </div>
 
-        {/* Outer Active/Archived Tabs */}
-        <Tabs value={archiveFilter} onValueChange={(value: string) => setArchiveFilter(value as 'active' | 'archived')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="active" data-testid="tab-active">
-              Active
-            </TabsTrigger>
-            <TabsTrigger value="archived" data-testid="tab-archived">
-              <Archive className="h-4 w-4 mr-2" />
-              Archived
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="active" className="mt-0">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Thread List */}
-              <Card className="lg:col-span-1">
-                <CardHeader>
-                  <CardTitle>Conversations</CardTitle>
-                  <div className="mt-3">
-                    <Input 
-                      value={threadSearchTerm}
-                      onChange={(e) => setThreadSearchTerm(e.target.value)}
-                      placeholder="Search by client name..."
-                      className="w-full"
-                      data-testid="input-thread-search"
-                    />
-                  </div>
-                  <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="open" data-testid="filter-open">All Open</TabsTrigger>
-                      <TabsTrigger value="client_replied" data-testid="filter-client-replied">Awaiting Reply</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </CardHeader>
+        {/* Streamlined Thread List */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Thread List */}
+          <Card className="lg:col-span-1">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex-1">
+                  <Input 
+                    value={threadSearchTerm}
+                    onChange={(e) => setThreadSearchTerm(e.target.value)}
+                    placeholder="Search"
+                    className="w-full"
+                    data-testid="input-thread-search"
+                  />
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" className="ml-2" data-testid="button-filter">
+                      <Filter className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="end">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium mb-3">Filters</h4>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Status</Label>
+                        <RadioGroup value={archiveFilter} onValueChange={(value) => setArchiveFilter(value as 'all' | 'open' | 'archived')}>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="all" id="status-all" />
+                            <Label htmlFor="status-all" className="font-normal cursor-pointer">All</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="open" id="status-open" />
+                            <Label htmlFor="status-open" className="font-normal cursor-pointer">Open</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="archived" id="status-archived" />
+                            <Label htmlFor="status-archived" className="font-normal cursor-pointer">Archived</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Read Status</Label>
+                        <RadioGroup value={readFilter} onValueChange={(value) => setReadFilter(value as 'all' | 'unread')}>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="all" id="read-all" />
+                            <Label htmlFor="read-all" className="font-normal cursor-pointer">All</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="unread" id="read-unread" />
+                            <Label htmlFor="read-unread" className="font-normal cursor-pointer">Unread only</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Date Range</Label>
+                        <div className="space-y-2">
+                          <div>
+                            <Label htmlFor="date-from" className="text-xs text-muted-foreground">From</Label>
+                            <Input 
+                              id="date-from"
+                              type="date"
+                              value={dateFrom}
+                              onChange={(e) => setDateFrom(e.target.value)}
+                              className="w-full"
+                              data-testid="input-date-from"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="date-to" className="text-xs text-muted-foreground">To</Label>
+                            <Input 
+                              id="date-to"
+                              type="date"
+                              value={dateTo}
+                              onChange={(e) => setDateTo(e.target.value)}
+                              className="w-full"
+                              data-testid="input-date-to"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {(archiveFilter !== 'open' || readFilter !== 'all' || dateFrom || dateTo) && (
+                        <>
+                          <Separator />
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => {
+                              setArchiveFilter('open');
+                              setReadFilter('all');
+                              setDateFrom('');
+                              setDateTo('');
+                            }}
+                            data-testid="button-clear-filters"
+                          >
+                            Clear Filters
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
                 {threadsLoading ? (
@@ -784,7 +887,7 @@ export default function Messages() {
                 ) : (
                   <div className="p-8 text-center text-muted-foreground">
                     <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No {statusFilter} conversations</p>
+                    <p>No conversations found</p>
                   </div>
                 )}
               </div>
@@ -1170,242 +1273,6 @@ export default function Messages() {
             )}
           </Card>
         </div>
-      </TabsContent>
-
-      <TabsContent value="archived" className="mt-0">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Archived Thread List */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Archived Conversations</CardTitle>
-              <div className="mt-3">
-                <Input 
-                  value={threadSearchTerm}
-                  onChange={(e) => setThreadSearchTerm(e.target.value)}
-                  placeholder="Search by client name..."
-                  className="w-full"
-                  data-testid="input-thread-search-archived"
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
-                {threadsLoading ? (
-                  <div className="p-4 space-y-3">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-20 w-full" />
-                    ))}
-                  </div>
-                ) : threads && threads.length > 0 ? (
-                  <div className="divide-y">
-                    {threads.map((thread) => {
-                      const messagePreview = thread.lastMessageContent 
-                        ? thread.lastMessageContent.substring(0, 60) + (thread.lastMessageContent.length > 60 ? '...' : '')
-                        : 'No messages yet';
-                      
-                      return (
-                        <button
-                          key={thread.id}
-                          onClick={() => setSelectedThreadId(thread.id)}
-                          className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors ${
-                            selectedThreadId === thread.id ? 'bg-accent' : ''
-                          }`}
-                          data-testid={`thread-${thread.id}`}
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-0.5">
-                            <h3 className="text-sm font-semibold truncate" data-testid={`thread-topic-${thread.id}`}>
-                              {thread.subject || thread.topic}
-                            </h3>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                              {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true }).replace('about ', '')}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate mb-0.5" data-testid={`thread-client-${thread.id}`}>
-                            {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
-                          </p>
-                          {thread.lastMessageSenderName && (
-                            <p className="text-xs text-muted-foreground truncate" data-testid={`thread-preview-${thread.id}`}>
-                              <span className="font-medium">{thread.lastMessageSenderName}:</span> {messagePreview}
-                            </p>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <Archive className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No archived conversations</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Message View for Archived Thread */}
-          <Card className="lg:col-span-2">
-            {selectedThread ? (
-              <>
-                <CardHeader className="border-b">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle data-testid="text-selected-thread-topic">{selectedThread.subject || selectedThread.topic}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1" data-testid="text-selected-thread-client">
-                        {selectedThread.clientPortalUser?.client?.name || selectedThread.clientPortalUser?.email}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {selectedThread.isArchived && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
-                          disabled={unarchiveThreadMutation.isPending}
-                          data-testid="button-unarchive"
-                        >
-                          <ArchiveRestore className="h-4 w-4 mr-2" />
-                          Restore
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-0">
-                  <div className="h-[400px] overflow-y-auto p-4 space-y-4" data-testid="messages-container">
-                    {messagesLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <Skeleton key={i} className="h-20 w-full" />
-                      ))
-                    ) : messages && messages.length > 0 ? (
-                      messages.map((message) => {
-                        const isStaff = !!message.userId;
-                        return (
-                          <div
-                            key={message.id}
-                            className={`flex gap-3 ${isStaff ? 'flex-row-reverse' : ''}`}
-                            data-testid={`message-${message.id}`}
-                          >
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback>
-                                {isStaff ? (
-                                  <User className="h-4 w-4" />
-                                ) : (
-                                  <Building2 className="h-4 w-4" />
-                                )}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className={`flex-1 ${isStaff ? 'text-right' : ''}`}>
-                              <div className="text-xs text-muted-foreground mb-1">
-                                <span data-testid={`message-sender-${message.id}`}>
-                                  {isStaff
-                                    ? `${message.user?.firstName || ''} ${message.user?.lastName || ''}`.trim() || message.user?.email
-                                    : message.clientPortalUser?.email}
-                                </span>
-                                {' • '}
-                                {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                              </div>
-                              <div>
-                                <div
-                                  className={`inline-block p-3 rounded-lg ${
-                                    isStaff
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'bg-muted'
-                                  }`}
-                                  data-testid={`message-content-${message.id}`}
-                                >
-                                  {message.content}
-                                </div>
-                                {message.attachments && message.attachments.length > 0 && (
-                                  <div className="mt-2 space-y-2">
-                                    {message.attachments.map((attachment, idx) => {
-                                      const isImage = attachment.fileType.startsWith('image/');
-                                      const isAudio = attachment.fileType.startsWith('audio/');
-                                      // Use the authorized endpoint for staff to access attachments
-                                      const objectUrl = attachment.objectPath.replace('/objects/', `/api/internal/messages/attachments/`) + `?threadId=${selectedThreadId}`;
-                                      
-                                      if (isImage) {
-                                        return (
-                                          <div key={idx} className="mt-2">
-                                            <button
-                                              onClick={() => setPreviewImage({ url: objectUrl, fileName: attachment.fileName })}
-                                              className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity cursor-pointer"
-                                              data-testid={`image-attachment-${idx}`}
-                                            >
-                                              <img 
-                                                src={objectUrl} 
-                                                alt={attachment.fileName}
-                                                className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
-                                                loading="lazy"
-                                              />
-                                            </button>
-                                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                              <ImageIcon className="h-3 w-3" />
-                                              <span className="truncate">{attachment.fileName}</span>
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                      
-                                      if (isAudio) {
-                                        return (
-                                          <div key={idx} className="p-3 rounded-lg bg-muted">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <FileAudio className="h-4 w-4" />
-                                              <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
-                                            </div>
-                                            <audio 
-                                              src={objectUrl} 
-                                              controls 
-                                              className="w-full max-w-xs"
-                                              preload="metadata"
-                                              data-testid={`audio-attachment-${idx}`}
-                                            />
-                                          </div>
-                                        );
-                                      }
-                                      
-                                      return (
-                                        <a
-                                          key={idx}
-                                          href={objectUrl}
-                                          download={attachment.fileName}
-                                          className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
-                                          data-testid={`attachment-${message.id}-${idx}`}
-                                        >
-                                          <File className="h-4 w-4 flex-shrink-0" />
-                                          <span className="truncate">{attachment.fileName}</span>
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center text-muted-foreground py-8">
-                        <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>No messages in this thread</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </>
-            ) : (
-              <CardContent className="flex items-center justify-center h-[500px]">
-                <div className="text-center text-muted-foreground">
-                  <Archive className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">Select an archived conversation to view</p>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        </div>
-      </TabsContent>
-    </Tabs>
       </main>
 
       <BottomNav onSearchClick={() => {}} />
