@@ -48,11 +48,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type PersonWithPortalStatus = Person & {
-  portalAccess?: {
-    hasAccessed: boolean;
-    lastLogin: Date | null;
-    pushEnabled: boolean;
-  } | null;
+  portalUser?: ClientPortalUser | null;
   relatedCompanies?: Client[];
 };
 
@@ -390,12 +386,12 @@ export default function People() {
         bVal = b.primaryPhone || b.telephone || "";
         break;
       case "hasAccessed":
-        aVal = a.portalAccess?.hasAccessed ? 1 : 0;
-        bVal = b.portalAccess?.hasAccessed ? 1 : 0;
+        aVal = a.portalUser?.lastLogin ? 1 : 0;
+        bVal = b.portalUser?.lastLogin ? 1 : 0;
         break;
       case "pushEnabled":
-        aVal = a.portalAccess?.pushEnabled ? 1 : 0;
-        bVal = b.portalAccess?.pushEnabled ? 1 : 0;
+        aVal = a.portalUser?.pushNotificationsEnabled ? 1 : 0;
+        bVal = b.portalUser?.pushNotificationsEnabled ? 1 : 0;
         break;
       case "dateOfBirth":
         aVal = a.dateOfBirth || "";
@@ -629,7 +625,7 @@ export default function People() {
                                 case "hasAccessed":
                                   return (
                                     <TableCell key={column.id} style={cellStyle} className="text-center">
-                                      {person.portalAccess?.hasAccessed ? (
+                                      {person.portalUser?.lastLogin ? (
                                         <Check className="h-4 w-4 text-green-500 mx-auto" data-testid={`icon-has-accessed-${person.id}`} />
                                       ) : (
                                         <span className="text-muted-foreground text-xs">-</span>
@@ -639,7 +635,7 @@ export default function People() {
                                 case "pushEnabled":
                                   return (
                                     <TableCell key={column.id} style={cellStyle} className="text-center">
-                                      {person.portalAccess?.pushEnabled ? (
+                                      {person.portalUser?.pushNotificationsEnabled ? (
                                         <Check className="h-4 w-4 text-blue-500 mx-auto" data-testid={`icon-push-enabled-${person.id}`} />
                                       ) : (
                                         <span className="text-muted-foreground text-xs">-</span>
