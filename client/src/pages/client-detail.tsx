@@ -5770,8 +5770,8 @@ function ServiceProjectsList({ serviceId }: { serviceId: string }) {
   return <ProjectsList projects={projects} isLoading={isLoading} clientId={id} />;
 }
 
-// Component to display a list of projects with hyperlinks
-function ProjectsList({ projects, isLoading, clientId }: { projects?: ProjectWithRelations[]; isLoading: boolean; clientId?: string }) {
+// Row component for open projects
+function OpenProjectRow({ project, clientId }: { project: ProjectWithRelations; clientId?: string }) {
   const [, setLocation] = useLocation();
 
   const getStatusColor = (status: string) => {
@@ -5789,24 +5789,170 @@ function ProjectsList({ projects, isLoading, clientId }: { projects?: ProjectWit
     return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
-  const navigateToProject = (projectId: string) => {
-    // Include client ID as query parameter when navigating from client detail page
-    const url = clientId ? `/projects/${projectId}?from=client&clientId=${clientId}` : `/projects/${projectId}`;
+  const navigateToProject = () => {
+    const url = clientId ? `/projects/${project.id}?from=client&clientId=${clientId}` : `/projects/${project.id}`;
     setLocation(url);
   };
 
+  const assigneeName = project.currentAssignee 
+    ? `${project.currentAssignee.firstName} ${project.currentAssignee.lastName}`
+    : '-';
+
+  return (
+    <TableRow data-testid={`row-project-${project.id}`}>
+      <TableCell className="font-medium">
+        <span data-testid={`text-name-${project.id}`}>
+          {project.description}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+          {formatStatus(project.currentStatus)}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-duedate-${project.id}`}>
+          {project.dueDate ? formatDate(project.dueDate) : '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-assignee-${project.id}`}>
+          {assigneeName}
+        </span>
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={navigateToProject}
+          data-testid={`button-view-${project.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// Row component for completed projects
+function CompletedProjectRow({ project, clientId }: { project: ProjectWithRelations; clientId?: string }) {
+  const [, setLocation] = useLocation();
+
+  const getStatusColor = (status: string) => {
+    const colors = {
+      no_latest_action: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+      bookkeeping_work_required: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      in_review: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      needs_client_input: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    };
+    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  };
+
+  const formatStatus = (status: string) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const navigateToProject = () => {
+    const url = clientId ? `/projects/${project.id}?from=client&clientId=${clientId}` : `/projects/${project.id}`;
+    setLocation(url);
+  };
+
+  const assigneeName = project.currentAssignee 
+    ? `${project.currentAssignee.firstName} ${project.currentAssignee.lastName}`
+    : '-';
+
+  const completionStatusDisplay = project.completionStatus 
+    ? (project.completionStatus === 'completed_successfully' ? 'Successful' : 'Unsuccessful')
+    : '-';
+
+  const completionStatusColor = project.completionStatus === 'completed_successfully'
+    ? 'text-green-600 dark:text-green-400'
+    : project.completionStatus === 'completed_unsuccessfully'
+    ? 'text-red-600 dark:text-red-400'
+    : 'text-muted-foreground';
+
+  return (
+    <TableRow data-testid={`row-project-${project.id}`}>
+      <TableCell className="font-medium">
+        <span data-testid={`text-name-${project.id}`}>
+          {project.description}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+          {formatStatus(project.currentStatus)}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-duedate-${project.id}`}>
+          {project.dueDate ? formatDate(project.dueDate) : '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-assignee-${project.id}`}>
+          {assigneeName}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className={`text-sm font-medium ${completionStatusColor}`} data-testid={`text-completion-${project.id}`}>
+          {completionStatusDisplay}
+        </span>
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={navigateToProject}
+          data-testid={`button-view-${project.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// Component to display a list of projects with table layout
+function ProjectsList({ projects, isLoading, clientId, isCompleted = false }: { projects?: ProjectWithRelations[]; isLoading: boolean; clientId?: string; isCompleted?: boolean }) {
   if (isLoading) {
     return (
-      <div className="space-y-3">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="flex justify-between items-center p-3 border rounded-lg">
-            <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
-            </div>
-            <Skeleton className="h-8 w-16" />
-          </div>
-        ))}
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Project Name</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Due Date</TableHead>
+              <TableHead>Assignee</TableHead>
+              {isCompleted && <TableHead>Completion</TableHead>}
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {[1, 2, 3].map(i => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                {isCompleted && <TableCell><Skeleton className="h-4 w-20" /></TableCell>}
+                <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     );
   }
@@ -5824,38 +5970,28 @@ function ProjectsList({ projects, isLoading, clientId }: { projects?: ProjectWit
   }
 
   return (
-    <div className="space-y-3">
-      {projects.map((project) => (
-        <div key={project.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-          <div className="flex-1 space-y-1">
-            <div className="flex items-center gap-2">
-              <h4 className="font-medium text-sm" data-testid={`text-project-title-${project.id}`}>
-                {project.description}
-              </h4>
-              <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
-                {formatStatus(project.currentStatus)}
-              </Badge>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {project.dueDate && (
-                <span>Due: {new Date(project.dueDate).toLocaleDateString()}</span>
-              )}
-              {project.projectMonth && (
-                <span className="ml-3">Month: {project.projectMonth}</span>
-              )}
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateToProject(project.id)}
-            data-testid={`button-view-project-${project.id}`}
-          >
-            <Eye className="w-4 h-4 mr-1" />
-            View
-          </Button>
-        </div>
-      ))}
+    <div className="border rounded-lg">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Project Name</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Due Date</TableHead>
+            <TableHead>Assignee</TableHead>
+            {isCompleted && <TableHead>Completion</TableHead>}
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {projects.map((project) => 
+            isCompleted ? (
+              <CompletedProjectRow key={project.id} project={project} clientId={clientId} />
+            ) : (
+              <OpenProjectRow key={project.id} project={project} clientId={clientId} />
+            )
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -7807,6 +7943,7 @@ export default function ClientDetail() {
                   projects={clientProjects?.filter(p => !p.completionStatus)} 
                   isLoading={projectsLoading}
                   clientId={id}
+                  isCompleted={false}
                 />
               </CardContent>
             </Card>
@@ -7824,6 +7961,7 @@ export default function ClientDetail() {
                   projects={clientProjects?.filter(p => p.completionStatus)} 
                   isLoading={projectsLoading}
                   clientId={id}
+                  isCompleted={true}
                 />
               </CardContent>
             </Card>
