@@ -695,11 +695,11 @@ export default function Messages() {
   const selectedThread = threads?.find(t => t.id === selectedThreadId);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
 
-      <main className="container mx-auto py-6 px-4">
-        <div className="flex items-center justify-between mb-6">
+      <main className="container mx-auto px-4 pt-6 pb-4 flex-1 flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">
             Client Messages
           </h1>
@@ -721,10 +721,10 @@ export default function Messages() {
         </div>
 
         {/* Streamlined Thread List */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
           {/* Thread List */}
-          <Card className="lg:col-span-1">
-            <CardHeader className="pb-3">
+          <Card className="lg:col-span-1 flex flex-col overflow-hidden">
+            <CardHeader className="pb-3 flex-shrink-0">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex-1">
                   <Input 
@@ -837,8 +837,8 @@ export default function Messages() {
                 </Popover>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              <div className="overflow-y-auto h-full">
                 {threadsLoading ? (
                   <div className="p-4 space-y-3">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -895,10 +895,10 @@ export default function Messages() {
           </Card>
 
           {/* Message View */}
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-2 flex flex-col overflow-hidden">
             {selectedThread ? (
               <>
-                <CardHeader className="border-b">
+                <CardHeader className="border-b flex-shrink-0">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <CardTitle data-testid="text-selected-thread-topic">{selectedThread.topic}</CardTitle>
@@ -935,8 +935,8 @@ export default function Messages() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-0">
-                  <div className="h-[400px] overflow-y-auto p-4 space-y-4" data-testid="messages-container">
+                <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4" data-testid="messages-container">
                     {messagesLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <Skeleton key={i} className="h-20 w-full" />
@@ -1057,7 +1057,7 @@ export default function Messages() {
                     )}
                   </div>
 
-                  <div className="border-t p-4">
+                  <div className="border-t p-4 flex-shrink-0">
                     {/* Upload Progress */}
                     {uploadingFiles && uploadProgress > 0 && (
                       <div className="mb-3 space-y-2">
