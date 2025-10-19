@@ -9360,12 +9360,13 @@ export class DatabaseStorage implements IStorage {
         fileUrls: taskInstanceResponses.fileUrls,
         createdAt: taskInstanceResponses.createdAt,
         updatedAt: taskInstanceResponses.updatedAt,
-        question: taskTemplateQuestions,
+        templateQuestion: taskTemplateQuestions,
+        customQuestion: clientCustomRequestQuestions,
       })
       .from(taskInstanceResponses)
-      .innerJoin(taskTemplateQuestions, eq(taskInstanceResponses.questionId, taskTemplateQuestions.id))
-      .where(eq(taskInstanceResponses.taskInstanceId, taskInstanceId))
-      .orderBy(taskTemplateQuestions.order);
+      .leftJoin(taskTemplateQuestions, eq(taskInstanceResponses.questionId, taskTemplateQuestions.id))
+      .leftJoin(clientCustomRequestQuestions, eq(taskInstanceResponses.questionId, clientCustomRequestQuestions.id))
+      .where(eq(taskInstanceResponses.taskInstanceId, taskInstanceId));
 
     return responses.map(row => ({
       id: row.id,
@@ -9375,7 +9376,7 @@ export class DatabaseStorage implements IStorage {
       fileUrls: row.fileUrls,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      question: row.question,
+      question: (row.templateQuestion || row.customQuestion) as any,
     }));
   }
 

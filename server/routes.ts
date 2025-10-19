@@ -9719,12 +9719,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (instance.status === 'in_progress') {
             const responses = await storage.getTaskInstanceResponsesByTaskInstanceId(instance.id);
             const fullData = await storage.getTaskInstanceWithFullData(instance.id);
-            const totalQuestions = fullData?.questions?.length || 0;
+            // Count total questions from all sections
+            const totalQuestions = fullData?.sections?.reduce((total: number, section: any) => {
+              return total + (section.questions?.length || 0);
+            }, 0) || 0;
             const answeredQuestions = responses.length;
+            const percentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
             progressData = {
               total: totalQuestions,
               completed: answeredQuestions,
-              percentage: totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0
+              percentage: percentage
             };
           }
           
