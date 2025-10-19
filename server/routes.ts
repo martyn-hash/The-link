@@ -10967,12 +10967,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         project.projectOwnerId === effectiveUserId
       );
 
-      // Get recent clients using actual recently viewed data
-      const recentlyViewed = await storage.getRecentlyViewedByUser(effectiveUserId, 20);
+      // Get recent clients, people, and projects using actual recently viewed data
+      const recentlyViewed = await storage.getRecentlyViewedByUser(effectiveUserId, 30);
       const recentClientViews = recentlyViewed.filter(item => item.entityType === 'client' && item.entityData);
-      const recentClients = recentClientViews.slice(0, 5).map(item => ({
+      const recentClients = recentClientViews.slice(0, 10).map(item => ({
         ...item.entityData,
         activeProjects: userProjects.filter(p => p.clientId === item.entityData.id).length,
+        lastViewed: item.viewedAt
+      }));
+
+      const recentPeopleViews = recentlyViewed.filter(item => item.entityType === 'person' && item.entityData);
+      const recentPeople = recentPeopleViews.slice(0, 10).map(item => ({
+        ...item.entityData,
         lastViewed: item.viewedAt
       }));
 
@@ -11021,7 +11027,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         overdueProjects: overdueProjects,
         behindScheduleProjects: behindScheduleProjects,
         recentClients: recentClients,
-        recentProjects: recentlyViewed.filter(item => item.entityType === 'project' && item.entityData).slice(0, 5).map(item => item.entityData),
+        recentPeople: recentPeople,
+        recentProjects: recentlyViewed.filter(item => item.entityType === 'project' && item.entityData).slice(0, 10).map(item => item.entityData),
         projectsByType: projectsByType,
         deadlineAlerts: overdueProjects.map(p => ({
           message: `${p.client?.name || 'Unknown Client'} - ${p.projectType?.name || 'Project'} is overdue`,
