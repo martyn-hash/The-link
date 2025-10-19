@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import TopNavigation from "@/components/top-navigation";
 
 interface Question {
   id: string;
@@ -165,22 +166,28 @@ export default function TaskInstanceDetail() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-96 w-full" />
+      <div className="min-h-screen bg-background">
+        <TopNavigation />
+        <main className="container mx-auto p-6 space-y-6">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-96 w-full" />
+        </main>
       </div>
     );
   }
 
   if (!instance) {
     return (
-      <div className="container mx-auto p-6">
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground">Task instance not found</p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <TopNavigation />
+        <main className="container mx-auto p-6">
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-center text-muted-foreground">Task instance not found</p>
+            </CardContent>
+          </Card>
+        </main>
       </div>
     );
   }
@@ -193,7 +200,9 @@ export default function TaskInstanceDetail() {
   }[instance.status] || 'bg-gray-100 text-gray-800';
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-background">
+      <TopNavigation />
+      <main className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href={`/clients/${instance.client.id}`}>
@@ -299,6 +308,7 @@ export default function TaskInstanceDetail() {
           </CardContent>
         </Card>
       )}
+      </main>
     </div>
   );
 }
