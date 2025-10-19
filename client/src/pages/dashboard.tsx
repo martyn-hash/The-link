@@ -45,6 +45,7 @@ interface DashboardStats {
   overdueProjects: ProjectWithRelations[];
   behindScheduleProjects: ProjectWithRelations[];
   recentClients: (Client & { activeProjects: number; lastViewed: Date })[];
+  recentPeople: (Person & { lastViewed: Date })[];
   recentProjects: ProjectWithRelations[];
   projectsByType: { [key: string]: ProjectWithRelations[] };
   deadlineAlerts: { message: string; projectId: string; dueDate: Date | null }[];
