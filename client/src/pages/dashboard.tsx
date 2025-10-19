@@ -434,7 +434,7 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
                   <div 
                     key={`person-${person.id}`} 
                     className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors w-[160px] flex-shrink-0"
-                    onClick={() => window.location.href = `/people/${person.id}`}
+                    onClick={() => window.location.href = `/person/${person.id}`}
                     data-testid={`recent-person-${person.id}`}
                   >
                     <div className="flex flex-col gap-2">
