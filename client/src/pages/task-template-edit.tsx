@@ -131,48 +131,60 @@ function SortableQuestionItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const questionTypeInfo = QUESTION_TYPES.find(qt => qt.type === question.questionType);
+  const QuestionIcon = questionTypeInfo?.icon || Type;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 p-2 bg-muted/30 rounded border"
+      className="flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 transition-colors"
       data-testid={`question-item-${question.id}`}
     >
-      <button
-        className="cursor-grab active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-        data-testid={`drag-handle-question-${question.id}`}
-      >
-        <GripVertical className="w-4 h-4 text-muted-foreground" />
-      </button>
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">{question.label}</p>
-          {question.isRequired && (
-            <Badge variant="destructive" className="text-xs px-1 py-0" data-testid={`badge-required-${question.id}`}>
-              Required
-            </Badge>
+      <div className="flex items-center space-x-3 flex-1">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+          data-testid={`drag-handle-question-${question.id}`}
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+        <QuestionIcon className="w-4 h-4 text-muted-foreground" />
+        <div className="flex-1">
+          <p className="text-sm font-medium" data-testid={`text-question-label-${question.id}`}>
+            {question.label}
+          </p>
+          {question.helpText && (
+            <p className="text-xs text-muted-foreground mt-1" data-testid={`text-question-help-${question.id}`}>
+              {question.helpText}
+            </p>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">{question.questionType}</p>
+        {question.isRequired && (
+          <Badge variant="secondary" className="text-xs" data-testid={`badge-question-required-${question.id}`}>
+            Required
+          </Badge>
+        )}
       </div>
-      <Button 
-        variant="ghost" 
-        size="sm"
-        onClick={onEdit}
-        data-testid={`button-edit-question-${question.id}`}
-      >
-        <Edit className="w-3 h-3" />
-      </Button>
-      <Button 
-        variant="ghost" 
-        size="sm"
-        onClick={onDelete}
-        data-testid={`button-delete-question-${question.id}`}
-      >
-        <Trash2 className="w-3 h-3 text-red-500" />
-      </Button>
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onEdit}
+          data-testid={`button-edit-question-${question.id}`}
+        >
+          <Edit className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          data-testid={`button-delete-question-${question.id}`}
+        >
+          <Trash2 className="w-4 h-4 text-destructive" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -183,67 +195,46 @@ function SortableSectionCard({
   onEdit, 
   onDelete,
   onEditQuestion,
+  onDeleteQuestion,
   onReorderQuestions,
 }: { 
   section: SortableSection; 
   templateId: string;
   onEdit: () => void; 
   onDelete: () => void;
-  onEditQuestion: (question: TaskTemplateQuestion) => void;
-  onReorderQuestions: (sectionId: string, oldIndex: number, newIndex: number, onError?: () => void) => void;
+  onEditQuestion: (questionId: string) => void;
+  onDeleteQuestion: (questionId: string) => void;
+  onReorderQuestions: (oldIndex: number, newIndex: number, onError?: () => void) => void;
 }) {
-  const { toast } = useToast();
   const {
     attributes,
     listeners,
-    setNodeRef: setSortableRef,
+    setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: section.id });
+    isDragging,
+  } = useSortable({ 
+    id: section.id,
+    data: { type: 'section', section },
+  });
 
-  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `section-${section.id}`,
     data: { sectionId: section.id },
   });
-
-  const combinedRef = (node: HTMLElement | null) => {
-    setSortableRef(node);
-    setDroppableRef(node);
-  };
 
   const { data: questionsData } = useQuery<TaskTemplateQuestion[]>({
     queryKey: ["/api/task-template-sections", section.id, "questions"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  const [questions, setQuestions] = useState<TaskTemplateQuestion[]>([]);
-
-  // Update local questions when data loads
-  useEffect(() => {
-    if (questionsData) {
-      setQuestions(questionsData);
-    }
-  }, [questionsData]);
-
-  const deleteQuestionMutation = useMutation({
-    mutationFn: async (questionId: string) => {
-      return apiRequest("DELETE", `/api/task-template-questions/${questionId}`);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Question deleted successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", section.id, "questions"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete question",
-        variant: "destructive",
-      });
-    },
-  });
+  const questions = questionsData || [];
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -254,112 +245,125 @@ function SortableSectionCard({
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
     if (!over || active.id === over.id) return;
 
     const oldIndex = questions.findIndex((q) => q.id === active.id);
     const newIndex = questions.findIndex((q) => q.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      // Store original order for rollback on error
-      const originalQuestions = [...questions];
-      
-      // Optimistically update UI
-      const reordered = arrayMove(questions, oldIndex, newIndex);
-      setQuestions(reordered);
-      
-      // Call reorder with error handling
-      onReorderQuestions(section.id, oldIndex, newIndex, () => {
-        // Rollback on error
-        setQuestions(originalQuestions);
-      });
+      const rollback = () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", section.id, "questions"] });
+      };
+      onReorderQuestions(oldIndex, newIndex, rollback);
     }
   };
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
   return (
-    <div
-      ref={combinedRef}
+    <Card
+      ref={setNodeRef}
       style={style}
-      className={`bg-card border rounded-lg p-4 mb-3 ${isOver ? 'ring-2 ring-primary' : ''}`}
+      className={`transition-colors ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`}
       data-testid={`section-card-${section.id}`}
     >
-      <div className="flex items-start space-x-3 mb-3">
-        <button
-          className="cursor-grab active:cursor-grabbing mt-1"
-          {...attributes}
-          {...listeners}
-          data-testid={`drag-handle-${section.id}`}
-        >
-          <GripVertical className="w-5 h-5 text-muted-foreground" />
-        </button>
-        <div className="flex-1">
-          <h4 className="font-medium" data-testid={`section-title-${section.id}`}>
-            {section.title}
-          </h4>
-          {section.description && (
-            <p className="text-sm text-muted-foreground mt-1" data-testid={`section-description-${section.id}`}>
-              {section.description}
-            </p>
-          )}
-        </div>
-        <div className="flex space-x-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onEdit}
-            data-testid={`button-edit-section-${section.id}`}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDelete}
-            data-testid={`button-delete-section-${section.id}`}
-          >
-            <Trash2 className="w-4 h-4 text-red-500" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Questions List */}
-      <div className="ml-8 space-y-2">
-        {questions && questions.length > 0 ? (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={questions.map(q => q.id)}
-              strategy={verticalListSortingStrategy}
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex items-start space-x-3 flex-1">
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground mt-1"
+              data-testid={`drag-handle-section-${section.id}`}
             >
-              {questions.map((question) => (
-                <SortableQuestionItem
-                  key={question.id}
-                  question={question}
-                  onEdit={() => onEditQuestion(question)}
-                  onDelete={() => {
-                    if (confirm(`Delete question "${question.label}"?`)) {
-                      deleteQuestionMutation.mutate(question.id);
-                    }
+              <GripVertical className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg" data-testid={`text-section-title-${section.id}`}>
+                {section.title}
+              </CardTitle>
+              {section.description && (
+                <p className="text-sm text-muted-foreground mt-1" data-testid={`text-section-description-${section.id}`}>
+                  {section.description}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEdit}
+              data-testid={`button-edit-section-${section.id}`}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              data-testid={`button-delete-section-${section.id}`}
+            >
+              <Trash2 className="w-4 h-4 text-destructive" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent ref={setDropRef}>
+        {questions.length === 0 ? (
+          <div className="text-center py-8 border-2 border-dashed rounded-lg">
+            <p className="text-sm text-muted-foreground mb-4">
+              Drag question types here to add questions
+            </p>
+            <Select
+              onValueChange={(type) => {
+                onEditQuestion('CREATE_NEW_' + type + '_' + section.id);
+              }}
+            >
+              <SelectTrigger className="w-[200px] mx-auto" data-testid={`select-add-question-${section.id}`}>
+                <SelectValue placeholder="Add question..." />
+              </SelectTrigger>
+              <SelectContent>
+                {QUESTION_TYPES.map((qt) => (
+                  <SelectItem key={qt.type} value={qt.type} data-testid={`option-question-type-${qt.type}`}>
+                    {qt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {questions.map((question) => (
+                  <SortableQuestionItem
+                    key={question.id}
+                    question={question}
+                    onEdit={() => onEditQuestion(question.id)}
+                    onDelete={() => onDeleteQuestion(question.id)}
+                  />
+                ))}
+                <Select
+                  onValueChange={(type) => {
+                    onEditQuestion('CREATE_NEW_' + type + '_' + section.id);
                   }}
-                />
-              ))}
+                >
+                  <SelectTrigger className="w-full" data-testid={`select-add-question-${section.id}`}>
+                    <SelectValue placeholder="Add another question..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUESTION_TYPES.map((qt) => (
+                      <SelectItem key={qt.type} value={qt.type} data-testid={`option-question-type-${qt.type}`}>
+                        {qt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </SortableContext>
           </DndContext>
-        ) : (
-          <p className="text-xs text-muted-foreground italic py-2">
-            No questions yet. Drag a question type here to add one.
-          </p>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -570,7 +574,9 @@ export default function TaskTemplateEditPage() {
   const [editTemplateDialogOpen, setEditTemplateDialogOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
   const [creatingQuestion, setCreatingQuestion] = useState<{ sectionId: string; questionType: string } | null>(null);
-  const [editingQuestion, setEditingQuestion] = useState<TaskTemplateQuestion | null>(null);
+  const [editQuestionId, setEditQuestionId] = useState<string | null>(null);
+  const [createQuestionOptions, setCreateQuestionOptions] = useState<string[]>([]);
+  const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
 
   const { data: template, isLoading: templateLoading } = useQuery<TaskTemplate>({
     queryKey: ["/api/task-templates", id],
@@ -676,14 +682,21 @@ export default function TaskTemplateEditPage() {
   });
 
   const createQuestionMutation = useMutation({
-    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean }) => {
-      return apiRequest("POST", `/api/task-template-sections/${data.sectionId}/questions`, {
+    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean; options?: string[] }) => {
+      const payload: any = {
         questionType: data.questionType,
         label: data.label,
         helpText: data.helpText,
         isRequired: data.isRequired,
         order: 0,
-      });
+      };
+      
+      // Include options if provided
+      if (data.options && data.options.length > 0) {
+        payload.options = data.options;
+      }
+      
+      return apiRequest("POST", `/api/task-template-sections/${data.sectionId}/questions`, payload);
     },
     onSuccess: (_, variables) => {
       toast({
@@ -692,11 +705,55 @@ export default function TaskTemplateEditPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
       setCreatingQuestion(null);
+      setCreateQuestionOptions([]);
     },
     onError: (error) => {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to add question",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateQuestionMutation = useMutation({
+    mutationFn: async (data: { id: string; [key: string]: any }) => {
+      const { id: questionId, ...updateData } = data;
+      return apiRequest("PATCH", `/api/task-template-questions/${questionId}`, updateData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Question updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+      setEditQuestionId(null);
+      setEditQuestionOptions([]);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update question",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteQuestionMutation = useMutation({
+    mutationFn: async (questionId: string) => {
+      return apiRequest("DELETE", `/api/task-template-questions/${questionId}`, undefined);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Question deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete question",
         variant: "destructive",
       });
     },
@@ -765,7 +822,8 @@ export default function TaskTemplateEditPage() {
 
     // Check if dragging from palette
     if (String(active.id).startsWith("palette-")) {
-      const type = active.data.current?.type;
+      const draggedData = active.data.current;
+      const type = draggedData?.type;
       
       // If dropping a section from palette
       if (type === "section") {
@@ -779,27 +837,18 @@ export default function TaskTemplateEditPage() {
       }
       
       // If dropping a question type from palette into a section
-      // Check if over.id starts with "section-" OR if it matches a section ID directly
-      let targetSectionId: string | null = null;
-      
-      if (String(over.id).startsWith("section-")) {
-        // Extract from droppable ID format: section-{uuid}
-        targetSectionId = over.data?.current?.sectionId || null;
-      } else if (sections.some(s => s.id === over.id)) {
-        // over.id is a section ID directly (from sortable)
-        targetSectionId = String(over.id);
-      }
-      
-      if (targetSectionId && type) {
-        setCreatingQuestion({ sectionId: targetSectionId, questionType: type });
+      // Check if dropping into a section (via droppable zone)
+      if (over.data?.current?.sectionId) {
+        const sectionId = over.data.current.sectionId;
+        setCreatingQuestion({ sectionId, questionType: type });
         return;
       }
       
       return;
     }
 
-    // Handle section reordering - only if dropping on another section
-    if (active.id !== over.id && sections.some(s => s.id === over.id)) {
+    // Handle section reordering
+    if (active.id !== over.id) {
       setSections((items) => {
         const oldIndex = items.findIndex((item) => item.id === active.id);
         const newIndex = items.findIndex((item) => item.id === over.id);
@@ -865,6 +914,21 @@ export default function TaskTemplateEditPage() {
   }
 
   const category = categories?.find(c => c.id === template.categoryId);
+
+  // Find question being edited
+  let editQuestion: any = null;
+  if (editQuestionId) {
+    for (const section of sections) {
+      const sectionQuestions = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
+      if (sectionQuestions) {
+        const question = sectionQuestions.find((q: any) => q.id === editQuestionId);
+        if (question) {
+          editQuestion = question;
+          break;
+        }
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -1002,8 +1066,27 @@ export default function TaskTemplateEditPage() {
                               templateId={template.id}
                               onEdit={() => setEditingSection(section)}
                               onDelete={() => setDeletingSection(section)}
-                              onEditQuestion={setEditingQuestion}
-                              onReorderQuestions={handleReorderQuestions}
+                              onEditQuestion={(questionId) => {
+                                // Handle creating new question via select dropdown
+                                if (questionId.startsWith('CREATE_NEW_')) {
+                                  const parts = questionId.split('_');
+                                  const sectionId = parts[parts.length - 1];
+                                  const questionType = parts.slice(2, -1).join('_');
+                                  setCreatingQuestion({ sectionId, questionType });
+                                } else {
+                                  // Editing existing question
+                                  const sectionQuestions = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
+                                  const question = sectionQuestions?.find((q: any) => q.id === questionId);
+                                  if (question) {
+                                    setEditQuestionId(questionId);
+                                    setEditQuestionOptions(question.options || []);
+                                  }
+                                }
+                              }}
+                              onDeleteQuestion={(questionId) => deleteQuestionMutation.mutate(questionId)}
+                              onReorderQuestions={(oldIndex, newIndex, onError) => 
+                                handleReorderQuestions(section.id, oldIndex, newIndex, onError)
+                              }
                             />
                           ))}
                         </div>
@@ -1017,6 +1100,13 @@ export default function TaskTemplateEditPage() {
               </DropZone>
             </div>
           </div>
+          <DragOverlay>
+            {activeDrag && (
+              <div className="flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg shadow-lg">
+                <span className="text-sm font-medium">{activeDrag.label}</span>
+              </div>
+            )}
+          </DragOverlay>
         </DndContext>
 
         {/* Edit Section Dialog */}
@@ -1151,195 +1241,311 @@ export default function TaskTemplateEditPage() {
         )}
 
         {/* Create Question Dialog */}
-        {creatingQuestion && (
-          <Dialog open={true} onOpenChange={() => setCreatingQuestion(null)}>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add {QUESTION_TYPES.find(qt => qt.type === creatingQuestion.questionType)?.label} Question</DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (createQuestionMutation.isPending) return;
-                  
-                  const formData = new FormData(e.currentTarget);
-                  const label = formData.get("label") as string;
-                  const helpText = formData.get("helpText") as string;
-                  const isRequired = formData.get("isRequired") === "on";
-                  
-                  createQuestionMutation.mutate({
-                    sectionId: creatingQuestion.sectionId,
-                    questionType: creatingQuestion.questionType,
-                    label,
-                    helpText: helpText || undefined,
-                    isRequired,
-                  });
-                }}
-                className="space-y-4"
-              >
+        <Dialog open={!!creatingQuestion} onOpenChange={(open) => {
+          if (!open) {
+            setCreatingQuestion(null);
+            setCreateQuestionOptions([]);
+          }
+        }}>
+          <DialogContent data-testid="dialog-create-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add Question</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Question Type</label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {creatingQuestion && QUESTION_TYPES.find(qt => qt.type === creatingQuestion.questionType)?.label}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Label</label>
+                <Input
+                  id="question-label"
+                  placeholder="Enter question label"
+                  data-testid="input-question-label"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Help Text (optional)</label>
+                <Textarea
+                  id="question-help"
+                  placeholder="Enter help text"
+                  data-testid="textarea-question-help"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="question-required"
+                  className="rounded"
+                  data-testid="checkbox-question-required"
+                />
+                <label htmlFor="question-required" className="text-sm font-medium">
+                  Required
+                </label>
+              </div>
+
+              {/* Options for choice questions */}
+              {creatingQuestion && ["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType) && (
                 <div>
-                  <label htmlFor="question-label" className="text-sm font-medium">
-                    Question Label *
-                  </label>
-                  <Input
-                    id="question-label"
-                    name="label"
-                    required
-                    placeholder="e.g. What is your full name?"
-                    data-testid="input-question-label"
-                    className="mt-1"
-                  />
+                  <label className="text-sm font-medium">Options *</label>
+                  <div className="space-y-2 mt-2">
+                    {createQuestionOptions.map((option, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <Input
+                          value={option}
+                          onChange={(e) => {
+                            const newOptions = [...createQuestionOptions];
+                            newOptions[index] = e.target.value;
+                            setCreateQuestionOptions(newOptions);
+                          }}
+                          placeholder={`Option ${index + 1}`}
+                          data-testid={`input-create-option-${index}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newOptions = createQuestionOptions.filter((_, i) => i !== index);
+                            setCreateQuestionOptions(newOptions);
+                          }}
+                          data-testid={`button-remove-create-option-${index}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCreateQuestionOptions([...createQuestionOptions, ""]);
+                      }}
+                      data-testid="button-add-create-option"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Option
+                    </Button>
+                  </div>
                 </div>
-
-                <div>
-                  <label htmlFor="question-help" className="text-sm font-medium">
-                    Help Text (Optional)
-                  </label>
-                  <Textarea
-                    id="question-help"
-                    name="helpText"
-                    placeholder="Additional guidance for this question"
-                    data-testid="input-question-help"
-                    className="mt-1"
-                    rows={2}
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="question-required"
-                    name="isRequired"
-                    className="rounded border-gray-300"
-                    data-testid="checkbox-question-required"
-                  />
-                  <label htmlFor="question-required" className="text-sm font-medium">
-                    Required field
-                  </label>
-                </div>
-
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCreatingQuestion(null)}
-                    disabled={createQuestionMutation.isPending}
-                    data-testid="button-cancel-question"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createQuestionMutation.isPending}
-                    data-testid="button-save-question"
-                  >
-                    {createQuestionMutation.isPending ? "Adding..." : "Add Question"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
-
-        {/* Edit Question Dialog */}
-        {editingQuestion && (
-          <Dialog open={true} onOpenChange={() => setEditingQuestion(null)}>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Edit {QUESTION_TYPES.find(qt => qt.type === editingQuestion.questionType)?.label} Question</DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  const label = formData.get("label") as string;
-                  const helpText = formData.get("helpText") as string;
-                  const isRequired = formData.get("isRequired") === "on";
-                  
-                  apiRequest("PATCH", `/api/task-template-questions/${editingQuestion.id}`, {
-                    label,
-                    helpText: helpText || undefined,
-                    isRequired,
-                  })
-                    .then(() => {
-                      toast({
-                        title: "Success",
-                        description: "Question updated successfully",
-                      });
-                      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", editingQuestion.sectionId, "questions"] });
-                      setEditingQuestion(null);
-                    })
-                    .catch((error) => {
+              )}
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setCreatingQuestion(null)}
+                  data-testid="button-cancel-create-question"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!creatingQuestion) return;
+                    const label = (document.getElementById("question-label") as HTMLInputElement)?.value;
+                    const helpText = (document.getElementById("question-help") as HTMLTextAreaElement)?.value;
+                    const isRequired = (document.getElementById("question-required") as HTMLInputElement)?.checked;
+                    
+                    if (!label) {
                       toast({
                         title: "Error",
-                        description: error instanceof Error ? error.message : "Failed to update question",
+                        description: "Question label is required",
                         variant: "destructive",
                       });
-                    });
-                }}
-                className="space-y-4"
-              >
+                      return;
+                    }
+
+                    // Validate options for choice questions
+                    if (["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType)) {
+                      if (!createQuestionOptions || createQuestionOptions.length === 0 || createQuestionOptions.every(o => !o.trim())) {
+                        toast({
+                          title: "Error",
+                          description: "At least one option is required for choice questions",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                    }
+
+                    const payload: any = {
+                      sectionId: creatingQuestion.sectionId,
+                      questionType: creatingQuestion.questionType,
+                      label,
+                      helpText: helpText || undefined,
+                      isRequired: isRequired || false,
+                    };
+
+                    // Include options if it's a choice question
+                    if (["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType)) {
+                      payload.options = createQuestionOptions.filter(o => o.trim());
+                    }
+
+                    createQuestionMutation.mutate(payload);
+                  }}
+                  data-testid="button-save-question"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Add Question
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Question Dialog */}
+        <Dialog open={!!editQuestionId} onOpenChange={(open) => {
+          if (!open) {
+            setEditQuestionId(null);
+            setEditQuestionOptions([]);
+          }
+        }}>
+          <DialogContent data-testid="dialog-edit-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Question</DialogTitle>
+            </DialogHeader>
+            {editQuestion && (
+              <div className="space-y-4">
                 <div>
-                  <label htmlFor="edit-question-label" className="text-sm font-medium">
-                    Question Label *
-                  </label>
+                  <label className="text-sm font-medium">Question Type</label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {QUESTION_TYPES.find(qt => qt.type === editQuestion.questionType)?.label}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Label</label>
                   <Input
                     id="edit-question-label"
-                    name="label"
-                    required
-                    defaultValue={editingQuestion.label}
-                    placeholder="e.g. What is your full name?"
+                    defaultValue={editQuestion.label}
                     data-testid="input-edit-question-label"
-                    className="mt-1"
                   />
                 </div>
-
                 <div>
-                  <label htmlFor="edit-question-help" className="text-sm font-medium">
-                    Help Text (Optional)
-                  </label>
+                  <label className="text-sm font-medium">Help Text (optional)</label>
                   <Textarea
                     id="edit-question-help"
-                    name="helpText"
-                    defaultValue={editingQuestion.helpText || ""}
-                    placeholder="Additional guidance for this question"
-                    data-testid="input-edit-question-help"
-                    className="mt-1"
-                    rows={2}
+                    defaultValue={editQuestion.helpText || ""}
+                    data-testid="textarea-edit-question-help"
                   />
                 </div>
-
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
                     id="edit-question-required"
-                    name="isRequired"
-                    defaultChecked={editingQuestion.isRequired}
-                    className="rounded border-gray-300"
+                    defaultChecked={editQuestion.isRequired}
+                    className="rounded"
                     data-testid="checkbox-edit-question-required"
                   />
                   <label htmlFor="edit-question-required" className="text-sm font-medium">
-                    Required field
+                    Required
                   </label>
                 </div>
 
+                {/* Options for choice questions */}
+                {["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType) && (
+                  <div>
+                    <label className="text-sm font-medium">Options *</label>
+                    <div className="space-y-2 mt-2">
+                      {editQuestionOptions.map((option, index) => (
+                        <div key={index} className="flex space-x-2">
+                          <Input
+                            value={option}
+                            onChange={(e) => {
+                              const newOptions = [...editQuestionOptions];
+                              newOptions[index] = e.target.value;
+                              setEditQuestionOptions(newOptions);
+                            }}
+                            placeholder={`Option ${index + 1}`}
+                            data-testid={`input-edit-option-${index}`}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newOptions = editQuestionOptions.filter((_, i) => i !== index);
+                              setEditQuestionOptions(newOptions);
+                            }}
+                            data-testid={`button-remove-edit-option-${index}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditQuestionOptions([...editQuestionOptions, ""]);
+                        }}
+                        data-testid="button-add-edit-option"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Option
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end space-x-2">
                   <Button
-                    type="button"
                     variant="outline"
-                    onClick={() => setEditingQuestion(null)}
+                    onClick={() => setEditQuestionId(null)}
                     data-testid="button-cancel-edit-question"
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" data-testid="button-save-edit-question">
-                    Save Changes
+                  <Button
+                    onClick={() => {
+                      const label = (document.getElementById("edit-question-label") as HTMLInputElement)?.value;
+                      const helpText = (document.getElementById("edit-question-help") as HTMLTextAreaElement)?.value;
+                      const isRequired = (document.getElementById("edit-question-required") as HTMLInputElement)?.checked;
+                      
+                      if (!label) {
+                        toast({
+                          title: "Error",
+                          description: "Question label is required",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      // Validate options for choice questions
+                      if (["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType)) {
+                        if (!editQuestionOptions || editQuestionOptions.length === 0 || editQuestionOptions.every(o => !o.trim())) {
+                          toast({
+                            title: "Error",
+                            description: "At least one option is required for choice questions",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                      }
+
+                      const payload: any = {
+                        id: editQuestion.id,
+                        label,
+                        helpText: helpText || undefined,
+                        isRequired: isRequired || false,
+                      };
+
+                      // Include options if it's a choice question
+                      if (["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType)) {
+                        payload.options = editQuestionOptions.filter(o => o.trim());
+                      }
+
+                      updateQuestionMutation.mutate(payload);
+                    }}
+                    data-testid="button-update-question"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Update
                   </Button>
                 </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Template Details Dialog */}
         <Dialog open={editTemplateDialogOpen} onOpenChange={(open) => {
