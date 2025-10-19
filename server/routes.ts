@@ -11021,6 +11021,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         projectsByType[typeName].push(project);
       });
 
+      const recentProjectViews = recentlyViewed.filter(item => item.entityType === 'project' && item.entityData);
+      const recentProjects = recentProjectViews.slice(0, 10).map(item => ({
+        ...item.entityData,
+        lastViewed: item.viewedAt
+      }));
+
       const dashboardData = {
         myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed" && !p.archived && !p.inactive).slice(0, 10),
         myProjects: userProjects.filter(p => !p.archived && !p.inactive),
@@ -11028,7 +11034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         behindScheduleProjects: behindScheduleProjects,
         recentClients: recentClients,
         recentPeople: recentPeople,
-        recentProjects: recentlyViewed.filter(item => item.entityType === 'project' && item.entityData).slice(0, 10).map(item => item.entityData),
+        recentProjects: recentProjects,
         projectsByType: projectsByType,
         deadlineAlerts: overdueProjects.map(p => ({
           message: `${p.client?.name || 'Unknown Client'} - ${p.projectType?.name || 'Project'} is overdue`,
