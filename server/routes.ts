@@ -418,8 +418,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== CLIENT PORTAL COMPANY SWITCHING ROUTES (JWT Auth Required) =====
+  const { authenticatePortal, createJWT } = await import('./portalAuth');
+
+  // Get all companies available to the authenticated portal user
+  app.get('/api/portal/available-companies', authenticatePortal, async (req: any, res) => {
+    try {
+      const personId = req.portalUser!.relatedPersonId;
+      
+      if (!personId) {
+        // If no personId, user can only access their current company
+        const currentClient = await storage.getClientById(req.portalUser!.clientId);
+        if (!currentClient) {
+          return res.status(404).json({ message: 'Current company not found' });
+        }
+        return res.json([{
+          id: currentClient.id,
+          name: currentClient.name,
+          isCurrent: true
+        }]);
+      }
+
+      // Get all companies the person is connected to
+      const clientRelationships = await storage.getClientPeopleByPersonId(personId);
+      
+      // Filter to only include company clients (not individuals)
+      const companies = clientRelationships
+        .filter(relationship => relationship.client.clientType === 'company')
+        .map(relationship => ({
+          id: relationship.client.id,
+          name: relationship.client.name,
+          officerRole: relationship.clientPerson.officerRole,
+          isCurrent: relationship.client.id === req.portalUser!.clientId
+        }));
+
+      res.json(companies);
+    } catch (error) {
+      console.error('Error fetching available companies:', error);
+      res.status(500).json({ message: 'Failed to fetch available companies' });
+    }
+  });
+
+  // Switch to a different company and get a new JWT
+  app.post('/api/portal/switch-company', authenticatePortal, async (req: any, res) => {
+    try {
+      const { clientId } = req.body;
+      const personId = req.portalUser!.relatedPersonId;
+
+      if (!clientId) {
+        return res.status(400).json({ message: 'clientId is required' });
+      }
+
+      if (!personId) {
+        return res.status(403).json({ message: 'Cannot switch companies: No person association' });
+      }
+
+      // Verify the person is actually connected to this client
+      const clientRelationships = await storage.getClientPeopleByPersonId(personId);
+      const hasAccess = clientRelationships.some(
+        relationship => relationship.client.id === clientId && relationship.client.clientType === 'company'
+      );
+
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Access denied to this company' });
+      }
+
+      // Get the portal user to create a new JWT
+      const portalUser = await storage.getClientPortalUserById(req.portalUser!.id);
+      if (!portalUser) {
+        return res.status(404).json({ message: 'Portal user not found' });
+      }
+
+      // Create a new JWT with the new clientId
+      const newJWT = createJWT({
+        id: portalUser.id,
+        clientId: clientId,
+        email: portalUser.email,
+        name: portalUser.name || 'Portal User'
+      });
+
+      res.json({ jwt: newJWT });
+    } catch (error) {
+      console.error('Error switching company:', error);
+      res.status(500).json({ message: 'Failed to switch company' });
+    }
+  });
+
   // ===== CLIENT PORTAL MESSAGING ROUTES (JWT Auth Required) =====
-  const { authenticatePortal } = await import('./portalAuth');
 
   // Get all threads for authenticated portal user
   app.get('/api/portal/threads', authenticatePortal, async (req: any, res) => {
