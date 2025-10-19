@@ -55,6 +55,9 @@ interface MessageThread {
   createdAt: string;
   updatedAt: string;
   lastMessageByStaff?: boolean; // Track if last message was from staff
+  lastMessageContent?: string | null; // Preview of last message
+  lastMessageSenderName?: string | null; // Name of last message sender
+  hasUnreadMessages?: boolean; // Whether there are unread messages from clients
   clientPortalUser?: {
     id: string;
     email: string;
@@ -742,47 +745,38 @@ export default function Messages() {
                 ) : threads && threads.length > 0 ? (
                   <div className="divide-y">
                     {threads.map((thread) => {
-                      const StatusIcon = statusConfig[thread.status].icon;
+                      const messagePreview = thread.lastMessageContent 
+                        ? thread.lastMessageContent.substring(0, 60) + (thread.lastMessageContent.length > 60 ? '...' : '')
+                        : 'No messages yet';
+                      
                       return (
                         <button
                           key={thread.id}
                           onClick={() => setSelectedThreadId(thread.id)}
-                          className={`w-full text-left p-4 hover:bg-accent transition-colors ${
+                          className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors relative ${
                             selectedThreadId === thread.id ? 'bg-accent' : ''
-                          }`}
+                          } ${thread.hasUnreadMessages ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}`}
                           data-testid={`thread-${thread.id}`}
                         >
-                          <div className="flex items-start gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback>
-                                <Building2 className="h-5 w-5" />
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <h3 className="font-semibold truncate" data-testid={`thread-topic-${thread.id}`}>
-                                  {thread.topic}
-                                </h3>
-                                <Badge className={statusConfig[thread.status].color} data-testid={`thread-status-${thread.id}`}>
-                                  <StatusIcon className="h-3 w-3 mr-1" />
-                                  {statusConfig[thread.status].label}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground truncate" data-testid={`thread-client-${thread.id}`}>
-                                {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <p className="text-xs text-muted-foreground">
-                                  {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
-                                </p>
-                                {thread.lastMessageByStaff === false && (
-                                  <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300" data-testid={`thread-client-replied-${thread.id}`}>
-                                    Client replied
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
+                          {thread.hasUnreadMessages && (
+                            <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full" data-testid={`unread-indicator-${thread.id}`}></div>
+                          )}
+                          <div className="flex items-start justify-between gap-2 mb-0.5">
+                            <h3 className={`text-sm truncate ${thread.hasUnreadMessages ? 'font-bold' : 'font-semibold'}`} data-testid={`thread-topic-${thread.id}`}>
+                              {thread.subject || thread.topic}
+                            </h3>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                              {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true }).replace('about ', '')}
+                            </span>
                           </div>
+                          <p className={`text-xs text-muted-foreground truncate mb-0.5 ${thread.hasUnreadMessages ? 'font-semibold' : ''}`} data-testid={`thread-client-${thread.id}`}>
+                            {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
+                          </p>
+                          {thread.lastMessageSenderName && (
+                            <p className={`text-xs truncate ${thread.hasUnreadMessages ? 'font-medium text-foreground' : 'text-muted-foreground'}`} data-testid={`thread-preview-${thread.id}`}>
+                              <span className="font-medium">{thread.lastMessageSenderName}:</span> {messagePreview}
+                            </p>
+                          )}
                         </button>
                       );
                     })}
@@ -1205,40 +1199,35 @@ export default function Messages() {
                 ) : threads && threads.length > 0 ? (
                   <div className="divide-y">
                     {threads.map((thread) => {
-                      const StatusIcon = statusConfig[thread.status]?.icon || MessageCircle;
+                      const messagePreview = thread.lastMessageContent 
+                        ? thread.lastMessageContent.substring(0, 60) + (thread.lastMessageContent.length > 60 ? '...' : '')
+                        : 'No messages yet';
+                      
                       return (
                         <button
                           key={thread.id}
                           onClick={() => setSelectedThreadId(thread.id)}
-                          className={`w-full text-left p-4 hover:bg-accent transition-colors ${
+                          className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors ${
                             selectedThreadId === thread.id ? 'bg-accent' : ''
                           }`}
                           data-testid={`thread-${thread.id}`}
                         >
-                          <div className="flex items-start gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback>
-                                <Building2 className="h-5 w-5" />
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <h3 className="font-semibold truncate" data-testid={`thread-topic-${thread.id}`}>
-                                  {thread.subject || thread.topic}
-                                </h3>
-                                <Badge variant="secondary" className="text-xs">
-                                  <Archive className="h-3 w-3 mr-1" />
-                                  Archived
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground truncate" data-testid={`thread-client-${thread.id}`}>
-                                {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
-                              </p>
-                            </div>
+                          <div className="flex items-start justify-between gap-2 mb-0.5">
+                            <h3 className="text-sm font-semibold truncate" data-testid={`thread-topic-${thread.id}`}>
+                              {thread.subject || thread.topic}
+                            </h3>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                              {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true }).replace('about ', '')}
+                            </span>
                           </div>
+                          <p className="text-xs text-muted-foreground truncate mb-0.5" data-testid={`thread-client-${thread.id}`}>
+                            {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
+                          </p>
+                          {thread.lastMessageSenderName && (
+                            <p className="text-xs text-muted-foreground truncate" data-testid={`thread-preview-${thread.id}`}>
+                              <span className="font-medium">{thread.lastMessageSenderName}:</span> {messagePreview}
+                            </p>
+                          )}
                         </button>
                       );
                     })}

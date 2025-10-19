@@ -8321,6 +8321,60 @@ export class DatabaseStorage implements IStorage {
     return await query;
   }
 
+  async getLastMessageForThread(threadId: string): Promise<{ 
+    content: string; 
+    senderName: string; 
+    isFromStaff: boolean;
+    createdAt: Date;
+  } | null> {
+    const result = await db
+      .select({
+        message: messages,
+        user: users,
+        clientPortalUser: clientPortalUsers,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.userId, users.id))
+      .leftJoin(clientPortalUsers, eq(messages.clientPortalUserId, clientPortalUsers.id))
+      .where(eq(messages.threadId, threadId))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    
+    if (result.length === 0) return null;
+    
+    const row = result[0];
+    const isFromStaff = !!row.message.userId;
+    
+    let senderName = 'Unknown';
+    if (isFromStaff && row.user) {
+      senderName = `${row.user.firstName || ''} ${row.user.lastName || ''}`.trim() || row.user.email;
+    } else if (!isFromStaff && row.clientPortalUser) {
+      senderName = row.clientPortalUser.email;
+    }
+    
+    return {
+      content: row.message.content,
+      senderName,
+      isFromStaff,
+      createdAt: row.message.createdAt,
+    };
+  }
+
+  async hasUnreadMessagesForStaff(threadId: string): Promise<boolean> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.threadId, threadId),
+          eq(messages.isReadByStaff, false),
+          sql`${messages.clientPortalUserId} IS NOT NULL` // Only messages from clients
+        )
+      );
+    
+    return result[0]?.count > 0;
+  }
+
   async updateMessageThread(id: string, thread: Partial<InsertMessageThread>): Promise<MessageThread> {
     const [updated] = await db
       .update(messageThreads)

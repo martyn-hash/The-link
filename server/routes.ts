@@ -8207,7 +8207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         accessibleThreads = allThreads.filter(t => accessibleThreadIds.has(t.id));
       }
       
-      // Enrich threads with client portal user and client information
+      // Enrich threads with client portal user, client information, and last message details
       const enrichedThreads = await Promise.all(
         accessibleThreads.map(async (thread) => {
           const client = await storage.getClientById(thread.clientId);
@@ -8226,9 +8226,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
+          // Get last message details
+          const lastMessage = await storage.getLastMessageForThread(thread.id);
+          const hasUnreadMessages = await storage.hasUnreadMessagesForStaff(thread.id);
+          
           return {
             ...thread,
             clientPortalUser,
+            lastMessageContent: lastMessage?.content || null,
+            lastMessageSenderName: lastMessage?.senderName || null,
+            hasUnreadMessages,
           };
         })
       );
