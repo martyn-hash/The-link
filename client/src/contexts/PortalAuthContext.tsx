@@ -1,9 +1,18 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { portalRequest } from '@/lib/portalApi';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PortalUser {
   id: string;
   clientId: string;
   email: string;
+}
+
+interface AvailableCompany {
+  id: string;
+  name: string;
+  officerRole?: string | null;
+  isCurrent: boolean;
 }
 
 interface PortalAuthContextType {
@@ -13,6 +22,11 @@ interface PortalAuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  availableCompanies: AvailableCompany[];
+  currentCompany: AvailableCompany | null;
+  switchCompany: (clientId: string) => Promise<void>;
+  loadAvailableCompanies: () => Promise<void>;
+  isLoadingCompanies: boolean;
 }
 
 const PortalAuthContext = createContext<PortalAuthContextType | undefined>(undefined);
@@ -99,6 +113,7 @@ function parseTokenUser(token: string): PortalUser | null {
 }
 
 export function PortalAuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(() => {
     const storedToken = getToken();
     if (storedToken && isTokenExpired(storedToken)) {
@@ -125,6 +140,8 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   });
   
   const [isLoading, setIsLoading] = useState(true);
+  const [availableCompanies, setAvailableCompanies] = useState<AvailableCompany[]>([]);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
 
   const logout = useCallback(() => {
     console.log('[Portal Auth] Logging out');
@@ -132,7 +149,53 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setIsLoading(false);
+    setAvailableCompanies([]);
   }, []);
+
+  const loadAvailableCompanies = useCallback(async () => {
+    if (!token) {
+      console.log('[Portal Auth] No token, skipping company load');
+      return;
+    }
+
+    setIsLoadingCompanies(true);
+    try {
+      const companies = await portalRequest('GET', '/api/portal/available-companies') as AvailableCompany[];
+      console.log('[Portal Auth] Loaded available companies:', companies);
+      setAvailableCompanies(companies);
+    } catch (error) {
+      console.error('[Portal Auth] Failed to load available companies:', error);
+      setAvailableCompanies([]);
+    } finally {
+      setIsLoadingCompanies(false);
+    }
+  }, [token]);
+
+  const switchCompany = useCallback(async (clientId: string) => {
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      console.log('[Portal Auth] Switching to company:', clientId);
+      const response = await portalRequest('POST', '/api/portal/switch-company', { clientId }) as { jwt: string };
+      
+      // Update token and user
+      saveToken(response.jwt);
+      setToken(response.jwt);
+      
+      // Clear all queries to force refetch with new company context
+      queryClient.clear();
+      
+      // Reload companies to update current company indicator
+      await loadAvailableCompanies();
+      
+      console.log('[Portal Auth] Successfully switched company');
+    } catch (error) {
+      console.error('[Portal Auth] Failed to switch company:', error);
+      throw error;
+    }
+  }, [token, queryClient, loadAvailableCompanies]);
 
   useEffect(() => {
     console.log('[Portal Auth] Token changed, validating...', token ? 'present' : 'none');
@@ -194,6 +257,16 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     setToken(jwt);
   };
 
+  // Load available companies when user authenticates
+  useEffect(() => {
+    if (user && token) {
+      loadAvailableCompanies();
+    }
+  }, [user, token, loadAvailableCompanies]);
+
+  // Derive current company from available companies
+  const currentCompany = availableCompanies.find(c => c.isCurrent) || null;
+
   return (
     <PortalAuthContext.Provider
       value={{
@@ -202,7 +275,12 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         isAuthenticated: !!token && !!user,
-        isLoading
+        isLoading,
+        availableCompanies,
+        currentCompany,
+        switchCompany,
+        loadAvailableCompanies,
+        isLoadingCompanies
       }}
     >
       {children}

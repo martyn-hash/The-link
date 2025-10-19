@@ -448,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .map(relationship => ({
           id: relationship.client.id,
           name: relationship.client.name,
-          officerRole: relationship.clientPerson.officerRole,
+          officerRole: relationship.officerRole,
           isCurrent: relationship.client.id === req.portalUser!.clientId
         }));
 
