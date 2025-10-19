@@ -9132,6 +9132,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: taskInstances.id,
         templateId: taskInstances.templateId,
+        customRequestId: taskInstances.customRequestId,
         clientId: taskInstances.clientId,
         personId: taskInstances.personId,
         clientPortalUserId: taskInstances.clientPortalUserId,
@@ -9144,11 +9145,13 @@ export class DatabaseStorage implements IStorage {
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
         template: taskTemplates,
+        customRequest: clientCustomRequests,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -9157,6 +9160,7 @@ export class DatabaseStorage implements IStorage {
     return instances.map(row => ({
       id: row.id,
       templateId: row.templateId,
+      customRequestId: row.customRequestId,
       clientId: row.clientId,
       personId: row.personId,
       clientPortalUserId: row.clientPortalUserId,
@@ -9171,7 +9175,7 @@ export class DatabaseStorage implements IStorage {
       template: row.template,
       client: row.client,
       person: row.person || undefined,
-    }));
+    } as any));
   }
 
   async updateTaskInstance(id: string, instance: UpdateTaskInstance): Promise<TaskInstance> {
