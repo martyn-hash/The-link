@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +138,13 @@ export default function StageApprovalModal({
         } else {
           schemaFields[field.id] = z.string().optional();
         }
+      } else if (field.fieldType === 'multi_select') {
+        // Multi-select fields with required validation
+        if (field.isRequired) {
+          schemaFields[field.id] = z.array(z.string()).min(1, `${field.fieldName} requires at least one selection`);
+        } else {
+          schemaFields[field.id] = z.array(z.string()).optional();
+        }
       }
     });
 
@@ -153,6 +161,8 @@ export default function StageApprovalModal({
         values[field.id] = undefined;
       } else if (field.fieldType === 'long_text') {
         values[field.id] = '';
+      } else if (field.fieldType === 'multi_select') {
+        values[field.id] = []; // Start with empty array
       }
     });
     return values;
@@ -181,6 +191,7 @@ export default function StageApprovalModal({
             valueBoolean: value as boolean,
             valueNumber: null,
             valueLongText: null,
+            valueMultiSelect: null,
           };
         } else if (field.fieldType === 'number') {
           return {
@@ -188,6 +199,7 @@ export default function StageApprovalModal({
             valueBoolean: null,
             valueNumber: value !== undefined ? (value as number) : null,
             valueLongText: null,
+            valueMultiSelect: null,
           };
         } else if (field.fieldType === 'long_text') {
           return {
@@ -195,6 +207,15 @@ export default function StageApprovalModal({
             valueBoolean: null,
             valueNumber: null,
             valueLongText: value ? (value as string) : null,
+            valueMultiSelect: null,
+          };
+        } else if (field.fieldType === 'multi_select') {
+          return {
+            ...baseResponse,
+            valueBoolean: null,
+            valueNumber: null,
+            valueLongText: null,
+            valueMultiSelect: Array.isArray(value) && value.length > 0 ? (value as string[]) : null,
           };
         }
 
@@ -203,12 +224,14 @@ export default function StageApprovalModal({
           valueBoolean: null,
           valueNumber: null,
           valueLongText: null,
+          valueMultiSelect: null,
         };
       }).filter((response) => {
         // Only include responses that have actual values
         return response.valueBoolean !== null || 
                response.valueNumber !== null || 
-               response.valueLongText !== null;
+               response.valueLongText !== null ||
+               response.valueMultiSelect !== null;
       });
 
       await onSubmit(responses);
@@ -351,6 +374,54 @@ export default function StageApprovalModal({
                                       className="min-h-[100px]"
                                       data-testid={`textarea-field-${field.id}`}
                                     />
+                                  </FormControl>
+                                </div>
+                              )}
+
+                              {/* Multi-Select Field */}
+                              {field.fieldType === 'multi_select' && (
+                                <div className="space-y-3">
+                                  {field.isRequired && (
+                                    <FormDescription>
+                                      Please select at least one option.
+                                    </FormDescription>
+                                  )}
+                                  <FormControl>
+                                    <div className="space-y-3 p-3 border rounded-md">
+                                      {field.options && field.options.length > 0 ? (
+                                        field.options.map((option, optionIndex) => {
+                                          const currentValues = formField.value || [];
+                                          const isChecked = currentValues.includes(option);
+                                          
+                                          return (
+                                            <div key={`${field.id}-option-${optionIndex}`} className="flex items-center space-x-2">
+                                              <Checkbox
+                                                id={`${field.id}-option-${optionIndex}`}
+                                                checked={isChecked}
+                                                onCheckedChange={(checked) => {
+                                                  const currentValues = formField.value || [];
+                                                  const updatedValues = checked
+                                                    ? [...currentValues, option]
+                                                    : currentValues.filter((item: string) => item !== option);
+                                                  formField.onChange(updatedValues);
+                                                }}
+                                                data-testid={`checkbox-field-${field.id}-option-${optionIndex}`}
+                                              />
+                                              <Label
+                                                htmlFor={`${field.id}-option-${optionIndex}`}
+                                                className="text-sm font-normal cursor-pointer"
+                                              >
+                                                {option}
+                                              </Label>
+                                            </div>
+                                          );
+                                        })
+                                      ) : (
+                                        <div className="text-sm text-muted-foreground">
+                                          No options available for this field.
+                                        </div>
+                                      )}
+                                    </div>
                                   </FormControl>
                                 </div>
                               )}
