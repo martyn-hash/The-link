@@ -10969,6 +10969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get recent clients, people, and projects using actual recently viewed data
       const recentlyViewed = await storage.getRecentlyViewedByUser(effectiveUserId, 30);
+      
       const recentClientViews = recentlyViewed.filter(item => item.entityType === 'client' && item.entityData);
       const recentClients = recentClientViews.slice(0, 10).map(item => ({
         ...item.entityData,

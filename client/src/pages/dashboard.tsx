@@ -86,6 +86,8 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard"],
     enabled: isAuthenticated && !!user,
     retry: false,
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
   });
 
   // Fetch homescreen dashboard
