@@ -285,26 +285,30 @@ function ApprovalFieldForm({
   onSuccess, 
   onCancel, 
   createMutation,
-  existingFields 
+  updateMutation,
+  existingFields,
+  editingField 
 }: {
   stageApprovalId: string;
   onSuccess: () => void;
   onCancel: () => void;
   createMutation: any;
+  updateMutation?: any;
   existingFields: any[];
+  editingField?: any;
 }) {
-  const [fieldName, setFieldName] = useState("");
-  const [fieldType, setFieldType] = useState<"boolean" | "number" | "long_text" | "multi_select">("boolean");
-  const [isRequired, setIsRequired] = useState(false);
-  const [placeholder, setPlaceholder] = useState("");
-  const [options, setOptions] = useState<string[]>([""]);
+  const [fieldName, setFieldName] = useState(editingField?.fieldName || "");
+  const [fieldType, setFieldType] = useState<"boolean" | "number" | "long_text" | "multi_select">(editingField?.fieldType || "boolean");
+  const [isRequired, setIsRequired] = useState(editingField?.isRequired || false);
+  const [placeholder, setPlaceholder] = useState(editingField?.placeholder || "");
+  const [options, setOptions] = useState<string[]>(editingField?.options || [""]);
   
   // Boolean validation fields
-  const [expectedValueBoolean, setExpectedValueBoolean] = useState<boolean>(true);
+  const [expectedValueBoolean, setExpectedValueBoolean] = useState<boolean>(editingField?.expectedValueBoolean !== undefined ? editingField.expectedValueBoolean : true);
   
   // Number validation fields
-  const [comparisonType, setComparisonType] = useState<"equal_to" | "less_than" | "greater_than">("equal_to");
-  const [expectedValueNumber, setExpectedValueNumber] = useState<number>(0);
+  const [comparisonType, setComparisonType] = useState<"equal_to" | "less_than" | "greater_than">(editingField?.comparisonType || "equal_to");
+  const [expectedValueNumber, setExpectedValueNumber] = useState<number>(editingField?.expectedValueNumber || 0);
 
   const handleSubmit = () => {
     if (!fieldName.trim()) {
@@ -335,14 +339,24 @@ function ApprovalFieldForm({
       expectedValueNumber: fieldType === "number" ? expectedValueNumber : undefined,
       // Multi-select options
       options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
-      order: existingFields.length
+      order: editingField ? editingField.order : existingFields.length
     };
 
-    createMutation.mutate(fieldData, {
-      onSuccess: () => {
-        onSuccess();
-      }
-    });
+    if (editingField) {
+      // Update existing field
+      updateMutation.mutate({ id: editingField.id, field: fieldData }, {
+        onSuccess: () => {
+          onSuccess();
+        }
+      });
+    } else {
+      // Create new field
+      createMutation.mutate(fieldData, {
+        onSuccess: () => {
+          onSuccess();
+        }
+      });
+    }
   };
 
   const addOption = () => {
@@ -523,7 +537,7 @@ function ApprovalFieldForm({
           }
           data-testid="button-save-approval-field"
         >
-          Add Field
+          {editingField ? "Update Field" : "Add Field"}
         </Button>
       </div>
     </div>
@@ -1047,12 +1061,36 @@ export default function ProjectTypeDetail() {
     },
   });
   
+  const updateApprovalFieldMutation = useMutation({
+    mutationFn: async ({ id, field }: { id: string; field: any }) => {
+      return await apiRequest("PATCH", `/api/config/stage-approval-fields/${id}`, field);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+      toast({
+        title: "Success",
+        description: "Approval field updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update approval field",
+        variant: "destructive",
+      });
+    },
+  });
+  
   const deleteApprovalFieldMutation = useMutation({
     mutationFn: async (id: string) => {
       return await apiRequest("DELETE", `/api/config/stage-approval-fields/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+      toast({
+        title: "Success",
+        description: "Approval field deleted successfully",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -2102,7 +2140,10 @@ export default function ProjectTypeDetail() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => setIsAddingApprovalField(true)}
+                            onClick={() => {
+                              setIsAddingApprovalField(true);
+                              setEditingStageApprovalField(null);
+                            }}
                             data-testid="button-add-approval-field"
                           >
                             <Plus className="w-4 h-4 mr-2" />
@@ -2125,15 +2166,32 @@ export default function ProjectTypeDetail() {
                                           Type: {field.fieldType} {field.isRequired && "(Required)"}
                                         </div>
                                       </div>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => deleteApprovalFieldMutation.mutate(field.id)}
-                                        data-testid={`button-delete-approval-field-${field.id}`}
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
+                                      <div className="flex items-center space-x-1">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            setEditingStageApprovalField({
+                                              ...field,
+                                              isRequired: field.isRequired ?? false,
+                                            });
+                                            setIsAddingApprovalField(false);
+                                          }}
+                                          data-testid={`button-edit-approval-field-${field.id}`}
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => deleteApprovalFieldMutation.mutate(field.id)}
+                                          data-testid={`button-delete-approval-field-${field.id}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
                                     </div>
                                   ))}
                               </div>
@@ -2150,19 +2208,30 @@ export default function ProjectTypeDetail() {
                         </div>
                       </div>
                       
-                      {/* Add Approval Field Form */}
-                      {isAddingApprovalField && editingStageApproval?.id && (
+                      {/* Add/Edit Approval Field Form */}
+                      {(isAddingApprovalField || editingStageApprovalField) && editingStageApproval?.id && (
                         <Card className="mt-4">
                           <CardHeader>
-                            <CardTitle className="text-base">Add Approval Field</CardTitle>
+                            <CardTitle className="text-base">
+                              {editingStageApprovalField ? "Edit Approval Field" : "Add Approval Field"}
+                            </CardTitle>
                           </CardHeader>
                           <CardContent>
                             <ApprovalFieldForm 
+                              key={editingStageApprovalField?.id || 'new'}
                               stageApprovalId={editingStageApproval.id}
-                              onSuccess={() => setIsAddingApprovalField(false)}
-                              onCancel={() => setIsAddingApprovalField(false)}
+                              onSuccess={() => {
+                                setIsAddingApprovalField(false);
+                                setEditingStageApprovalField(null);
+                              }}
+                              onCancel={() => {
+                                setIsAddingApprovalField(false);
+                                setEditingStageApprovalField(null);
+                              }}
                               createMutation={createApprovalFieldMutation}
+                              updateMutation={updateApprovalFieldMutation}
                               existingFields={allStageApprovalFields?.filter(f => f.stageApprovalId === editingStageApproval.id) || []}
+                              editingField={editingStageApprovalField}
                             />
                           </CardContent>
                         </Card>
