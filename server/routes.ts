@@ -1010,12 +1010,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const portalUserId = req.portalUser.id;
       const relatedPersonId = req.portalUser.relatedPersonId;
+      const clientId = req.portalUser.clientId;
 
       if (!relatedPersonId) {
         return res.status(400).json({ message: "Portal user has no associated person" });
       }
 
-      const instances = await storage.getTaskInstancesByPersonId(relatedPersonId);
+      if (!clientId) {
+        return res.status(400).json({ message: "Client ID is required" });
+      }
+
+      const instances = await storage.getTaskInstancesByPersonIdAndClientId(relatedPersonId, clientId);
       res.json(instances);
     } catch (error) {
       console.error("Error fetching portal task instances:", error);
@@ -1027,12 +1032,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/portal/task-instances/count/incomplete", authenticatePortal, async (req: any, res: any) => {
     try {
       const relatedPersonId = req.portalUser.relatedPersonId;
+      const clientId = req.portalUser.clientId;
 
       if (!relatedPersonId) {
         return res.status(400).json({ message: "Portal user has no associated person" });
       }
 
-      const instances = await storage.getTaskInstancesByPersonId(relatedPersonId);
+      if (!clientId) {
+        return res.status(400).json({ message: "Client ID is required" });
+      }
+
+      const instances = await storage.getTaskInstancesByPersonIdAndClientId(relatedPersonId, clientId);
       const incompleteCount = instances.filter(i => i.status !== 'submitted' && i.status !== 'approved' && i.status !== 'cancelled').length;
       res.json({ count: incompleteCount });
     } catch (error) {

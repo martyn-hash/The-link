@@ -768,6 +768,7 @@ export interface IStorage {
   getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
   getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
   getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
+  getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
   getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
   getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
   getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
@@ -9101,6 +9102,58 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(eq(taskInstances.personId, personId))
+      .orderBy(desc(taskInstances.createdAt));
+
+    return instances.map(row => ({
+      id: row.id,
+      templateId: row.templateId,
+      customRequestId: row.customRequestId,
+      clientId: row.clientId,
+      personId: row.personId,
+      clientPortalUserId: row.clientPortalUserId,
+      status: row.status,
+      assignedBy: row.assignedBy,
+      dueDate: row.dueDate,
+      submittedAt: row.submittedAt,
+      approvedAt: row.approvedAt,
+      approvedBy: row.approvedBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      template: row.template || undefined,
+      customRequest: row.customRequest || undefined,
+      client: row.client,
+    }));
+  }
+
+  async getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]> {
+    const instances = await db
+      .select({
+        id: taskInstances.id,
+        templateId: taskInstances.templateId,
+        customRequestId: taskInstances.customRequestId,
+        clientId: taskInstances.clientId,
+        personId: taskInstances.personId,
+        clientPortalUserId: taskInstances.clientPortalUserId,
+        status: taskInstances.status,
+        assignedBy: taskInstances.assignedBy,
+        dueDate: taskInstances.dueDate,
+        submittedAt: taskInstances.submittedAt,
+        approvedAt: taskInstances.approvedAt,
+        approvedBy: taskInstances.approvedBy,
+        createdAt: taskInstances.createdAt,
+        updatedAt: taskInstances.updatedAt,
+        template: taskTemplates,
+        customRequest: clientCustomRequests,
+        client: clients,
+      })
+      .from(taskInstances)
+      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
+      .innerJoin(clients, eq(taskInstances.clientId, clients.id))
+      .where(and(
+        eq(taskInstances.personId, personId),
+        eq(taskInstances.clientId, clientId)
+      ))
       .orderBy(desc(taskInstances.createdAt));
 
     return instances.map(row => ({
