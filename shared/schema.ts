@@ -402,7 +402,7 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
 export const stageApprovalResponses = pgTable("stage_approval_responses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  fieldId: varchar("field_id").notNull().references(() => stageApprovalFields.id, { onDelete: "restrict" }),
+  fieldId: varchar("field_id").notNull().references(() => stageApprovalFields.id, { onDelete: "cascade" }),
   valueBoolean: boolean("value_boolean"), // For boolean field types
   valueNumber: integer("value_number"), // For number field types
   valueLongText: text("value_long_text"), // For long_text field types
