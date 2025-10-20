@@ -115,6 +115,7 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/settings" component={Settings} />
       <Route path="/project-types" component={ProjectTypes} />
+      <Route path="/settings/project-types" component={ProjectTypes} />
       <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
       <Route path="/users" component={Users} />
       <Route path="/services" component={Services} />

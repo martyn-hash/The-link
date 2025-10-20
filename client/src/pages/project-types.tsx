@@ -19,7 +19,8 @@ import { Separator } from "@/components/ui/separator";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Search, Settings, Plus, ChevronRight, Activity, Layers, CheckCircle, XCircle, Power, ExternalLink, Users } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertCircle, Search, Settings, Plus, ChevronRight, Activity, Layers, CheckCircle, XCircle, Power, ExternalLink, Users, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,6 +35,74 @@ const createProjectTypeSchema = z.object({
 });
 
 type CreateProjectTypeForm = z.infer<typeof createProjectTypeSchema>;
+
+function ProjectTypeRow({ 
+  projectType, 
+  stageCount,
+  serviceName 
+}: { 
+  projectType: ProjectType;
+  stageCount: number;
+  serviceName: string | null;
+}) {
+  return (
+    <TableRow data-testid={`row-project-type-${projectType.id}`}>
+      <TableCell className="font-medium">
+        <span data-testid={`text-project-type-name-${projectType.id}`}>
+          {projectType.name}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm line-clamp-2" data-testid={`text-project-type-description-${projectType.id}`}>
+          {projectType.description || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-project-type-service-${projectType.id}`}>
+          {serviceName || <span className="text-muted-foreground">-</span>}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <div className="flex items-center">
+          <Layers className="h-4 w-4 mr-1 text-muted-foreground" />
+          <span className="text-sm" data-testid={`text-project-type-stages-${projectType.id}`}>
+            {stageCount}
+          </span>
+        </div>
+      </TableCell>
+      
+      <TableCell>
+        {projectType.active ? (
+          <Badge variant="secondary" className="bg-green-500 text-white text-xs">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Active
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="bg-gray-500 text-white text-xs">
+            <XCircle className="h-4 w-4 mr-1" />
+            Inactive
+          </Badge>
+        )}
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <Link href={`/settings/project-types/${projectType.id}`}>
+          <Button
+            variant="default"
+            size="sm"
+            data-testid={`button-view-${projectType.id}`}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            View
+          </Button>
+        </Link>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export default function ProjectTypes() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -67,10 +136,12 @@ export default function ProjectTypes() {
       return;
     }
   }, [user, toast, setLocation]);
+  
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [showInactive, setShowInactive] = useState<boolean>(false);
+  const [isUnmappedServicesModalOpen, setIsUnmappedServicesModalOpen] = useState(false);
 
   // Form for creating new project type
   const form = useForm<CreateProjectTypeForm>({
@@ -135,14 +206,17 @@ export default function ProjectTypes() {
   // Create project type mutation
   const createProjectTypeMutation = useMutation({
     mutationFn: async (data: CreateProjectTypeForm) => {
-      // Create the project type with serviceId included if provided
-      const projectTypeData = data.serviceId && data.serviceId.trim() 
-        ? data 
-        : { ...data, serviceId: undefined };
+      // Normalize serviceId: treat empty string, "none", or whitespace as undefined
+      const normalizedServiceId = data.serviceId && data.serviceId.trim() && data.serviceId !== "none"
+        ? data.serviceId
+        : undefined;
+      
+      const projectTypeData = {
+        ...data,
+        serviceId: normalizedServiceId
+      };
       
       const projectType = await apiRequest("POST", "/api/config/project-types", projectTypeData);
-      
-      // Service linking is now handled by serviceId in project type - no service update needed
       
       return projectType;
     },
@@ -150,6 +224,7 @@ export default function ProjectTypes() {
       toast({ title: "Success", description: "Project type created successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
       queryClient.invalidateQueries({ queryKey: ["/api/services"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-type-stage-counts"] });
       setIsCreateDialogOpen(false);
       form.reset();
     },
@@ -161,21 +236,6 @@ export default function ProjectTypes() {
       });
     },
   });
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, authLoading, toast]);
 
   // Handle query errors
   useEffect(() => {
@@ -226,6 +286,19 @@ export default function ProjectTypes() {
                 <p className="text-muted-foreground">Manage project type configurations and their stages</p>
               </div>
               <div className="flex items-center space-x-4">
+                {/* Unmapped Services Button */}
+                {!servicesLoading && unmappedServices.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsUnmappedServicesModalOpen(true)}
+                    data-testid="button-show-unmapped-services"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-2 text-amber-500" />
+                    Show Unmapped Services ({unmappedServices.length})
+                  </Button>
+                )}
+                
                 {/* Show Inactive Toggle */}
                 <div className="flex items-center space-x-2">
                   <Power className="w-4 h-4 text-muted-foreground" />
@@ -249,141 +322,141 @@ export default function ProjectTypes() {
                       Add New Project Type
                     </Button>
                   </DialogTrigger>
-                <DialogContent className="sm:max-w-[525px]">
-                  <DialogHeader>
-                    <DialogTitle>Create New Project Type</DialogTitle>
-                    <DialogDescription>
-                      Create a new project type to define workflow stages and optional service mappings for role-based assignments.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreateSubmit)} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Name</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="e.g., Monthly Bookkeeping"
-                                data-testid="input-project-type-name"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Description</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Describe this project type..."
-                                data-testid="textarea-project-type-description"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <Separator />
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium">Optional: Map to Service</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Link this project type to an existing service for role-based assignments
-                        </p>
-                      </div>
-                      <FormField
-                        control={form.control}
-                        name="serviceId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Select Service (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-service-mapping">
+                  <DialogContent className="sm:max-w-[525px]">
+                    <DialogHeader>
+                      <DialogTitle>Create New Project Type</DialogTitle>
+                      <DialogDescription>
+                        Create a new project type to define workflow stages and optional service mappings for role-based assignments.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(handleCreateSubmit)} className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Name</FormLabel>
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a service to map to this project type" />
-                                </SelectTrigger>
+                                <Input
+                                  placeholder="e.g., Monthly Bookkeeping"
+                                  data-testid="input-project-type-name"
+                                  {...field}
+                                />
                               </FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">No service mapping</SelectItem>
-                                {unmappedServices.map((service) => (
-                                  <SelectItem key={service.id} value={service.id} data-testid={`option-service-${service.id}`}>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{service.name}</span>
-                                      {service.description && (
-                                        <span className="text-xs text-muted-foreground">{service.description}</span>
-                                      )}
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {selectedService && (
-                        <div className="rounded-lg border p-3 bg-muted/50">
-                          <div className="flex items-start space-x-2">
-                            <Users className="w-4 h-4 mt-0.5 text-muted-foreground" />
-                            <div className="text-sm">
-                              <p className="font-medium">Role-based Assignments</p>
-                              <p className="text-muted-foreground text-xs mt-1">
-                                When this service is mapped, kanban stages will assign tasks to users based on their roles rather than specific individuals. This enables flexible team management.
-                              </p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Description</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Describe this project type..."
+                                  data-testid="textarea-project-type-description"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Separator />
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium">Optional: Map to Service</h4>
+                          <p className="text-xs text-muted-foreground">
+                            Link this project type to an existing service for role-based assignments
+                          </p>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name="serviceId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Select Service (Optional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} data-testid="select-service-mapping">
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a service to map to this project type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="none">No service mapping</SelectItem>
+                                  {unmappedServices.map((service) => (
+                                    <SelectItem key={service.id} value={service.id} data-testid={`option-service-${service.id}`}>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">{service.name}</span>
+                                        {service.description && (
+                                          <span className="text-xs text-muted-foreground">{service.description}</span>
+                                        )}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {selectedService && (
+                          <div className="rounded-lg border p-3 bg-muted/50">
+                            <div className="flex items-start space-x-2">
+                              <Users className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                              <div className="text-sm">
+                                <p className="font-medium">Role-based Assignments</p>
+                                <p className="text-muted-foreground text-xs mt-1">
+                                  When this service is mapped, kanban stages will assign tasks to users based on their roles rather than specific individuals. This enables flexible team management.
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
-                      <FormField
-                        control={form.control}
-                        name="active"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Active</FormLabel>
-                              <FormDescription className="text-sm text-muted-foreground">
-                                Allow new projects to be created with this type
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="switch-project-type-active"
-                              />
-                            </FormControl>
-                          </FormItem>
                         )}
-                      />
-                      <div className="flex justify-end space-x-2 pt-4">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsCreateDialogOpen(false)}
-                          data-testid="button-cancel-create"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={createProjectTypeMutation.isPending}
-                          data-testid="button-submit-create"
-                        >
-                          {createProjectTypeMutation.isPending ? "Creating..." : "Create Project Type"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
+                        <FormField
+                          control={form.control}
+                          name="active"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                              <div className="space-y-0.5">
+                                <FormLabel>Active</FormLabel>
+                                <FormDescription className="text-sm text-muted-foreground">
+                                  Allow new projects to be created with this type
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="switch-project-type-active"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex justify-end space-x-2 pt-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsCreateDialogOpen(false)}
+                            data-testid="button-cancel-create"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="submit"
+                            disabled={createProjectTypeMutation.isPending}
+                            data-testid="button-submit-create"
+                          >
+                            {createProjectTypeMutation.isPending ? "Creating..." : "Create Project Type"}
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
             
@@ -402,79 +475,86 @@ export default function ProjectTypes() {
           </div>
         </div>
 
+        {/* Unmapped Services Modal */}
+        <Dialog open={isUnmappedServicesModalOpen} onOpenChange={setIsUnmappedServicesModalOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+                <span>Unmapped Services ({unmappedServices.length})</span>
+              </DialogTitle>
+              <DialogDescription>
+                These services don't have a project type mapping yet. You can map them when creating a new project type.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Service Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {unmappedServices.map((service) => (
+                    <TableRow key={service.id} data-testid={`row-unmapped-service-${service.id}`}>
+                      <TableCell className="font-medium">
+                        <span data-testid={`text-unmapped-service-name-${service.id}`}>
+                          {service.name}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm" data-testid={`text-unmapped-service-description-${service.id}`}>
+                          {service.description || '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                          Needs Mapping
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="text-center pt-2">
+              <p className="text-sm text-muted-foreground">
+                Create a new project type and select one of these services to establish the mapping.
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
-          {/* Unmapped Services Section */}
-          {!servicesLoading && services && unmappedServices.length > 0 && (
-            <Card className="mb-6">
-              <CardHeader>
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <CardTitle className="text-lg" data-testid="text-unmapped-services-title">
-                    Unmapped Services ({unmappedServices.length})
-                  </CardTitle>
-                </div>
-                <CardDescription>
-                  These services don't have a project type mapping yet. You can map them when creating a new project type.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {unmappedServices.map((service) => (
-                    <Card key={service.id} className="border-2 border-dashed border-amber-200 dark:border-amber-800" data-testid={`card-unmapped-service-${service.id}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-sm text-foreground truncate" data-testid={`text-unmapped-service-name-${service.id}`}>
-                              {service.name}
-                            </h4>
-                            {service.description && (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2" data-testid={`text-unmapped-service-description-${service.id}`}>
-                                {service.description}
-                              </p>
-                            )}
-                          </div>
-                          <ExternalLink className="w-4 h-4 text-muted-foreground ml-2 flex-shrink-0" />
-                        </div>
-                        <div className="mt-3">
-                          <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                            Needs Mapping
-                          </Badge>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                <div className="mt-4 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Create a new project type and select one of these services to establish the mapping.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {projectTypesLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <div className="flex items-center space-x-4">
-                      <Skeleton className="w-10 h-10 rounded-full" />
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <Skeleton className="h-3 w-28" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Mapped Service</TableHead>
+                    <TableHead>Stages</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...Array(6)].map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -505,64 +585,34 @@ export default function ProjectTypes() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjectTypes.map((projectType) => (
-                <Link key={projectType.id} href={`/settings/project-types/${projectType.id}`}>
-                  <Card 
-                    className="hover:shadow-md transition-all duration-200 cursor-pointer hover:border-primary/50" 
-                    data-testid={`card-project-type-${projectType.id}`}
-                  >
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <Settings className="w-5 h-5 text-primary" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base truncate flex items-center" data-testid={`text-project-type-name-${projectType.id}`}>
-                              {projectType.name}
-                              <ChevronRight className="w-4 h-4 ml-2 text-muted-foreground" />
-                            </CardTitle>
-                            <div className="flex items-center space-x-2 mt-1">
-                              {projectType.active ? (
-                                <Badge variant="default" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Active
-                                </Badge>
-                              ) : (
-                                <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Inactive
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {projectType.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2" data-testid={`text-project-type-description-${projectType.id}`}>
-                            {projectType.description}
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <div className="flex items-center">
-                            <Layers className="w-3 h-3 mr-1" />
-                            <span data-testid={`text-project-type-stages-${projectType.id}`}>
-                              {stageCountQueries.data?.[projectType.id] || 0} stages
-                            </span>
-                          </div>
-                          <p data-testid={`text-project-type-created-${projectType.id}`}>
-                            Created: {projectType.createdAt ? format(new Date(projectType.createdAt), "MMM d, yyyy") : "Unknown"}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Mapped Service</TableHead>
+                    <TableHead>Stages</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProjectTypes.map((projectType) => {
+                    const service = services?.find(s => s.id === projectType.serviceId);
+                    const stageCount = stageCountQueries.data?.[projectType.id] || 0;
+                    
+                    return (
+                      <ProjectTypeRow
+                        key={projectType.id}
+                        projectType={projectType}
+                        stageCount={stageCount}
+                        serviceName={service?.name || null}
+                      />
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
