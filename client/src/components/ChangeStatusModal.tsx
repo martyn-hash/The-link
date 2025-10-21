@@ -147,17 +147,8 @@ export default function ChangeStatusModal({
   // Find the selected stage to get its ID
   const selectedStage = stages.find((stage) => stage.name === newStatus);
 
-  // Fetch change reasons for this project's project type
-  const { data: allProjectReasons = [], isLoading: reasonsLoading } = useQuery<
-    ChangeReason[]
-  >({
-    queryKey: ["/api/config/project-types", project.projectTypeId, "reasons"],
-    enabled: !!project.projectTypeId && isOpen,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
   // Fetch valid change reasons for the selected stage
-  const { data: validStageReasons = [] } = useQuery<ChangeReason[]>({
+  const { data: validStageReasons = [], isLoading: reasonsLoading } = useQuery<ChangeReason[]>({
     queryKey: ["/api/config/stages", selectedStage?.id, "reasons"],
     enabled: !!selectedStage?.id && isOpen,
     staleTime: 5 * 60 * 1000, // 5 minutes
