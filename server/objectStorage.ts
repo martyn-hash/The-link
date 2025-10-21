@@ -159,6 +159,21 @@ export class ObjectStorageService {
     return { uploadURL, objectPath };
   }
 
+  // Gets the upload URL for a custom object path.
+  async getUploadURLForPath(fullPath: string): Promise<string> {
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+
+    // Sign URL for PUT method with TTL
+    const uploadURL = await signObjectURL({
+      bucketName,
+      objectName,
+      method: "PUT",
+      ttlSec: 900,
+    });
+
+    return uploadURL;
+  }
+
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {

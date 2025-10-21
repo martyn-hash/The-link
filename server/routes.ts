@@ -9016,10 +9016,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate a unique object path in the private directory
       const timestamp = Date.now();
       const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const objectPath = `/objects/.private/project-messages/${threadId}/${timestamp}_${sanitizedFileName}`;
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const fullPath = `${privateDir}/project-messages/${threadId}/${timestamp}_${sanitizedFileName}`;
       
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.generateUploadURL(objectPath);
+      const uploadURL = await objectStorageService.getUploadURLForPath(fullPath);
+      
+      // Return the normalized object path for later retrieval
+      const objectPath = `/objects/project-messages/${threadId}/${timestamp}_${sanitizedFileName}`;
       
       res.json({
         url: uploadURL,
