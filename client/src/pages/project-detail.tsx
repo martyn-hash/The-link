@@ -23,6 +23,8 @@ import TopNavigation from "@/components/top-navigation";
 import ProjectInfo from "@/components/project-info";
 import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
+import ProjectMessaging from "@/components/ProjectMessaging";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -394,18 +396,31 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {/* Two-row layout */}
-        <div className="space-y-6">
-          {/* Row 1: Full-width project info */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <ProjectInfo project={project} user={user} />
-          </div>
+        {/* Tabs Layout */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
+          </TabsList>
 
-          {/* Row 2: Full-width chronology */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <ProjectChronology project={project} currentAssignee={currentAssignee} />
-          </div>
-        </div>
+          <TabsContent value="overview" className="mt-6">
+            <div className="space-y-6">
+              {/* Row 1: Full-width project info */}
+              <div className="bg-card border border-border rounded-lg p-6">
+                <ProjectInfo project={project} user={user} />
+              </div>
+
+              {/* Row 2: Full-width chronology */}
+              <div className="bg-card border border-border rounded-lg p-6">
+                <ProjectChronology project={project} currentAssignee={currentAssignee} />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="messages" className="mt-6">
+            <ProjectMessaging projectId={project.id} />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Completion Selection Dialog */}
