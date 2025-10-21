@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import TopNavigation from "@/components/top-navigation";
 import ProjectInfo from "@/components/project-info";
-import StatusChangeForm from "@/components/status-change-form";
+import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
 import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect, useState } from "react";
@@ -45,6 +45,7 @@ export default function ProjectDetail() {
   const [completionType, setCompletionType] = useState<'completed_successfully' | 'completed_unsuccessfully' | null>(null);
   const [showStageErrorDialog, setShowStageErrorDialog] = useState(false);
   const [stageErrorMessage, setStageErrorMessage] = useState<{ currentStage: string; validStages: string[] } | null>(null);
+  const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
 
   // Track project view activity when component mounts
   useEffect(() => {
@@ -363,40 +364,40 @@ export default function ProjectDetail() {
               </h1>
             </div>
             
-            {/* Complete Project Button - Only visible when at a completable stage */}
-            {canComplete && (
+            <div className="flex gap-2">
+              {/* Change Status Button */}
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
-                onClick={() => setShowCompleteDialog(true)}
-                disabled={completeMutation.isPending}
-                data-testid="button-complete"
-                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => setShowChangeStatusModal(true)}
+                data-testid="button-change-status"
               >
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Complete
+                Change Status
               </Button>
-            )}
+
+              {/* Complete Project Button - Only visible when at a completable stage */}
+              {canComplete && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowCompleteDialog(true)}
+                  disabled={completeMutation.isPending}
+                  data-testid="button-complete"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Complete
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Two-row layout */}
         <div className="space-y-6">
-          {/* Row 1: 2-column grid (responsive) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Project Info */}
-            <div className="bg-card border border-border rounded-lg p-6">
-              <ProjectInfo project={project} user={user} />
-            </div>
-
-            {/* Status Controls */}
-            <div className="bg-card border border-border rounded-lg p-6">
-              <StatusChangeForm 
-                project={project} 
-                user={user} 
-                onStatusUpdated={handleStatusUpdated}
-              />
-            </div>
+          {/* Row 1: Full-width project info */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <ProjectInfo project={project} user={user} />
           </div>
 
           {/* Row 2: Full-width chronology */}
@@ -450,6 +451,15 @@ export default function ProjectDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Change Status Modal */}
+      <ChangeStatusModal
+        isOpen={showChangeStatusModal}
+        onClose={() => setShowChangeStatusModal(false)}
+        project={project}
+        user={user}
+        onStatusUpdated={handleStatusUpdated}
+      />
 
       {/* Stage Requirement Error Dialog */}
       <AlertDialog open={showStageErrorDialog} onOpenChange={setShowStageErrorDialog}>
