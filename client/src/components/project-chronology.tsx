@@ -264,10 +264,15 @@ export default function ProjectChronology({ project, currentAssignee }: ProjectC
     ? `${currentAssignee.user.firstName} ${currentAssignee.user.lastName}`
     : 'Unassigned';
 
+  // Remove client name from description since it's shown in the page header
+  const descriptionWithoutClient = project.description.endsWith(` - ${project.client.name}`)
+    ? project.description.slice(0, -(` - ${project.client.name}`.length))
+    : project.description;
+
   return (
     <div className="space-y-6">
       <h4 className="font-semibold text-foreground mb-4" data-testid="heading-project-chronology">
-        {project.description} - Currently assigned to: {assigneeName} - {formattedStatus}
+        {descriptionWithoutClient} - Currently assigned to: {assigneeName} - {formattedStatus}
       </h4>
       {!sortedChronology.length ? (
         <div className="text-center py-8 text-muted-foreground">
