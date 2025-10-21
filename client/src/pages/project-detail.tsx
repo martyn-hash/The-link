@@ -367,10 +367,11 @@ export default function ProjectDetail() {
             <div className="flex gap-2">
               {/* Change Status Button */}
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 onClick={() => setShowChangeStatusModal(true)}
                 data-testid="button-change-status"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Change Status
               </Button>
