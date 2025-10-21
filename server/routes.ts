@@ -8658,7 +8658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       
       // Check if user has access to this project
-      const project = await storage.getProjectById(projectId);
+      const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
@@ -8717,7 +8717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user has access to this project
-      const project = await storage.getProjectById(projectId);
+      const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }

@@ -145,20 +145,97 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     },
   });
 
+  const uploadFiles = async (files: File[]) => {
+    const uploadedAttachments = [];
+
+    for (const file of files) {
+      try {
+        const uploadUrlResponse = await apiRequest('POST', '/api/internal/project-messages/attachments/upload-url', {
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          threadId: selectedThreadId,
+        });
+
+        const { url, objectPath } = uploadUrlResponse as any;
+
+        await fetch(url, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type,
+          },
+        });
+
+        uploadedAttachments.push({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          objectPath,
+        });
+      } catch (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        throw error;
+      }
+    }
+
+    return uploadedAttachments;
+  };
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() && selectedFiles.length === 0) return;
 
-    // TODO: Upload files and get attachment data
-    const attachments = null;
+    try {
+      setUploadingFiles(true);
+      let attachments = undefined;
 
-    sendMessageMutation.mutate({
-      content: newMessage,
-      attachments,
-    });
+      if (selectedFiles.length > 0) {
+        attachments = await uploadFiles(selectedFiles);
+      }
+
+      sendMessageMutation.mutate({
+        content: newMessage.trim() || '(Attachment)',
+        attachments,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload files",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFiles(false);
+    }
   };
 
   const handleRemoveFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (selectedFiles.length + files.length > 5) {
+      toast({
+        title: "Too many files",
+        description: "You can only attach up to 5 files per message",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validFiles = files.filter(file => {
+      const isValid = file.size <= 25 * 1024 * 1024; // 25MB limit
+      if (!isValid) {
+        toast({
+          title: "File too large",
+          description: `${file.name} exceeds 25MB limit`,
+          variant: "destructive",
+        });
+      }
+      return isValid;
+    });
+
+    setSelectedFiles(prev => [...prev, ...validFiles]);
   };
 
   const filteredThreads = threads?.filter(thread => {
@@ -399,10 +476,20 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                     data-testid="textarea-message"
                   />
                   <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={handleFileSelect}
+                      style={{ display: 'none' }}
+                      id="file-upload"
+                      data-testid="input-file"
+                    />
                     <Button
                       size="icon"
                       variant="outline"
                       disabled={uploadingFiles}
+                      onClick={() => document.getElementById('file-upload')?.click()}
                       data-testid="button-attach-file"
                     >
                       <Paperclip className="w-4 h-4" />
@@ -410,10 +497,14 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                     <Button
                       size="icon"
                       onClick={handleSendMessage}
-                      disabled={sendMessageMutation.isPending || (!newMessage.trim() && selectedFiles.length === 0)}
+                      disabled={sendMessageMutation.isPending || uploadingFiles || (!newMessage.trim() && selectedFiles.length === 0)}
                       data-testid="button-send"
                     >
-                      <Send className="w-4 h-4" />
+                      {uploadingFiles ? (
+                        <span className="w-4 h-4 animate-spin">⏳</span>
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
