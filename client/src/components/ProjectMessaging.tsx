@@ -81,12 +81,16 @@ interface ProjectMessagingProps {
 export default function ProjectMessaging({ projectId, project }: ProjectMessagingProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [archiveFilter, setArchiveFilter] = useState<'all' | 'open' | 'archived'>('open');
   const [newMessage, setNewMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [showNewThreadModal, setShowNewThreadModal] = useState(false);
+
+  // Check URL for thread parameter (from push notification)
+  const urlParams = new URLSearchParams(window.location.search);
+  const threadFromUrl = urlParams.get('thread');
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(threadFromUrl);
 
   // Fetch threads for this project
   const { data: threads, isLoading: threadsLoading } = useQuery<ProjectMessageThread[]>({

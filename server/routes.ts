@@ -8823,7 +8823,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         attachments: attachments || null,
       });
       
-      // TODO: Send push notifications to participants
+      // Send push notifications to participants (except sender)
+      try {
+        const sender = await storage.getUser(effectiveUserId);
+        const senderName = sender?.firstName && sender?.lastName 
+          ? `${sender.firstName} ${sender.lastName}` 
+          : sender?.email || 'Someone';
+        
+        // Get all participants except the sender
+        const otherParticipants = participants.filter(p => p.userId !== effectiveUserId);
+        
+        if (otherParticipants.length > 0) {
+          // Get all subscriptions for these users
+          let allSubscriptions: any[] = [];
+          for (const participant of otherParticipants) {
+            const subs = await storage.getPushSubscriptionsByUserId(participant.userId);
+            allSubscriptions = allSubscriptions.concat(subs);
+          }
+          
+          if (allSubscriptions.length > 0) {
+            // Get project for URL
+            const project = await storage.getProject(thread.projectId);
+            const body = content.length > 100 ? content.substring(0, 97) + '...' : content;
+            
+            const payload: PushNotificationPayload = {
+              title: `${senderName} in ${thread.topic}`,
+              body,
+              icon: '/pwa-icon-192.png',
+              badge: '/pwa-icon-192.png',
+              tag: `project-message-${message.id}`,
+              url: `/projects/${thread.projectId}?tab=messages&thread=${threadId}`
+            };
+            
+            const result = await sendPushNotificationToMultiple(
+              allSubscriptions.map(sub => ({
+                endpoint: sub.endpoint,
+                keys: sub.keys as { p256dh: string; auth: string }
+              })),
+              payload
+            );
+            
+            console.log(`[Push] Sent project message notification to ${result.successful}/${allSubscriptions.length} staff subscriptions`);
+            
+            // Clean up expired subscriptions
+            if (result.expiredSubscriptions.length > 0) {
+              for (const endpoint of result.expiredSubscriptions) {
+                await storage.deletePushSubscription(endpoint);
+              }
+            }
+          }
+        }
+      } catch (pushError) {
+        console.error('[Push] Error sending project message notifications:', pushError);
+        // Don't fail the message send if push fails
+      }
       
       res.status(201).json(message);
     } catch (error) {
