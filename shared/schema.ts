@@ -95,6 +95,8 @@ export const users = pgTable("users", {
   canSeeAdminMenu: boolean("can_see_admin_menu").default(false), // Can see admin menu flag
   passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
   isFallbackUser: boolean("is_fallback_user").default(false), // Only one user can be the fallback user
+  pushNotificationsEnabled: boolean("push_notifications_enabled").default(true), // Push notifications enabled by default for staff
+  notificationPreferences: jsonb("notification_preferences"), // Email, push, SMS preferences
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1911,6 +1913,61 @@ export const pushNotificationTemplates = pgTable("push_notification_templates", 
   uniqueTemplateType: unique("unique_template_type").on(table.templateType),
 }));
 
+// Project Message Threads - staff-to-staff messaging for project discussions
+export const projectMessageThreads = pgTable("project_message_threads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  topic: varchar("topic").notNull(), // Thread topic/subject
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id, { onDelete: "set null" }),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  lastMessageByUserId: varchar("last_message_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for project thread lookups
+  projectIdLastMessageIdx: index("project_message_threads_project_id_last_message_idx").on(table.projectId, table.lastMessageAt),
+  // Index for archived status
+  isArchivedIdx: index("project_message_threads_is_archived_idx").on(table.isArchived),
+}));
+
+// Project Messages - individual messages within project threads
+export const projectMessages = pgTable("project_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => projectMessageThreads.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "set null" }), // Staff member who sent message
+  attachments: jsonb("attachments"), // Array of attachment metadata {fileName, fileSize, fileType, objectPath}
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread message lookups
+  threadIdCreatedAtIdx: index("project_messages_thread_id_created_at_idx").on(table.threadId, table.createdAt),
+  // Index for user messages
+  userIdIdx: index("project_messages_user_id_idx").on(table.userId),
+}));
+
+// Project Message Participants - tracks which staff members are in each thread
+export const projectMessageParticipants = pgTable("project_message_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => projectMessageThreads.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lastReadAt: timestamp("last_read_at"), // When participant last read messages
+  lastReadMessageId: varchar("last_read_message_id").references(() => projectMessages.id, { onDelete: "set null" }), // Last message they read
+  joinedAt: timestamp("joined_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread participants
+  threadIdIdx: index("project_message_participants_thread_id_idx").on(table.threadId),
+  // Index for user participation lookups
+  userIdIdx: index("project_message_participants_user_id_idx").on(table.userId),
+  // Unique constraint to prevent duplicate participants
+  uniqueThreadUser: unique("unique_project_thread_user").on(table.threadId, table.userId),
+}));
+
 // Document folders table - organizes documents into folders (batches)
 export const documentFolders = pgTable("document_folders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1978,6 +2035,25 @@ export const insertMessageThreadSchema = createInsertSchema(messageThreads).omit
 });
 
 export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Zod schemas for project messaging
+export const insertProjectMessageThreadSchema = createInsertSchema(projectMessageThreads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProjectMessageSchema = createInsertSchema(projectMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProjectMessageParticipantSchema = createInsertSchema(projectMessageParticipants).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -2361,6 +2437,12 @@ export type MessageThread = typeof messageThreads.$inferSelect;
 export type InsertMessageThread = z.infer<typeof insertMessageThreadSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type ProjectMessageThread = typeof projectMessageThreads.$inferSelect;
+export type InsertProjectMessageThread = z.infer<typeof insertProjectMessageThreadSchema>;
+export type ProjectMessage = typeof projectMessages.$inferSelect;
+export type InsertProjectMessage = z.infer<typeof insertProjectMessageSchema>;
+export type ProjectMessageParticipant = typeof projectMessageParticipants.$inferSelect;
+export type InsertProjectMessageParticipant = z.infer<typeof insertProjectMessageParticipantSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type UserActivityTracking = typeof userActivityTracking.$inferSelect;

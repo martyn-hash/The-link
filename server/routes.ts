@@ -8649,6 +8649,382 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== PROJECT MESSAGING ROUTES (Staff Only) =====
+
+  // Get all threads for a project (only threads where user is a participant)
+  app.get("/api/internal/project-messages/threads/:projectId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { projectId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if user has access to this project
+      const project = await storage.getProjectById(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const hasAccess = await userHasClientAccess(effectiveUserId, project.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const allThreads = await storage.getProjectMessageThreadsByProjectId(projectId);
+      
+      // Filter to only threads where the user is a participant
+      const userThreads = [];
+      for (const thread of allThreads) {
+        const participants = await storage.getProjectMessageParticipantsByThreadId(thread.id);
+        const isParticipant = participants.some(p => p.userId === effectiveUserId);
+        if (isParticipant) {
+          userThreads.push(thread);
+        }
+      }
+      
+      // Enrich threads with user and participant information
+      const enrichedThreads = await Promise.all(userThreads.map(async (thread) => {
+        const creator = thread.createdByUserId ? await storage.getUser(thread.createdByUserId) : undefined;
+        const participants = await storage.getProjectMessageParticipantsByThreadId(thread.id);
+        const participantUsers = await Promise.all(
+          participants.map(async (p) => {
+            const user = await storage.getUser(p.userId);
+            return user;
+          })
+        );
+        
+        return {
+          ...thread,
+          creator,
+          participants: participantUsers.filter(Boolean),
+        };
+      }));
+      
+      res.json(enrichedThreads);
+    } catch (error) {
+      console.error("Error fetching project message threads:", error);
+      res.status(500).json({ message: "Failed to fetch threads" });
+    }
+  });
+
+  // Create a new project message thread
+  app.post("/api/internal/project-messages/threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { projectId, topic, participantUserIds, initialMessage } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      if (!projectId || !topic || !participantUserIds || !Array.isArray(participantUserIds)) {
+        return res.status(400).json({ message: "projectId, topic, and participantUserIds are required" });
+      }
+      
+      // Check if user has access to this project
+      const project = await storage.getProjectById(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+      const hasAccess = await userHasClientAccess(effectiveUserId, project.clientId, isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Create the thread
+      const thread = await storage.createProjectMessageThread({
+        projectId,
+        topic,
+        createdByUserId: effectiveUserId,
+        lastMessageAt: new Date(),
+      });
+      
+      // Add participants (including the creator)
+      const allParticipants = [...new Set([effectiveUserId, ...participantUserIds])];
+      await Promise.all(
+        allParticipants.map((userId) =>
+          storage.createProjectMessageParticipant({
+            threadId: thread.id,
+            userId,
+          })
+        )
+      );
+      
+      // If there's an initial message, create it
+      if (initialMessage && initialMessage.content) {
+        await storage.createProjectMessage({
+          threadId: thread.id,
+          content: initialMessage.content,
+          userId: effectiveUserId,
+          attachments: initialMessage.attachments || null,
+        });
+      }
+      
+      res.status(201).json(thread);
+    } catch (error) {
+      console.error("Error creating project message thread:", error);
+      res.status(500).json({ message: "Failed to create thread" });
+    }
+  });
+
+  // Get messages for a thread
+  app.get("/api/internal/project-messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      const messages = await storage.getProjectMessagesByThreadId(threadId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching project messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Send a message in a thread
+  app.post("/api/internal/project-messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const { content, attachments } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      if (!content) {
+        return res.status(400).json({ message: "content is required" });
+      }
+      
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      // Create the message
+      const message = await storage.createProjectMessage({
+        threadId,
+        content,
+        userId: effectiveUserId,
+        attachments: attachments || null,
+      });
+      
+      // TODO: Send push notifications to participants
+      
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error sending project message:", error);
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  // Mark messages as read
+  app.put("/api/internal/project-messages/threads/:threadId/mark-read", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const { lastReadMessageId } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      if (!lastReadMessageId) {
+        return res.status(400).json({ message: "lastReadMessageId is required" });
+      }
+      
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      await storage.markProjectMessagesAsRead(threadId, effectiveUserId, lastReadMessageId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+      res.status(500).json({ message: "Failed to mark messages as read" });
+    }
+  });
+
+  // Archive a thread
+  app.put("/api/internal/project-messages/threads/:threadId/archive", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      const updated = await storage.archiveProjectMessageThread(threadId, effectiveUserId);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error archiving thread:", error);
+      res.status(500).json({ message: "Failed to archive thread" });
+    }
+  });
+
+  // Unarchive a thread
+  app.put("/api/internal/project-messages/threads/:threadId/unarchive", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      const updated = await storage.unarchiveProjectMessageThread(threadId);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error unarchiving thread:", error);
+      res.status(500).json({ message: "Failed to unarchive thread" });
+    }
+  });
+
+  // Get unread message count for the current user
+  app.get("/api/internal/project-messages/unread-count", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const unreadMessages = await storage.getUnreadProjectMessagesForUser(effectiveUserId);
+      
+      const totalCount = unreadMessages.reduce((sum, item) => sum + item.count, 0);
+      
+      res.json({
+        total: totalCount,
+        byThread: unreadMessages,
+      });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  // Generate upload URL for project message attachments
+  app.post("/api/internal/project-messages/attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType, threadId } = req.body;
+      
+      if (!fileName || !fileType || !threadId) {
+        return res.status(400).json({ message: "fileName, fileType, and threadId are required" });
+      }
+      
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      // Generate a unique object path in the private directory
+      const timestamp = Date.now();
+      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const objectPath = `/objects/.private/project-messages/${threadId}/${timestamp}_${sanitizedFileName}`;
+      
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.generateUploadURL(objectPath);
+      
+      res.json({
+        url: uploadURL,
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Serve project message attachments with thread access check
+  app.get("/api/internal/project-messages/attachments/*", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Extract the object path from the URL
+      const objectPath = req.path.replace('/api/internal/project-messages/attachments', '/objects');
+      
+      // Get the thread ID from query params
+      const threadId = req.query.threadId;
+      if (!threadId) {
+        return res.status(400).json({ message: "threadId query parameter is required" });
+      }
+      
+      // Check if the thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Verify user is a participant in this thread
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+      
+      // Serve the file without ACL check since we verified thread access
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error("Error serving attachment:", error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: "Attachment not found" });
+        }
+        return res.status(500).json({ message: "Error serving attachment" });
+      }
+    } catch (error) {
+      console.error("Error serving project message attachment:", error);
+      res.status(500).json({ message: "Failed to serve attachment" });
+    }
+  });
+
   // ===== PORTAL USER MANAGEMENT ROUTES (Staff Only) =====
   
   // Get portal users for a client

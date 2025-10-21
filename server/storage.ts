@@ -47,6 +47,9 @@ import {
   clientPortalUsers,
   messageThreads,
   messages,
+  projectMessageThreads,
+  projectMessages,
+  projectMessageParticipants,
   taskTemplateCategories,
   taskTemplates,
   taskTemplateSections,
@@ -156,6 +159,12 @@ import {
   type InsertMessageThread,
   type Message,
   type InsertMessage,
+  type ProjectMessageThread,
+  type InsertProjectMessageThread,
+  type ProjectMessage,
+  type InsertProjectMessage,
+  type ProjectMessageParticipant,
+  type InsertProjectMessageParticipant,
   type TaskTemplateCategory,
   type InsertTaskTemplateCategory,
   type UpdateTaskTemplateCategory,
@@ -699,6 +708,31 @@ export interface IStorage {
   markMessagesAsReadByClient(threadId: string): Promise<void>;
   getUnreadMessageCountForClient(clientId: string): Promise<number>;
   getUnreadMessageCountForStaff(userId: string, isAdmin?: boolean): Promise<number>;
+  
+  // Project Message Thread operations
+  createProjectMessageThread(thread: InsertProjectMessageThread): Promise<ProjectMessageThread>;
+  getProjectMessageThreadById(id: string): Promise<ProjectMessageThread | undefined>;
+  getProjectMessageThreadsByProjectId(projectId: string): Promise<ProjectMessageThread[]>;
+  updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread>;
+  deleteProjectMessageThread(id: string): Promise<void>;
+  archiveProjectMessageThread(id: string, archivedBy: string): Promise<ProjectMessageThread>;
+  unarchiveProjectMessageThread(id: string): Promise<ProjectMessageThread>;
+  
+  // Project Message operations
+  createProjectMessage(message: InsertProjectMessage): Promise<ProjectMessage>;
+  getProjectMessageById(id: string): Promise<ProjectMessage | undefined>;
+  getProjectMessagesByThreadId(threadId: string): Promise<ProjectMessage[]>;
+  updateProjectMessage(id: string, message: Partial<InsertProjectMessage>): Promise<ProjectMessage>;
+  deleteProjectMessage(id: string): Promise<void>;
+  
+  // Project Message Participant operations
+  createProjectMessageParticipant(participant: InsertProjectMessageParticipant): Promise<ProjectMessageParticipant>;
+  getProjectMessageParticipantsByThreadId(threadId: string): Promise<ProjectMessageParticipant[]>;
+  getProjectMessageParticipantsByUserId(userId: string): Promise<ProjectMessageParticipant[]>;
+  updateProjectMessageParticipant(id: string, participant: Partial<InsertProjectMessageParticipant>): Promise<ProjectMessageParticipant>;
+  deleteProjectMessageParticipant(id: string): Promise<void>;
+  markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void>;
+  getUnreadProjectMessagesForUser(userId: string): Promise<{ threadId: string; count: number; projectId: string }[]>;
   
   // Client Portal Session operations (using built-in token fields)
   createClientPortalSession(data: { clientPortalUserId: string; token: string; expiresAt: Date }): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date }>;
@@ -8514,6 +8548,238 @@ export class DatabaseStorage implements IStorage {
         )
       ));
     return result[0]?.count || 0;
+  }
+
+  // Project Message Thread operations
+  async createProjectMessageThread(thread: InsertProjectMessageThread): Promise<ProjectMessageThread> {
+    const [newThread] = await db
+      .insert(projectMessageThreads)
+      .values(thread)
+      .returning();
+    return newThread;
+  }
+
+  async getProjectMessageThreadById(id: string): Promise<ProjectMessageThread | undefined> {
+    const [thread] = await db
+      .select()
+      .from(projectMessageThreads)
+      .where(eq(projectMessageThreads.id, id));
+    return thread;
+  }
+
+  async getProjectMessageThreadsByProjectId(projectId: string): Promise<ProjectMessageThread[]> {
+    const threads = await db
+      .select()
+      .from(projectMessageThreads)
+      .where(eq(projectMessageThreads.projectId, projectId))
+      .orderBy(desc(projectMessageThreads.lastMessageAt));
+    return threads;
+  }
+
+  async updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread> {
+    const [updated] = await db
+      .update(projectMessageThreads)
+      .set({ ...thread, updatedAt: new Date() })
+      .where(eq(projectMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectMessageThread(id: string): Promise<void> {
+    await db.delete(projectMessageThreads).where(eq(projectMessageThreads.id, id));
+  }
+
+  async archiveProjectMessageThread(id: string, archivedBy: string): Promise<ProjectMessageThread> {
+    const [updated] = await db
+      .update(projectMessageThreads)
+      .set({ 
+        isArchived: true, 
+        archivedAt: new Date(),
+        archivedBy,
+        updatedAt: new Date() 
+      })
+      .where(eq(projectMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async unarchiveProjectMessageThread(id: string): Promise<ProjectMessageThread> {
+    const [updated] = await db
+      .update(projectMessageThreads)
+      .set({ 
+        isArchived: false, 
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date() 
+      })
+      .where(eq(projectMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Project Message operations
+  async createProjectMessage(message: InsertProjectMessage): Promise<ProjectMessage> {
+    const [newMessage] = await db
+      .insert(projectMessages)
+      .values(message)
+      .returning();
+    
+    // Update thread's lastMessageAt and lastMessageByUserId
+    await db
+      .update(projectMessageThreads)
+      .set({ 
+        lastMessageAt: new Date(),
+        lastMessageByUserId: message.userId
+      })
+      .where(eq(projectMessageThreads.id, message.threadId));
+    
+    return newMessage;
+  }
+
+  async getProjectMessageById(id: string): Promise<ProjectMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(projectMessages)
+      .where(eq(projectMessages.id, id));
+    return message;
+  }
+
+  async getProjectMessagesByThreadId(threadId: string): Promise<ProjectMessage[]> {
+    const result = await db
+      .select({
+        message: projectMessages,
+        user: users,
+      })
+      .from(projectMessages)
+      .leftJoin(users, eq(projectMessages.userId, users.id))
+      .where(eq(projectMessages.threadId, threadId))
+      .orderBy(projectMessages.createdAt);
+    
+    return result.map(row => ({
+      ...row.message,
+      user: row.user || undefined,
+    })) as ProjectMessage[];
+  }
+
+  async updateProjectMessage(id: string, message: Partial<InsertProjectMessage>): Promise<ProjectMessage> {
+    const [updated] = await db
+      .update(projectMessages)
+      .set({ ...message, updatedAt: new Date() })
+      .where(eq(projectMessages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectMessage(id: string): Promise<void> {
+    await db.delete(projectMessages).where(eq(projectMessages.id, id));
+  }
+
+  // Project Message Participant operations
+  async createProjectMessageParticipant(participant: InsertProjectMessageParticipant): Promise<ProjectMessageParticipant> {
+    const [newParticipant] = await db
+      .insert(projectMessageParticipants)
+      .values(participant)
+      .returning();
+    return newParticipant;
+  }
+
+  async getProjectMessageParticipantsByThreadId(threadId: string): Promise<ProjectMessageParticipant[]> {
+    const participants = await db
+      .select()
+      .from(projectMessageParticipants)
+      .where(eq(projectMessageParticipants.threadId, threadId))
+      .orderBy(projectMessageParticipants.joinedAt);
+    return participants;
+  }
+
+  async getProjectMessageParticipantsByUserId(userId: string): Promise<ProjectMessageParticipant[]> {
+    const participants = await db
+      .select()
+      .from(projectMessageParticipants)
+      .where(eq(projectMessageParticipants.userId, userId))
+      .orderBy(desc(projectMessageParticipants.joinedAt));
+    return participants;
+  }
+
+  async updateProjectMessageParticipant(id: string, participant: Partial<InsertProjectMessageParticipant>): Promise<ProjectMessageParticipant> {
+    const [updated] = await db
+      .update(projectMessageParticipants)
+      .set({ ...participant, updatedAt: new Date() })
+      .where(eq(projectMessageParticipants.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectMessageParticipant(id: string): Promise<void> {
+    await db.delete(projectMessageParticipants).where(eq(projectMessageParticipants.id, id));
+  }
+
+  async markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void> {
+    // Find the participant record for this thread and user
+    const [participant] = await db
+      .select()
+      .from(projectMessageParticipants)
+      .where(and(
+        eq(projectMessageParticipants.threadId, threadId),
+        eq(projectMessageParticipants.userId, userId)
+      ));
+    
+    if (!participant) {
+      throw new Error(`Participant not found for thread ${threadId} and user ${userId}`);
+    }
+    
+    // Update the participant's last read info
+    await db
+      .update(projectMessageParticipants)
+      .set({ 
+        lastReadAt: new Date(),
+        lastReadMessageId,
+        updatedAt: new Date()
+      })
+      .where(eq(projectMessageParticipants.id, participant.id));
+  }
+
+  async getUnreadProjectMessagesForUser(userId: string): Promise<{ threadId: string; count: number; projectId: string }[]> {
+    // Get all threads the user is participating in
+    const participantRecords = await db
+      .select({
+        threadId: projectMessageParticipants.threadId,
+        lastReadMessageId: projectMessageParticipants.lastReadMessageId,
+        lastReadAt: projectMessageParticipants.lastReadAt,
+      })
+      .from(projectMessageParticipants)
+      .where(eq(projectMessageParticipants.userId, userId));
+    
+    const unreadCounts: { threadId: string; count: number; projectId: string }[] = [];
+    
+    for (const participant of participantRecords) {
+      // Count messages created after the user's last read timestamp
+      const result = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+          projectId: projectMessageThreads.projectId,
+        })
+        .from(projectMessages)
+        .innerJoin(projectMessageThreads, eq(projectMessages.threadId, projectMessageThreads.id))
+        .where(and(
+          eq(projectMessages.threadId, participant.threadId),
+          ne(projectMessages.userId, userId), // Exclude user's own messages
+          participant.lastReadAt 
+            ? sql`${projectMessages.createdAt} > ${participant.lastReadAt}`
+            : sql`true` // If never read, count all messages from others
+        ))
+        .groupBy(projectMessageThreads.projectId);
+      
+      if (result.length > 0 && result[0].count > 0) {
+        unreadCounts.push({
+          threadId: participant.threadId,
+          count: result[0].count,
+          projectId: result[0].projectId!,
+        });
+      }
+    }
+    
+    return unreadCounts;
   }
 
   // Client Portal Session operations - using built-in token fields
