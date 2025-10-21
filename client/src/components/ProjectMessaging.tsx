@@ -27,6 +27,7 @@ import {
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
+import NewProjectThreadModal from '@/components/NewProjectThreadModal';
 
 interface ProjectMessageThread {
   id: string;
@@ -74,9 +75,10 @@ interface ProjectMessage {
 
 interface ProjectMessagingProps {
   projectId: string;
+  project: any;
 }
 
-export default function ProjectMessaging({ projectId }: ProjectMessagingProps) {
+export default function ProjectMessaging({ projectId, project }: ProjectMessagingProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -84,6 +86,7 @@ export default function ProjectMessaging({ projectId }: ProjectMessagingProps) {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [showNewThreadModal, setShowNewThreadModal] = useState(false);
 
   // Fetch threads for this project
   const { data: threads, isLoading: threadsLoading } = useQuery<ProjectMessageThread[]>({
@@ -173,17 +176,22 @@ export default function ProjectMessaging({ projectId }: ProjectMessagingProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Thread List */}
-      <Card className="lg:col-span-1 h-[600px] flex flex-col">
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Threads</h2>
-            <Button size="sm" data-testid="button-new-thread">
-              <Plus className="w-4 h-4 mr-1" />
-              New
-            </Button>
-          </div>
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Thread List */}
+        <Card className="lg:col-span-1 h-[600px] flex flex-col">
+          <div className="p-4 border-b">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Threads</h2>
+              <Button
+                size="sm"
+                onClick={() => setShowNewThreadModal(true)}
+                data-testid="button-new-thread"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                New
+              </Button>
+            </div>
           
           <div className="flex gap-2">
             <Button
@@ -415,5 +423,12 @@ export default function ProjectMessaging({ projectId }: ProjectMessagingProps) {
         )}
       </Card>
     </div>
+
+    <NewProjectThreadModal
+      open={showNewThreadModal}
+      onOpenChange={setShowNewThreadModal}
+      project={project}
+    />
+  </>
   );
 }

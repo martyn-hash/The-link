@@ -418,7 +418,7 @@ export default function ProjectDetail() {
           </TabsContent>
 
           <TabsContent value="messages" className="mt-6">
-            <ProjectMessaging projectId={project.id} />
+            <ProjectMessaging projectId={project.id} project={project} />
           </TabsContent>
         </Tabs>
       </div>
