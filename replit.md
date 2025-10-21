@@ -3,6 +3,9 @@
 ## Overview
 This full-stack project management application provides a comprehensive solution for managing projects, clients, and services. It aims for a seamless, app-like experience across devices, prioritizing mobile responsiveness and intuitive user interfaces. The application integrates with third-party services to streamline communication, document management, and compliance tracking, offering a robust platform for efficient business operations. Key capabilities include core project management, client and contact management, service and communication tracking, and a client portal with secure messaging.
 
+## Recent Changes (October 2025)
+- **Change Status Modal (Oct 21)**: Streamlined project detail page UI by consolidating status change functionality into a modal dialog. Removed the dedicated status change panel and replaced it with a discreet "Change Status" button in the header. The modal features a dynamic two-column layout that appears when stage approval is required, freeing up valuable screen real estate on the right side for future messaging features (Phase 2).
+
 ## User Preferences
 - Mobile-first responsive design
 - Touch-friendly interactions
