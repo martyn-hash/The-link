@@ -733,6 +733,20 @@ export interface IStorage {
   deleteProjectMessageParticipant(id: string): Promise<void>;
   markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void>;
   getUnreadProjectMessagesForUser(userId: string): Promise<{ threadId: string; count: number; projectId: string }[]>;
+  getProjectMessageUnreadSummaries(olderThanMinutes: number): Promise<Array<{
+    userId: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    threads: Array<{
+      threadId: string;
+      topic: string;
+      projectId: string;
+      projectName: string;
+      unreadCount: number;
+      oldestUnreadAt: Date;
+    }>;
+  }>>;
   
   // Client Portal Session operations (using built-in token fields)
   createClientPortalSession(data: { clientPortalUserId: string; token: string; expiresAt: Date }): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date }>;
@@ -8780,6 +8794,108 @@ export class DatabaseStorage implements IStorage {
     }
     
     return unreadCounts;
+  }
+
+  async getProjectMessageUnreadSummaries(olderThanMinutes: number): Promise<Array<{
+    userId: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    threads: Array<{
+      threadId: string;
+      topic: string;
+      projectId: string;
+      projectName: string;
+      unreadCount: number;
+      oldestUnreadAt: Date;
+    }>;
+  }>> {
+    const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+    
+    // Get all participants with unread messages older than cutoff
+    const participantsWithUnread = await db
+      .select({
+        userId: projectMessageParticipants.userId,
+        threadId: projectMessageParticipants.threadId,
+        lastReadAt: projectMessageParticipants.lastReadAt,
+        topic: projectMessageThreads.topic,
+        projectId: projectMessageThreads.projectId,
+      })
+      .from(projectMessageParticipants)
+      .innerJoin(projectMessageThreads, eq(projectMessageParticipants.threadId, projectMessageThreads.id))
+      .where(
+        or(
+          isNull(projectMessageParticipants.lastReadAt),
+          sql`${projectMessageParticipants.lastReadAt} < ${cutoffTime}`
+        )
+      );
+    
+    // Group by user
+    const userMap = new Map<string, {
+      userId: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      threads: Array<{
+        threadId: string;
+        topic: string;
+        projectId: string;
+        projectName: string;
+        unreadCount: number;
+        oldestUnreadAt: Date;
+      }>;
+    }>();
+    
+    for (const participant of participantsWithUnread) {
+      // Get unread messages in this thread
+      const unreadMessages = await db
+        .select({
+          id: projectMessages.id,
+          createdAt: projectMessages.createdAt,
+        })
+        .from(projectMessages)
+        .where(and(
+          eq(projectMessages.threadId, participant.threadId),
+          ne(projectMessages.userId, participant.userId), // Exclude user's own messages
+          participant.lastReadAt 
+            ? sql`${projectMessages.createdAt} > ${participant.lastReadAt}`
+            : sql`true`, // If never read, count all messages from others
+          sql`${projectMessages.createdAt} < ${cutoffTime}` // Only messages older than cutoff
+        ))
+        .orderBy(projectMessages.createdAt);
+      
+      if (unreadMessages.length === 0) continue;
+      
+      // Get user details
+      const user = await this.getUser(participant.userId);
+      if (!user || !user.email) continue;
+      
+      // Get project details
+      const project = await this.getProject(participant.projectId);
+      if (!project) continue;
+      
+      if (!userMap.has(participant.userId)) {
+        userMap.set(participant.userId, {
+          userId: participant.userId,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          threads: [],
+        });
+      }
+      
+      const userSummary = userMap.get(participant.userId)!;
+      userSummary.threads.push({
+        threadId: participant.threadId,
+        topic: participant.topic,
+        projectId: participant.projectId,
+        projectName: project.name,
+        unreadCount: unreadMessages.length,
+        oldestUnreadAt: unreadMessages[0].createdAt,
+      });
+    }
+    
+    return Array.from(userMap.values()).filter(u => u.threads.length > 0);
   }
 
   // Client Portal Session operations - using built-in token fields

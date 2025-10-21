@@ -5,6 +5,7 @@ import cron from "node-cron";
 import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling } from "./project-scheduler";
 import { sendSchedulingSummaryEmail } from "./emailService";
+import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { storage } from "./storage";
 import fs from "fs";
 import path from "path";
@@ -172,5 +173,22 @@ app.use((req, res, next) => {
     });
     
     log('[CH Sync] Nightly scheduler initialized (runs daily at 2:00 AM UTC)');
+    
+    // Setup project message reminder checks
+    // Runs every 10 minutes to check for unread messages >10 minutes old
+    cron.schedule('*/10 * * * *', async () => {
+      try {
+        log('[Project Message Reminders] Starting reminder check...');
+        const result = await sendProjectMessageReminders();
+        log(`[Project Message Reminders] Check completed: ${result.emailsSent}/${result.usersProcessed} emails sent`);
+        if (result.errors.length > 0) {
+          console.error('[Project Message Reminders] Errors:', result.errors);
+        }
+      } catch (error) {
+        console.error('[Project Message Reminders] Fatal error:', error);
+      }
+    });
+    
+    log('[Project Message Reminders] Scheduler initialized (runs every 10 minutes)');
   });
 })();

@@ -49,7 +49,7 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@ringcentral/sdk": "^5.0.5",
     "@ringcentral/subscriptions": "^5.0.5",
-    "@sendgrid/mail": "^8.1.5",
+    "@sendgrid/mail": "^8.1.6",
     "@tanstack/react-query": "^5.60.5",
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.9",
