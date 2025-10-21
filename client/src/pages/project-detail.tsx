@@ -371,7 +371,7 @@ export default function ProjectDetail() {
                 size="sm"
                 onClick={() => setShowChangeStatusModal(true)}
                 data-testid="button-change-status"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-[#3e7195] hover:bg-[#325b7a] text-white"
               >
                 Change Status
               </Button>
