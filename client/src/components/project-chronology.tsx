@@ -12,6 +12,7 @@ import { Eye, Clock, User as UserIcon } from "lucide-react";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
+  currentAssignee?: RoleAssigneeResponse | null;
 }
 
 interface RoleAssigneeResponse {
@@ -71,7 +72,7 @@ const formatChangeReason = (reason: string): string => {
     .join(' ');
 };
 
-export default function ProjectChronology({ project }: ProjectChronologyProps) {
+export default function ProjectChronology({ project, currentAssignee }: ProjectChronologyProps) {
   // State for live time updates
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
@@ -252,9 +253,22 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     }
   };
 
+  // Format current status for display
+  const formattedStatus = project.currentStatus
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+  // Get assignee name
+  const assigneeName = currentAssignee?.user 
+    ? `${currentAssignee.user.firstName} ${currentAssignee.user.lastName}`
+    : 'Unassigned';
+
   return (
     <div className="space-y-6">
-      <h4 className="font-semibold text-foreground mb-4">Project Chronology</h4>
+      <h4 className="font-semibold text-foreground mb-4" data-testid="heading-project-chronology">
+        {project.description} - Currently assigned to: {assigneeName} - {formattedStatus}
+      </h4>
       {!sortedChronology.length ? (
         <div className="text-center py-8 text-muted-foreground">
           <p className="text-sm">No chronology available</p>

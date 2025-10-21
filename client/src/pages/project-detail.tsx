@@ -183,15 +183,9 @@ export default function ProjectDetail() {
     refetch();
   };
 
-  const handleCompleteClick = (type: 'completed_successfully' | 'completed_unsuccessfully') => {
-    setCompletionType(type);
-    setShowCompleteDialog(true);
-  };
-
-  const handleConfirmComplete = () => {
-    if (completionType) {
-      completeMutation.mutate(completionType);
-    }
+  const handleConfirmComplete = (status: 'completed_successfully' | 'completed_unsuccessfully') => {
+    completeMutation.mutate(status);
+    setShowCompleteDialog(false);
   };
 
   // Check if user has permission to complete
@@ -364,97 +358,26 @@ export default function ProjectDetail() {
           
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-project-title">
-                {project.description} - {project.currentStatus.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-client-name">
+                {project.client?.name || 'Unknown Client'}
               </h1>
-              
-              {/* Stage Completion Status Indicator */}
-              {hasPermissionToComplete && currentStage && (
-                <div className="flex items-center gap-2 mt-2">
-                  {currentStageAllowsCompletion ? (
-                    <Badge variant="default" className="bg-green-600 hover:bg-green-700" data-testid="badge-completion-allowed">
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      Completion allowed at this stage
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-900 dark:text-orange-200" data-testid="badge-completion-blocked">
-                      <Info className="w-3 h-3 mr-1" />
-                      Completion not allowed at this stage
-                    </Badge>
-                  )}
-                </div>
-              )}
             </div>
             
-            {/* Complete Project Buttons */}
-            {hasPermissionToComplete && (
-              <TooltipProvider>
-                <div className="flex gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleCompleteClick('completed_successfully')}
-                          disabled={!currentStageAllowsCompletion || completeMutation.isPending}
-                          data-testid="button-complete-success"
-                          className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                          Mark as Successfully Completed
-                        </Button>
-                      </div>
-                    </TooltipTrigger>
-                    {!currentStageAllowsCompletion && (
-                      <TooltipContent>
-                        <p>Cannot complete project at this stage. Move to a final stage first.</p>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleCompleteClick('completed_unsuccessfully')}
-                          disabled={!currentStageAllowsCompletion || completeMutation.isPending}
-                          data-testid="button-complete-fail"
-                        >
-                          <XCircle className="w-4 h-4 mr-2" />
-                          Mark as Unsuccessfully Completed
-                        </Button>
-                      </div>
-                    </TooltipTrigger>
-                    {!currentStageAllowsCompletion && (
-                      <TooltipContent>
-                        <p>Cannot complete project at this stage. Move to a final stage first.</p>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                </div>
-              </TooltipProvider>
+            {/* Complete Project Button - Only visible when at a completable stage */}
+            {canComplete && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setShowCompleteDialog(true)}
+                disabled={completeMutation.isPending}
+                data-testid="button-complete"
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Complete
+              </Button>
             )}
           </div>
-          
-          {/* Current Stage Assignee Display */}
-          <Alert className="mt-4 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900" data-testid="alert-current-assignee">
-            <UserIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <AlertDescription className="text-blue-800 dark:text-blue-200">
-              <span className="font-medium">Currently assigned to: </span>
-              {assigneeLoading ? (
-                <span>Loading...</span>
-              ) : currentAssignee?.user ? (
-                <span className="font-semibold" data-testid="text-current-assignee-name">
-                  {currentAssignee.user.firstName} {currentAssignee.user.lastName}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">Unassigned</span>
-              )}
-            </AlertDescription>
-          </Alert>
         </div>
 
         {/* Two-row layout */}
@@ -478,26 +401,42 @@ export default function ProjectDetail() {
 
           {/* Row 2: Full-width chronology */}
           <div className="bg-card border border-border rounded-lg p-6">
-            <ProjectChronology project={project} />
+            <ProjectChronology project={project} currentAssignee={currentAssignee} />
           </div>
         </div>
       </div>
 
-      {/* Completion Confirmation Dialog */}
+      {/* Completion Selection Dialog */}
       <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
         <AlertDialogContent data-testid="dialog-complete-confirmation">
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {completionType === 'completed_successfully' 
-                ? 'Mark Project as Successfully Completed?' 
-                : 'Mark Project as Unsuccessfully Completed?'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Complete Project</AlertDialogTitle>
             <AlertDialogDescription>
-              {completionType === 'completed_successfully' 
-                ? 'This will mark the project as successfully completed and archive it. The project will no longer appear in active project lists.'
-                : 'This will mark the project as unsuccessfully completed and archive it. The project will no longer appear in active project lists.'}
+              How would you like to complete this project? The project will be archived and will no longer appear in active project lists.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex gap-3 py-4">
+            <Button
+              variant="default"
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              onClick={() => handleConfirmComplete('completed_successfully')}
+              disabled={completeMutation.isPending}
+              data-testid="button-complete-success"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Mark as Successfully Completed
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => handleConfirmComplete('completed_unsuccessfully')}
+              disabled={completeMutation.isPending}
+              data-testid="button-complete-fail"
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Mark as Unsuccessfully Completed
+            </Button>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel 
               onClick={() => {
@@ -508,16 +447,6 @@ export default function ProjectDetail() {
             >
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmComplete}
-              disabled={completeMutation.isPending}
-              data-testid="button-confirm-complete"
-              className={completionType === 'completed_successfully' 
-                ? 'bg-green-600 hover:bg-green-700' 
-                : 'bg-destructive hover:bg-destructive/90'}
-            >
-              {completeMutation.isPending ? 'Processing...' : 'Confirm'}
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
