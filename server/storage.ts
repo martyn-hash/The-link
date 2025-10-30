@@ -3232,10 +3232,15 @@ export class DatabaseStorage implements IStorage {
       throw new Error(validation.reason || "Invalid project status");
     }
 
-    // Look up the kanban stage to get the assigned role
-    const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.name, update.newStatus));
+    // Look up the kanban stage to get the assigned role - MUST scope by project type to avoid name collisions
+    const [stage] = await db.select().from(kanbanStages).where(
+      and(
+        eq(kanbanStages.name, update.newStatus),
+        eq(kanbanStages.projectTypeId, project.projectTypeId)
+      )
+    );
     if (!stage) {
-      throw new Error(`Kanban stage '${update.newStatus}' not found`);
+      throw new Error(`Kanban stage '${update.newStatus}' not found for this project type`);
     }
 
     // Look up the change reason scoped to the project's project type to avoid name collisions
