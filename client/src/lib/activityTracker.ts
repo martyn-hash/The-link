@@ -1,5 +1,5 @@
 // Activity tracking utility for monitoring user interactions
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // Track when a user views an entity
 export async function trackActivity(entityType: 'client' | 'project' | 'person' | 'communication', entityId: string) {
@@ -8,6 +8,9 @@ export async function trackActivity(entityType: 'client' | 'project' | 'person' 
       entityType,
       entityId,
     });
+    
+    // Invalidate dashboard cache so Recently Viewed updates immediately
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
   } catch (error) {
     // Don't log to console to avoid spamming - activity tracking is non-critical
     // console.warn('Failed to track activity:', error);
