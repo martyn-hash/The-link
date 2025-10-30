@@ -6047,23 +6047,32 @@ function RelatedPersonRow({
     },
   });
 
-  // Fetch and generate QR code when needed
-  const handleShowQRCode = async () => {
-    try {
-      const response = await fetch(`/api/portal-user/qr-code/${clientPerson.person.id}`);
-      if (!response.ok) throw new Error('Failed to generate QR code');
-      
-      const data = await response.json();
-      setQrCodeDataUrl(data.qrCode);
+  // Generate QR code mutation
+  const generateQRMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/portal-user/generate-qr-code", {
+        personId: clientPerson.person.id,
+        clientId,
+        email: personEmail,
+        name: formatPersonName(clientPerson.person.fullName),
+      });
+    },
+    onSuccess: (data: any) => {
+      setQrCodeDataUrl(data.qrCodeDataUrl);
       setShowQRCode(true);
-    } catch (error) {
+      toast({
+        title: "QR Code Generated",
+        description: "Scan to access portal",
+      });
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to generate QR code",
+        description: error?.message || "Failed to generate QR code",
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
   useEffect(() => {
     refetch();
@@ -6131,7 +6140,8 @@ function RelatedPersonRow({
                   Send App Invite
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={handleShowQRCode}
+                  onClick={() => generateQRMutation.mutate()}
+                  disabled={generateQRMutation.isPending || !hasEmail}
                   data-testid={`action-show-qr-${clientPerson.person.id}`}
                 >
                   <QrCode className="h-4 w-4 mr-2" />
