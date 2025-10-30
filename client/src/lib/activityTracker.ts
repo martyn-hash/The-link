@@ -9,11 +9,14 @@ export async function trackActivity(entityType: 'client' | 'project' | 'person' 
       entityId,
     });
     
-    // Invalidate dashboard cache so Recently Viewed updates immediately
-    queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+    // Use refetchQueries to force immediate refetch if dashboard is mounted
+    // This handles the case where user uses browser back button and dashboard never unmounts
+    queryClient.refetchQueries({ 
+      queryKey: ["/api/dashboard"],
+      type: 'active' // Only refetch if query has active observers (dashboard is mounted)
+    });
   } catch (error) {
-    // Don't log to console to avoid spamming - activity tracking is non-critical
-    // console.warn('Failed to track activity:', error);
+    // Activity tracking is non-critical, silently fail
   }
 }
 
