@@ -290,6 +290,7 @@ export function registerProjectRoutes(
             valueBoolean: response.valueBoolean,
             valueNumber: response.valueNumber,
             valueLongText: response.valueLongText,
+            valueMultiSelect: response.valueMultiSelect,
           }));
 
           // Validate the approval responses
