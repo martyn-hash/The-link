@@ -712,9 +712,88 @@ app.post("/api/resource", isAuthenticated, resolveEffectiveUser, async (req: any
 
 ---
 
+## Post-Refactoring Bug Fixes
+
+### Bug #1: Stage Approval Response Storage Method
+**Reported:** Project status change with stage approval questionnaire
+**Commit:** `9c24c32`
+
+**Issue:** When changing a project to a status that requires stage approval (e.g., "Work Fully Completed"), the submission failed with error 500: "Failed to save stage approval responses"
+
+**Root Cause:** During refactoring, incorrectly changed the storage method name:
+```typescript
+// INCORRECT (introduced during refactoring)
+const saved = await storage.upsertStageApprovalResponse(response);
+
+// CORRECT (original method name)
+const saved = await storage.createStageApprovalResponse(response);
+```
+
+**Fix:** Restored the correct method name `createStageApprovalResponse` in `server/routes/projects.ts:580`
+
+**Status:** ✅ Fixed
+
+---
+
+### Bug #2: Duplicate Custom-Requests Endpoints
+**Reported:** Client detail page → Tasks → + New Client Request → Use Template
+**Commit:** `3c3b452`
+
+**Issue:** Creating client requests from templates failed with error 400: "Either templateId or customRequestId must be provided, but not both"
+
+**Root Cause:** During refactoring, the custom-requests endpoints were duplicated:
+- Original location: `server/routes/tasks.ts:561-610`
+- Duplicate created: `server/routes/clients.ts:1898-1963`
+
+Express registered both routes, causing validation conflicts.
+
+**Fix:** Removed duplicate endpoints from `clients.ts`:
+```typescript
+// Removed from clients.ts (lines 1898-1963):
+// POST /api/clients/:clientId/custom-requests
+// GET /api/clients/:clientId/custom-requests
+```
+
+These routes now only exist in `tasks.ts` where they belong.
+
+**Status:** ✅ Fixed
+
+---
+
+### Bug #3: App Invitation Email Unique Constraint Error
+**Reported:** Client detail page → Overview → Related People → Send App Invite
+**Commit:** `3c3b452`
+
+**Issue:** Sending app invitations failed with error 500: "Failed to send invitation" when a portal user with the same email already existed in the database.
+
+**Root Cause:** The `clientPortalUsers` table has a unique constraint on the `email` field. The invitation logic only checked if a portal user existed for the `personId`, but not for the `email`. When trying to create a new portal user with an email that already existed, the database insert failed.
+
+**Fix:** Added check for existing portal users by email before attempting to create:
+```typescript
+// Check if a portal user with this email already exists
+const existingUser = await storage.getClientPortalUserByEmail(email);
+if (existingUser) {
+  // Update existing portal user to link with this person
+  portalUser = await storage.updateClientPortalUser(existingUser.id, {
+    personId,
+    name: name || existingUser.name,
+    clientId: clientId || existingUser.clientId
+  });
+} else {
+  // Create new portal user
+  portalUser = await storage.createClientPortalUser({...});
+}
+```
+
+**Location:** `server/routes/auth.ts:1413-1430`
+
+**Status:** ✅ Fixed
+
+---
+
 ## Conclusion
 
-This refactoring successfully modernized the codebase structure without introducing any breaking changes. The code is now:
+This refactoring successfully modernized the codebase structure. The code is now:
 - ✅ More maintainable
 - ✅ Easier to navigate
 - ✅ Better organized by domain
@@ -722,6 +801,8 @@ This refactoring successfully modernized the codebase structure without introduc
 - ✅ Ready for future expansion
 
 All endpoint URLs remain unchanged, ensuring complete backward compatibility with the existing frontend application.
+
+**Note:** Three bugs were identified during production testing and subsequently fixed - see Post-Refactoring Bug Fixes section above.
 
 ---
 
@@ -734,5 +815,8 @@ If issues arise during testing:
 4. Verify TypeScript compilation: `npx tsc --noEmit`
 5. Use the backup file for reference: `server/routes.ts.backup`
 
-**Commit Reference:** `56c210e408ea6a68f95f73166eca365a775854bc`
+**Main Refactoring Commit:** `56c210e408ea6a68f95f73166eca365a775854bc`
+**Bug Fix Commits:**
+- `9c24c32` - Stage approval response fix
+- `3c3b452` - Duplicate routes and invitation fixes
 **Branch:** `refactor/code-structure-cleanup`
