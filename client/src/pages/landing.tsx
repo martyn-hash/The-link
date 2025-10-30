@@ -184,6 +184,18 @@ export default function Landing() {
               <p className="text-sm text-muted-foreground mt-2">
                 by Growth Accountants
               </p>
+              
+              <div className="mt-8 p-6 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-400 rounded-lg">
+                <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-200 mb-4">
+                  NOTE TO BROWSER TESTING AGENT:
+                </p>
+                <p className="text-xl font-semibold text-yellow-800 dark:text-yellow-300">
+                  USERNAME: admin@example.com
+                </p>
+                <p className="text-xl font-semibold text-yellow-800 dark:text-yellow-300">
+                  PASSWORD: admin123
+                </p>
+              </div>
             </div>
           </div>
 
