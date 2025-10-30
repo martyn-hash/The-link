@@ -532,13 +532,12 @@ export default function ChangeStatusModal({
 
       // Submit approval responses first
       const approvalData = approvalForm.getValues();
-      const responses: InsertStageApprovalResponse[] = targetStageApprovalFields.map(
-        (field) => {
+      const responses: InsertStageApprovalResponse[] = targetStageApprovalFields
+        .map((field) => {
           const value = approvalData[field.id];
           const baseResponse = {
             projectId: project.id,
             fieldId: field.id,
-            fieldType: field.fieldType,
           };
 
           if (field.fieldType === "boolean") {
@@ -548,12 +547,22 @@ export default function ChangeStatusModal({
           } else if (field.fieldType === "long_text") {
             return { ...baseResponse, valueLongText: value as string };
           } else if (field.fieldType === "multi_select") {
-            return { ...baseResponse, valueMultiSelect: value as string[] };
+            return {
+              ...baseResponse,
+              valueMultiSelect: Array.isArray(value) && value.length > 0 ? value as string[] : undefined,
+            };
           }
 
           return baseResponse;
-        }
-      );
+        })
+        .filter((response) => {
+          // Filter out responses with no populated value field
+          if ("valueBoolean" in response && response.valueBoolean !== undefined) return true;
+          if ("valueNumber" in response && response.valueNumber !== undefined) return true;
+          if ("valueLongText" in response && response.valueLongText !== undefined && response.valueLongText !== "") return true;
+          if ("valueMultiSelect" in response && response.valueMultiSelect !== undefined && response.valueMultiSelect.length > 0) return true;
+          return false;
+        });
 
       submitApprovalResponsesMutation.mutate(responses);
     } else {
