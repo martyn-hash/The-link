@@ -298,7 +298,7 @@ export default function PersonDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <main className="container mx-auto py-6 space-y-6">
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -312,7 +312,7 @@ export default function PersonDetail() {
   if (error || !person) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <main className="container mx-auto py-6">
           <Card>
             <CardContent className="py-12 text-center">
@@ -332,8 +332,8 @@ export default function PersonDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNavigation />
-      
+      <TopNavigation user={user} />
+
       <main className="container mx-auto py-6 space-y-6">
         {/* Header Section */}
         <div className="flex items-center justify-between">

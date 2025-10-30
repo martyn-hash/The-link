@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { ArrowLeft, CheckCircle, AlertCircle, FileText } from "lucide-react";
@@ -51,6 +52,7 @@ export default function TaskSubmissionDetail() {
   const [, params] = useRoute("/task-submissions/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const submissionId = params?.id;
 
   // Fetch submission details
@@ -151,7 +153,7 @@ export default function TaskSubmissionDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="p-8 space-y-6">
           <Skeleton className="h-12 w-3/4" />
           <Card>
@@ -172,7 +174,7 @@ export default function TaskSubmissionDetail() {
   if (error || !submission) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="p-8">
           <Card>
             <CardContent className="py-12">

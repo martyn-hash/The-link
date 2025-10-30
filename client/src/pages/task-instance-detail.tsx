@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import TopNavigation from "@/components/top-navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Question {
   id: string;
@@ -158,6 +159,7 @@ function QuestionResponse({ question }: { question: Question }) {
 export default function TaskInstanceDetail() {
   const [, params] = useRoute("/task-instances/:id");
   const instanceId = params?.id;
+  const { user } = useAuth();
 
   const { data: instance, isLoading } = useQuery<TaskInstanceDetail>({
     queryKey: [`/api/task-instances/${instanceId}/full`],
@@ -167,7 +169,7 @@ export default function TaskInstanceDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <main className="container mx-auto p-6 space-y-6">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-32 w-full" />
@@ -180,7 +182,7 @@ export default function TaskInstanceDetail() {
   if (!instance) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <main className="container mx-auto p-6">
           <Card>
             <CardContent className="p-6">

@@ -336,7 +336,7 @@ export default function TaskTemplatesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNavigation />
+      <TopNavigation user={user} />
       <div className="container mx-auto py-8">
         <div className="flex justify-between items-center mb-6">
           <div>

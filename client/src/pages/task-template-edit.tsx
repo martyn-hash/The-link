@@ -906,7 +906,7 @@ export default function TaskTemplateEditPage() {
   if (templateLoading || sectionsLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="container mx-auto py-8">
           <div className="flex justify-center py-12">
             <p className="text-muted-foreground">Loading template...</p>
@@ -919,7 +919,7 @@ export default function TaskTemplateEditPage() {
   if (!template) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="container mx-auto py-8">
           <Card>
             <CardContent className="p-6">
@@ -950,7 +950,7 @@ export default function TaskTemplateEditPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNavigation />
+      <TopNavigation user={user} />
       <div className="container mx-auto py-8">
         {/* Compact Header with Template Details */}
         <div className="mb-6">

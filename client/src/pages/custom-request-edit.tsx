@@ -781,7 +781,7 @@ export default function CustomRequestEdit() {
   if (requestLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="container mx-auto py-8">
           <div className="flex justify-center py-12">
             <p className="text-muted-foreground">Loading custom request...</p>
@@ -794,7 +794,7 @@ export default function CustomRequestEdit() {
   if (!request) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="container mx-auto py-8">
           <Card>
             <CardContent className="p-6">
@@ -823,7 +823,7 @@ export default function CustomRequestEdit() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNavigation />
+      <TopNavigation user={user} />
       <div className="container mx-auto py-8">
         {/* Header */}
         <div className="mb-6">
