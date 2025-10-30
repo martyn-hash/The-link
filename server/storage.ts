@@ -464,9 +464,9 @@ export interface IStorage {
   deleteCompanyView(id: string): Promise<void>;
   
   // User column preferences operations
-  getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined>;
+  getUserColumnPreferences(userId: string, viewType?: string): Promise<UserColumnPreferences | undefined>;
   upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences>;
-  updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;
+  updateUserColumnPreferences(userId: string, viewType: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;
   
   // Dashboard operations
   createDashboard(dashboard: InsertDashboard): Promise<Dashboard>;
@@ -1109,11 +1109,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User column preferences operations
-  async getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined> {
+  async getUserColumnPreferences(userId: string, viewType: string = 'projects'): Promise<UserColumnPreferences | undefined> {
     const [preferences] = await db
       .select()
       .from(userColumnPreferences)
-      .where(eq(userColumnPreferences.userId, userId));
+      .where(and(
+        eq(userColumnPreferences.userId, userId),
+        eq(userColumnPreferences.viewType, viewType)
+      ));
     return preferences;
   }
 
@@ -1122,7 +1125,7 @@ export class DatabaseStorage implements IStorage {
       .insert(userColumnPreferences)
       .values(preferences)
       .onConflictDoUpdate({
-        target: userColumnPreferences.userId,
+        target: [userColumnPreferences.userId, userColumnPreferences.viewType],
         set: {
           columnOrder: preferences.columnOrder,
           visibleColumns: preferences.visibleColumns,
@@ -1134,18 +1137,21 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences> {
+  async updateUserColumnPreferences(userId: string, viewType: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences> {
     const [updated] = await db
       .update(userColumnPreferences)
       .set({
         ...preferences,
         updatedAt: new Date(),
       })
-      .where(eq(userColumnPreferences.userId, userId))
+      .where(and(
+        eq(userColumnPreferences.userId, userId),
+        eq(userColumnPreferences.viewType, viewType)
+      ))
       .returning();
     
     if (!updated) {
-      throw new Error(`Column preferences not found for user ${userId}`);
+      throw new Error(`Column preferences not found for user ${userId} and viewType ${viewType}`);
     }
     
     return updated;

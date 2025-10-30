@@ -1734,7 +1734,8 @@ export async function registerAuthAndMiscRoutes(
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const preferences = await storage.getUserColumnPreferences(effectiveUserId);
+      const viewType = req.query.viewType as string || 'projects';
+      const preferences = await storage.getUserColumnPreferences(effectiveUserId, viewType);
 
       // Return null if no preferences exist yet (first time user)
       res.json(preferences || null);
@@ -1755,6 +1756,7 @@ export async function registerAuthAndMiscRoutes(
       const validPreferencesData = insertUserColumnPreferencesSchema.parse({
         ...req.body,
         userId: effectiveUserId, // Security: Always use authenticated user ID
+        viewType: req.body.viewType || 'projects', // Default to projects if not specified
       });
 
       const savedPreferences = await storage.upsertUserColumnPreferences(validPreferencesData);

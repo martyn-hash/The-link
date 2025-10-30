@@ -9,6 +9,7 @@ import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import DashboardBuilder from "@/components/dashboard-builder";
+import TaskList from "@/components/task-list";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -185,59 +186,8 @@ export default function Dashboard() {
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
 
-            {/* Homescreen Dashboard Section */}
-            <div data-testid="homescreen-dashboard-section">
-              {homescreenLoading ? (
-              <Card>
-                <CardContent className="py-12">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-                    <p className="text-muted-foreground">Loading homescreen dashboard...</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : homescreenDashboard ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Home className="w-6 h-6 text-primary" />
-                  <h3 className="text-xl font-semibold" data-testid="text-homescreen-dashboard-name">
-                    {homescreenDashboard.name}
-                  </h3>
-                  {homescreenDashboard.description && (
-                    <p className="text-sm text-muted-foreground">- {homescreenDashboard.description}</p>
-                  )}
-                </div>
-                {homescreenFilters && (
-                  <DashboardBuilder
-                    filters={homescreenFilters}
-                    widgets={homescreenDashboard.widgets || []}
-                    editMode={false}
-                    currentDashboard={homescreenDashboard}
-                  />
-                )}
-              </div>
-            ) : (
-              <Card>
-                <CardHeader className="text-center">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                    <BarChart3 className="w-6 h-6 text-muted-foreground" />
-                  </div>
-                  <CardTitle data-testid="text-no-homescreen">No homescreen dashboard set</CardTitle>
-                  <CardDescription>
-                    Set a dashboard as your homescreen in the Projects page
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex justify-center">
-                  <Button
-                    onClick={() => window.location.href = '/projects'}
-                    data-testid="button-go-to-projects"
-                  >
-                    Go to Projects
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-            </div>
+            {/* My Dashboard - Default View */}
+            <MyDashboardPanel user={user} />
           </div>
         </main>
       </div>
@@ -567,5 +517,138 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+
+function MyDashboardPanel({ user }: { user: any }) {
+  // Fetch dashboard metrics
+  const { data: metrics, isLoading: metricsLoading } = useQuery<{
+    myProjectsCount: number;
+    myTasksCount: number;
+    behindScheduleCount: number;
+    lateCount: number;
+  }>({
+    queryKey: ["/api/dashboard/metrics"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Fetch my projects (where user is service owner)
+  const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/dashboard/my-projects"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Fetch my tasks (where user is current assignee)
+  const { data: myTasks = [], isLoading: myTasksLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/dashboard/my-tasks"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  if (metricsLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading dashboard...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* My Projects Count - Green */}
+        <Card className="border-l-4 border-l-green-500" data-testid="card-my-projects">
+          <CardHeader className="pb-2">
+            <CardDescription>My Projects</CardDescription>
+            <CardTitle className="text-3xl text-green-600 dark:text-green-500">
+              {metrics?.myProjectsCount || 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">Projects you own</p>
+          </CardContent>
+        </Card>
+
+        {/* My Tasks Count - Blue */}
+        <Card className="border-l-4 border-l-blue-500" data-testid="card-my-tasks">
+          <CardHeader className="pb-2">
+            <CardDescription>My Tasks</CardDescription>
+            <CardTitle className="text-3xl text-blue-600 dark:text-blue-500">
+              {metrics?.myTasksCount || 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">Tasks assigned to you</p>
+          </CardContent>
+        </Card>
+
+        {/* Behind Schedule Count - Orange */}
+        <Card className="border-l-4 border-l-orange-500" data-testid="card-behind-schedule">
+          <CardHeader className="pb-2">
+            <CardDescription>Behind Schedule</CardDescription>
+            <CardTitle className="text-3xl text-orange-600 dark:text-orange-500">
+              {metrics?.behindScheduleCount || 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">Projects over stage time limit</p>
+          </CardContent>
+        </Card>
+
+        {/* Late Projects Count - Red */}
+        <Card className="border-l-4 border-l-red-500" data-testid="card-late-projects">
+          <CardHeader className="pb-2">
+            <CardDescription>Late Projects</CardDescription>
+            <CardTitle className="text-3xl text-red-600 dark:text-red-500">
+              {metrics?.lateCount || 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">Projects past due date</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* My Projects Table */}
+      <div data-testid="section-my-projects">
+        <h2 className="text-2xl font-semibold mb-4">My Projects</h2>
+        {myProjectsLoading ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <TaskList projects={myProjects} user={user} viewType="my-projects" />
+        )}
+      </div>
+
+      {/* My Tasks Table */}
+      <div data-testid="section-my-tasks">
+        <h2 className="text-2xl font-semibold mb-4">My Tasks</h2>
+        {myTasksLoading ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <TaskList projects={myTasks} user={user} viewType="my-tasks" />
+        )}
+      </div>
+    </div>
   );
 }

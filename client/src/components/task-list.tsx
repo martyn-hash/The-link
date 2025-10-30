@@ -48,6 +48,7 @@ interface TaskListProps {
   user: User;
   serviceFilter?: string;
   onSwitchToKanban?: () => void;
+  viewType?: string; // 'projects', 'my-projects', 'my-tasks'
 }
 
 // Column configuration with ID, label, and metadata
@@ -168,7 +169,7 @@ function SortableColumnHeader({ column, sortBy, sortOrder, onSort, width, onResi
   );
 }
 
-export default function TaskList({ projects, user, serviceFilter, onSwitchToKanban }: TaskListProps) {
+export default function TaskList({ projects, user, serviceFilter, onSwitchToKanban, viewType = 'projects' }: TaskListProps) {
   const [, setLocation] = useLocation();
   const [sortBy, setSortBy] = useState<string>("timeInStage");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -236,18 +237,28 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   );
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
-  // Load column preferences from API
+  // Load column preferences from API with viewType
   const { data: savedPreferences } = useQuery<SavedPreferences>({
-    queryKey: ["/api/column-preferences"],
+    queryKey: ["/api/column-preferences", { viewType }],
+    queryFn: async () => {
+      const response = await fetch(`/api/column-preferences?viewType=${encodeURIComponent(viewType)}`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = "/api/login";
+        }
+        throw new Error("Failed to fetch column preferences");
+      }
+      return response.json();
+    },
   });
 
-  // Save column preferences mutation
+  // Save column preferences mutation with viewType
   const savePreferencesMutation = useMutation({
     mutationFn: async (preferences: SavedPreferences) => {
-      return await apiRequest("POST", "/api/column-preferences", preferences);
+      return await apiRequest("POST", "/api/column-preferences", { ...preferences, viewType });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/column-preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/column-preferences", { viewType }] });
     },
   });
 

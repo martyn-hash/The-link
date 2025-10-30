@@ -1175,4 +1175,120 @@ export function registerProjectRoutes(
       });
     }
   });
+
+  // ==================================================
+  // DASHBOARD API ROUTES
+  // ==================================================
+
+  // Get dashboard metrics for the current user
+  app.get("/api/dashboard/metrics", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get all active projects (not archived)
+      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
+
+      // Filter projects where user is the service owner
+      const myProjects = allProjects.filter(p => p.projectOwnerId === effectiveUserId);
+
+      // Filter projects where user is the current assignee
+      const myTasks = allProjects.filter(p => p.currentAssigneeId === effectiveUserId);
+
+      // Calculate behind schedule count (time in current stage > maxInstanceTime)
+      let behindScheduleCount = 0;
+      for (const project of allProjects) {
+        // Get stage config for this project
+        const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+        const currentStageConfig = stages.find(s => s.name === project.currentStatus);
+        
+        if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
+          // Calculate current business hours in stage
+          const chronology = project.chronology || [];
+          const sortedChronology = [...chronology].sort((a, b) => 
+            new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+          );
+          
+          const lastEntry = sortedChronology.find(entry => entry.toStatus === project.currentStatus);
+          const startTime = lastEntry?.timestamp || project.createdAt;
+          
+          if (startTime) {
+            const { calculateBusinessHours } = await import("@shared/businessTime");
+            const currentHours = calculateBusinessHours(
+              typeof startTime === 'string' ? startTime : new Date(startTime).toISOString(),
+              new Date().toISOString()
+            );
+            
+            if (currentHours >= currentStageConfig.maxInstanceTime) {
+              behindScheduleCount++;
+            }
+          }
+        }
+      }
+
+      // Calculate late count (current date > due date)
+      const now = new Date();
+      const lateCount = allProjects.filter(p => {
+        if (!p.dueDate) return false;
+        const dueDate = new Date(p.dueDate);
+        return now > dueDate;
+      }).length;
+
+      res.json({
+        myProjectsCount: myProjects.length,
+        myTasksCount: myTasks.length,
+        behindScheduleCount,
+        lateCount
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard metrics:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch dashboard metrics" });
+    }
+  });
+
+  // Get projects where user is the service owner
+  app.get("/api/dashboard/my-projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get all projects and filter by service owner
+      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
+      const myProjects = allProjects.filter(p => p.projectOwnerId === effectiveUserId);
+
+      res.json(myProjects);
+    } catch (error) {
+      console.error("Error fetching my projects:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch my projects" });
+    }
+  });
+
+  // Get projects where user is the current assignee
+  app.get("/api/dashboard/my-tasks", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get all projects and filter by current assignee
+      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
+      const myTasks = allProjects.filter(p => p.currentAssigneeId === effectiveUserId);
+
+      res.json(myTasks);
+    } catch (error) {
+      console.error("Error fetching my tasks:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch my tasks" });
+    }
+  });
 }

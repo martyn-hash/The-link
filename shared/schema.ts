@@ -171,7 +171,8 @@ export const companyViews = pgTable("company_views", {
 // User column preferences table - Stores column visibility, order, and width settings for project list view
 export const userColumnPreferences = pgTable("user_column_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  viewType: varchar("view_type").notNull().default("projects"), // 'projects', 'my-projects', 'my-tasks'
   columnOrder: text("column_order").array().notNull(), // Array of column IDs in desired order
   visibleColumns: text("visible_columns").array().notNull(), // Array of visible column IDs
   columnWidths: jsonb("column_widths"), // JSON object mapping column ID to width in pixels
@@ -179,6 +180,7 @@ export const userColumnPreferences = pgTable("user_column_preferences", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_user_column_preferences_user_id").on(table.userId),
+  unique("unique_user_view_type").on(table.userId, table.viewType),
 ]);
 
 // Dashboards table - Stores saved dashboard configurations with visualizations
