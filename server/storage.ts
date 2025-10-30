@@ -430,8 +430,9 @@ export interface IStorage {
   updateStageApprovalField(id: string, field: Partial<InsertStageApprovalField>): Promise<StageApprovalField>;
   deleteStageApprovalField(id: string): Promise<void>;
   
-  // Stage approval responses operations  
+  // Stage approval responses operations
   createStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse>;
+  upsertStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse>;
   getStageApprovalResponsesByProjectId(projectId: string): Promise<StageApprovalResponse[]>;
   
   // Stage approval validation
@@ -4788,6 +4789,30 @@ export class DatabaseStorage implements IStorage {
       if (error instanceof Error && error.message.includes('unique constraint')) {
         throw new Error(`Stage approval response already exists for this field and project`);
       }
+      if (error instanceof Error && error.message.includes('check_single_value_column')) {
+        throw new Error(`Invalid field value: only one value column should be populated based on field type`);
+      }
+      throw error;
+    }
+  }
+
+  async upsertStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse> {
+    try {
+      const [upsertedResponse] = await db
+        .insert(stageApprovalResponses)
+        .values(response)
+        .onConflictDoUpdate({
+          target: [stageApprovalResponses.projectId, stageApprovalResponses.fieldId],
+          set: {
+            valueBoolean: response.valueBoolean,
+            valueNumber: response.valueNumber,
+            valueLongText: response.valueLongText,
+            valueMultiSelect: response.valueMultiSelect,
+          }
+        })
+        .returning();
+      return upsertedResponse;
+    } catch (error) {
       if (error instanceof Error && error.message.includes('check_single_value_column')) {
         throw new Error(`Invalid field value: only one value column should be populated based on field type`);
       }

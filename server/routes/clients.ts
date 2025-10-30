@@ -624,6 +624,53 @@ export function registerClientRoutes(
     }
   });
 
+  // GET /api/clients/:id/chronology - Get client chronology
+  app.get("/api/clients/:id/chronology", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      // Validate client ID parameter with UUID format
+      const paramValidation = z.object({
+        id: z.string().min(1, "Client ID is required").uuid("Invalid client ID format")
+      }).safeParse(req.params);
+
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid client ID format",
+          errors: paramValidation.error.issues
+        });
+      }
+
+      const { id: clientId } = paramValidation.data;
+
+      // Check if client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Get chronology entries for this client
+      const chronologyEntries = await storage.getClientChronology(clientId);
+
+      // Sanitize user objects to remove sensitive fields
+      const sanitizedEntries = chronologyEntries.map(entry => ({
+        ...entry,
+        user: entry.user ? {
+          id: entry.user.id,
+          firstName: entry.user.firstName,
+          lastName: entry.user.lastName,
+          email: entry.user.email,
+          isAdmin: entry.user.isAdmin,
+          canSeeAdminMenu: entry.user.canSeeAdminMenu
+        } : undefined
+      }));
+
+      res.status(200).json(sanitizedEntries);
+
+    } catch (error) {
+      console.error("Error fetching client chronology:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client chronology" });
+    }
+  });
+
   // POST /api/clients/:id/people - Add a new person to a client
   app.post("/api/clients/:id/people", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -728,6 +775,17 @@ export function registerClientRoutes(
     } catch (error) {
       console.error("Error deleting client tag:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to delete client tag" });
+    }
+  });
+
+  // GET /api/client-tag-assignments - Get all client tag assignments
+  app.get("/api/client-tag-assignments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const assignments = await storage.getAllClientTagAssignments();
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching client tag assignments:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client tag assignments" });
     }
   });
 
@@ -1727,6 +1785,59 @@ export function registerClientRoutes(
     } catch (error) {
       console.error("Error creating portal user:", error);
       res.status(500).json({ message: "Failed to create portal user" });
+    }
+  });
+
+  // PUT /api/portal-users/:portalUserId - Update portal user
+  app.put("/api/portal-users/:portalUserId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { portalUserId } = req.params;
+      const { name } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+
+      const portalUser = await storage.getClientPortalUserById(portalUserId);
+      if (!portalUser) {
+        return res.status(404).json({ message: "Portal user not found" });
+      }
+
+      const hasAccess = await userHasClientAccess(effectiveUserId, portalUser.clientId);
+      if (!hasAccess && !isAdmin) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updated = await storage.updateClientPortalUser(portalUserId, { name });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating portal user:", error);
+      res.status(500).json({ message: "Failed to update portal user" });
+    }
+  });
+
+  // DELETE /api/portal-users/:portalUserId - Delete portal user
+  app.delete("/api/portal-users/:portalUserId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { portalUserId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const isAdmin = req.user?.effectiveIsAdmin || req.user?.isAdmin;
+
+      const portalUser = await storage.getClientPortalUserById(portalUserId);
+      if (!portalUser) {
+        return res.status(404).json({ message: "Portal user not found" });
+      }
+
+      const hasAccess = await userHasClientAccess(effectiveUserId, portalUser.clientId);
+      if (!hasAccess && !isAdmin) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Note: JWT sessions are automatically invalidated on next request when user doesn't exist
+      // The requirePortalAuth middleware verifies the user exists for each authenticated request
+      await storage.deleteClientPortalUser(portalUserId);
+      res.json({ message: "Portal user deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting portal user:", error);
+      res.status(500).json({ message: "Failed to delete portal user" });
     }
   });
 
