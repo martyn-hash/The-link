@@ -4877,14 +4877,17 @@ export class DatabaseStorage implements IStorage {
       const hasBoolean = response.valueBoolean !== undefined && response.valueBoolean !== null;
       const hasNumber = response.valueNumber !== undefined && response.valueNumber !== null;
       const hasLongText = response.valueLongText !== undefined && response.valueLongText !== null && response.valueLongText !== '';
+      const hasMultiSelect = response.valueMultiSelect !== undefined && response.valueMultiSelect !== null && Array.isArray(response.valueMultiSelect);
       
       let validFieldMatch = false;
       if (field.fieldType === 'boolean') {
-        validFieldMatch = hasBoolean && !hasNumber && !hasLongText;
+        validFieldMatch = hasBoolean && !hasNumber && !hasLongText && !hasMultiSelect;
       } else if (field.fieldType === 'number') {
-        validFieldMatch = !hasBoolean && hasNumber && !hasLongText;
+        validFieldMatch = !hasBoolean && hasNumber && !hasLongText && !hasMultiSelect;
       } else if (field.fieldType === 'long_text') {
-        validFieldMatch = !hasBoolean && !hasNumber && hasLongText;
+        validFieldMatch = !hasBoolean && !hasNumber && hasLongText && !hasMultiSelect;
+      } else if (field.fieldType === 'multi_select') {
+        validFieldMatch = !hasBoolean && !hasNumber && !hasLongText && hasMultiSelect;
       }
       
       if (!validFieldMatch) {
@@ -4927,6 +4930,17 @@ export class DatabaseStorage implements IStorage {
         // For long_text fields: just check not empty if required
         if (field.isRequired && (!response.valueLongText || response.valueLongText.trim() === '')) {
           failedFields.push(field.fieldName);
+        }
+      } else if (field.fieldType === 'multi_select') {
+        // For multi_select fields: validate against configured options if present
+        if (field.isRequired && (!response.valueMultiSelect || response.valueMultiSelect.length === 0)) {
+          failedFields.push(field.fieldName);
+        } else if (field.options && field.options.length > 0 && response.valueMultiSelect) {
+          // Validate that all selected values are in the configured options
+          const invalidOptions = response.valueMultiSelect.filter(value => !field.options?.includes(value));
+          if (invalidOptions.length > 0) {
+            failedFields.push(`${field.fieldName}: invalid options selected`);
+          }
         }
       }
     }
