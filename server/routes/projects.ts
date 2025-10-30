@@ -574,10 +574,10 @@ export function registerProjectRoutes(
         })
       );
 
-      // Save responses to database using storage interface (upsert to handle updates)
+      // Save responses to database using storage interface
       const savedResponses = [];
       for (const response of validatedResponses) {
-        const saved = await storage.upsertStageApprovalResponse(response);
+        const saved = await storage.createStageApprovalResponse(response);
         savedResponses.push(saved);
       }
 
