@@ -236,11 +236,14 @@ export function registerProjectRoutes(
         return res.status(400).json({ message: stageValidation.reason || "Invalid project status" });
       }
 
-      // Get the stage to find change reason
+      // Get the stage for this specific project type - MUST scope by project type to avoid name collisions
       const stages = await storage.getAllKanbanStages();
-      const targetStage = stages.find(stage => stage.name === updateData.newStatus);
+      const targetStage = stages.find(stage => 
+        stage.name === updateData.newStatus && 
+        stage.projectTypeId === project.projectTypeId
+      );
       if (!targetStage) {
-        return res.status(400).json({ message: "Invalid project status" });
+        return res.status(400).json({ message: "Invalid project status for this project type" });
       }
 
       // Get the change reason by name, scoped to the project's project type
@@ -316,12 +319,13 @@ export function registerProjectRoutes(
 
       res.json(updatedProject);
     } catch (error) {
-      console.error("Error updating project status:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      console.error("[PATCH /api/projects/:id/status] Error updating project status:", error instanceof Error ? error.message : error);
+      console.error("[PATCH /api/projects/:id/status] Full error stack:", error);
       if (error instanceof Error && error.name === 'ZodError') {
-        console.error("Validation errors:", (error as any).issues);
+        console.error("[PATCH /api/projects/:id/status] Validation errors:", (error as any).issues);
         res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
-      } else if (error instanceof Error && error.message && (error.message.includes("Invalid project status") || error.message.includes("not found"))) {
-        // Handle validation errors from validateProjectStatus and stage lookup errors
+      } else if (error instanceof Error && error.message) {
+        // Return all error messages to help debug
         res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Failed to update project status" });
