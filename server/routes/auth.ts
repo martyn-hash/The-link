@@ -143,6 +143,28 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
+  app.delete("/api/auth/impersonate", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const adminUserId = req.user!.id;
+      await storage.stopImpersonation(adminUserId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error stopping impersonation:", error);
+      res.status(400).json({ message: "Failed to stop impersonation" });
+    }
+  });
+
+  app.get("/api/auth/impersonation-state", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const adminUserId = req.user!.id;
+      const state = await storage.getImpersonationState(adminUserId);
+      res.json(state);
+    } catch (error) {
+      console.error("Error getting impersonation state:", error);
+      res.status(500).json({ message: "Failed to get impersonation state" });
+    }
+  });
+
   // ===== BOOTSTRAP AND DEV ROUTES =====
 
   // One-time admin creation route (for production bootstrap)
@@ -358,6 +380,25 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
+  app.delete("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUserIdAsIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      await storage.deleteUser(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      res.status(400).json({ message: "Failed to delete user" });
+    }
+  });
+
   // User profile routes
   app.get("/api/users/profile", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -385,6 +426,57 @@ export async function registerAuthAndMiscRoutes(
     } catch (error) {
       console.error("Error fetching user profile:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch user profile" });
+    }
+  });
+
+  app.put("/api/users/profile", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // SECURITY: Block profile updates during impersonation mode
+      if (req.user?.isImpersonating) {
+        return res.status(403).json({
+          message: "Profile updates are not allowed while impersonating another user",
+          code: "IMPERSONATION_PROFILE_UPDATE_BLOCKED"
+        });
+      }
+
+      const { ...profileData } = req.body;
+
+      // SECURITY: Explicitly remove sensitive fields from request to prevent injection
+      delete profileData.passwordHash;
+      delete profileData.role;
+      delete profileData.id;
+      delete profileData.email;
+
+      // Create safe schema that only allows certain profile fields
+      const safeProfileSchema = insertUserSchema.pick({
+        firstName: true,
+        lastName: true,
+        profileImageUrl: true,
+        emailSignature: true,
+      }).partial();
+
+      const validProfileData = safeProfileSchema.parse(profileData);
+
+      const user = await storage.updateUser(effectiveUserId, validProfileData);
+
+      // Get notification preferences
+      const notificationPreferences = await storage.getOrCreateDefaultNotificationPreferences(effectiveUserId);
+
+      // Remove password hash from response
+      const { passwordHash: _, ...userResponse } = user;
+
+      res.json({
+        ...userResponse,
+        notificationPreferences
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to update user profile" });
     }
   });
 
@@ -553,6 +645,51 @@ export async function registerAuthAndMiscRoutes(
     } catch (error) {
       console.error("Error fetching dashboards:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch dashboards" });
+    }
+  });
+
+  app.get("/api/dashboards/homescreen", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const dashboard = await storage.getHomescreenDashboard(effectiveUserId);
+
+      if (!dashboard) {
+        return res.status(404).json({ message: "No homescreen dashboard found" });
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error fetching homescreen dashboard:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch homescreen dashboard" });
+    }
+  });
+
+  app.get("/api/dashboards/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const dashboard = await storage.getDashboardById(req.params.id);
+
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      // Check authorization - user can access their own dashboards or shared ones
+      if (dashboard.userId !== effectiveUserId && dashboard.visibility !== 'shared') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error fetching dashboard:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch dashboard" });
     }
   });
 
@@ -971,6 +1108,35 @@ export async function registerAuthAndMiscRoutes(
   });
 
   // Delete a document
+  app.get("/api/documents/:id/file", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+
+      // Get the document
+      const document = await storage.getDocumentById(id);
+      if (!document) {
+        console.log(`[Admin Document Access Denied] Document not found: ${id}`);
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Serve the file using ObjectStorageService
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(document.objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error('Error serving admin document:', error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: 'Document file not found' });
+        }
+        return res.status(500).json({ message: 'Error serving document' });
+      }
+    } catch (error) {
+      console.error("Error serving admin document:", error);
+      res.status(500).json({ message: "Failed to serve document" });
+    }
+  });
+
   app.delete("/api/documents/:id", isAuthenticated, async (req: any, res: any) => {
     try {
       const documentIdSchema = z.object({ id: z.string().uuid() });

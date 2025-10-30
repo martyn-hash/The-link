@@ -17,6 +17,7 @@ import {
   userHasClientAccess,
 } from "./routeHelpers";
 import { insertUserIntegrationSchema } from "@shared/schema";
+import { sendTaskAssignmentEmail } from "../emailService";
 import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "../utils/userOutlookClient";
 import {
   generateUserRingCentralAuthUrl,
@@ -1127,4 +1128,34 @@ export function registerIntegrationRoutes(
       res.status(500).json({ message: "Failed to delete user integration" });
     }
   });
+
+  // Test email endpoint (development only)
+  if (process.env.NODE_ENV === 'development') {
+    app.post("/api/test-email", isAuthenticated, requireAdmin, async (req: any, res) => {
+      try {
+        const { to, subject, message } = req.body;
+
+        if (!to || !subject || !message) {
+          return res.status(400).json({ message: "Missing required fields: to, subject, message" });
+        }
+
+        const success = await sendTaskAssignmentEmail(
+          to,
+          "Test User",
+          message,
+          "Test Client",
+          "bookkeeping_work_required"
+        );
+
+        if (success) {
+          res.json({ message: "Test email sent successfully" });
+        } else {
+          res.status(500).json({ message: "Failed to send test email" });
+        }
+      } catch (error) {
+        console.error("Error sending test email:", error);
+        res.status(500).json({ message: "Failed to send test email" });
+      }
+    });
+  }
 }
