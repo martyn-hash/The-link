@@ -1410,13 +1410,24 @@ export async function registerAuthAndMiscRoutes(
       let portalUser = await storage.getClientPortalUserByPersonId(personId);
 
       if (!portalUser) {
-        // Create new portal user linked to person
-        portalUser = await storage.createClientPortalUser({
-          clientId,
-          email,
-          name,
-          personId,
-        });
+        // Check if a portal user with this email already exists
+        const existingUser = await storage.getClientPortalUserByEmail(email);
+        if (existingUser) {
+          // Update existing portal user to link with this person
+          portalUser = await storage.updateClientPortalUser(existingUser.id, {
+            personId,
+            name: name || existingUser.name,
+            clientId: clientId || existingUser.clientId
+          });
+        } else {
+          // Create new portal user linked to person
+          portalUser = await storage.createClientPortalUser({
+            clientId,
+            email,
+            name,
+            personId,
+          });
+        }
       }
 
       // Generate magic link token
