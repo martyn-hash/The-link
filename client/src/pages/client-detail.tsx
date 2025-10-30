@@ -6535,6 +6535,7 @@ export default function ClientDetail() {
     mutationFn: async (data: { templateId: string; personId: string }) => {
       return await apiRequest("POST", "/api/task-instances", {
         templateId: data.templateId,
+        customRequestId: null,
         clientId: id,
         personId: data.personId,
         status: "not_started",

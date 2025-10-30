@@ -26,6 +26,9 @@ import {
   insertClientCustomRequestQuestionSchema,
   updateClientCustomRequestQuestionSchema,
 } from "@shared/schema";
+import { sendTaskAssignmentEmail } from "../emailService";
+import { sendPushNotification } from "../push-service";
+import type { PushNotificationPayload } from "../push-service";
 
 export function registerTaskRoutes(
   app: Express,
@@ -1067,6 +1070,91 @@ export function registerTaskRoutes(
       }
 
       const instance = await storage.createTaskInstance(taskData);
+
+      // Send notifications to the assigned person
+      if (personId) {
+        try {
+          const person = await storage.getPersonById(personId);
+          if (person) {
+            // Get task description from template or custom request
+            let taskDescription = "New task assigned";
+            if (templateId) {
+              const template = await storage.getTaskTemplateById(templateId);
+              if (template) {
+                taskDescription = template.name;
+              }
+            } else if (customRequestId) {
+              const customRequest = await storage.getClientCustomRequestById(customRequestId);
+              if (customRequest) {
+                taskDescription = customRequest.name;
+              }
+            }
+
+            // Send email notification if person has an email
+            if (person.email && person.fullName) {
+              try {
+                await sendTaskAssignmentEmail(
+                  person.email,
+                  person.fullName,
+                  taskDescription,
+                  client.name || client.companyNumber || "Unknown Client",
+                  "not_started"
+                );
+                console.log(`Task assignment email sent to ${person.email}`);
+              } catch (emailError) {
+                console.error("Failed to send task assignment email:", emailError);
+                // Don't fail the task creation if email fails
+              }
+            }
+
+            // Send push notification if portal user exists and has subscriptions
+            if (taskData.clientPortalUserId) {
+              try {
+                const portalUser = await storage.getClientPortalUserById(taskData.clientPortalUserId);
+                if (portalUser?.pushNotificationsEnabled) {
+                  const subscriptions = await storage.getPushSubscriptionsByClientPortalUserId(taskData.clientPortalUserId);
+                  
+                  if (subscriptions.length > 0) {
+                    const payload: PushNotificationPayload = {
+                      title: "New Task Assigned",
+                      body: taskDescription,
+                      icon: "/pwa-icon-192.png",
+                      badge: "/pwa-icon-192.png",
+                      tag: `task-${instance.id}`,
+                      url: `/portal/tasks/${instance.id}`
+                    };
+
+                    for (const subscription of subscriptions) {
+                      try {
+                        await sendPushNotification(
+                          {
+                            endpoint: subscription.endpoint,
+                            keys: subscription.keys as { p256dh: string; auth: string }
+                          },
+                          payload
+                        );
+                      } catch (pushError: any) {
+                        console.error("Failed to send push notification:", pushError);
+                        // Clean up expired subscriptions
+                        if (pushError.message === 'SUBSCRIPTION_EXPIRED') {
+                          await storage.deletePushSubscription(subscription.endpoint);
+                        }
+                      }
+                    }
+                    console.log(`Push notifications sent for task ${instance.id}`);
+                  }
+                }
+              } catch (pushError) {
+                console.error("Failed to send push notifications:", pushError);
+                // Don't fail the task creation if push fails
+              }
+            }
+          }
+        } catch (notificationError) {
+          console.error("Error sending notifications:", notificationError);
+          // Don't fail the task creation if notifications fail
+        }
+      }
 
       res.status(201).json(instance);
     } catch (error) {
