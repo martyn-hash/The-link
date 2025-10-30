@@ -2144,7 +2144,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                 )}
 
                 {/* Role Assignments Section */}
-                {hasRolesToAssign() && (
+                {hasRolesToAssign() && !isPersonalService && (
                   <div className="space-y-4">
                     <div className="border-t pt-4">
                       <h4 className="font-medium text-sm mb-3">Role Assignments</h4>
