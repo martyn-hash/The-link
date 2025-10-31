@@ -8868,6 +8868,7 @@ export class DatabaseStorage implements IStorage {
         userId: projectMessageParticipants.userId,
         threadId: projectMessageParticipants.threadId,
         lastReadAt: projectMessageParticipants.lastReadAt,
+        lastReminderEmailSentAt: projectMessageParticipants.lastReminderEmailSentAt,
         topic: projectMessageThreads.topic,
         projectId: projectMessageThreads.projectId,
       })
@@ -8897,7 +8898,9 @@ export class DatabaseStorage implements IStorage {
     }>();
     
     for (const participant of participantsWithUnread) {
-      // Get unread messages in this thread
+      // Get unread messages in this thread that are:
+      // 1. Older than the cutoff time (10 minutes)
+      // 2. NEW since we last sent a reminder email (if we've sent one before)
       const unreadMessages = await db
         .select({
           id: projectMessages.id,
@@ -8910,7 +8913,12 @@ export class DatabaseStorage implements IStorage {
           participant.lastReadAt 
             ? sql`${projectMessages.createdAt} > ${participant.lastReadAt}`
             : sql`true`, // If never read, count all messages from others
-          sql`${projectMessages.createdAt} < ${cutoffTime}` // Only messages older than cutoff
+          sql`${projectMessages.createdAt} < ${cutoffTime}`, // Only messages older than cutoff
+          // Critical: Only include messages created AFTER the last reminder email was sent
+          // This prevents re-sending reminders for the same old unread messages
+          participant.lastReminderEmailSentAt
+            ? sql`${projectMessages.createdAt} > ${participant.lastReminderEmailSentAt}`
+            : sql`true` // If we've never sent a reminder, include all unread messages
         ))
         .orderBy(projectMessages.createdAt);
       
