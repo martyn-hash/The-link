@@ -10,6 +10,8 @@ import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import DashboardBuilder from "@/components/dashboard-builder";
 import TaskList from "@/components/task-list";
+import MiniProjectsTable from "@/components/mini-projects-table";
+import DataViewSelector from "@/components/data-view-selector";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -522,221 +524,45 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
 
 
 function MyDashboardPanel({ user }: { user: any }) {
-  // State for selected dashboard
-  const [selectedDashboardId, setSelectedDashboardId] = useState<string>("default");
-
-  // Fetch all saved dashboards
-  const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery<Dashboard[]>({
-    queryKey: ["/api/dashboards"],
+  // Fetch all projects for the current user
+  const { data: allProjects = [], isLoading: projectsLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/projects"],
     enabled: !!user,
     retry: false,
   });
 
-  // Fetch dashboard metrics
-  const { data: metrics, isLoading: metricsLoading } = useQuery<{
-    myProjectsCount: number;
-    myTasksCount: number;
-    behindScheduleCount: number;
-    lateCount: number;
-  }>({
-    queryKey: ["/api/dashboard/metrics"],
-    enabled: !!user,
-    retry: false,
-  });
-
-  // Fetch my projects (where user is service owner)
-  const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/dashboard/my-projects"],
-    enabled: !!user,
-    retry: false,
-  });
-
-  // Fetch my tasks (where user is current assignee)
-  const { data: myTasks = [], isLoading: myTasksLoading } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/dashboard/my-tasks"],
-    enabled: !!user,
-    retry: false,
-  });
-
-  // Get selected dashboard filters
-  const selectedDashboard = dashboards.find(d => d.id === selectedDashboardId);
-  const appliedFilters = useMemo(() => {
-    if (!selectedDashboard || selectedDashboardId === "default") return null;
-    
-    const parsedFilters = typeof selectedDashboard.filters === 'string'
-      ? JSON.parse(selectedDashboard.filters)
-      : selectedDashboard.filters;
-    
-    // Parse date range strings to Date objects
-    if (parsedFilters.customDateRange) {
-      return {
-        ...parsedFilters,
-        customDateRange: {
-          from: parsedFilters.customDateRange.from ? new Date(parsedFilters.customDateRange.from) : undefined,
-          to: parsedFilters.customDateRange.to ? new Date(parsedFilters.customDateRange.to) : undefined,
-        }
-      };
-    }
-    
-    return parsedFilters;
-  }, [selectedDashboard, selectedDashboardId]);
-
-  // Filter projects based on selected dashboard (comprehensive filtering)
-  const applyDashboardFilters = (projects: ProjectWithRelations[]) => {
-    if (!appliedFilters) return projects;
-
-    return projects.filter((project) => {
-      // Service filter (by service/project type)
-      if (appliedFilters.serviceFilter && appliedFilters.serviceFilter !== "all") {
-        if (project.projectTypeId !== appliedFilters.serviceFilter) return false;
-      }
-
-      // Service owner filter
-      if (appliedFilters.serviceOwnerFilter && appliedFilters.serviceOwnerFilter !== "all") {
-        if (project.projectOwnerId !== appliedFilters.serviceOwnerFilter) return false;
-      }
-      
-      // Task assignee filter
-      if (appliedFilters.taskAssigneeFilter && appliedFilters.taskAssigneeFilter !== "all") {
-        if (project.currentAssigneeId !== appliedFilters.taskAssigneeFilter) return false;
-      }
-
-      // User filter (either owner or assignee)
-      if (appliedFilters.userFilter && appliedFilters.userFilter !== "all") {
-        const matchesOwner = project.projectOwnerId === appliedFilters.userFilter;
-        const matchesAssignee = project.currentAssigneeId === appliedFilters.userFilter;
-        if (!matchesOwner && !matchesAssignee) return false;
-      }
-
-      // Archive filter - check the archived flag, not deletedAt
-      if (!appliedFilters.showArchived && project.archived) return false;
-
-      // Dynamic date filter
-      if (appliedFilters.dynamicDateFilter && appliedFilters.dynamicDateFilter !== "all") {
-        const now = new Date();
-        const projectDate = project.startDate ? new Date(project.startDate) : null;
-        
-        if (!projectDate) return false;
-
-        switch (appliedFilters.dynamicDateFilter) {
-          case "today":
-            if (projectDate.toDateString() !== now.toDateString()) return false;
-            break;
-          case "yesterday":
-            const yesterday = new Date(now);
-            yesterday.setDate(yesterday.getDate() - 1);
-            if (projectDate.toDateString() !== yesterday.toDateString()) return false;
-            break;
-          case "this_week":
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - now.getDay());
-            if (projectDate < weekStart) return false;
-            break;
-          case "last_week":
-            const lastWeekStart = new Date(now);
-            lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
-            const lastWeekEnd = new Date(lastWeekStart);
-            lastWeekEnd.setDate(lastWeekEnd.getDate() + 7);
-            if (projectDate < lastWeekStart || projectDate >= lastWeekEnd) return false;
-            break;
-          case "this_month":
-            if (projectDate.getMonth() !== now.getMonth() || projectDate.getFullYear() !== now.getFullYear()) return false;
-            break;
-          case "last_month":
-            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
-            if (projectDate.getMonth() !== lastMonth.getMonth() || projectDate.getFullYear() !== lastMonth.getFullYear()) return false;
-            break;
-          case "this_year":
-            if (projectDate.getFullYear() !== now.getFullYear()) return false;
-            break;
-          case "custom":
-            if (appliedFilters.customDateRange) {
-              const from = appliedFilters.customDateRange.from;
-              const to = appliedFilters.customDateRange.to;
-              if (from && projectDate < from) return false;
-              if (to && projectDate > to) return false;
-            }
-            break;
-        }
-      }
-      
-      return true;
+  // Filter to only projects where user is involved
+  const userProjects = useMemo(() => {
+    return allProjects.filter(project => {
+      return (
+        project.currentAssigneeId === user.id ||
+        project.clientManagerId === user.id ||
+        project.bookkeeperId === user.id ||
+        project.projectOwnerId === user.id
+      );
     });
+  }, [allProjects, user.id]);
+
+  const handleLoadView = (view: any) => {
+    // When a saved view is loaded, you could navigate to the projects page with those filters
+    // For now, we'll just show a toast notification
+    console.log("Loaded view:", view);
   };
 
-  const filteredMyProjects = useMemo(
-    () => applyDashboardFilters(myProjects),
-    [myProjects, appliedFilters]
-  );
+  const handleLoadDashboard = (dashboard: any) => {
+    // When a dashboard is loaded, navigate to the projects page in dashboard mode
+    console.log("Loaded dashboard:", dashboard);
+    // You could navigate to /projects with the dashboard configuration
+    window.location.href = '/projects';
+  };
 
-  const filteredMyTasks = useMemo(
-    () => applyDashboardFilters(myTasks),
-    [myTasks, appliedFilters]
-  );
-
-  // Recalculate metrics based on filtered data when dashboard is selected
-  const displayMetrics = useMemo(() => {
-    if (!appliedFilters || !metrics) return metrics;
-    
-    // When a dashboard filter is active, recalculate metrics from filtered data
-    const allFilteredProjects = [...filteredMyProjects, ...filteredMyTasks];
-    const uniqueFilteredProjects = Array.from(
-      new Map(allFilteredProjects.map(p => [p.id, p])).values()
-    );
-
-    // Calculate behind schedule from filtered projects
-    // Use a similar heuristic as backend: projects in current stage > 7 days
-    const behindScheduleCount = uniqueFilteredProjects.filter(project => {
-      // Skip archived, inactive, or completed projects
-      if (project.archived || project.inactive || project.currentStatus === "completed") {
-        return false;
-      }
-
-      const chronology = project.chronology || [];
-      if (chronology.length === 0) return false;
-
-      // Sort chronology by timestamp descending (most recent first) and find entry for current status
-      const sortedChronology = [...chronology].sort((a, b) => 
-        new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
-      );
-      
-      const lastEntry = sortedChronology.find(entry => entry.toStatus === project.currentStatus);
-      if (!lastEntry || !lastEntry.timestamp) return false;
-
-      // Consider projects stuck in a stage for more than 7 days as "behind schedule"
-      const timeInCurrentStageMs = Date.now() - new Date(lastEntry.timestamp).getTime();
-      const timeInCurrentStageDays = timeInCurrentStageMs / (1000 * 60 * 60 * 24);
-
-      return timeInCurrentStageDays > 7;
-    }).length;
-
-    // Calculate late count from filtered projects (current date > due date)
-    const now = new Date();
-    const lateCount = uniqueFilteredProjects.filter(p => {
-      // Skip archived, inactive, or completed projects
-      if (p.archived || p.inactive || p.currentStatus === "completed") {
-        return false;
-      }
-      if (!p.dueDate) return false;
-      const dueDate = new Date(p.dueDate);
-      return now > dueDate;
-    }).length;
-
-    return {
-      myProjectsCount: filteredMyProjects.length,
-      myTasksCount: filteredMyTasks.length,
-      behindScheduleCount,
-      lateCount,
-    };
-  }, [appliedFilters, metrics, filteredMyProjects, filteredMyTasks]);
-
-  if (metricsLoading) {
+  if (projectsLoading) {
     return (
       <Card>
         <CardContent className="py-12">
           <div className="flex flex-col items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-            <p className="text-muted-foreground">Loading dashboard...</p>
+            <p className="text-muted-foreground">Loading projects...</p>
           </div>
         </CardContent>
       </Card>
@@ -745,126 +571,14 @@ function MyDashboardPanel({ user }: { user: any }) {
 
   return (
     <div className="space-y-6">
-      {/* Dashboard Selector */}
-      <div className="flex items-center gap-3">
-        <Select 
-          value={selectedDashboardId} 
-          onValueChange={setSelectedDashboardId}
-          data-testid="dashboard-selector"
-        >
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Select a dashboard view" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Default View</SelectItem>
-            {dashboards.map((dashboard) => (
-              <SelectItem key={dashboard.id} value={dashboard.id}>
-                {dashboard.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Mini Projects Table */}
+      <MiniProjectsTable projects={userProjects} user={user} />
 
-        {/* Reset to Default Button - Only show when non-default dashboard is selected */}
-        {selectedDashboardId !== "default" && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectedDashboardId("default")}
-            data-testid="button-reset-dashboard"
-          >
-            <Home className="w-4 h-4 mr-2" />
-            Reset to Default
-          </Button>
-        )}
-      </div>
-
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* My Projects Count - Green */}
-        <Card className="border-l-4 border-l-green-500" data-testid="card-my-projects">
-          <CardHeader className="pb-2">
-            <CardDescription>My Projects</CardDescription>
-            <CardTitle className="text-3xl text-green-600 dark:text-green-500">
-              {displayMetrics?.myProjectsCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Projects you own</p>
-          </CardContent>
-        </Card>
-
-        {/* My Tasks Count - Blue */}
-        <Card className="border-l-4 border-l-blue-500" data-testid="card-my-tasks">
-          <CardHeader className="pb-2">
-            <CardDescription>My Tasks</CardDescription>
-            <CardTitle className="text-3xl text-blue-600 dark:text-blue-500">
-              {displayMetrics?.myTasksCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Tasks assigned to you</p>
-          </CardContent>
-        </Card>
-
-        {/* Behind Schedule Count - Orange */}
-        <Card className="border-l-4 border-l-orange-500" data-testid="card-behind-schedule">
-          <CardHeader className="pb-2">
-            <CardDescription>Behind Schedule</CardDescription>
-            <CardTitle className="text-3xl text-orange-600 dark:text-orange-500">
-              {displayMetrics?.behindScheduleCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Projects over stage time limit</p>
-          </CardContent>
-        </Card>
-
-        {/* Late Projects Count - Red */}
-        <Card className="border-l-4 border-l-red-500" data-testid="card-late-projects">
-          <CardHeader className="pb-2">
-            <CardDescription>Late Projects</CardDescription>
-            <CardTitle className="text-3xl text-red-600 dark:text-red-500">
-              {displayMetrics?.lateCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Projects past due date</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* My Projects Table */}
-      <div data-testid="section-my-projects">
-        <h2 className="text-2xl font-semibold mb-4">My Projects</h2>
-        {myProjectsLoading ? (
-          <Card>
-            <CardContent className="py-8">
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <TaskList projects={filteredMyProjects} user={user} viewType="my-projects" />
-        )}
-      </div>
-
-      {/* My Tasks Table */}
-      <div data-testid="section-my-tasks">
-        <h2 className="text-2xl font-semibold mb-4">My Tasks</h2>
-        {myTasksLoading ? (
-          <Card>
-            <CardContent className="py-8">
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <TaskList projects={filteredMyTasks} user={user} viewType="my-tasks" />
-        )}
-      </div>
+      {/* Data View Selector */}
+      <DataViewSelector 
+        onLoadView={handleLoadView}
+        onLoadDashboard={handleLoadDashboard}
+      />
     </div>
   );
 }
