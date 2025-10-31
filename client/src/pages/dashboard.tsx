@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 // Navigation handled via window.location.href for reliability
 import { useAuth } from "@/hooks/useAuth";
@@ -582,7 +582,7 @@ function MyDashboardPanel({ user }: { user: any }) {
   }, [selectedDashboard, selectedDashboardId]);
 
   // Filter projects based on selected dashboard (comprehensive filtering)
-  const applyDashboardFilters = useCallback((projects: ProjectWithRelations[]) => {
+  const applyDashboardFilters = (projects: ProjectWithRelations[]) => {
     if (!appliedFilters) return projects;
 
     return projects.filter((project) => {
@@ -614,7 +614,7 @@ function MyDashboardPanel({ user }: { user: any }) {
       // Dynamic date filter
       if (appliedFilters.dynamicDateFilter && appliedFilters.dynamicDateFilter !== "all") {
         const now = new Date();
-        const projectDate = project.createdAt ? new Date(project.createdAt) : null;
+        const projectDate = project.startDate ? new Date(project.startDate) : null;
         
         if (!projectDate) return false;
 
@@ -662,25 +662,21 @@ function MyDashboardPanel({ user }: { user: any }) {
       
       return true;
     });
-  }, [appliedFilters]);
+  };
 
   const filteredMyProjects = useMemo(
     () => applyDashboardFilters(myProjects),
-    [myProjects, applyDashboardFilters]
+    [myProjects, appliedFilters]
   );
 
   const filteredMyTasks = useMemo(
     () => applyDashboardFilters(myTasks),
-    [myTasks, applyDashboardFilters]
+    [myTasks, appliedFilters]
   );
 
   // Recalculate metrics based on filtered data when dashboard is selected
   const displayMetrics = useMemo(() => {
-    // If no filters are applied (default view), use the metrics from API
-    if (!appliedFilters) return metrics;
-    
-    // If filters are applied but metrics haven't loaded yet, return undefined
-    if (!metrics) return undefined;
+    if (!appliedFilters || !metrics) return metrics;
     
     // When a dashboard filter is active, recalculate metrics from filtered data
     const allFilteredProjects = [...filteredMyProjects, ...filteredMyTasks];
