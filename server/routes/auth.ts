@@ -863,7 +863,12 @@ export async function registerAuthAndMiscRoutes(
       }));
 
       const dashboardData = {
-        myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed" && !p.archived && !p.inactive).slice(0, 10),
+        myActiveTasks: userProjects.filter(p => 
+          p.currentAssigneeId === effectiveUserId && 
+          p.currentStatus !== "completed" && 
+          !p.archived && 
+          !p.inactive
+        ).slice(0, 10),
         myProjects: userProjects.filter(p => !p.archived && !p.inactive),
         overdueProjects: overdueProjects,
         behindScheduleProjects: behindScheduleProjects,
