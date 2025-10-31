@@ -567,55 +567,112 @@ function MyDashboardPanel({ user }: { user: any }) {
       ? JSON.parse(selectedDashboard.filters)
       : selectedDashboard.filters;
     
+    // Parse date range strings to Date objects
+    if (parsedFilters.customDateRange) {
+      return {
+        ...parsedFilters,
+        customDateRange: {
+          from: parsedFilters.customDateRange.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+          to: parsedFilters.customDateRange.to ? new Date(parsedFilters.customDateRange.to) : undefined,
+        }
+      };
+    }
+    
     return parsedFilters;
   }, [selectedDashboard, selectedDashboardId]);
 
-  // Filter projects based on selected dashboard
-  const filteredMyProjects = useMemo(() => {
-    if (!appliedFilters) return myProjects;
-    
-    return myProjects.filter((project) => {
-      // Apply service owner filter
-      if (appliedFilters.serviceOwnerFilter && appliedFilters.serviceOwnerFilter !== "all") {
-        if (project.projectOwnerId !== appliedFilters.serviceOwnerFilter) return false;
-      }
-      
-      // Apply assignee filter
-      if (appliedFilters.taskAssigneeFilter && appliedFilters.taskAssigneeFilter !== "all") {
-        if (project.currentAssigneeId !== appliedFilters.taskAssigneeFilter) return false;
-      }
-      
-      // Apply status filter (if exists in dashboard filters)
-      if (appliedFilters.statusFilter && appliedFilters.statusFilter !== "all") {
-        if (project.currentStatus !== appliedFilters.statusFilter) return false;
-      }
-      
-      return true;
-    });
-  }, [myProjects, appliedFilters]);
+  // Filter projects based on selected dashboard (comprehensive filtering)
+  const applyDashboardFilters = (projects: ProjectWithRelations[]) => {
+    if (!appliedFilters) return projects;
 
-  const filteredMyTasks = useMemo(() => {
-    if (!appliedFilters) return myTasks;
-    
-    return myTasks.filter((project) => {
-      // Apply service owner filter
+    return projects.filter((project) => {
+      // Service filter (by service/project type)
+      if (appliedFilters.serviceFilter && appliedFilters.serviceFilter !== "all") {
+        if (project.projectTypeId !== appliedFilters.serviceFilter) return false;
+      }
+
+      // Service owner filter
       if (appliedFilters.serviceOwnerFilter && appliedFilters.serviceOwnerFilter !== "all") {
         if (project.projectOwnerId !== appliedFilters.serviceOwnerFilter) return false;
       }
       
-      // Apply assignee filter
+      // Task assignee filter
       if (appliedFilters.taskAssigneeFilter && appliedFilters.taskAssigneeFilter !== "all") {
         if (project.currentAssigneeId !== appliedFilters.taskAssigneeFilter) return false;
       }
-      
-      // Apply status filter (if exists in dashboard filters)
-      if (appliedFilters.statusFilter && appliedFilters.statusFilter !== "all") {
-        if (project.currentStatus !== appliedFilters.statusFilter) return false;
+
+      // User filter (either owner or assignee)
+      if (appliedFilters.userFilter && appliedFilters.userFilter !== "all") {
+        const matchesOwner = project.projectOwnerId === appliedFilters.userFilter;
+        const matchesAssignee = project.currentAssigneeId === appliedFilters.userFilter;
+        if (!matchesOwner && !matchesAssignee) return false;
+      }
+
+      // Archive filter - check the archived flag, not deletedAt
+      if (!appliedFilters.showArchived && project.archived) return false;
+
+      // Dynamic date filter
+      if (appliedFilters.dynamicDateFilter && appliedFilters.dynamicDateFilter !== "all") {
+        const now = new Date();
+        const projectDate = project.startDate ? new Date(project.startDate) : null;
+        
+        if (!projectDate) return false;
+
+        switch (appliedFilters.dynamicDateFilter) {
+          case "today":
+            if (projectDate.toDateString() !== now.toDateString()) return false;
+            break;
+          case "yesterday":
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (projectDate.toDateString() !== yesterday.toDateString()) return false;
+            break;
+          case "this_week":
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() - now.getDay());
+            if (projectDate < weekStart) return false;
+            break;
+          case "last_week":
+            const lastWeekStart = new Date(now);
+            lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+            const lastWeekEnd = new Date(lastWeekStart);
+            lastWeekEnd.setDate(lastWeekEnd.getDate() + 7);
+            if (projectDate < lastWeekStart || projectDate >= lastWeekEnd) return false;
+            break;
+          case "this_month":
+            if (projectDate.getMonth() !== now.getMonth() || projectDate.getFullYear() !== now.getFullYear()) return false;
+            break;
+          case "last_month":
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
+            if (projectDate.getMonth() !== lastMonth.getMonth() || projectDate.getFullYear() !== lastMonth.getFullYear()) return false;
+            break;
+          case "this_year":
+            if (projectDate.getFullYear() !== now.getFullYear()) return false;
+            break;
+          case "custom":
+            if (appliedFilters.customDateRange) {
+              const from = appliedFilters.customDateRange.from;
+              const to = appliedFilters.customDateRange.to;
+              if (from && projectDate < from) return false;
+              if (to && projectDate > to) return false;
+            }
+            break;
+        }
       }
       
       return true;
     });
-  }, [myTasks, appliedFilters]);
+  };
+
+  const filteredMyProjects = useMemo(
+    () => applyDashboardFilters(myProjects),
+    [myProjects, appliedFilters]
+  );
+
+  const filteredMyTasks = useMemo(
+    () => applyDashboardFilters(myTasks),
+    [myTasks, appliedFilters]
+  );
 
   // Recalculate metrics based on filtered data when dashboard is selected
   const displayMetrics = useMemo(() => {
@@ -628,15 +685,38 @@ function MyDashboardPanel({ user }: { user: any }) {
     );
 
     // Calculate behind schedule from filtered projects
+    // Use a similar heuristic as backend: projects in current stage > 7 days
     const behindScheduleCount = uniqueFilteredProjects.filter(project => {
-      // Simple check: if project has been in current stage for a long time
-      // This is a simplified version - full calculation would need stage configs
-      return project.chronology && project.chronology.length > 0;
+      // Skip archived, inactive, or completed projects
+      if (project.archived || project.inactive || project.currentStatus === "completed") {
+        return false;
+      }
+
+      const chronology = project.chronology || [];
+      if (chronology.length === 0) return false;
+
+      // Sort chronology by timestamp descending (most recent first) and find entry for current status
+      const sortedChronology = [...chronology].sort((a, b) => 
+        new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+      );
+      
+      const lastEntry = sortedChronology.find(entry => entry.toStatus === project.currentStatus);
+      if (!lastEntry || !lastEntry.timestamp) return false;
+
+      // Consider projects stuck in a stage for more than 7 days as "behind schedule"
+      const timeInCurrentStageMs = Date.now() - new Date(lastEntry.timestamp).getTime();
+      const timeInCurrentStageDays = timeInCurrentStageMs / (1000 * 60 * 60 * 24);
+
+      return timeInCurrentStageDays > 7;
     }).length;
 
-    // Calculate late count from filtered projects
+    // Calculate late count from filtered projects (current date > due date)
     const now = new Date();
     const lateCount = uniqueFilteredProjects.filter(p => {
+      // Skip archived, inactive, or completed projects
+      if (p.archived || p.inactive || p.currentStatus === "completed") {
+        return false;
+      }
       if (!p.dueDate) return false;
       const dueDate = new Date(p.dueDate);
       return now > dueDate;
