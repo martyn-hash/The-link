@@ -2139,7 +2139,7 @@ export async function registerAuthAndMiscRoutes(
                 primaryEmail: row.person_primary_email || null,
               };
 
-              const [person] = await tx.insert(peopleTable).values(personData).returning();
+              const [person] = await tx.insert(peopleTable).values([personData]).returning();
               personId = person.id;
               personMap.set(row.person_ref, personId);
               stats.peopleCreated++;
@@ -2200,7 +2200,7 @@ export async function registerAuthAndMiscRoutes(
             isActive: row.is_active?.toLowerCase() !== 'no',
           };
 
-          const [clientService] = await tx.insert(clientServicesTable).values(clientServiceData).returning();
+          const [clientService] = await tx.insert(clientServicesTable).values([clientServiceData]).returning();
           const serviceKey = `${row.client_ref}|${row.service_name}`;
           clientServiceMap.set(serviceKey, clientService.id);
           stats.servicesCreated++;

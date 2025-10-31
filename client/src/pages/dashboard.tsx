@@ -614,7 +614,7 @@ function MyDashboardPanel({ user }: { user: any }) {
       // Dynamic date filter
       if (appliedFilters.dynamicDateFilter && appliedFilters.dynamicDateFilter !== "all") {
         const now = new Date();
-        const projectDate = project.startDate ? new Date(project.startDate) : null;
+        const projectDate = project.createdAt ? new Date(project.createdAt) : null;
         
         if (!projectDate) return false;
 
@@ -676,7 +676,11 @@ function MyDashboardPanel({ user }: { user: any }) {
 
   // Recalculate metrics based on filtered data when dashboard is selected
   const displayMetrics = useMemo(() => {
-    if (!appliedFilters || !metrics) return metrics;
+    // If no filters are applied (default view), use the metrics from API
+    if (!appliedFilters) return metrics;
+    
+    // If filters are applied but metrics haven't loaded yet, return undefined
+    if (!metrics) return undefined;
     
     // When a dashboard filter is active, recalculate metrics from filtered data
     const allFilteredProjects = [...filteredMyProjects, ...filteredMyTasks];
