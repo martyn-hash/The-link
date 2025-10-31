@@ -119,6 +119,7 @@ Preferred communication style: Simple, everyday language.
 - **Project Creation**: Automatically generates projects linked to services
 - **Frequency Support**: Daily, weekly, fortnightly, monthly, quarterly, annually
 - **Date Advancement**: Updates `nextStartDate` and `nextDueDate` based on service frequency
+- **Intended Day Tracking** (Oct 2025): Services scheduled for 29th, 30th, or 31st now persist their intended day in `intendedStartDay` and `intendedDueDay` columns. When advancing to shorter months (e.g., 31 Oct → 30 Nov), the system uses the latest available day but reverts to the originally intended day in subsequent months (30 Nov → 31 Dec). This prevents skipping billing/payroll cycles. Auto-detected on first reschedule for backwards compatibility.
 
 **Companies House Integration**
 - Special handling for CH-connected services (accounts, confirmation statements)
