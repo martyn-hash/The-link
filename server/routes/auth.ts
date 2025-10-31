@@ -24,6 +24,13 @@ import {
   updateRiskAssessmentSchema,
   insertRiskAssessmentResponseSchema,
   clientPortalUsers,
+  clients as clientsTable,
+  people as peopleTable,
+  clientPeople as clientPeopleTable,
+  clientServices as clientServicesTable,
+  clientServiceRoleAssignments as clientServiceRoleAssignmentsTable,
+  type InsertPerson,
+  type InsertClientService,
 } from "@shared/schema";
 
 // Analytics query schema
@@ -1924,38 +1931,182 @@ export async function registerAuthAndMiscRoutes(
     try {
       const { clients, clientServices, roleAssignments } = req.body;
 
-      const result = {
-        success: true,
-        clientsCreated: 0,
-        peopleCreated: 0,
-        relationshipsCreated: 0,
-        servicesCreated: 0,
-        rolesAssigned: 0,
-        errors: [] as string[],
-      };
+      console.log("=== Import Execution Request ===");
+      console.log("Clients count:", clients?.length || 0);
+      console.log("Client Services count:", clientServices?.length || 0);
+      console.log("Role Assignments count:", roleAssignments?.length || 0);
 
-      // Maps for tracking created entities
-      const clientMap = new Map<string, string>(); // client_ref -> client_id
-      const personMap = new Map<string, string>(); // person_ref -> person_id
+      // ============================================
+      // STEP 1: COMPREHENSIVE PRE-VALIDATION
+      // ============================================
+      // Validate everything BEFORE starting the transaction
+      // This ensures we fail fast with clear errors before touching the database
 
-      // Process clients and people
+      const validationErrors: string[] = [];
+      const clientRefs = new Set<string>();
+      const personRefs = new Set<string>();
+
+      // Validate client data structure and collect refs
       for (const row of clients || []) {
-        try {
+        if (!row.client_ref) validationErrors.push("Missing client_ref in clients data");
+        if (!row.client_name) validationErrors.push(`Missing client_name for ${row.client_ref || 'unknown'}`);
+        if (!row.client_type) validationErrors.push(`Missing client_type for ${row.client_ref || 'unknown'}`);
+        if (row.client_type && !['company', 'individual'].includes(row.client_type)) {
+          validationErrors.push(`Invalid client_type for ${row.client_ref}. Must be 'company' or 'individual'`);
+        }
+
+        if (row.client_ref) clientRefs.add(row.client_ref);
+        if (row.person_ref) personRefs.add(row.person_ref);
+
+        if (!row.person_full_name && row.person_ref) {
+          validationErrors.push(`Missing person_full_name for ${row.person_ref}`);
+        }
+      }
+
+      // Validate client services structure and verify references
+      const serviceLookup = new Map<string, any>(); // Cache service lookups
+      const userLookup = new Map<string, any>(); // Cache user lookups
+
+      for (const row of clientServices || []) {
+        if (!row.client_ref) {
+          validationErrors.push("Missing client_ref in services data");
+        } else if (!clientRefs.has(row.client_ref)) {
+          validationErrors.push(`Client ref ${row.client_ref} in services not found in clients data`);
+        }
+
+        if (!row.service_name) {
+          validationErrors.push(`Missing service_name for ${row.client_ref}`);
+        } else {
+          // Verify service exists (cache the result)
+          if (!serviceLookup.has(row.service_name)) {
+            const service = await storage.getServiceByName(row.service_name);
+            if (!service) {
+              const allServices = await storage.getAllServices();
+              const serviceNames = allServices.map(s => s.name).slice(0, 5).join(', ');
+              validationErrors.push(`Service "${row.service_name}" not found in system. Available services include: ${serviceNames}...`);
+            } else {
+              serviceLookup.set(row.service_name, service);
+            }
+          }
+        }
+
+        if (!row.frequency) {
+          validationErrors.push(`Missing frequency for ${row.client_ref} - ${row.service_name}`);
+        } else if (!['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'annually'].includes(row.frequency)) {
+          validationErrors.push(`Invalid frequency for ${row.client_ref}. Must be one of: daily, weekly, fortnightly, monthly, quarterly, annually`);
+        }
+
+        // Verify service owner exists if provided
+        if (row.service_owner_email) {
+          if (!userLookup.has(row.service_owner_email)) {
+            const user = await storage.getUserByEmail(row.service_owner_email);
+            if (!user) {
+              validationErrors.push(`User with email "${row.service_owner_email}" not found in system`);
+            } else {
+              userLookup.set(row.service_owner_email, user);
+            }
+          }
+        }
+      }
+
+      // Validate role assignments and verify references
+      const workRoleLookup = new Map<string, any>(); // Cache work role lookups
+
+      for (const row of roleAssignments || []) {
+        if (!row.client_ref) {
+          validationErrors.push("Missing client_ref in role assignments");
+        } else if (!clientRefs.has(row.client_ref)) {
+          validationErrors.push(`Client ref ${row.client_ref} in role assignments not found in clients data`);
+        }
+
+        if (!row.service_name) validationErrors.push(`Missing service_name for ${row.client_ref}`);
+        if (!row.work_role_name) validationErrors.push(`Missing work_role_name for ${row.client_ref} - ${row.service_name}`);
+        if (!row.assigned_user_email) validationErrors.push(`Missing assigned_user_email for ${row.client_ref} - ${row.service_name} - ${row.work_role_name}`);
+
+        // Verify work role exists
+        if (row.work_role_name) {
+          if (!workRoleLookup.has(row.work_role_name)) {
+            const workRole = await storage.getWorkRoleByName(row.work_role_name);
+            if (!workRole) {
+              const allWorkRoles = await storage.getAllWorkRoles();
+              const roleNames = allWorkRoles.map(r => r.name).slice(0, 5).join(', ');
+              validationErrors.push(`Work role "${row.work_role_name}" not found in system. Available roles include: ${roleNames}...`);
+            } else {
+              workRoleLookup.set(row.work_role_name, workRole);
+            }
+          }
+        }
+
+        // Verify assigned user exists
+        if (row.assigned_user_email) {
+          if (!userLookup.has(row.assigned_user_email)) {
+            const user = await storage.getUserByEmail(row.assigned_user_email);
+            if (!user) {
+              validationErrors.push(`User with email "${row.assigned_user_email}" not found in system`);
+            } else {
+              userLookup.set(row.assigned_user_email, user);
+            }
+          }
+        }
+      }
+
+      // If there are ANY validation errors, stop immediately before touching the database
+      if (validationErrors.length > 0) {
+        console.log("Validation failed with errors:", validationErrors);
+        return res.status(400).json({
+          success: false,
+          message: "Import validation failed. No data has been imported.",
+          errors: validationErrors,
+          clientsCreated: 0,
+          peopleCreated: 0,
+          relationshipsCreated: 0,
+          servicesCreated: 0,
+          rolesAssigned: 0,
+        });
+      }
+
+      console.log("Pre-validation passed. Starting transactional import...");
+
+      // ============================================
+      // STEP 2: TRANSACTIONAL IMPORT
+      // ============================================
+      // All database operations happen in a single transaction
+      // If ANYTHING fails, the entire transaction is rolled back
+
+      const result = await db.transaction(async (tx) => {
+        const stats = {
+          success: true,
+          clientsCreated: 0,
+          peopleCreated: 0,
+          relationshipsCreated: 0,
+          servicesCreated: 0,
+          rolesAssigned: 0,
+          errors: [] as string[],
+        };
+
+        // Maps for tracking created entities within this transaction
+        const clientMap = new Map<string, string>(); // client_ref -> client_id
+        const personMap = new Map<string, string>(); // person_ref -> person_id
+        const clientServiceMap = new Map<string, string>(); // "client_ref|service_name" -> client_service_id
+
+        // Import clients and people
+        for (const row of clients || []) {
           // Create or get client
           let clientId = clientMap.get(row.client_ref);
 
           if (!clientId) {
             const clientData = {
               name: row.client_name,
-              email: row.client_email,
+              email: row.client_email || null,
               clientType: row.client_type,
               companyNumber: row.company_number || null,
             };
 
-            const client = await storage.createClient(clientData);
+            // Use tx instead of db for transaction-scoped operations
+            const [client] = await tx.insert(clientsTable).values(clientData).returning();
             clientId = client.id;
             clientMap.set(row.client_ref, clientId);
-            result.clientsCreated++;
+            stats.clientsCreated++;
           }
 
           // Create or get person
@@ -1963,7 +2114,7 @@ export async function registerAuthAndMiscRoutes(
             let personId = personMap.get(row.person_ref);
 
             if (!personId) {
-              const personData = {
+              const personData: InsertPerson = {
                 fullName: row.person_full_name,
                 email: row.person_email || null,
                 telephone: row.person_telephone || null,
@@ -1971,44 +2122,38 @@ export async function registerAuthAndMiscRoutes(
                 primaryEmail: row.person_primary_email || null,
               };
 
-              const person = await storage.createPerson(personData);
+              const [person] = await tx.insert(peopleTable).values(personData).returning();
               personId = person.id;
               personMap.set(row.person_ref, personId);
-              result.peopleCreated++;
+              stats.peopleCreated++;
             }
 
-            // Create relationship
-            await storage.linkPersonToClient(
+            // Create client-person relationship
+            await tx.insert(clientPeopleTable).values({
               clientId,
               personId,
-              row.officer_role || undefined,
-              row.is_primary_contact?.toLowerCase() === 'yes'
-            );
-            result.relationshipsCreated++;
+              officerRole: row.officer_role || null,
+              isPrimaryContact: row.is_primary_contact?.toLowerCase() === 'yes',
+            });
+            stats.relationshipsCreated++;
           }
-        } catch (error) {
-          result.errors.push(`Error processing client ${row.client_ref}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-      }
 
-      // Process client services
-      for (const row of clientServices || []) {
-        try {
+        // Import client services
+        for (const row of clientServices || []) {
           const clientId = clientMap.get(row.client_ref);
           if (!clientId) {
-            result.errors.push(`Client ref ${row.client_ref} not found when processing services`);
-            continue;
+            throw new Error(`Client ref ${row.client_ref} not found - this should have been caught in validation`);
           }
 
-          const service = await storage.getServiceByName(row.service_name);
+          const service = serviceLookup.get(row.service_name);
           if (!service) {
-            result.errors.push(`Service "${row.service_name}" not found`);
-            continue;
+            throw new Error(`Service "${row.service_name}" not found - this should have been caught in validation`);
           }
 
           let serviceOwnerId = null;
           if (row.service_owner_email) {
-            const user = await storage.getUserByEmail(row.service_owner_email);
+            const user = userLookup.get(row.service_owner_email);
             if (user) {
               serviceOwnerId = user.id;
             }
@@ -2028,7 +2173,7 @@ export async function registerAuthAndMiscRoutes(
           const nextStartDate = parseDate(row.next_start_date);
           const nextDueDate = parseDate(row.next_due_date);
 
-          const clientServiceData = {
+          const clientServiceData: InsertClientService = {
             clientId,
             serviceId: service.id,
             serviceOwnerId,
@@ -2038,41 +2183,55 @@ export async function registerAuthAndMiscRoutes(
             isActive: row.is_active?.toLowerCase() !== 'no',
           };
 
-          const clientService = await storage.createClientService(clientServiceData);
-          result.servicesCreated++;
-
-          // Process role assignments for this service
-          const serviceRoleAssignments = roleAssignments?.filter(
-            (ra: any) => ra.client_ref === row.client_ref && ra.service_name === row.service_name
-          ) || [];
-
-          for (const roleRow of serviceRoleAssignments) {
-            try {
-              const workRole = await storage.getWorkRoleByName(roleRow.work_role_name);
-              const user = await storage.getUserByEmail(roleRow.assigned_user_email);
-
-              if (workRole && user) {
-                await storage.createClientServiceRoleAssignment({
-                  clientServiceId: clientService.id,
-                  workRoleId: workRole.id,
-                  userId: user.id,
-                  isActive: roleRow.is_active?.toLowerCase() !== 'no',
-                });
-                result.rolesAssigned++;
-              }
-            } catch (error) {
-              result.errors.push(`Error assigning role for ${row.client_ref} - ${row.service_name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
-          }
-        } catch (error) {
-          result.errors.push(`Error processing service for ${row.client_ref}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          const [clientService] = await tx.insert(clientServicesTable).values(clientServiceData).returning();
+          const serviceKey = `${row.client_ref}|${row.service_name}`;
+          clientServiceMap.set(serviceKey, clientService.id);
+          stats.servicesCreated++;
         }
-      }
 
+        // Import role assignments
+        for (const row of roleAssignments || []) {
+          const serviceKey = `${row.client_ref}|${row.service_name}`;
+          const clientServiceId = clientServiceMap.get(serviceKey);
+          
+          if (!clientServiceId) {
+            throw new Error(`Client service not found for ${serviceKey} - this should have been caught earlier`);
+          }
+
+          const workRole = workRoleLookup.get(row.work_role_name);
+          const user = userLookup.get(row.assigned_user_email);
+
+          if (!workRole || !user) {
+            throw new Error(`Work role or user not found - this should have been caught in validation`);
+          }
+
+          await tx.insert(clientServiceRoleAssignmentsTable).values({
+            clientServiceId,
+            workRoleId: workRole.id,
+            userId: user.id,
+            isActive: row.is_active?.toLowerCase() !== 'no',
+          });
+          stats.rolesAssigned++;
+        }
+
+        return stats;
+      });
+
+      console.log("Transactional import completed successfully:", result);
       res.json(result);
+
     } catch (error) {
-      console.error("Import error:", error);
-      res.status(500).json({ message: "Import failed", errors: [error instanceof Error ? error.message : 'Unknown error'] });
+      console.error("Import transaction failed and was rolled back:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Import failed. No data has been imported due to an error.",
+        errors: [error instanceof Error ? error.message : 'Unknown error'],
+        clientsCreated: 0,
+        peopleCreated: 0,
+        relationshipsCreated: 0,
+        servicesCreated: 0,
+        rolesAssigned: 0,
+      });
     }
   });
 
