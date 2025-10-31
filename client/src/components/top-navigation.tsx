@@ -173,7 +173,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       )}
                     </div>
 
-                    {/* Column 2: Messages, Internal Chat, Client Requests, Companies, People */}
+                    {/* Column 2: Messages, Internal Chat, Client Requests */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/messages" className="w-full">
@@ -216,6 +216,30 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
+                    </div>
+
+                    {/* Column 3: User Profile, Companies, People */}
+                    <div className="space-y-1">
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-user-profile">
+                            <Avatar className="w-8 h-8 shrink-0">
+                              <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
+                              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+                                {getUserInitials()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm truncate">
+                                {getUserDisplayName()}
+                                {isImpersonating && (
+                                  <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
                       {(user?.isAdmin || user?.canSeeAdminMenu) && (
                         <>
                           <DropdownMenuItem asChild>
@@ -244,44 +268,6 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </DropdownMenuItem>
                         </>
                       )}
-                    </div>
-
-                    {/* Column 3: User Profile, Sign Out */}
-                    <div className="space-y-1">
-                      <DropdownMenuItem asChild>
-                        <Link href="/profile" className="w-full">
-                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-user-profile">
-                            <Avatar className="w-8 h-8 shrink-0">
-                              <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
-                              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                                {getUserInitials()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground text-sm truncate">
-                                {getUserDisplayName()}
-                                {isImpersonating && (
-                                  <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <button 
-                          onClick={handleLogout}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors text-left"
-                          data-testid="button-logout"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
-                            <Settings className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-foreground text-sm">Sign Out</div>
-                          </div>
-                        </button>
-                      </DropdownMenuItem>
                     </div>
                   </div>
                 </div>
