@@ -445,9 +445,9 @@ export default function InternalChat() {
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-0">
               {threadsLoading ? (
-                <div className="p-4 space-y-3">
+                <div className="p-4 space-y-2">
                   {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-20 w-full" />
+                    <Skeleton key={i} className="h-14 w-full" />
                   ))}
                 </div>
               ) : filteredThreads && filteredThreads.length > 0 ? (
@@ -456,30 +456,24 @@ export default function InternalChat() {
                     <button
                       key={thread.id}
                       onClick={() => setSelectedThreadId(thread.id)}
-                      className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
+                      className={`w-full text-left p-2 hover:bg-muted/50 transition-colors ${
                         selectedThreadId === thread.id ? 'bg-muted' : ''
                       }`}
                       data-testid={`thread-item-${thread.id}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                            <span className="font-medium text-sm truncate" data-testid={`text-company-${thread.id}`}>
-                              {thread.client.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <FolderKanban className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                             <span className="text-sm text-muted-foreground truncate" data-testid={`text-project-${thread.id}`}>
                               {thread.project.description}
                             </span>
                           </div>
-                          <p className="font-semibold text-sm mt-2 truncate" data-testid={`text-topic-${thread.id}`}>
+                          <p className="font-semibold text-sm mt-0.5 truncate" data-testid={`text-topic-${thread.id}`}>
                             {thread.topic}
                           </p>
                           {thread.lastMessage && (
-                            <p className="text-xs text-muted-foreground truncate mt-1">
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
                               {thread.lastMessage.content}
                             </p>
                           )}
@@ -489,9 +483,7 @@ export default function InternalChat() {
                             {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
                           </span>
                           {thread.unreadCount > 0 && (
-                            <Badge variant="default" className="text-xs" data-testid={`badge-unread-${thread.id}`}>
-                              {thread.unreadCount}
-                            </Badge>
+                            <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
                           )}
                         </div>
                       </div>
