@@ -60,9 +60,15 @@ function Router() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#0A7BBF]/10 via-white to-[#76CA23]/10 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <img 
+            src="/attached_assets/full_logo_transparent_600_1761924125378.png" 
+            alt="Growth Accountants" 
+            className="h-20 mx-auto mb-6 animate-pulse"
+          />
+          <h1 className="text-2xl font-bold text-[#0A7BBF] dark:text-[#76CA23] mb-4">The Link</h1>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0A7BBF] dark:border-[#76CA23] mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>

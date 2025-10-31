@@ -8,7 +8,7 @@ import { BarChart3, Users, Clock, CheckCircle, Settings, LogIn } from "lucide-re
 import MagicLinkLoginForm from "@/components/magic-link-login-form";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import logoPath from "@assets/resized_logo_1758262615320.png";
+import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 export default function Landing() {
   const [adminFormOpen, setAdminFormOpen] = useState(false);
