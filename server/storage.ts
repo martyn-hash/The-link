@@ -714,6 +714,13 @@ export interface IStorage {
   createProjectMessageThread(thread: InsertProjectMessageThread): Promise<ProjectMessageThread>;
   getProjectMessageThreadById(id: string): Promise<ProjectMessageThread | undefined>;
   getProjectMessageThreadsByProjectId(projectId: string): Promise<ProjectMessageThread[]>;
+  getProjectMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<ProjectMessageThread & {
+    project: { id: string; description: string; clientId: string };
+    client: { id: string; name: string };
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>>;
   updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread>;
   deleteProjectMessageThread(id: string): Promise<void>;
   archiveProjectMessageThread(id: string, archivedBy: string): Promise<ProjectMessageThread>;
@@ -8639,6 +8646,103 @@ export class DatabaseStorage implements IStorage {
       .where(eq(projectMessageThreads.projectId, projectId))
       .orderBy(desc(projectMessageThreads.lastMessageAt));
     return threads;
+  }
+
+  async getProjectMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<ProjectMessageThread & {
+    project: { id: string; description: string; clientId: string };
+    client: { id: string; name: string };
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>> {
+    const participantRecords = await db
+      .select({
+        threadId: projectMessageParticipants.threadId,
+        lastReadAt: projectMessageParticipants.lastReadAt,
+      })
+      .from(projectMessageParticipants)
+      .where(eq(projectMessageParticipants.userId, userId));
+
+    const threadIds = participantRecords.map(p => p.threadId);
+    
+    if (threadIds.length === 0) {
+      return [];
+    }
+
+    let whereConditions = [inArray(projectMessageThreads.id, threadIds)];
+    
+    if (!filters?.includeArchived) {
+      whereConditions.push(eq(projectMessageThreads.isArchived, false));
+    }
+
+    const threadsData = await db
+      .select({
+        thread: projectMessageThreads,
+        project: projects,
+        client: clients,
+      })
+      .from(projectMessageThreads)
+      .innerJoin(projects, eq(projectMessageThreads.projectId, projects.id))
+      .innerJoin(clients, eq(projects.clientId, clients.id))
+      .where(and(...whereConditions))
+      .orderBy(desc(projectMessageThreads.lastMessageAt));
+
+    const enrichedThreads = await Promise.all(threadsData.map(async (row) => {
+      const participantRecord = participantRecords.find(p => p.threadId === row.thread.id);
+      
+      const unreadCountResult = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(projectMessages)
+        .where(and(
+          eq(projectMessages.threadId, row.thread.id),
+          ne(projectMessages.userId, userId),
+          participantRecord?.lastReadAt 
+            ? sql`${projectMessages.createdAt} > ${participantRecord.lastReadAt}`
+            : sql`true`
+        ));
+      
+      const lastMessageResult = await db
+        .select({
+          content: projectMessages.content,
+          createdAt: projectMessages.createdAt,
+          userId: projectMessages.userId,
+        })
+        .from(projectMessages)
+        .where(eq(projectMessages.threadId, row.thread.id))
+        .orderBy(desc(projectMessages.createdAt))
+        .limit(1);
+
+      const threadParticipants = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(projectMessageParticipants)
+        .innerJoin(users, eq(projectMessageParticipants.userId, users.id))
+        .where(eq(projectMessageParticipants.threadId, row.thread.id));
+
+      return {
+        ...row.thread,
+        project: {
+          id: row.project.id,
+          description: row.project.description,
+          clientId: row.project.clientId,
+        },
+        client: {
+          id: row.client.id,
+          name: row.client.name,
+        },
+        unreadCount: unreadCountResult[0]?.count || 0,
+        lastMessage: lastMessageResult[0] || null,
+        participants: threadParticipants,
+      };
+    }));
+
+    return enrichedThreads;
   }
 
   async updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread> {

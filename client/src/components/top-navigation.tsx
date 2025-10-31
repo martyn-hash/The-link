@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,22 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
   const [location] = useLocation();
   const { isImpersonating } = useAuth();
   const isMobile = useIsMobile();
+
+  // Fetch unread internal chat count
+  const { data: internalChatThreads } = useQuery<Array<{ unreadCount: number }>>({
+    queryKey: ['/api/project-messages/my-threads', { includeArchived: false }],
+    queryFn: async () => {
+      const response = await fetch('/api/project-messages/my-threads?includeArchived=false', {
+        credentials: 'include'
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+
+  const internalChatUnreadCount = internalChatThreads?.reduce((sum, thread) => sum + thread.unreadCount, 0) || 0;
 
   const getUserInitials = () => {
     if (!user) return "U";
@@ -156,7 +173,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       )}
                     </div>
 
-                    {/* Column 2: Messages, Client Requests, Companies, People */}
+                    {/* Column 2: Messages, Internal Chat, Client Requests, Companies, People */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/messages" className="w-full">
@@ -166,6 +183,23 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Messages</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/internal-chat" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-internal-chat-menu">
+                            <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
+                              <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Internal Chat</div>
+                              {internalChatUnreadCount > 0 && (
+                                <Badge variant="default" className="ml-2 text-xs" data-testid="badge-internal-chat-unread">
+                                  {internalChatUnreadCount}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </Link>

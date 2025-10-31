@@ -734,6 +734,21 @@ export function registerMessageRoutes(
   // PROJECT MESSAGING ROUTES (Staff Only)
   // ==================================================
 
+  // Get all threads the user participates in across all projects
+  app.get("/api/project-messages/my-threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const includeArchived = req.query.includeArchived === 'true';
+
+      const threads = await storage.getProjectMessageThreadsForUser(effectiveUserId, { includeArchived });
+      
+      res.json(threads);
+    } catch (error) {
+      console.error("Error fetching user's project message threads:", error);
+      res.status(500).json({ message: "Failed to fetch threads" });
+    }
+  });
+
   // Get all threads for a project (only threads where user is a participant)
   app.get("/api/internal/project-messages/threads/:projectId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
