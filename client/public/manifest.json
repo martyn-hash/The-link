@@ -1,8 +1,8 @@
 {
-  "name": "The Link",
+  "name": "The Link - Growth Accountants",
   "short_name": "The Link",
-  "description": "Bookkeeping workflow management",
-  "theme_color": "#0c7cba",
+  "description": "Growth Accountants workflow management platform",
+  "theme_color": "#0A7BBF",
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
