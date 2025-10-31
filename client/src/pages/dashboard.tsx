@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 // Navigation handled via window.location.href for reliability
 import { useAuth } from "@/hooks/useAuth";
@@ -582,7 +582,7 @@ function MyDashboardPanel({ user }: { user: any }) {
   }, [selectedDashboard, selectedDashboardId]);
 
   // Filter projects based on selected dashboard (comprehensive filtering)
-  const applyDashboardFilters = (projects: ProjectWithRelations[]) => {
+  const applyDashboardFilters = useCallback((projects: ProjectWithRelations[]) => {
     if (!appliedFilters) return projects;
 
     return projects.filter((project) => {
@@ -662,16 +662,16 @@ function MyDashboardPanel({ user }: { user: any }) {
       
       return true;
     });
-  };
+  }, [appliedFilters]);
 
   const filteredMyProjects = useMemo(
     () => applyDashboardFilters(myProjects),
-    [myProjects, appliedFilters]
+    [myProjects, applyDashboardFilters]
   );
 
   const filteredMyTasks = useMemo(
     () => applyDashboardFilters(myTasks),
-    [myTasks, appliedFilters]
+    [myTasks, applyDashboardFilters]
   );
 
   // Recalculate metrics based on filtered data when dashboard is selected
