@@ -524,6 +524,9 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
 
 
 function MyDashboardPanel({ user }: { user: any }) {
+  const [loadedFilters, setLoadedFilters] = useState<any>(null);
+  const { toast } = useToast();
+  
   // Fetch all projects for the current user
   const { data: allProjects = [], isLoading: projectsLoading } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects"],
@@ -544,16 +547,35 @@ function MyDashboardPanel({ user }: { user: any }) {
   }, [allProjects, user.id]);
 
   const handleLoadView = (view: any) => {
-    // When a saved view is loaded, you could navigate to the projects page with those filters
-    // For now, we'll just show a toast notification
-    console.log("Loaded view:", view);
+    // Parse and apply the saved view filters to the mini table
+    const filters = typeof view.filters === 'string' 
+      ? JSON.parse(view.filters) 
+      : view.filters as any;
+    
+    setLoadedFilters(filters);
+    toast({
+      title: "View Loaded",
+      description: `Applied filters from "${view.name}"`,
+    });
   };
 
   const handleLoadDashboard = (dashboard: any) => {
-    // When a dashboard is loaded, navigate to the projects page in dashboard mode
-    console.log("Loaded dashboard:", dashboard);
-    // You could navigate to /projects with the dashboard configuration
-    window.location.href = '/projects';
+    // For dashboards, we can either navigate or just show a message
+    // Since dashboards have widgets that can't be shown in the mini table,
+    // we'll show a helpful message suggesting to visit the projects page
+    toast({
+      title: "Dashboard Selected",
+      description: `"${dashboard.name}" contains custom widgets. Visit the Projects page to view the full dashboard.`,
+      action: (
+        <Button 
+          size="sm" 
+          variant="outline"
+          onClick={() => window.location.href = '/projects'}
+        >
+          Go to Projects
+        </Button>
+      ),
+    });
   };
 
   if (projectsLoading) {
@@ -572,7 +594,11 @@ function MyDashboardPanel({ user }: { user: any }) {
   return (
     <div className="space-y-6">
       {/* Mini Projects Table */}
-      <MiniProjectsTable projects={userProjects} user={user} />
+      <MiniProjectsTable 
+        projects={userProjects} 
+        user={user}
+        externalFilters={loadedFilters}
+      />
 
       {/* Data View Selector */}
       <DataViewSelector 

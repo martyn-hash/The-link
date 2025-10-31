@@ -25,7 +25,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, Clock, User as UserIcon, Calendar, Building2, Settings2, GripVertical, AlertCircle, Timer, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Eye, Clock, User as UserIcon, Calendar as CalendarIcon, Building2, Settings2, GripVertical, AlertCircle, Timer, ChevronLeft, ChevronRight, Filter, Archive, Users, Briefcase } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
@@ -51,6 +61,7 @@ import { CSS } from "@dnd-kit/utilities";
 interface MiniProjectsTableProps {
   projects: ProjectWithRelations[];
   user: User;
+  externalFilters?: any; // External filters from loaded views/dashboards
 }
 
 // Column configuration
@@ -166,7 +177,7 @@ function SortableColumnHeader({ column, sortBy, sortOrder, onSort, width, onResi
   );
 }
 
-export default function MiniProjectsTable({ projects, user }: MiniProjectsTableProps) {
+export default function MiniProjectsTable({ projects, user, externalFilters }: MiniProjectsTableProps) {
   const [, setLocation] = useLocation();
   const [sortBy, setSortBy] = useState<string>("timeInStage");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -177,8 +188,15 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
 
   // Filter states
   const [serviceFilter, setServiceFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<string>("all");
+  const [serviceOwnerFilter, setServiceOwnerFilter] = useState<string>("all");
+  const [userFilter, setUserFilter] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState<boolean>(false);
+  const [dynamicDateFilter, setDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom">("all");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
 
   // Fetch all services for filter dropdown
   const { data: allServices = [] } = useQuery<Array<{ id: string; name: string }>>({
@@ -186,6 +204,14 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
     enabled: !!user,
     retry: false,
     select: (data: any[]) => data.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
+  });
+
+  // Fetch all users for filter dropdowns
+  const { data: users = [] } = useQuery<Array<{ id: string; firstName: string; lastName: string }>>({
+    queryKey: ["/api/users"],
+    enabled: !!user,
+    retry: false,
+    select: (data: any[]) => data.map((u: any) => ({ id: u.id, firstName: u.firstName || "", lastName: u.lastName || "" }))
   });
 
   // Fetch stage configurations for all unique project types
@@ -242,8 +268,12 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
     sortBy: string;
     sortOrder: "asc" | "desc";
     serviceFilter: string;
-    statusFilter: string;
-    dateFilter: string;
+    taskAssigneeFilter: string;
+    serviceOwnerFilter: string;
+    userFilter: string;
+    showArchived: boolean;
+    dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
+    customDateRange: { from: string | undefined; to: string | undefined };
   }
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -298,14 +328,41 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
         if (state.sortBy) setSortBy(state.sortBy);
         if (state.sortOrder) setSortOrder(state.sortOrder);
         if (state.serviceFilter) setServiceFilter(state.serviceFilter);
-        if (state.statusFilter) setStatusFilter(state.statusFilter);
-        if (state.dateFilter) setDateFilter(state.dateFilter);
+        if (state.taskAssigneeFilter) setTaskAssigneeFilter(state.taskAssigneeFilter);
+        if (state.serviceOwnerFilter) setServiceOwnerFilter(state.serviceOwnerFilter);
+        if (state.userFilter) setUserFilter(state.userFilter);
+        if (state.showArchived !== undefined) setShowArchived(state.showArchived);
+        if (state.dynamicDateFilter) setDynamicDateFilter(state.dynamicDateFilter);
+        if (state.customDateRange) {
+          setCustomDateRange({
+            from: state.customDateRange.from ? new Date(state.customDateRange.from) : undefined,
+            to: state.customDateRange.to ? new Date(state.customDateRange.to) : undefined,
+          });
+        }
       }
     } catch (error) {
       console.error("Failed to parse saved filter state from localStorage:", error);
       localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
+
+  // Apply external filters from loaded views/dashboards
+  useEffect(() => {
+    if (externalFilters) {
+      if (externalFilters.serviceFilter) setServiceFilter(externalFilters.serviceFilter);
+      if (externalFilters.taskAssigneeFilter) setTaskAssigneeFilter(externalFilters.taskAssigneeFilter);
+      if (externalFilters.serviceOwnerFilter) setServiceOwnerFilter(externalFilters.serviceOwnerFilter);
+      if (externalFilters.userFilter) setUserFilter(externalFilters.userFilter);
+      if (externalFilters.showArchived !== undefined) setShowArchived(externalFilters.showArchived);
+      if (externalFilters.dynamicDateFilter) setDynamicDateFilter(externalFilters.dynamicDateFilter);
+      if (externalFilters.customDateRange) {
+        setCustomDateRange({
+          from: externalFilters.customDateRange.from ? new Date(externalFilters.customDateRange.from) : undefined,
+          to: externalFilters.customDateRange.to ? new Date(externalFilters.customDateRange.to) : undefined,
+        });
+      }
+    }
+  }, [externalFilters]);
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
@@ -316,11 +373,18 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
       sortBy,
       sortOrder,
       serviceFilter,
-      statusFilter,
-      dateFilter,
+      taskAssigneeFilter,
+      serviceOwnerFilter,
+      userFilter,
+      showArchived,
+      dynamicDateFilter,
+      customDateRange: {
+        from: customDateRange.from ? customDateRange.from.toISOString() : undefined,
+        to: customDateRange.to ? customDateRange.to.toISOString() : undefined,
+      },
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [columnOrder, visibleColumns, columnWidths, sortBy, sortOrder, serviceFilter, statusFilter, dateFilter]);
+  }, [columnOrder, visibleColumns, columnWidths, sortBy, sortOrder, serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, customDateRange]);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -518,23 +582,40 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
 
   // Apply filters
   const filteredProjects = projects.filter(project => {
+    // Archived filter
+    if (!showArchived && project.archived) return false;
+    
     // Service filter
     if (serviceFilter !== "all") {
       if (project.projectType?.service?.id !== serviceFilter) return false;
     }
 
-    // Status filter
-    if (statusFilter !== "all") {
-      if (project.currentStatus !== statusFilter) return false;
+    // Task Assignee filter (current assignee)
+    if (taskAssigneeFilter !== "all") {
+      if (project.currentAssigneeId !== taskAssigneeFilter) return false;
+    }
+
+    // Service Owner filter (project owner)
+    if (serviceOwnerFilter !== "all") {
+      if (project.projectOwnerId !== serviceOwnerFilter) return false;
+    }
+
+    // User/Creator filter (client manager, bookkeeper, or project owner)
+    if (userFilter !== "all") {
+      const matchesUser = project.clientManagerId === userFilter ||
+                         project.bookkeeperId === userFilter ||
+                         project.projectOwnerId === userFilter ||
+                         project.currentAssigneeId === userFilter;
+      if (!matchesUser) return false;
     }
 
     // Date filter
-    if (dateFilter !== "all" && project.dueDate) {
+    if (dynamicDateFilter !== "all" && project.dueDate) {
       const dueDate = new Date(project.dueDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      switch (dateFilter) {
+      switch (dynamicDateFilter) {
         case "overdue":
           if (dueDate >= today) return false;
           break;
@@ -547,6 +628,25 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
           const next7Days = new Date(today);
           next7Days.setDate(next7Days.getDate() + 7);
           if (dueDate < today || dueDate > next7Days) return false;
+          break;
+        case "next14days":
+          const next14Days = new Date(today);
+          next14Days.setDate(next14Days.getDate() + 14);
+          if (dueDate < today || dueDate > next14Days) return false;
+          break;
+        case "next30days":
+          const next30Days = new Date(today);
+          next30Days.setDate(next30Days.getDate() + 30);
+          if (dueDate < today || dueDate > next30Days) return false;
+          break;
+        case "custom":
+          if (customDateRange.from && customDateRange.to) {
+            const fromDate = new Date(customDateRange.from);
+            const toDate = new Date(customDateRange.to);
+            fromDate.setHours(0, 0, 0, 0);
+            toDate.setHours(23, 59, 59, 999);
+            if (dueDate < fromDate || dueDate > toDate) return false;
+          }
           break;
       }
     }
@@ -668,7 +768,7 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
       case "dueDate":
         return (
           <div className="flex items-center space-x-1">
-            <Calendar className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+            <CalendarIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
             <span className="text-xs" data-testid={`text-due-date-${project.id}`}>
               {formatDate(project.dueDate)}
             </span>
@@ -742,8 +842,11 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
   const activeFilterCount = () => {
     let count = 0;
     if (serviceFilter !== "all") count++;
-    if (statusFilter !== "all") count++;
-    if (dateFilter !== "all") count++;
+    if (taskAssigneeFilter !== "all") count++;
+    if (serviceOwnerFilter !== "all") count++;
+    if (userFilter !== "all") count++;
+    if (showArchived) count++;
+    if (dynamicDateFilter !== "all") count++;
     return count;
   };
 
@@ -768,13 +871,17 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent data-testid="dialog-filters" className="max-w-md">
+              <DialogContent data-testid="dialog-filters" className="max-w-md max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Filters</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-4 py-2">
+                  {/* Service Filter */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Service</label>
+                    <Label className="flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Service
+                    </Label>
                     <Select value={serviceFilter} onValueChange={setServiceFilter}>
                       <SelectTrigger data-testid="select-service-filter">
                         <SelectValue />
@@ -787,25 +894,77 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Task Assignee Filter */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Status</label>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger data-testid="select-status-filter">
+                    <Label className="flex items-center gap-2">
+                      <UserIcon className="w-4 h-4" />
+                      Task Assignee
+                    </Label>
+                    <Select value={taskAssigneeFilter} onValueChange={setTaskAssigneeFilter}>
+                      <SelectTrigger data-testid="select-task-assignee-filter">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="no_latest_action">No Latest Action</SelectItem>
-                        <SelectItem value="bookkeeping_work_required">Bookkeeping Work Required</SelectItem>
-                        <SelectItem value="in_review">In Review</SelectItem>
-                        <SelectItem value="needs_client_input">Needs Input from Client</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="all">All Assignees</SelectItem>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.firstName} {u.lastName}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Service Owner Filter */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Due Date</label>
-                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <Label className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Service Owner
+                    </Label>
+                    <Select value={serviceOwnerFilter} onValueChange={setServiceOwnerFilter}>
+                      <SelectTrigger data-testid="select-service-owner-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Service Owners</SelectItem>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.firstName} {u.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* User/Creator Filter */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <UserIcon className="w-4 h-4" />
+                      Project Member
+                    </Label>
+                    <Select value={userFilter} onValueChange={setUserFilter}>
+                      <SelectTrigger data-testid="select-user-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Users</SelectItem>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.firstName} {u.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Filter */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4" />
+                      Due Date
+                    </Label>
+                    <Select value={dynamicDateFilter} onValueChange={(value) => setDynamicDateFilter(value as typeof dynamicDateFilter)}>
                       <SelectTrigger data-testid="select-date-filter">
                         <SelectValue />
                       </SelectTrigger>
@@ -814,9 +973,104 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
                         <SelectItem value="overdue">Overdue</SelectItem>
                         <SelectItem value="today">Due Today</SelectItem>
                         <SelectItem value="next7days">Next 7 Days</SelectItem>
+                        <SelectItem value="next14days">Next 14 Days</SelectItem>
+                        <SelectItem value="next30days">Next 30 Days</SelectItem>
+                        <SelectItem value="custom">Custom Range</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Custom Date Range */}
+                  {dynamicDateFilter === "custom" && (
+                    <div className="space-y-2 pl-6 border-l-2">
+                      <Label className="text-sm">Custom Date Range</Label>
+                      <div className="flex gap-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                "justify-start text-left font-normal text-xs",
+                                !customDateRange.from && "text-muted-foreground"
+                              )}
+                              data-testid="button-date-from"
+                            >
+                              <CalendarIcon className="mr-2 h-3 w-3" />
+                              {customDateRange.from ? format(customDateRange.from, "PPP") : "From"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <CalendarComponent
+                              mode="single"
+                              selected={customDateRange.from}
+                              onSelect={(date) => setCustomDateRange(prev => ({ ...prev, from: date }))}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                "justify-start text-left font-normal text-xs",
+                                !customDateRange.to && "text-muted-foreground"
+                              )}
+                              data-testid="button-date-to"
+                            >
+                              <CalendarIcon className="mr-2 h-3 w-3" />
+                              {customDateRange.to ? format(customDateRange.to, "PPP") : "To"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <CalendarComponent
+                              mode="single"
+                              selected={customDateRange.to}
+                              onSelect={(date) => setCustomDateRange(prev => ({ ...prev, to: date }))}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show Archived */}
+                  <div className="flex items-center justify-between py-2 border-t">
+                    <Label htmlFor="show-archived" className="flex items-center gap-2 cursor-pointer">
+                      <Archive className="w-4 h-4" />
+                      Show Archived
+                    </Label>
+                    <Switch
+                      id="show-archived"
+                      checked={showArchived}
+                      onCheckedChange={setShowArchived}
+                      data-testid="switch-show-archived"
+                    />
+                  </div>
+
+                  {/* Clear Filters Button */}
+                  {activeFilterCount() > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setServiceFilter("all");
+                        setTaskAssigneeFilter("all");
+                        setServiceOwnerFilter("all");
+                        setUserFilter("all");
+                        setShowArchived(false);
+                        setDynamicDateFilter("all");
+                        setCustomDateRange({ from: undefined, to: undefined });
+                      }}
+                      data-testid="button-clear-filters"
+                    >
+                      Clear All Filters
+                    </Button>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
