@@ -733,6 +733,7 @@ export interface IStorage {
   updateProjectMessageParticipant(id: string, participant: Partial<InsertProjectMessageParticipant>): Promise<ProjectMessageParticipant>;
   deleteProjectMessageParticipant(id: string): Promise<void>;
   markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void>;
+  updateParticipantReminderSent(threadId: string, userId: string): Promise<void>;
   getUnreadProjectMessagesForUser(userId: string): Promise<{ threadId: string; count: number; projectId: string }[]>;
   getProjectMessageUnreadSummaries(olderThanMinutes: number): Promise<Array<{
     userId: string;
@@ -8798,6 +8799,30 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         lastReadAt: new Date(),
         lastReadMessageId,
+        updatedAt: new Date()
+      })
+      .where(eq(projectMessageParticipants.id, participant.id));
+  }
+
+  async updateParticipantReminderSent(threadId: string, userId: string): Promise<void> {
+    // Find the participant record for this thread and user
+    const [participant] = await db
+      .select()
+      .from(projectMessageParticipants)
+      .where(and(
+        eq(projectMessageParticipants.threadId, threadId),
+        eq(projectMessageParticipants.userId, userId)
+      ));
+    
+    if (!participant) {
+      throw new Error(`Participant not found for thread ${threadId} and user ${userId}`);
+    }
+    
+    // Update the participant's last reminder email timestamp
+    await db
+      .update(projectMessageParticipants)
+      .set({ 
+        lastReminderEmailSentAt: new Date(),
         updatedAt: new Date()
       })
       .where(eq(projectMessageParticipants.id, participant.id));
