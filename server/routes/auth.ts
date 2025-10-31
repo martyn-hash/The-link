@@ -1460,6 +1460,8 @@ export async function registerAuthAndMiscRoutes(
 
       sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+      const logoUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+
       const msg = {
         to: email,
         from: process.env.FROM_EMAIL || 'link@growth-accountants.com',
@@ -1472,8 +1474,9 @@ export async function registerAuthAndMiscRoutes(
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Your Portal</h1>
+              <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
+                <h1 style="color: white; margin: 0; font-size: 28px;">The Link</h1>
               </div>
 
               <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -1486,7 +1489,7 @@ export async function registerAuthAndMiscRoutes(
 
                 <div style="text-align: center; margin: 30px 0;">
                   <a href="${magicLink}"
-                     style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                     style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Access Portal
                   </a>
                 </div>
@@ -1497,7 +1500,16 @@ export async function registerAuthAndMiscRoutes(
 
                 <p style="font-size: 14px; color: #666; margin-top: 20px;">
                   Or copy and paste this URL into your browser:<br>
-                  <a href="${magicLink}" style="color: #667eea; word-break: break-all;">${magicLink}</a>
+                  <a href="${magicLink}" style="color: #0A7BBF; word-break: break-all;">${magicLink}</a>
+                </p>
+              </div>
+
+              <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
+                <p style="margin: 0 0 10px 0;">
+                  <strong style="color: #0A7BBF;">The Link</strong> by Growth Accountants
+                </p>
+                <p style="margin: 0; font-size: 13px;">
+                  Your workflow management partner
                 </p>
               </div>
 

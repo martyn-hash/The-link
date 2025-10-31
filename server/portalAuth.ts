@@ -137,7 +137,7 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
     
     // Send branded email
     const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
-    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1759469504917.png`;
+    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
     
     await sendEmail({
       to: email,
@@ -187,7 +187,10 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
             </div>
             <div class="footer">
               <p style="margin: 0 0 10px 0;">
-                <strong class="accent">The Link</strong> - Your Financial Partner
+                <strong class="accent">The Link by Growth Accountants</strong>
+              </p>
+              <p style="margin: 0 0 10px 0; font-size: 13px; color: #64748b;">
+                Your workflow management partner
               </p>
               <p style="margin: 0; font-size: 13px;">
                 If you didn't request this login link, please ignore this email and your account will remain secure.
@@ -310,7 +313,7 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
     
     // Send branded email with verification code
     const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
-    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1759469504917.png`;
+    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
     
     await sendEmail({
       to: email,
@@ -359,7 +362,10 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
             </div>
             <div class="footer">
               <p style="margin: 0 0 10px 0;">
-                <strong class="accent">The Link</strong> - Your Financial Partner
+                <strong class="accent">The Link by Growth Accountants</strong>
+              </p>
+              <p style="margin: 0 0 10px 0; font-size: 13px; color: #64748b;">
+                Your workflow management partner
               </p>
               <p style="margin: 0; font-size: 13px;">
                 If you didn't request this code, please ignore this email and your account will remain secure.
