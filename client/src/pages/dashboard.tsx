@@ -522,6 +522,16 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
 
 
 function MyDashboardPanel({ user }: { user: any }) {
+  // State for selected dashboard
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string>("default");
+
+  // Fetch all saved dashboards
+  const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery<Dashboard[]>({
+    queryKey: ["/api/dashboards"],
+    enabled: !!user,
+    retry: false,
+  });
+
   // Fetch dashboard metrics
   const { data: metrics, isLoading: metricsLoading } = useQuery<{
     myProjectsCount: number;
@@ -548,6 +558,98 @@ function MyDashboardPanel({ user }: { user: any }) {
     retry: false,
   });
 
+  // Get selected dashboard filters
+  const selectedDashboard = dashboards.find(d => d.id === selectedDashboardId);
+  const appliedFilters = useMemo(() => {
+    if (!selectedDashboard || selectedDashboardId === "default") return null;
+    
+    const parsedFilters = typeof selectedDashboard.filters === 'string'
+      ? JSON.parse(selectedDashboard.filters)
+      : selectedDashboard.filters;
+    
+    return parsedFilters;
+  }, [selectedDashboard, selectedDashboardId]);
+
+  // Filter projects based on selected dashboard
+  const filteredMyProjects = useMemo(() => {
+    if (!appliedFilters) return myProjects;
+    
+    return myProjects.filter((project) => {
+      // Apply service owner filter
+      if (appliedFilters.serviceOwnerFilter && appliedFilters.serviceOwnerFilter !== "all") {
+        if (project.projectOwnerId !== appliedFilters.serviceOwnerFilter) return false;
+      }
+      
+      // Apply assignee filter
+      if (appliedFilters.taskAssigneeFilter && appliedFilters.taskAssigneeFilter !== "all") {
+        if (project.currentAssigneeId !== appliedFilters.taskAssigneeFilter) return false;
+      }
+      
+      // Apply status filter (if exists in dashboard filters)
+      if (appliedFilters.statusFilter && appliedFilters.statusFilter !== "all") {
+        if (project.currentStatus !== appliedFilters.statusFilter) return false;
+      }
+      
+      return true;
+    });
+  }, [myProjects, appliedFilters]);
+
+  const filteredMyTasks = useMemo(() => {
+    if (!appliedFilters) return myTasks;
+    
+    return myTasks.filter((project) => {
+      // Apply service owner filter
+      if (appliedFilters.serviceOwnerFilter && appliedFilters.serviceOwnerFilter !== "all") {
+        if (project.projectOwnerId !== appliedFilters.serviceOwnerFilter) return false;
+      }
+      
+      // Apply assignee filter
+      if (appliedFilters.taskAssigneeFilter && appliedFilters.taskAssigneeFilter !== "all") {
+        if (project.currentAssigneeId !== appliedFilters.taskAssigneeFilter) return false;
+      }
+      
+      // Apply status filter (if exists in dashboard filters)
+      if (appliedFilters.statusFilter && appliedFilters.statusFilter !== "all") {
+        if (project.currentStatus !== appliedFilters.statusFilter) return false;
+      }
+      
+      return true;
+    });
+  }, [myTasks, appliedFilters]);
+
+  // Recalculate metrics based on filtered data when dashboard is selected
+  const displayMetrics = useMemo(() => {
+    if (!appliedFilters || !metrics) return metrics;
+    
+    // When a dashboard filter is active, recalculate metrics from filtered data
+    const allFilteredProjects = [...filteredMyProjects, ...filteredMyTasks];
+    const uniqueFilteredProjects = Array.from(
+      new Map(allFilteredProjects.map(p => [p.id, p])).values()
+    );
+
+    // Calculate behind schedule from filtered projects
+    const behindScheduleCount = uniqueFilteredProjects.filter(project => {
+      // Simple check: if project has been in current stage for a long time
+      // This is a simplified version - full calculation would need stage configs
+      return project.chronology && project.chronology.length > 0;
+    }).length;
+
+    // Calculate late count from filtered projects
+    const now = new Date();
+    const lateCount = uniqueFilteredProjects.filter(p => {
+      if (!p.dueDate) return false;
+      const dueDate = new Date(p.dueDate);
+      return now > dueDate;
+    }).length;
+
+    return {
+      myProjectsCount: filteredMyProjects.length,
+      myTasksCount: filteredMyTasks.length,
+      behindScheduleCount,
+      lateCount,
+    };
+  }, [appliedFilters, metrics, filteredMyProjects, filteredMyTasks]);
+
   if (metricsLoading) {
     return (
       <Card>
@@ -563,6 +665,40 @@ function MyDashboardPanel({ user }: { user: any }) {
 
   return (
     <div className="space-y-6">
+      {/* Dashboard Selector */}
+      <div className="flex items-center gap-3">
+        <Select 
+          value={selectedDashboardId} 
+          onValueChange={setSelectedDashboardId}
+          data-testid="dashboard-selector"
+        >
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Select a dashboard view" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Default View</SelectItem>
+            {dashboards.map((dashboard) => (
+              <SelectItem key={dashboard.id} value={dashboard.id}>
+                {dashboard.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Reset to Default Button - Only show when non-default dashboard is selected */}
+        {selectedDashboardId !== "default" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedDashboardId("default")}
+            data-testid="button-reset-dashboard"
+          >
+            <Home className="w-4 h-4 mr-2" />
+            Reset to Default
+          </Button>
+        )}
+      </div>
+
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* My Projects Count - Green */}
@@ -570,7 +706,7 @@ function MyDashboardPanel({ user }: { user: any }) {
           <CardHeader className="pb-2">
             <CardDescription>My Projects</CardDescription>
             <CardTitle className="text-3xl text-green-600 dark:text-green-500">
-              {metrics?.myProjectsCount || 0}
+              {displayMetrics?.myProjectsCount || 0}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -583,7 +719,7 @@ function MyDashboardPanel({ user }: { user: any }) {
           <CardHeader className="pb-2">
             <CardDescription>My Tasks</CardDescription>
             <CardTitle className="text-3xl text-blue-600 dark:text-blue-500">
-              {metrics?.myTasksCount || 0}
+              {displayMetrics?.myTasksCount || 0}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -596,7 +732,7 @@ function MyDashboardPanel({ user }: { user: any }) {
           <CardHeader className="pb-2">
             <CardDescription>Behind Schedule</CardDescription>
             <CardTitle className="text-3xl text-orange-600 dark:text-orange-500">
-              {metrics?.behindScheduleCount || 0}
+              {displayMetrics?.behindScheduleCount || 0}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -609,7 +745,7 @@ function MyDashboardPanel({ user }: { user: any }) {
           <CardHeader className="pb-2">
             <CardDescription>Late Projects</CardDescription>
             <CardTitle className="text-3xl text-red-600 dark:text-red-500">
-              {metrics?.lateCount || 0}
+              {displayMetrics?.lateCount || 0}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -630,7 +766,7 @@ function MyDashboardPanel({ user }: { user: any }) {
             </CardContent>
           </Card>
         ) : (
-          <TaskList projects={myProjects} user={user} viewType="my-projects" />
+          <TaskList projects={filteredMyProjects} user={user} viewType="my-projects" />
         )}
       </div>
 
@@ -646,7 +782,7 @@ function MyDashboardPanel({ user }: { user: any }) {
             </CardContent>
           </Card>
         ) : (
-          <TaskList projects={myTasks} user={user} viewType="my-tasks" />
+          <TaskList projects={filteredMyTasks} user={user} viewType="my-tasks" />
         )}
       </div>
     </div>
