@@ -1199,9 +1199,15 @@ export function registerProjectRoutes(
       // Filter projects where user is the current assignee
       const myTasks = allProjects.filter(p => p.currentAssigneeId === effectiveUserId);
 
+      // Create union of user's relevant projects (owned OR assigned)
+      const myRelevantProjects = allProjects.filter(p => 
+        p.projectOwnerId === effectiveUserId || p.currentAssigneeId === effectiveUserId
+      );
+
       // Calculate behind schedule count (time in current stage > maxInstanceTime)
+      // Only count from user's relevant projects
       let behindScheduleCount = 0;
-      for (const project of allProjects) {
+      for (const project of myRelevantProjects) {
         // Get stage config for this project
         const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
         const currentStageConfig = stages.find(s => s.name === project.currentStatus);
@@ -1231,8 +1237,9 @@ export function registerProjectRoutes(
       }
 
       // Calculate late count (current date > due date)
+      // Only count from user's relevant projects
       const now = new Date();
-      const lateCount = allProjects.filter(p => {
+      const lateCount = myRelevantProjects.filter(p => {
         if (!p.dueDate) return false;
         const dueDate = new Date(p.dueDate);
         return now > dueDate;
