@@ -175,10 +175,17 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
 
     if ((!folders || folders.length === 0) && ungroupedDocuments.length === 0) {
       return (
-        <div className="text-center py-8">
-          <Folder className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">No documents yet.</p>
-          <p className="text-sm text-muted-foreground mt-1">Upload documents to get started.</p>
+        <div className="space-y-4">
+          <div className="text-center py-8">
+            <Folder className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">No documents yet.</p>
+            <p className="text-sm text-muted-foreground mt-1">Upload documents to get started.</p>
+          </div>
+          {renderActions && (
+            <div className="flex justify-center gap-2">
+              {renderActions(null)}
+            </div>
+          )}
         </div>
       );
     }
