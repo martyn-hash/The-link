@@ -247,42 +247,63 @@ export default function MiniProjectsTable({ projects, user }: MiniProjectsTableP
   }
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const state: SavedState = JSON.parse(saved);
-      return state.visibleColumns || ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const state: SavedState = JSON.parse(saved);
+        return state.visibleColumns || ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
+      }
+    } catch (error) {
+      console.error("Failed to parse saved column state from localStorage:", error);
+      // Clear malformed data
+      localStorage.removeItem(STORAGE_KEY);
     }
     return ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
   });
 
   const [columnOrder, setColumnOrder] = useState<string[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const state: SavedState = JSON.parse(saved);
-      return state.columnOrder || ALL_COLUMNS.map(col => col.id);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const state: SavedState = JSON.parse(saved);
+        return state.columnOrder || ALL_COLUMNS.map(col => col.id);
+      }
+    } catch (error) {
+      console.error("Failed to parse saved column order from localStorage:", error);
+      localStorage.removeItem(STORAGE_KEY);
     }
     return ALL_COLUMNS.map(col => col.id);
   });
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const state: SavedState = JSON.parse(saved);
-      return state.columnWidths || {};
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const state: SavedState = JSON.parse(saved);
+        return state.columnWidths || {};
+      }
+    } catch (error) {
+      console.error("Failed to parse saved column widths from localStorage:", error);
+      localStorage.removeItem(STORAGE_KEY);
     }
     return {};
   });
 
   // Load filters and sort from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const state: SavedState = JSON.parse(saved);
-      if (state.sortBy) setSortBy(state.sortBy);
-      if (state.sortOrder) setSortOrder(state.sortOrder);
-      if (state.serviceFilter) setServiceFilter(state.serviceFilter);
-      if (state.statusFilter) setStatusFilter(state.statusFilter);
-      if (state.dateFilter) setDateFilter(state.dateFilter);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const state: SavedState = JSON.parse(saved);
+        if (state.sortBy) setSortBy(state.sortBy);
+        if (state.sortOrder) setSortOrder(state.sortOrder);
+        if (state.serviceFilter) setServiceFilter(state.serviceFilter);
+        if (state.statusFilter) setStatusFilter(state.statusFilter);
+        if (state.dateFilter) setDateFilter(state.dateFilter);
+      }
+    } catch (error) {
+      console.error("Failed to parse saved filter state from localStorage:", error);
+      localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
 
