@@ -53,11 +53,15 @@ function incrementMonthSafely(date: Date, monthsToAdd: number, intendedDay?: num
 
 /**
  * Calculate the next service dates based on frequency
+ * @param intendedStartDay Optional: The intended day-of-month (29-31) for start date
+ * @param intendedDueDay Optional: The intended day-of-month (29-31) for due date
  */
 export function calculateNextServiceDates(
   currentStartDate: Date,
   currentDueDate: Date,
-  frequency: ServiceFrequency
+  frequency: ServiceFrequency,
+  intendedStartDay?: number | null,
+  intendedDueDay?: number | null
 ): NextDateResult {
   const nextStartDate = new Date(currentStartDate);
   const nextDueDate = new Date(currentDueDate);
@@ -83,17 +87,21 @@ export function calculateNextServiceDates(
       break;
 
     case "monthly":
-      // Preserve intended day for end-of-month dates (29, 30, 31)
-      const startIntendedDay = currentStartDate.getUTCDate() >= 29 ? currentStartDate.getUTCDate() : undefined;
-      const dueIntendedDay = currentDueDate.getUTCDate() >= 29 ? currentDueDate.getUTCDate() : undefined;
+      // Use provided intended days, or detect from current date if not provided
+      const startIntendedDay = intendedStartDay ?? 
+        (currentStartDate.getUTCDate() >= 29 ? currentStartDate.getUTCDate() : undefined);
+      const dueIntendedDay = intendedDueDay ?? 
+        (currentDueDate.getUTCDate() >= 29 ? currentDueDate.getUTCDate() : undefined);
       incrementMonthSafely(nextStartDate, 1, startIntendedDay);
       incrementMonthSafely(nextDueDate, 1, dueIntendedDay);
       break;
 
     case "quarterly":
-      // Preserve intended day for end-of-month dates (29, 30, 31)
-      const qStartIntendedDay = currentStartDate.getUTCDate() >= 29 ? currentStartDate.getUTCDate() : undefined;
-      const qDueIntendedDay = currentDueDate.getUTCDate() >= 29 ? currentDueDate.getUTCDate() : undefined;
+      // Use provided intended days, or detect from current date if not provided
+      const qStartIntendedDay = intendedStartDay ?? 
+        (currentStartDate.getUTCDate() >= 29 ? currentStartDate.getUTCDate() : undefined);
+      const qDueIntendedDay = intendedDueDay ?? 
+        (currentDueDate.getUTCDate() >= 29 ? currentDueDate.getUTCDate() : undefined);
       incrementMonthSafely(nextStartDate, 3, qStartIntendedDay);
       incrementMonthSafely(nextDueDate, 3, qDueIntendedDay);
       break;

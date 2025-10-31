@@ -53,6 +53,8 @@ interface DueService {
   frequency: ServiceFrequency;
   nextStartDate: Date;
   nextDueDate: Date;
+  intendedStartDay: number | null; // Intended day-of-month for start date (29-31)
+  intendedDueDay: number | null; // Intended day-of-month for due date (29-31)
   isCompaniesHouseService: boolean; // Flag to indicate CH services
 }
 
@@ -976,6 +978,8 @@ async function findServicesDueToday(
         frequency: clientServiceWithDetails.frequency as ServiceFrequency,
         nextStartDate: clientServiceWithDetails.nextStartDate,
         nextDueDate: clientServiceWithDetails.nextDueDate || clientServiceWithDetails.nextStartDate,
+        intendedStartDay: clientServiceWithDetails.intendedStartDay,
+        intendedDueDay: clientServiceWithDetails.intendedDueDay,
         isCompaniesHouseService: isChService
       });
     }
@@ -1300,17 +1304,35 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
 async function rescheduleService(dueService: DueService, targetDate: Date): Promise<void> {
   // Calculate next dates with fallback frequency
   const frequency = dueService.service.frequency || dueService.frequency || 'monthly';
+  
+  // Detect and set intended days if not already set (for backwards compatibility)
+  // For dates on 29, 30, or 31, remember the intended day for future scheduling
+  let intendedStartDay = dueService.intendedStartDay;
+  let intendedDueDay = dueService.intendedDueDay;
+  
+  // Auto-detect intended days if not already set and current day is 29-31
+  if (intendedStartDay === null && dueService.nextStartDate.getUTCDate() >= 29) {
+    intendedStartDay = dueService.nextStartDate.getUTCDate();
+  }
+  if (intendedDueDay === null && dueService.nextDueDate.getUTCDate() >= 29) {
+    intendedDueDay = dueService.nextDueDate.getUTCDate();
+  }
+  
   const { nextStartDate, nextDueDate } = calculateNextServiceDates(
     dueService.nextStartDate,
     dueService.nextDueDate,
-    frequency
+    frequency,
+    intendedStartDay,
+    intendedDueDay
   );
 
   // Update the service
   if (dueService.type === 'client') {
     await storage.updateClientService(dueService.id, {
       nextStartDate: nextStartDate.toISOString(),
-      nextDueDate: nextDueDate.toISOString()
+      nextDueDate: nextDueDate.toISOString(),
+      intendedStartDay,
+      intendedDueDay
     });
   } else if (dueService.type === 'people') {
     // Update people service when support is added

@@ -557,6 +557,8 @@ export const clientServices = pgTable("client_services", {
   frequency: varchar("frequency"), // monthly, quarterly, annually, etc. - nullable for static services
   nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
   nextDueDate: timestamp("next_due_date"), // Next due date for the service
+  intendedStartDay: integer("intended_start_day"), // Intended day-of-month for start date (29-31) to preserve across short months
+  intendedDueDay: integer("intended_due_day"), // Intended day-of-month for due date (29-31) to preserve across short months
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
   udfValues: jsonb("udf_values").default(sql`'{}'::jsonb`), // User-defined field values as key-value pairs
   createdAt: timestamp("created_at").defaultNow(),
@@ -577,6 +579,8 @@ export const peopleServices = pgTable("people_services", {
   frequency: varchar("frequency").notNull().default("monthly"), // monthly, quarterly, annually, etc.
   nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
   nextDueDate: timestamp("next_due_date"), // Next due date for the service
+  intendedStartDay: integer("intended_start_day"), // Intended day-of-month for start date (29-31) to preserve across short months
+  intendedDueDay: integer("intended_due_day"), // Intended day-of-month for due date (29-31) to preserve across short months
   notes: text("notes"), // Specific notes for this person's service
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
   createdAt: timestamp("created_at").defaultNow(),
