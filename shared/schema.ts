@@ -1962,6 +1962,7 @@ export const projectMessageParticipants = pgTable("project_message_participants"
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   lastReadAt: timestamp("last_read_at"), // When participant last read messages
   lastReadMessageId: varchar("last_read_message_id").references(() => projectMessages.id, { onDelete: "set null" }), // Last message they read
+  lastReminderEmailSentAt: timestamp("last_reminder_email_sent_at"), // When we last sent a reminder email about unread messages
   joinedAt: timestamp("joined_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
