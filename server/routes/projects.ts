@@ -1205,11 +1205,22 @@ export function registerProjectRoutes(
       );
 
       // Calculate behind schedule count (time in current stage > maxInstanceTime)
-      // Only count from user's relevant projects
+      // Optimize by batch-fetching all stage configs once instead of N+1 queries
       let behindScheduleCount = 0;
+      
+      // Get unique project type IDs
+      const uniqueProjectTypeIds = [...new Set(myRelevantProjects.map(p => p.projectTypeId))];
+      
+      // Batch-fetch all stage configs
+      const stageConfigsMap = new Map();
+      for (const projectTypeId of uniqueProjectTypeIds) {
+        const stages = await storage.getKanbanStagesByProjectTypeId(projectTypeId);
+        stageConfigsMap.set(projectTypeId, stages);
+      }
+      
+      // Now check each project using the cached stage configs
       for (const project of myRelevantProjects) {
-        // Get stage config for this project
-        const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+        const stages = stageConfigsMap.get(project.projectTypeId) || [];
         const currentStageConfig = stages.find(s => s.name === project.currentStatus);
         
         if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
@@ -1267,9 +1278,12 @@ export function registerProjectRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Get all projects and filter by service owner
-      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
-      const myProjects = allProjects.filter(p => p.projectOwnerId === effectiveUserId);
+      // Use optimized query with service owner filter at database level
+      const myProjects = await storage.getProjectsByUser(
+        effectiveUserId, 
+        effectiveUser.isAdmin ? 'admin' : 'user', 
+        { archived: false, serviceOwnerId: effectiveUserId }
+      );
 
       res.json(myProjects);
     } catch (error) {
@@ -1288,9 +1302,12 @@ export function registerProjectRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Get all projects and filter by current assignee
-      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
-      const myTasks = allProjects.filter(p => p.currentAssigneeId === effectiveUserId);
+      // Use optimized query with assignee filter at database level
+      const myTasks = await storage.getProjectsByUser(
+        effectiveUserId, 
+        effectiveUser.isAdmin ? 'admin' : 'user', 
+        { archived: false, assigneeId: effectiveUserId }
+      );
 
       res.json(myTasks);
     } catch (error) {

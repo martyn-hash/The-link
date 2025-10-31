@@ -791,14 +791,13 @@ export async function registerAuthAndMiscRoutes(
   app.get("/api/dashboard", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const effectiveUser = req.user?.effectiveUser;
 
-      // Get all projects assigned to user
-      const allProjects = await storage.getAllProjects();
-      const userProjects = allProjects.filter(project =>
-        project.currentAssigneeId === effectiveUserId ||
-        project.bookkeeperId === effectiveUserId ||
-        project.clientManagerId === effectiveUserId ||
-        project.projectOwnerId === effectiveUserId
+      // Use optimized query that filters at database level instead of fetching all projects
+      const userProjects = await storage.getProjectsByUser(
+        effectiveUserId, 
+        effectiveUser?.isAdmin ? 'admin' : 'user',
+        { showArchived: false }
       );
 
       // Get recent clients, people, and projects using actual recently viewed data

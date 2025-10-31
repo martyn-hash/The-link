@@ -6,7 +6,7 @@ export type ConnectionStatus = 'online' | 'offline' | 'reconnecting';
 interface UseServerConnectionOptions {
   /**
    * How often to check server connection (in milliseconds)
-   * Default: 10000 (10 seconds)
+   * Default: 30000 (30 seconds)
    */
   checkInterval?: number;
 
@@ -29,7 +29,7 @@ interface UseServerConnectionOptions {
  */
 export function useServerConnection(options: UseServerConnectionOptions = {}) {
   const {
-    checkInterval = 10000, // Check every 10 seconds
+    checkInterval = 30000, // Check every 30 seconds
     healthEndpoint = '/api/health',
     enabled = true,
   } = options;
@@ -42,7 +42,7 @@ export function useServerConnection(options: UseServerConnectionOptions = {}) {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
       const response = await fetch(healthEndpoint, {
         method: 'GET',
@@ -59,8 +59,9 @@ export function useServerConnection(options: UseServerConnectionOptions = {}) {
           setStatus('online');
           setWasOffline(false);
 
-          // Refetch all queries when server comes back online
-          await queryClient.refetchQueries();
+          // Invalidate queries instead of refetching to avoid thundering herd
+          // Only refetch queries that are currently being observed (mounted components)
+          queryClient.invalidateQueries({ refetchType: 'active' });
         } else if (status !== 'online') {
           setStatus('online');
         }
