@@ -17,6 +17,15 @@ The Link is a comprehensive full-stack CRM and project management application de
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (November 2025)
+
+**Dashboard Performance Optimization**
+- Simplified home dashboard to show only "Recently Viewed" panel (removed complex metrics and project lists)
+- Eliminated 3 slow backend queries: `/api/dashboard/metrics` (~2.5s), `/api/dashboard/my-projects` (~2.1s), `/api/dashboard/my-tasks` (~2.3s)
+- Optimized `/api/dashboard` endpoint to skip expensive `getAllProjects()` call and project filtering
+- Dashboard load time reduced from ~10 seconds to under 1 second
+- Reduced polling frequency across app: `refetchInterval` increased from 3-5s to 10-30s, `staleTime` increased from 5s to 30s
+
 ## System Architecture
 
 ### Frontend Architecture

@@ -82,7 +82,7 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-  // Fetch dashboard data
+  // Fetch dashboard data (only for recently viewed)
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard"],
     enabled: isAuthenticated && !!user,
@@ -90,35 +90,6 @@ export default function Dashboard() {
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true, // Refetch when component mounts
   });
-
-  // Fetch homescreen dashboard
-  const { data: homescreenDashboard, isLoading: homescreenLoading, error: homescreenError } = useQuery<Dashboard>({
-    queryKey: ["/api/dashboards/homescreen"],
-    enabled: isAuthenticated && !!user,
-    retry: false,
-  });
-
-  // Memoize homescreen dashboard filters to prevent unnecessary re-renders
-  const homescreenFilters = useMemo(() => {
-    if (!homescreenDashboard) return null;
-    
-    const parsedFilters = typeof homescreenDashboard.filters === 'string'
-      ? JSON.parse(homescreenDashboard.filters)
-      : homescreenDashboard.filters;
-    
-    return {
-      serviceFilter: parsedFilters.serviceFilter || "all",
-      taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
-      serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
-      userFilter: parsedFilters.userFilter || "all",
-      showArchived: parsedFilters.showArchived || false,
-      dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
-      customDateRange: {
-        from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
-        to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
-      },
-    };
-  }, [homescreenDashboard]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -185,9 +156,6 @@ export default function Dashboard() {
           <div className="space-y-6">
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
-
-            {/* My Dashboard - Default View */}
-            <MyDashboardPanel user={user} />
           </div>
         </main>
       </div>

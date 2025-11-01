@@ -787,19 +787,10 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
-  // GET /api/dashboard - Get personalized dashboard data (homescreen)
+  // GET /api/dashboard - Get personalized dashboard data (homescreen - lightweight version for Recently Viewed only)
   app.get("/api/dashboard", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
-
-      // Get all projects assigned to user
-      const allProjects = await storage.getAllProjects();
-      const userProjects = allProjects.filter(project =>
-        project.currentAssigneeId === effectiveUserId ||
-        project.bookkeeperId === effectiveUserId ||
-        project.clientManagerId === effectiveUserId ||
-        project.projectOwnerId === effectiveUserId
-      );
 
       // Get recent clients, people, and projects using actual recently viewed data
       const recentlyViewed = await storage.getRecentlyViewedByUser(effectiveUserId, 30);
@@ -807,7 +798,7 @@ export async function registerAuthAndMiscRoutes(
       const recentClientViews = recentlyViewed.filter(item => item.entityType === 'client' && item.entityData);
       const recentClients = recentClientViews.slice(0, 10).map(item => ({
         ...item.entityData,
-        activeProjects: userProjects.filter(p => p.clientId === item.entityData.id).length,
+        activeProjects: 0, // Removed expensive project count calculation
         lastViewed: item.viewedAt
       }));
 
@@ -817,45 +808,6 @@ export async function registerAuthAndMiscRoutes(
         lastViewed: item.viewedAt
       }));
 
-      // Calculate overdue projects (active projects past their due date)
-      const now = new Date();
-      const overdueProjects = userProjects.filter(project => {
-        // Must have a due date, not be archived or inactive, and not be completed
-        if (!project.dueDate || project.archived || project.inactive || project.currentStatus === "completed") {
-          return false;
-        }
-        // Check if due date has passed
-        return new Date(project.dueDate) < now;
-      });
-
-      // Calculate behind schedule projects (at current stage longer than permitted time)
-      // Note: This requires stage configuration data which we'll implement when stage configs are available
-      const behindScheduleProjects = userProjects.filter(project => {
-        if (project.archived || project.inactive || project.currentStatus === "completed") {
-          return false;
-        }
-
-        const lastChronology = project.chronology?.[0];
-        if (!lastChronology || !lastChronology.timestamp) return false;
-
-        // For now, consider projects stuck in a stage for more than 7 days as "behind schedule"
-        // TODO: Enhance this with actual stage maxInstanceTime and maxTotalTime when stage data is accessible
-        const timeInCurrentStageMs = Date.now() - new Date(lastChronology.timestamp).getTime();
-        const timeInCurrentStageDays = timeInCurrentStageMs / (1000 * 60 * 60 * 24);
-
-        return timeInCurrentStageDays > 7;
-      });
-
-      // Group projects by type
-      const projectsByType: { [key: string]: any[] } = {};
-      userProjects.forEach(project => {
-        const typeName = project.projectType?.name || "Unknown";
-        if (!projectsByType[typeName]) {
-          projectsByType[typeName] = [];
-        }
-        projectsByType[typeName].push(project);
-      });
-
       const recentProjectViews = recentlyViewed.filter(item => item.entityType === 'project' && item.entityData);
       const recentProjects = recentProjectViews.slice(0, 10).map(item => ({
         ...item.entityData,
@@ -863,21 +815,17 @@ export async function registerAuthAndMiscRoutes(
       }));
 
       const dashboardData = {
-        myActiveTasks: userProjects.filter(p => p.currentStatus !== "completed" && !p.archived && !p.inactive).slice(0, 10),
-        myProjects: userProjects.filter(p => !p.archived && !p.inactive),
-        overdueProjects: overdueProjects,
-        behindScheduleProjects: behindScheduleProjects,
+        myActiveTasks: [],
+        myProjects: [],
+        overdueProjects: [],
+        behindScheduleProjects: [],
         recentClients: recentClients,
         recentPeople: recentPeople,
         recentProjects: recentProjects,
-        projectsByType: projectsByType,
-        deadlineAlerts: overdueProjects.map(p => ({
-          message: `${p.client?.name || 'Unknown Client'} - ${p.projectType?.name || 'Project'} is overdue`,
-          projectId: p.id,
-          dueDate: p.dueDate
-        })),
-        stuckProjects: behindScheduleProjects,
-        upcomingRenewals: [] // TODO: Implement renewal tracking
+        projectsByType: {},
+        deadlineAlerts: [],
+        stuckProjects: [],
+        upcomingRenewals: []
       };
 
       res.json(dashboardData);
