@@ -173,7 +173,7 @@ export default function Messages() {
   const { data: allThreads, isLoading: threadsLoading } = useQuery<MessageThread[]>({
     queryKey: ['/api/internal/messages/threads'],
     enabled: isAuthenticated && !!user,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   const threads = allThreads?.filter(thread => {
@@ -220,13 +220,13 @@ export default function Messages() {
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ['/api/internal/messages/threads', selectedThreadId, 'messages'],
     enabled: !!selectedThreadId && isAuthenticated,
-    refetchInterval: 3000,
+    refetchInterval: 10000,
   });
 
   const { data: unreadCount } = useQuery<{ count: number }>({
     queryKey: ['/api/internal/messages/unread-count'],
     enabled: isAuthenticated && !!user,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   // Fetch task templates for task creation

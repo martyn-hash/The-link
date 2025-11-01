@@ -136,7 +136,7 @@ export default function InternalChat() {
       return response.json();
     },
     enabled: isAuthenticated && !!user,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   // Fetch messages for selected thread
@@ -150,7 +150,7 @@ export default function InternalChat() {
       return response.json();
     },
     enabled: !!selectedThreadId && isAuthenticated,
-    refetchInterval: 3000,
+    refetchInterval: 10000,
   });
 
   // Scroll to bottom when messages change
