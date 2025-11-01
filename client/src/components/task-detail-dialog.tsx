@@ -80,6 +80,7 @@ interface InternalTaskWithRelations extends InternalTask {
 }
 
 export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialogProps) {
+  console.log("[TaskDetailDialog] Rendered with:", { taskId, open });
   const { user } = useAuth();
   const { toast } = useToast();
   const [newComment, setNewComment] = useState("");

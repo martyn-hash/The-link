@@ -64,20 +64,30 @@ export default function InternalTasks() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   
   // Handle task detail dialog via URL parameters
-  const params = new URLSearchParams(window.location.search);
-  const selectedTaskId = params.get("task");
-  const [taskDetailOpen, setTaskDetailOpen] = useState(!!selectedTaskId);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    // Parse search params from the location string  
+    const searchStart = location.indexOf('?');
+    const search = searchStart >= 0 ? location.substring(searchStart) : '';
+    const params = new URLSearchParams(search);
     const taskId = params.get("task");
+    console.log("[InternalTasks] URL changed, taskId from params:", taskId);
+    console.log("[InternalTasks] Current location:", location);
+    console.log("[InternalTasks] Parsed search:", search);
+    setSelectedTaskId(taskId);
     setTaskDetailOpen(!!taskId);
+    console.log("[InternalTasks] Set taskDetailOpen to:", !!taskId);
   }, [location]);
 
   const handleOpenTaskDetail = (taskId: string) => {
+    console.log("[InternalTasks] handleOpenTaskDetail called with taskId:", taskId);
     const params = new URLSearchParams(window.location.search);
     params.set("task", taskId);
-    setLocation(`/internal-tasks?${params.toString()}`);
+    const newLocation = `/internal-tasks?${params.toString()}`;
+    console.log("[InternalTasks] Setting location to:", newLocation);
+    setLocation(newLocation);
   };
 
   const handleCloseTaskDetail = () => {

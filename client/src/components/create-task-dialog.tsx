@@ -255,7 +255,7 @@ export function CreateTaskDialog({
                   <FormLabel>Task Type *</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                     disabled={loadingTypes}
                   >
                     <FormControl>
@@ -282,7 +282,7 @@ export function CreateTaskDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Priority *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-task-priority">
                         <SelectValue placeholder="Select priority" />
@@ -318,8 +318,11 @@ export function CreateTaskDialog({
                 <FormItem>
                   <FormLabel>Assign To *</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(value) => {
+                      console.log("[CreateTaskDialog] Assignee changed to:", value);
+                      field.onChange(value);
+                    }}
+                    value={field.value}
                     disabled={loadingStaff}
                   >
                     <FormControl>
@@ -329,7 +332,7 @@ export function CreateTaskDialog({
                     </FormControl>
                     <SelectContent>
                       {staff.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
+                        <SelectItem key={user.id} value={user.id} data-testid={`select-option-${user.id}`}>
                           {user.firstName && user.lastName
                             ? `${user.firstName} ${user.lastName}`
                             : user.email}
@@ -348,7 +351,7 @@ export function CreateTaskDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-task-status">
                         <SelectValue placeholder="Select status" />
