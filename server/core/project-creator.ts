@@ -117,7 +117,7 @@ export async function handleSingleProjectConstraint(
 
 /**
  * Resolve assignee for a new project
- * Uses hierarchy: service owner > role assignment > stage default > fallback
+ * Uses hierarchy: service owner > first stage's role assignment > stage direct user > fallback
  */
 export async function resolveProjectAssignee(
   dueService: DueService,
@@ -131,39 +131,39 @@ export async function resolveProjectAssignee(
     }
   }
 
-  // 2. Try role assignments
-  if (dueService.type === 'client' && dueService.clientId) {
-    const clientService = await storage.getClientServiceByClientAndProjectType(
-      dueService.clientId,
-      projectType.id
-    );
+  // 2. Get first kanban stage to determine what role is needed
+  const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
+  const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+  
+  if (firstStage) {
+    // 2a. Try stage's direct user assignment
+    if (firstStage.assignedUserId) {
+      return firstStage.assignedUserId;
+    }
     
-    if (clientService) {
-      const roleAssignments = await storage.getClientServiceRoleAssignments(clientService.id);
-      if (roleAssignments.length > 0) {
-        // Get first active assignment
-        const activeAssignment = roleAssignments.find(a => a.isActive);
-        if (activeAssignment) {
-          return activeAssignment.userId;
+    // 2b. Try stage's role-based assignment
+    if (firstStage.assignedWorkRoleId && dueService.type === 'client' && dueService.clientId) {
+      const workRole = await storage.getWorkRoleById(firstStage.assignedWorkRoleId);
+      if (workRole) {
+        const roleUser = await storage.resolveRoleAssigneeForClient(
+          dueService.clientId,
+          projectType.id,
+          workRole.name
+        );
+        if (roleUser) {
+          return roleUser.id;
         }
       }
     }
   }
 
-  // 3. Try first kanban stage default assignee
-  const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
-  const firstStage = stages.sort((a, b) => a.order - b.order)[0];
-  if (firstStage?.assignedUserId) {
-    return firstStage.assignedUserId;
-  }
-
-  // 4. Fallback to admin
+  // 3. Fallback to admin
   const adminUser = await storage.getUserByEmail('admin@example.com');
   if (adminUser) {
     return adminUser.id;
   }
 
-  // 5. Ultimate fallback - first user in system
+  // 4. Ultimate fallback - first user in system
   const allUsers = await storage.getAllUsers();
   if (allUsers.length > 0) {
     return allUsers[0].id;
