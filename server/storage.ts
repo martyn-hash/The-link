@@ -59,6 +59,12 @@ import {
   clientCustomRequestQuestions,
   taskInstances,
   taskInstanceResponses,
+  taskTypes,
+  internalTasks,
+  taskConnections,
+  taskComments,
+  taskNotes,
+  taskTimeEntries,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -191,6 +197,24 @@ import {
   type UpdateTaskInstance,
   type TaskInstanceResponse,
   type InsertTaskInstanceResponse,
+  type TaskType,
+  type InsertTaskType,
+  type UpdateTaskType,
+  type InternalTask,
+  type InsertInternalTask,
+  type UpdateInternalTask,
+  type CloseInternalTask,
+  type TaskConnection,
+  type InsertTaskConnection,
+  type TaskComment,
+  type InsertTaskComment,
+  type UpdateTaskComment,
+  type TaskNote,
+  type InsertTaskNote,
+  type UpdateTaskNote,
+  type TaskTimeEntry,
+  type InsertTaskTimeEntry,
+  type StopTaskTimeEntry,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -840,6 +864,51 @@ export interface IStorage {
   updateTaskInstanceResponse(id: string, response: Partial<InsertTaskInstanceResponse>): Promise<TaskInstanceResponse>;
   deleteTaskInstanceResponse(id: string): Promise<void>;
   bulkSaveTaskInstanceResponses(taskInstanceId: string, responses: InsertTaskInstanceResponse[]): Promise<void>;
+  
+  // Internal Tasks - Task Type operations
+  createTaskType(taskType: InsertTaskType): Promise<TaskType>;
+  getTaskTypeById(id: string): Promise<TaskType | undefined>;
+  getAllTaskTypes(includeInactive?: boolean): Promise<TaskType[]>;
+  getActiveTaskTypes(): Promise<TaskType[]>;
+  updateTaskType(id: string, taskType: UpdateTaskType): Promise<TaskType>;
+  deleteTaskType(id: string): Promise<void>;
+  
+  // Internal Tasks - Task operations
+  createInternalTask(task: InsertInternalTask): Promise<InternalTask>;
+  getInternalTaskById(id: string): Promise<InternalTask | undefined>;
+  getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]>;
+  getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]>;
+  getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]>;
+  getInternalTasksByClient(clientId: string): Promise<InternalTask[]>;
+  updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask>;
+  closeInternalTask(id: string, closeData: CloseInternalTask, userId: string): Promise<InternalTask>;
+  deleteInternalTask(id: string): Promise<void>;
+  bulkReassignTasks(taskIds: string[], assignedTo: string): Promise<void>;
+  bulkUpdateTaskStatus(taskIds: string[], status: string): Promise<void>;
+  
+  // Internal Tasks - Task Connection operations
+  createTaskConnection(connection: InsertTaskConnection): Promise<TaskConnection>;
+  getTaskConnectionsByTaskId(taskId: string): Promise<TaskConnection[]>;
+  deleteTaskConnection(id: string): Promise<void>;
+  
+  // Internal Tasks - Task Comment operations
+  createTaskComment(comment: InsertTaskComment): Promise<TaskComment>;
+  getTaskCommentsByTaskId(taskId: string): Promise<(TaskComment & { user: User })[]>;
+  updateTaskComment(id: string, comment: UpdateTaskComment): Promise<TaskComment>;
+  deleteTaskComment(id: string): Promise<void>;
+  
+  // Internal Tasks - Task Note operations
+  createTaskNote(note: InsertTaskNote): Promise<TaskNote>;
+  getTaskNotesByTaskId(taskId: string): Promise<(TaskNote & { user: User })[]>;
+  updateTaskNote(id: string, note: UpdateTaskNote): Promise<TaskNote>;
+  deleteTaskNote(id: string): Promise<void>;
+  
+  // Internal Tasks - Task Time Entry operations
+  createTaskTimeEntry(entry: InsertTaskTimeEntry): Promise<TaskTimeEntry>;
+  getTaskTimeEntriesByTaskId(taskId: string): Promise<(TaskTimeEntry & { user: User })[]>;
+  getActiveTaskTimeEntry(taskId: string, userId: string): Promise<TaskTimeEntry | undefined>;
+  stopTaskTimeEntry(id: string, stopData: StopTaskTimeEntry): Promise<TaskTimeEntry>;
+  deleteTaskTimeEntry(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -10092,6 +10161,394 @@ export class DatabaseStorage implements IStorage {
           });
       }
     });
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Type operations
+  // ============================================
+
+  async createTaskType(taskType: InsertTaskType): Promise<TaskType> {
+    const [created] = await db
+      .insert(taskTypes)
+      .values(taskType)
+      .returning();
+    return created;
+  }
+
+  async getTaskTypeById(id: string): Promise<TaskType | undefined> {
+    const [taskType] = await db
+      .select()
+      .from(taskTypes)
+      .where(eq(taskTypes.id, id));
+    return taskType;
+  }
+
+  async getAllTaskTypes(includeInactive = false): Promise<TaskType[]> {
+    const conditions = includeInactive ? [] : [eq(taskTypes.isActive, true)];
+    return await db
+      .select()
+      .from(taskTypes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(taskTypes.name);
+  }
+
+  async getActiveTaskTypes(): Promise<TaskType[]> {
+    return await db
+      .select()
+      .from(taskTypes)
+      .where(eq(taskTypes.isActive, true))
+      .orderBy(taskTypes.name);
+  }
+
+  async updateTaskType(id: string, taskType: UpdateTaskType): Promise<TaskType> {
+    const [updated] = await db
+      .update(taskTypes)
+      .set({ ...taskType, updatedAt: new Date() })
+      .where(eq(taskTypes.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task type not found");
+    }
+    return updated;
+  }
+
+  async deleteTaskType(id: string): Promise<void> {
+    await db.delete(taskTypes).where(eq(taskTypes.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task operations
+  // ============================================
+
+  async createInternalTask(task: InsertInternalTask): Promise<InternalTask> {
+    const [created] = await db
+      .insert(internalTasks)
+      .values(task)
+      .returning();
+    return created;
+  }
+
+  async getInternalTaskById(id: string): Promise<InternalTask | undefined> {
+    const [task] = await db
+      .select()
+      .from(internalTasks)
+      .where(eq(internalTasks.id, id));
+    return task;
+  }
+
+  async getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
+    const conditions = [eq(internalTasks.assignedTo, assigneeId)];
+    if (filters?.status) {
+      conditions.push(eq(internalTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(internalTasks.priority, filters.priority));
+    }
+    return await db
+      .select()
+      .from(internalTasks)
+      .where(and(...conditions))
+      .orderBy(desc(internalTasks.createdAt));
+  }
+
+  async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
+    const conditions = [eq(internalTasks.createdBy, creatorId)];
+    if (filters?.status) {
+      conditions.push(eq(internalTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(internalTasks.priority, filters.priority));
+    }
+    return await db
+      .select()
+      .from(internalTasks)
+      .where(and(...conditions))
+      .orderBy(desc(internalTasks.createdAt));
+  }
+
+  async getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]> {
+    const conditions = [];
+    if (filters?.status) {
+      conditions.push(eq(internalTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(internalTasks.priority, filters.priority));
+    }
+    if (filters?.assigneeId) {
+      conditions.push(eq(internalTasks.assignedTo, filters.assigneeId));
+    }
+    if (filters?.creatorId) {
+      conditions.push(eq(internalTasks.createdBy, filters.creatorId));
+    }
+    return await db
+      .select()
+      .from(internalTasks)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(internalTasks.createdAt));
+  }
+
+  async getInternalTasksByClient(clientId: string): Promise<InternalTask[]> {
+    const connections = await db
+      .select()
+      .from(taskConnections)
+      .where(
+        and(
+          eq(taskConnections.entityType, 'client'),
+          eq(taskConnections.entityId, clientId)
+        )
+      );
+    
+    if (connections.length === 0) {
+      return [];
+    }
+
+    const taskIds = connections.map(c => c.taskId);
+    return await db
+      .select()
+      .from(internalTasks)
+      .where(inArray(internalTasks.id, taskIds))
+      .orderBy(desc(internalTasks.createdAt));
+  }
+
+  async updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({ ...task, updatedAt: new Date() })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async closeInternalTask(id: string, closeData: CloseInternalTask, userId: string): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({
+        status: 'closed',
+        closedAt: new Date(),
+        closedBy: userId,
+        closureNote: closeData.closureNote,
+        totalTimeSpentMinutes: closeData.totalTimeSpentMinutes,
+        updatedAt: new Date(),
+      })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async deleteInternalTask(id: string): Promise<void> {
+    await db.delete(internalTasks).where(eq(internalTasks.id, id));
+  }
+
+  async bulkReassignTasks(taskIds: string[], assignedTo: string): Promise<void> {
+    if (taskIds.length === 0) return;
+    await db
+      .update(internalTasks)
+      .set({ assignedTo, updatedAt: new Date() })
+      .where(inArray(internalTasks.id, taskIds));
+  }
+
+  async bulkUpdateTaskStatus(taskIds: string[], status: string): Promise<void> {
+    if (taskIds.length === 0) return;
+    await db
+      .update(internalTasks)
+      .set({ status: status as any, updatedAt: new Date() })
+      .where(inArray(internalTasks.id, taskIds));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Connection operations
+  // ============================================
+
+  async createTaskConnection(connection: InsertTaskConnection): Promise<TaskConnection> {
+    const [created] = await db
+      .insert(taskConnections)
+      .values(connection)
+      .returning();
+    return created;
+  }
+
+  async getTaskConnectionsByTaskId(taskId: string): Promise<TaskConnection[]> {
+    return await db
+      .select()
+      .from(taskConnections)
+      .where(eq(taskConnections.taskId, taskId));
+  }
+
+  async deleteTaskConnection(id: string): Promise<void> {
+    await db.delete(taskConnections).where(eq(taskConnections.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Comment operations
+  // ============================================
+
+  async createTaskComment(comment: InsertTaskComment): Promise<TaskComment> {
+    const [created] = await db
+      .insert(taskComments)
+      .values(comment)
+      .returning();
+    return created;
+  }
+
+  async getTaskCommentsByTaskId(taskId: string): Promise<(TaskComment & { user: User })[]> {
+    return await db
+      .select({
+        id: taskComments.id,
+        taskId: taskComments.taskId,
+        userId: taskComments.userId,
+        comment: taskComments.comment,
+        createdAt: taskComments.createdAt,
+        updatedAt: taskComments.updatedAt,
+        user: users,
+      })
+      .from(taskComments)
+      .leftJoin(users, eq(taskComments.userId, users.id))
+      .where(eq(taskComments.taskId, taskId))
+      .orderBy(taskComments.createdAt);
+  }
+
+  async updateTaskComment(id: string, comment: UpdateTaskComment): Promise<TaskComment> {
+    const [updated] = await db
+      .update(taskComments)
+      .set({ ...comment, updatedAt: new Date() })
+      .where(eq(taskComments.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Comment not found");
+    }
+    return updated;
+  }
+
+  async deleteTaskComment(id: string): Promise<void> {
+    await db.delete(taskComments).where(eq(taskComments.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Note operations
+  // ============================================
+
+  async createTaskNote(note: InsertTaskNote): Promise<TaskNote> {
+    const [created] = await db
+      .insert(taskNotes)
+      .values(note)
+      .returning();
+    return created;
+  }
+
+  async getTaskNotesByTaskId(taskId: string): Promise<(TaskNote & { user: User })[]> {
+    return await db
+      .select({
+        id: taskNotes.id,
+        taskId: taskNotes.taskId,
+        userId: taskNotes.userId,
+        note: taskNotes.note,
+        createdAt: taskNotes.createdAt,
+        updatedAt: taskNotes.updatedAt,
+        user: users,
+      })
+      .from(taskNotes)
+      .leftJoin(users, eq(taskNotes.userId, users.id))
+      .where(eq(taskNotes.taskId, taskId))
+      .orderBy(taskNotes.createdAt);
+  }
+
+  async updateTaskNote(id: string, note: UpdateTaskNote): Promise<TaskNote> {
+    const [updated] = await db
+      .update(taskNotes)
+      .set({ ...note, updatedAt: new Date() })
+      .where(eq(taskNotes.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Note not found");
+    }
+    return updated;
+  }
+
+  async deleteTaskNote(id: string): Promise<void> {
+    await db.delete(taskNotes).where(eq(taskNotes.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Time Entry operations
+  // ============================================
+
+  async createTaskTimeEntry(entry: InsertTaskTimeEntry): Promise<TaskTimeEntry> {
+    const [created] = await db
+      .insert(taskTimeEntries)
+      .values(entry)
+      .returning();
+    return created;
+  }
+
+  async getTaskTimeEntriesByTaskId(taskId: string): Promise<(TaskTimeEntry & { user: User })[]> {
+    return await db
+      .select({
+        id: taskTimeEntries.id,
+        taskId: taskTimeEntries.taskId,
+        userId: taskTimeEntries.userId,
+        startTime: taskTimeEntries.startTime,
+        endTime: taskTimeEntries.endTime,
+        durationMinutes: taskTimeEntries.durationMinutes,
+        note: taskTimeEntries.note,
+        createdAt: taskTimeEntries.createdAt,
+        user: users,
+      })
+      .from(taskTimeEntries)
+      .leftJoin(users, eq(taskTimeEntries.userId, users.id))
+      .where(eq(taskTimeEntries.taskId, taskId))
+      .orderBy(desc(taskTimeEntries.startTime));
+  }
+
+  async getActiveTaskTimeEntry(taskId: string, userId: string): Promise<TaskTimeEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(taskTimeEntries)
+      .where(
+        and(
+          eq(taskTimeEntries.taskId, taskId),
+          eq(taskTimeEntries.userId, userId),
+          isNull(taskTimeEntries.endTime)
+        )
+      )
+      .orderBy(desc(taskTimeEntries.startTime))
+      .limit(1);
+    return entry;
+  }
+
+  async stopTaskTimeEntry(id: string, stopData: StopTaskTimeEntry): Promise<TaskTimeEntry> {
+    const [entry] = await db
+      .select()
+      .from(taskTimeEntries)
+      .where(eq(taskTimeEntries.id, id));
+    
+    if (!entry) {
+      throw new Error("Time entry not found");
+    }
+
+    const endTime = new Date();
+    const durationMinutes = Math.floor((endTime.getTime() - new Date(entry.startTime).getTime()) / 1000 / 60);
+
+    const [updated] = await db
+      .update(taskTimeEntries)
+      .set({
+        endTime,
+        durationMinutes,
+        note: stopData.note || entry.note,
+      })
+      .where(eq(taskTimeEntries.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteTaskTimeEntry(id: string): Promise<void> {
+    await db.delete(taskTimeEntries).where(eq(taskTimeEntries.id, id));
   }
 }
 

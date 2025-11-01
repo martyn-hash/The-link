@@ -22,6 +22,7 @@ import { registerTaskRoutes } from "./routes/tasks";
 import { registerMessageRoutes } from "./routes/messages";
 import { registerIntegrationRoutes } from "./routes/integrations";
 import { registerAuthAndMiscRoutes } from "./routes/auth";
+import { registerInternalTaskRoutes } from "./routes/internalTasks";
 
 /**
  * Register all application routes
@@ -66,6 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerProjectRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager, upload);
   registerServiceRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerTaskRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerInternalTaskRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerMessageRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, verifyMessageAttachmentAccess, verifyThreadAccess);
   registerIntegrationRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
 

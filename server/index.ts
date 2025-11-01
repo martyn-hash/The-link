@@ -8,6 +8,7 @@ import { sendSchedulingSummaryEmail } from "./emailService";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
 import { storage } from "./storage";
+import { seedTaskTypes } from "./seedData";
 import fs from "fs";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -99,8 +100,11 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+    
+    // Seed initial task types
+    await seedTaskTypes();
     
     // Setup nightly project scheduling
     // Runs every day at 1:00 AM UTC (before CH sync to ensure projects are created first)

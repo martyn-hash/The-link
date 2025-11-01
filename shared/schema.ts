@@ -83,6 +83,12 @@ export const comparisonTypeEnum = pgEnum("comparison_type", ["equal_to", "less_t
 // UDF type enum for services
 export const udfTypeEnum = pgEnum("udf_type", ["number", "date", "boolean", "short_text"]);
 
+// Internal task status enum
+export const internalTaskStatusEnum = pgEnum("internal_task_status", ["open", "in_progress", "closed"]);
+
+// Internal task priority enum
+export const internalTaskPriorityEnum = pgEnum("internal_task_priority", ["low", "medium", "high", "urgent"]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2360,6 +2366,100 @@ export const clientCustomRequestQuestions = pgTable("client_custom_request_quest
   index("idx_client_custom_request_questions_order").on(table.sectionId, table.order),
 ]);
 
+// ============================================
+// INTERNAL TASKS SYSTEM
+// ============================================
+
+// Task types table - admin-defined list of task types
+export const taskTypes = pgTable("task_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Internal tasks table - staff task management
+export const internalTasks = pgTable("internal_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  status: internalTaskStatusEnum("status").notNull().default("open"),
+  priority: internalTaskPriorityEnum("priority").notNull().default("low"),
+  taskTypeId: varchar("task_type_id").references(() => taskTypes.id, { onDelete: "set null" }),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  assignedTo: varchar("assigned_to").notNull().references(() => users.id),
+  dueDate: timestamp("due_date"),
+  closedAt: timestamp("closed_at"),
+  closedBy: varchar("closed_by").references(() => users.id),
+  closureNote: text("closure_note"),
+  totalTimeSpentMinutes: integer("total_time_spent_minutes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_internal_tasks_status").on(table.status),
+  index("idx_internal_tasks_priority").on(table.priority),
+  index("idx_internal_tasks_created_by").on(table.createdBy),
+  index("idx_internal_tasks_assigned_to").on(table.assignedTo),
+  index("idx_internal_tasks_task_type_id").on(table.taskTypeId),
+  index("idx_internal_tasks_due_date").on(table.dueDate),
+]);
+
+// Task connections table - links tasks to other entities
+export const taskConnections = pgTable("task_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  entityType: varchar("entity_type").notNull(), // 'client', 'project', 'person', 'message', 'service'
+  entityId: varchar("entity_id").notNull(), // ID of the connected entity
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_connections_task_id").on(table.taskId),
+  index("idx_task_connections_entity").on(table.entityType, table.entityId),
+]);
+
+// Task comments table - for collaboration
+export const taskComments = pgTable("task_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  comment: text("comment").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_comments_task_id").on(table.taskId),
+  index("idx_task_comments_user_id").on(table.userId),
+]);
+
+// Task notes table - for progress tracking
+export const taskNotes = pgTable("task_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  note: text("note").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_task_notes_task_id").on(table.taskId),
+  index("idx_task_notes_user_id").on(table.userId),
+]);
+
+// Task time entries table - for time tracking
+export const taskTimeEntries = pgTable("task_time_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time"),
+  durationMinutes: integer("duration_minutes"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_time_entries_task_id").on(table.taskId),
+  index("idx_task_time_entries_user_id").on(table.userId),
+  index("idx_task_time_entries_start_time").on(table.startTime),
+]);
+
 // Zod schemas for risk assessments
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
@@ -2469,6 +2569,92 @@ export const insertClientCustomRequestQuestionSchema = createInsertSchema(client
 
 export const updateClientCustomRequestQuestionSchema = insertClientCustomRequestQuestionSchema.partial();
 
+// Zod schemas for internal tasks
+export const insertTaskTypeSchema = createInsertSchema(taskTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskTypeSchema = insertTaskTypeSchema.partial();
+
+export const insertInternalTaskSchema = createInsertSchema(internalTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  closedAt: true,
+  closedBy: true,
+  totalTimeSpentMinutes: true,
+}).extend({
+  dueDate: z.union([z.string(), z.date()]).optional().nullable().transform(val => {
+    if (!val) return null;
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+});
+
+export const updateInternalTaskSchema = insertInternalTaskSchema.partial();
+
+export const closeInternalTaskSchema = z.object({
+  closureNote: z.string().min(1, "Closure note is required"),
+  totalTimeSpentMinutes: z.number().int().min(0, "Time spent must be a positive number"),
+});
+
+export const insertTaskConnectionSchema = createInsertSchema(taskConnections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTaskCommentSchema = createInsertSchema(taskComments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskCommentSchema = z.object({
+  comment: z.string().min(1, "Comment cannot be empty"),
+});
+
+export const insertTaskNoteSchema = createInsertSchema(taskNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskNoteSchema = z.object({
+  note: z.string().min(1, "Note cannot be empty"),
+});
+
+export const insertTaskTimeEntrySchema = createInsertSchema(taskTimeEntries).omit({
+  id: true,
+  createdAt: true,
+  durationMinutes: true,
+}).extend({
+  startTime: z.union([z.string(), z.date()]).transform(val => {
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+  endTime: z.union([z.string(), z.date()]).optional().nullable().transform(val => {
+    if (!val) return null;
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+});
+
+export const stopTaskTimeEntrySchema = z.object({
+  note: z.string().optional(),
+});
+
+export const bulkReassignTasksSchema = z.object({
+  taskIds: z.array(z.string().uuid()),
+  assignedTo: z.string().uuid(),
+});
+
+export const bulkUpdateTaskStatusSchema = z.object({
+  taskIds: z.array(z.string().uuid()),
+  status: z.enum(["open", "in_progress", "closed"]),
+});
+
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
@@ -2529,6 +2715,26 @@ export type UpdateClientCustomRequestSection = z.infer<typeof updateClientCustom
 export type ClientCustomRequestQuestion = typeof clientCustomRequestQuestions.$inferSelect;
 export type InsertClientCustomRequestQuestion = z.infer<typeof insertClientCustomRequestQuestionSchema>;
 export type UpdateClientCustomRequestQuestion = z.infer<typeof updateClientCustomRequestQuestionSchema>;
+export type TaskType = typeof taskTypes.$inferSelect;
+export type InsertTaskType = z.infer<typeof insertTaskTypeSchema>;
+export type UpdateTaskType = z.infer<typeof updateTaskTypeSchema>;
+export type InternalTask = typeof internalTasks.$inferSelect;
+export type InsertInternalTask = z.infer<typeof insertInternalTaskSchema>;
+export type UpdateInternalTask = z.infer<typeof updateInternalTaskSchema>;
+export type CloseInternalTask = z.infer<typeof closeInternalTaskSchema>;
+export type TaskConnection = typeof taskConnections.$inferSelect;
+export type InsertTaskConnection = z.infer<typeof insertTaskConnectionSchema>;
+export type TaskComment = typeof taskComments.$inferSelect;
+export type InsertTaskComment = z.infer<typeof insertTaskCommentSchema>;
+export type UpdateTaskComment = z.infer<typeof updateTaskCommentSchema>;
+export type TaskNote = typeof taskNotes.$inferSelect;
+export type InsertTaskNote = z.infer<typeof insertTaskNoteSchema>;
+export type UpdateTaskNote = z.infer<typeof updateTaskNoteSchema>;
+export type TaskTimeEntry = typeof taskTimeEntries.$inferSelect;
+export type InsertTaskTimeEntry = z.infer<typeof insertTaskTimeEntrySchema>;
+export type StopTaskTimeEntry = z.infer<typeof stopTaskTimeEntrySchema>;
+export type BulkReassignTasks = z.infer<typeof bulkReassignTasksSchema>;
+export type BulkUpdateTaskStatus = z.infer<typeof bulkUpdateTaskStatusSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
