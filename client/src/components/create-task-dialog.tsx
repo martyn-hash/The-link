@@ -33,21 +33,23 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X, Loader2 } from "lucide-react";
-import { insertInternalTaskSchema, type TaskType, type User } from "@shared/schema";
+import { type TaskType, type User } from "@shared/schema";
 import { format } from "date-fns";
+import { z } from "zod";
 
-// Use the insert schema as-is
-const taskFormSchema = insertInternalTaskSchema;
+// Custom form schema that matches the form fields
+// Note: createdBy will be added by the server, assignedToId will be mapped to assignedTo
+const taskFormSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  taskTypeId: z.string().uuid("Please select a task type"),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  status: z.enum(["open", "in_progress", "closed"]),
+  assignedToId: z.string().uuid("Please select an assignee"),
+  dueDate: z.string().optional(),
+});
 
-type TaskFormData = {
-  title: string;
-  description?: string;
-  taskTypeId: string;
-  priority: "low" | "medium" | "high" | "urgent";
-  status: "open" | "in_progress" | "closed";
-  assignedToId: string;
-  dueDate?: string;
-};
+type TaskFormData = z.infer<typeof taskFormSchema>;
 
 // Connection data is handled separately, not part of the form schema
 interface ConnectionData {
@@ -136,8 +138,9 @@ export function CreateTaskDialog({
         taskTypeId: data.taskTypeId,
         priority: data.priority,
         status: data.status,
-        assignedToId: data.assignedToId,
+        assignedTo: data.assignedToId, // Backend expects 'assignedTo' not 'assignedToId'
         dueDate: data.dueDate || null,
+        // createdBy will be added by the server from authenticated user
       });
 
       // Create connections if provided
@@ -413,7 +416,7 @@ export function CreateTaskDialog({
   // If a custom trigger is provided, use it
   if (trigger) {
     return (
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={setOpen} modal={false}>
         <DialogTrigger asChild>{trigger}</DialogTrigger>
         {dialogContent}
       </Dialog>
@@ -422,7 +425,7 @@ export function CreateTaskDialog({
 
   // Default trigger button
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen} modal={false}>
       <DialogTrigger asChild>
         <Button data-testid="button-create-task-trigger">
           <Plus className="w-4 h-4 mr-2" />

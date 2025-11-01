@@ -28,7 +28,7 @@ export function registerInternalTaskRoutes(
   // TASK TYPES ROUTES (Admin Only)
   // ============================================
 
-  app.get("/api/task-types", isAuthenticated, async (req, res) => {
+  app.get("/api/internal-task-types", isAuthenticated, async (req, res) => {
     try {
       const includeInactive = req.query.includeInactive === 'true';
       const taskTypes = await storage.getAllTaskTypes(includeInactive);
@@ -39,7 +39,7 @@ export function registerInternalTaskRoutes(
     }
   });
 
-  app.get("/api/task-types/active", isAuthenticated, async (req, res) => {
+  app.get("/api/internal-task-types/active", isAuthenticated, async (req, res) => {
     try {
       const taskTypes = await storage.getActiveTaskTypes();
       res.json(taskTypes);
@@ -49,7 +49,7 @@ export function registerInternalTaskRoutes(
     }
   });
 
-  app.post("/api/task-types", isAuthenticated, requireAdmin, async (req, res) => {
+  app.post("/api/internal-task-types", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const taskType = insertTaskTypeSchema.parse(req.body);
       const created = await storage.createTaskType(taskType);
@@ -60,7 +60,7 @@ export function registerInternalTaskRoutes(
     }
   });
 
-  app.patch("/api/task-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.patch("/api/internal-task-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const taskType = updateTaskTypeSchema.parse(req.body);
       const updated = await storage.updateTaskType(req.params.id, taskType);
@@ -71,7 +71,7 @@ export function registerInternalTaskRoutes(
     }
   });
 
-  app.delete("/api/task-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
+  app.delete("/api/internal-task-types/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteTaskType(req.params.id);
       res.status(204).send();
@@ -170,7 +170,14 @@ export function registerInternalTaskRoutes(
 
   app.post("/api/internal-tasks", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const taskData = insertInternalTaskSchema.parse(req.body);
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Add createdBy from authenticated user
+      const taskData = insertInternalTaskSchema.parse({
+        ...req.body,
+        createdBy: userId,
+      });
+      
       const created = await storage.createInternalTask(taskData);
       res.json(created);
     } catch (error) {

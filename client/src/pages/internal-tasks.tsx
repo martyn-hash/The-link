@@ -179,7 +179,7 @@ export default function InternalTasks() {
   // Bulk status change mutation
   const bulkStatusMutation = useMutation({
     mutationFn: async (status: string) => {
-      return await apiRequest("POST", "/api/internal-tasks/bulk/status", {
+      return await apiRequest("POST", "/api/internal-tasks/bulk/update-status", {
         taskIds: selectedTasks,
         status,
       });
