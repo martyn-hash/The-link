@@ -1,4 +1,4 @@
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link as RouterLink } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,11 +26,13 @@ import ProjectInfo from "@/components/project-info";
 import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
 import ProjectMessaging from "@/components/ProjectMessaging";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useActivityTracker } from "@/lib/activityTracker";
+import { format } from "date-fns";
 
 interface RoleAssigneeResponse {
   user: User | null;
@@ -85,6 +89,12 @@ export default function ProjectDetail() {
     queryKey: ['/api/config/project-types', project?.projectTypeId, 'stages'],
     enabled: !!project?.projectTypeId,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch internal tasks for this project
+  const { data: projectInternalTasks, isLoading: projectInternalTasksLoading } = useQuery<any[]>({
+    queryKey: [`/api/internal-tasks/project/${projectId}`],
+    enabled: !!projectId,
   });
 
   // Find current stage and check if it allows completion
@@ -398,9 +408,10 @@ export default function ProjectDetail() {
 
         {/* Tabs Layout */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-3xl grid-cols-3">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
+            <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6">
@@ -419,6 +430,104 @@ export default function ProjectDetail() {
 
           <TabsContent value="messages" className="mt-6">
             <ProjectMessaging projectId={project.id} project={project} />
+          </TabsContent>
+
+          <TabsContent value="tasks" className="mt-6">
+            {/* Internal Tasks Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5" />
+                    Internal Tasks
+                  </CardTitle>
+                  <CreateTaskDialog
+                    trigger={
+                      <Button
+                        variant="default"
+                        size="sm"
+                        data-testid="button-new-internal-task"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Task
+                      </Button>
+                    }
+                    defaultConnections={{ projectId }}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {projectInternalTasksLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : !projectInternalTasks || projectInternalTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No internal tasks for this project yet.</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Assigned To</TableHead>
+                          <TableHead>Created</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {projectInternalTasks.map((task: any) => (
+                          <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
+                            <TableCell className="font-medium">
+                              <RouterLink href={`/internal-tasks?task=${task.id}`}>
+                                <button className="hover:underline text-left" data-testid={`link-task-${task.id}`}>
+                                  {task.title}
+                                </button>
+                              </RouterLink>
+                            </TableCell>
+                            <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  task.priority === 'urgent' ? 'destructive' :
+                                  task.priority === 'high' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-priority-${task.id}`}
+                              >
+                                {task.priority}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  task.status === 'closed' ? 'outline' :
+                                  task.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${task.id}`}
+                              >
+                                {task.status === 'in_progress' ? 'In Progress' : task.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {format(new Date(task.createdAt), 'MMM d, yyyy')}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

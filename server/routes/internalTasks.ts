@@ -155,6 +155,16 @@ export function registerInternalTaskRoutes(
     }
   });
 
+  app.get("/api/internal-tasks/project/:projectId", isAuthenticated, async (req, res) => {
+    try {
+      const tasks = await storage.getInternalTasksByProject(req.params.projectId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching project tasks:", error);
+      res.status(500).json({ message: "Failed to fetch project tasks" });
+    }
+  });
+
   app.get("/api/internal-tasks/:id", isAuthenticated, async (req, res) => {
     try {
       const task = await storage.getInternalTaskById(req.params.id);

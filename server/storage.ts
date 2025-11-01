@@ -880,6 +880,7 @@ export interface IStorage {
   getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]>;
   getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]>;
   getInternalTasksByClient(clientId: string): Promise<InternalTask[]>;
+  getInternalTasksByProject(projectId: string): Promise<InternalTask[]>;
   updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask>;
   closeInternalTask(id: string, closeData: CloseInternalTask, userId: string): Promise<InternalTask>;
   deleteInternalTask(id: string): Promise<void>;
@@ -10295,6 +10296,29 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(taskConnections.entityType, 'client'),
           eq(taskConnections.entityId, clientId)
+        )
+      );
+    
+    if (connections.length === 0) {
+      return [];
+    }
+
+    const taskIds = connections.map(c => c.taskId);
+    return await db
+      .select()
+      .from(internalTasks)
+      .where(inArray(internalTasks.id, taskIds))
+      .orderBy(desc(internalTasks.createdAt));
+  }
+
+  async getInternalTasksByProject(projectId: string): Promise<InternalTask[]> {
+    const connections = await db
+      .select()
+      .from(taskConnections)
+      .where(
+        and(
+          eq(taskConnections.entityType, 'project'),
+          eq(taskConnections.entityId, projectId)
         )
       );
     
