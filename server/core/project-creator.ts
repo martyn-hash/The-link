@@ -117,7 +117,7 @@ export async function handleSingleProjectConstraint(
 
 /**
  * Resolve assignee for a new project
- * Uses hierarchy: service owner > first stage's role assignment > stage direct user > fallback
+ * Uses hierarchy: service owner > role assignment > stage default > fallback
  */
 export async function resolveProjectAssignee(
   dueService: DueService,
@@ -131,49 +131,39 @@ export async function resolveProjectAssignee(
     }
   }
 
-  // 2. Get first kanban stage to determine what role is needed
-  const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
-  const firstStage = stages.sort((a, b) => a.order - b.order)[0];
-  
-  if (firstStage) {
-    // 2a. Try stage's role-based assignment FIRST (client-specific)
-    if (firstStage.assignedWorkRoleId && dueService.type === 'client' && dueService.clientId) {
-      console.log(`[resolveProjectAssignee] First stage has assignedWorkRoleId: ${firstStage.assignedWorkRoleId}`);
-      const workRole = await storage.getWorkRoleById(firstStage.assignedWorkRoleId);
-      if (workRole) {
-        console.log(`[resolveProjectAssignee] Work role found: ${workRole.name}`);
-        console.log(`[resolveProjectAssignee] Looking for ${workRole.name} assignment for client ${dueService.clientId}, project type ${projectType.id}`);
-        const roleUser = await storage.resolveRoleAssigneeForClient(
-          dueService.clientId,
-          projectType.id,
-          workRole.name
-        );
-        if (roleUser) {
-          console.log(`[resolveProjectAssignee] Role user found: ${roleUser.email}`);
-          return roleUser.id;
-        } else {
-          console.warn(`[resolveProjectAssignee] No role user found for ${workRole.name}`);
-        }
-      } else {
-        console.warn(`[resolveProjectAssignee] Work role not found for ID: ${firstStage.assignedWorkRoleId}`);
-      }
-    } else {
-      console.log(`[resolveProjectAssignee] First stage does not have role assignment or not a client service. assignedWorkRoleId: ${firstStage.assignedWorkRoleId}, type: ${dueService.type}, clientId: ${dueService.clientId}`);
-    }
+  // 2. Try role assignments
+  if (dueService.type === 'client' && dueService.clientId) {
+    const clientService = await storage.getClientServiceByClientAndProjectType(
+      dueService.clientId,
+      projectType.id
+    );
     
-    // 2b. Try stage's direct user assignment (fallback)
-    if (firstStage.assignedUserId) {
-      return firstStage.assignedUserId;
+    if (clientService) {
+      const roleAssignments = await storage.getClientServiceRoleAssignments(clientService.id);
+      if (roleAssignments.length > 0) {
+        // Get first active assignment
+        const activeAssignment = roleAssignments.find(a => a.isActive);
+        if (activeAssignment) {
+          return activeAssignment.userId;
+        }
+      }
     }
   }
 
-  // 3. Fallback to admin
+  // 3. Try first kanban stage default assignee
+  const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
+  const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+  if (firstStage?.assignedUserId) {
+    return firstStage.assignedUserId;
+  }
+
+  // 4. Fallback to admin
   const adminUser = await storage.getUserByEmail('admin@example.com');
   if (adminUser) {
     return adminUser.id;
   }
 
-  // 4. Ultimate fallback - first user in system
+  // 5. Ultimate fallback - first user in system
   const allUsers = await storage.getAllUsers();
   if (allUsers.length > 0) {
     return allUsers[0].id;
