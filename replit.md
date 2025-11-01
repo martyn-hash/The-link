@@ -32,6 +32,13 @@ Preferred communication style: Simple, everyday language.
   - `/api/dashboard/attention-needed`: Efficiently combines overdue + behind schedule logic
 - **Performance**: Individual queries run <5s, total dashboard load time under 4 seconds
 - **Data Integrity**: `currentAssigneeId` now single source of truth for project assignees throughout app
+- **Dashboard Feature Parity**: MyTasksPanel and MyProjectsPanel now use the shared TaskList component (same as /projects page), providing:
+  - Column reordering via drag-and-drop
+  - Column visibility controls
+  - Column resizing
+  - Sorting by any column
+  - Full column set (Client, Project Type, Service Owner, Due Date, Status, Assigned To, Time in Stage, etc.)
+  - Separate column preferences per viewType (my-tasks, my-projects, projects)
 
 **Dashboard Performance Optimization - Earlier November 2025**
 - Simplified home dashboard to show only "Recently Viewed" panel (removed complex metrics and project lists)
