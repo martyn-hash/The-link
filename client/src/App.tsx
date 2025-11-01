@@ -55,6 +55,7 @@ import PortalDocuments from "@/pages/portal/PortalDocuments";
 import Messages from "@/pages/messages";
 import InternalChat from "@/pages/internal-chat";
 import ClientRequests from "@/pages/client-requests";
+import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -64,7 +65,7 @@ function Router() {
       <div className="min-h-screen bg-gradient-to-br from-[#0A7BBF]/10 via-white to-[#76CA23]/10 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <img 
-            src="/attached_assets/full_logo_transparent_600_1761924125378.png" 
+            src={logoPath} 
             alt="Growth Accountants" 
             className="h-20 mx-auto mb-6 animate-pulse"
           />
