@@ -443,7 +443,7 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                         <Input
                           type="date"
                           value={task.dueDate ? format(new Date(task.dueDate), 'yyyy-MM-dd') : ''}
-                          onChange={(e) => updateTaskMutation.mutate({ dueDate: e.target.value ? new Date(e.target.value) : null })}
+                          onChange={(e) => updateTaskMutation.mutate({ dueDate: e.target.value ? new Date(e.target.value) : undefined })}
                           data-testid="input-due-date"
                         />
                       </div>

@@ -57,6 +57,7 @@ import Messages from "@/pages/messages";
 import InternalChat from "@/pages/internal-chat";
 import ClientRequests from "@/pages/client-requests";
 import InternalTasks from "@/pages/internal-tasks";
+import InternalTaskDetail from "@/pages/internal-task-detail";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 function Router() {
@@ -142,6 +143,7 @@ function Router() {
       <Route path="/task-submissions/:id" component={TaskSubmissionDetail} />
       <Route path="/task-submissions" component={TaskSubmissions} />
       <Route path="/task-instances/:id" component={TaskInstanceDetail} />
+      <Route path="/internal-tasks/:id" component={InternalTaskDetail} />
       <Route path="/internal-tasks" component={InternalTasks} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />

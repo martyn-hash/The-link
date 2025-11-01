@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -8,13 +8,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -24,26 +26,14 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   ClipboardList,
-  Plus,
-  Filter,
-  MoreVertical,
   Clock,
-  CheckCircle2,
-  Circle,
-  AlertCircle,
+  Eye,
 } from "lucide-react";
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
-import { TaskDetailDialog } from "@/components/task-detail-dialog";
 import TopNavigation from "@/components/top-navigation";
+import { format } from "date-fns";
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -51,10 +41,109 @@ interface InternalTaskWithRelations extends InternalTask {
   creator?: User | null;
 }
 
+function TaskRow({ task, selected, onSelect, onViewClick }: {
+  task: InternalTaskWithRelations;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onViewClick: () => void;
+}) {
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "urgent":
+        return "bg-red-500 text-white";
+      case "high":
+        return "bg-orange-500 text-white";
+      case "medium":
+        return "bg-blue-500 text-white";
+      case "low":
+        return "bg-gray-500 text-white";
+      default:
+        return "bg-gray-500 text-white";
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "open":
+        return "bg-blue-500 text-white";
+      case "in_progress":
+        return "bg-yellow-500 text-white";
+      case "closed":
+        return "bg-green-500 text-white";
+      default:
+        return "bg-gray-500 text-white";
+    }
+  };
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return '-';
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return format(dateObj, 'd MMM yyyy');
+  };
+
+  return (
+    <TableRow data-testid={`row-task-${task.id}`}>
+      <TableCell className="w-12">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          data-testid={`checkbox-task-${task.id}`}
+        />
+      </TableCell>
+      <TableCell className="font-medium">
+        <span data-testid={`text-title-${task.id}`}>
+          {task.title}
+        </span>
+        {task.description && (
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-1" data-testid={`text-description-${task.id}`}>
+            {task.description}
+          </p>
+        )}
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className={`text-xs ${getPriorityColor(task.priority)}`} data-testid={`badge-priority-${task.id}`}>
+          {task.priority}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className={`text-xs ${getStatusColor(task.status)}`} data-testid={`badge-status-${task.id}`}>
+          {task.status === "in_progress" ? "In Progress" : task.status}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-type-${task.id}`}>
+          {task.taskType?.name || '-'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-assignee-${task.id}`}>
+          {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : '-'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-due-${task.id}`}>
+          {formatDate(task.dueDate)}
+        </span>
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onViewClick}
+          data-testid={`button-view-${task.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function InternalTasks() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"assigned" | "created" | "all">("assigned");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -63,57 +152,6 @@ export default function InternalTasks() {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
-  
-  // Handle task detail dialog via URL parameters
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
-
-  // Sync dialog state with URL parameters
-  useEffect(() => {
-    const checkUrl = () => {
-      const params = new URLSearchParams(window.location.search);
-      const taskId = params.get("task");
-      console.log("[InternalTasks] URL changed, taskId from params:", taskId);
-      console.log("[InternalTasks] Current location:", location);
-      console.log("[InternalTasks] Window search:", window.location.search);
-      setSelectedTaskId(taskId);
-      setTaskDetailOpen(!!taskId);
-      console.log("[InternalTasks] Set taskDetailOpen to:", !!taskId);
-    };
-
-    // Check immediately
-    checkUrl();
-
-    // Also listen to popstate for browser back/forward navigation
-    window.addEventListener('popstate', checkUrl);
-    
-    return () => {
-      window.removeEventListener('popstate', checkUrl);
-    };
-  }, [location]);
-
-  const handleOpenTaskDetail = (taskId: string) => {
-    console.log("[InternalTasks] handleOpenTaskDetail called with taskId:", taskId);
-    
-    // Immediately update state to open the dialog
-    setSelectedTaskId(taskId);
-    setTaskDetailOpen(true);
-    console.log("[InternalTasks] State updated directly - taskId:", taskId, "open: true");
-    
-    // Also update URL for browser history
-    const params = new URLSearchParams(window.location.search);
-    params.set("task", taskId);
-    const newLocation = `/internal-tasks?${params.toString()}`;
-    console.log("[InternalTasks] Setting location to:", newLocation);
-    setLocation(newLocation);
-  };
-
-  const handleCloseTaskDetail = () => {
-    const params = new URLSearchParams(window.location.search);
-    params.delete("task");
-    const newSearch = params.toString();
-    setLocation(newSearch ? `/internal-tasks?${newSearch}` : "/internal-tasks");
-  };
 
   // Fetch staff members for bulk reassign
   const { data: staff = [] } = useQuery<User[]>({
@@ -197,6 +235,10 @@ export default function InternalTasks() {
     }
   };
 
+  const handleViewTask = (taskId: string) => {
+    setLocation(`/internal-tasks/${taskId}`);
+  };
+
   // Bulk reassign mutation
   const bulkReassignMutation = useMutation({
     mutationFn: async (assignedToId: string) => {
@@ -210,7 +252,6 @@ export default function InternalTasks() {
         title: "Tasks reassigned",
         description: `${selectedTasks.length} task(s) have been reassigned successfully.`,
       });
-      // Invalidate all task queries
       queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey[0];
@@ -243,7 +284,6 @@ export default function InternalTasks() {
         title: "Status updated",
         description: `${selectedTasks.length} task(s) have been updated successfully.`,
       });
-      // Invalidate all task queries
       queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey[0];
@@ -275,53 +315,44 @@ export default function InternalTasks() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "open":
-        return <Circle className="w-4 h-4 text-blue-500" data-testid={`icon-status-open`} />;
-      case "in_progress":
-        return <Clock className="w-4 h-4 text-yellow-500" data-testid={`icon-status-in-progress`} />;
-      case "closed":
-        return <CheckCircle2 className="w-4 h-4 text-green-500" data-testid={`icon-status-closed`} />;
-      default:
-        return <Circle className="w-4 h-4" data-testid={`icon-status-default`} />;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "open":
-        return <Badge variant="secondary" data-testid={`badge-status-open`}>Open</Badge>;
-      case "in_progress":
-        return <Badge variant="default" className="bg-yellow-500" data-testid={`badge-status-in-progress`}>In Progress</Badge>;
-      case "closed":
-        return <Badge variant="default" className="bg-green-500" data-testid={`badge-status-closed`}>Closed</Badge>;
-      default:
-        return <Badge variant="outline" data-testid={`badge-status-default`}>{status}</Badge>;
-    }
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case "low":
-        return <Badge variant="outline" data-testid={`badge-priority-low`}>Low</Badge>;
-      case "medium":
-        return <Badge variant="secondary" data-testid={`badge-priority-medium`}>Medium</Badge>;
-      case "high":
-        return <Badge variant="destructive" data-testid={`badge-priority-high`}>High</Badge>;
-      default:
-        return <Badge variant="outline" data-testid={`badge-priority-default`}>{priority}</Badge>;
-    }
-  };
-
-  const formatDate = (date: Date | string | null) => {
-    if (!date) return null;
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+  const TaskTable = () => (
+    <div className="border rounded-lg">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-12">
+              <Checkbox
+                checked={selectedTasks.length === tasks.length && tasks.length > 0}
+                onCheckedChange={handleSelectAll}
+                data-testid="checkbox-select-all"
+              />
+            </TableHead>
+            <TableHead>Task</TableHead>
+            <TableHead>Priority</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Assigned To</TableHead>
+            <TableHead>Due Date</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {tasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              selected={selectedTasks.includes(task.id)}
+              onSelect={(checked) => handleSelectTask(task.id, checked)}
+              onViewClick={() => handleViewTask(task.id)}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20">
       <TopNavigation user={user} />
       
       <div className="container mx-auto p-6 space-y-6">
@@ -391,6 +422,7 @@ export default function InternalTasks() {
                       <SelectItem value="low" data-testid="option-priority-low">Low</SelectItem>
                       <SelectItem value="medium" data-testid="option-priority-medium">Medium</SelectItem>
                       <SelectItem value="high" data-testid="option-priority-high">High</SelectItem>
+                      <SelectItem value="urgent" data-testid="option-priority-urgent">Urgent</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -441,88 +473,7 @@ export default function InternalTasks() {
                     No tasks assigned to you
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Select All */}
-                    <div className="flex items-center gap-2 pb-2 border-b">
-                      <Checkbox
-                        checked={selectedTasks.length === tasks.length && tasks.length > 0}
-                        onCheckedChange={handleSelectAll}
-                        data-testid="checkbox-select-all"
-                      />
-                      <span className="text-sm font-medium">Select All</span>
-                    </div>
-
-                    {tasks.map((task) => (
-                      <Card key={task.id} className="hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <Checkbox
-                              checked={selectedTasks.includes(task.id)}
-                              onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
-                              data-testid={`checkbox-task-${task.id}`}
-                            />
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <button
-                                    type="button"
-                                    className="text-left font-semibold hover:underline cursor-pointer bg-transparent border-0 p-0"
-                                    data-testid={`link-task-${task.id}`}
-                                    onClick={() => handleOpenTaskDetail(task.id)}
-                                  >
-                                    {task.title}
-                                  </button>
-                                  {task.description && (
-                                    <p className="text-sm text-muted-foreground mt-1" data-testid={`text-description-${task.id}`}>
-                                      {task.description}
-                                    </p>
-                                  )}
-                                </div>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" data-testid={`button-menu-${task.id}`}>
-                                      <MoreVertical className="w-4 h-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem data-testid={`menu-edit-${task.id}`}>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem data-testid={`menu-close-${task.id}`}>Close Task</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive" data-testid={`menu-delete-${task.id}`}>
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 text-sm">
-                                <div className="flex items-center gap-1">
-                                  {getStatusIcon(task.status)}
-                                  {getStatusBadge(task.status)}
-                                </div>
-                                {getPriorityBadge(task.priority)}
-                                {task.taskType && (
-                                  <Badge variant="outline" data-testid={`badge-type-${task.id}`}>
-                                    {task.taskType.name}
-                                  </Badge>
-                                )}
-                                {task.dueDate && (
-                                  <span className="text-muted-foreground flex items-center gap-1" data-testid={`text-due-${task.id}`}>
-                                    <Clock className="w-3 h-3" />
-                                    Due: {formatDate(task.dueDate)}
-                                  </span>
-                                )}
-                                {task.assignee && (
-                                  <span className="text-muted-foreground" data-testid={`text-assignee-${task.id}`}>
-                                    Assigned to: {task.assignee.firstName} {task.assignee.lastName}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <TaskTable />
                 )}
               </TabsContent>
 
@@ -536,88 +487,7 @@ export default function InternalTasks() {
                     No tasks created by you
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Select All */}
-                    <div className="flex items-center gap-2 pb-2 border-b">
-                      <Checkbox
-                        checked={selectedTasks.length === tasks.length && tasks.length > 0}
-                        onCheckedChange={handleSelectAll}
-                        data-testid="checkbox-select-all"
-                      />
-                      <span className="text-sm font-medium">Select All</span>
-                    </div>
-
-                    {tasks.map((task) => (
-                      <Card key={task.id} className="hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <Checkbox
-                              checked={selectedTasks.includes(task.id)}
-                              onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
-                              data-testid={`checkbox-task-${task.id}`}
-                            />
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <button
-                                    type="button"
-                                    className="text-left font-semibold hover:underline cursor-pointer bg-transparent border-0 p-0"
-                                    data-testid={`link-task-${task.id}`}
-                                    onClick={() => handleOpenTaskDetail(task.id)}
-                                  >
-                                    {task.title}
-                                  </button>
-                                  {task.description && (
-                                    <p className="text-sm text-muted-foreground mt-1" data-testid={`text-description-${task.id}`}>
-                                      {task.description}
-                                    </p>
-                                  )}
-                                </div>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" data-testid={`button-menu-${task.id}`}>
-                                      <MoreVertical className="w-4 h-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem data-testid={`menu-edit-${task.id}`}>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem data-testid={`menu-close-${task.id}`}>Close Task</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive" data-testid={`menu-delete-${task.id}`}>
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 text-sm">
-                                <div className="flex items-center gap-1">
-                                  {getStatusIcon(task.status)}
-                                  {getStatusBadge(task.status)}
-                                </div>
-                                {getPriorityBadge(task.priority)}
-                                {task.taskType && (
-                                  <Badge variant="outline" data-testid={`badge-type-${task.id}`}>
-                                    {task.taskType.name}
-                                  </Badge>
-                                )}
-                                {task.dueDate && (
-                                  <span className="text-muted-foreground flex items-center gap-1" data-testid={`text-due-${task.id}`}>
-                                    <Clock className="w-3 h-3" />
-                                    Due: {formatDate(task.dueDate)}
-                                  </span>
-                                )}
-                                {task.assignee && (
-                                  <span className="text-muted-foreground" data-testid={`text-assignee-${task.id}`}>
-                                    Assigned to: {task.assignee.firstName} {task.assignee.lastName}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <TaskTable />
                 )}
               </TabsContent>
 
@@ -631,201 +501,93 @@ export default function InternalTasks() {
                     No tasks found
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Select All */}
-                    <div className="flex items-center gap-2 pb-2 border-b">
-                      <Checkbox
-                        checked={selectedTasks.length === tasks.length && tasks.length > 0}
-                        onCheckedChange={handleSelectAll}
-                        data-testid="checkbox-select-all"
-                      />
-                      <span className="text-sm font-medium">Select All</span>
-                    </div>
-
-                    {tasks.map((task) => (
-                      <Card key={task.id} className="hover:bg-accent/50 transition-colors">
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <Checkbox
-                              checked={selectedTasks.includes(task.id)}
-                              onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
-                              data-testid={`checkbox-task-${task.id}`}
-                            />
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <button
-                                    type="button"
-                                    className="text-left font-semibold hover:underline cursor-pointer bg-transparent border-0 p-0"
-                                    data-testid={`link-task-${task.id}`}
-                                    onClick={() => handleOpenTaskDetail(task.id)}
-                                  >
-                                    {task.title}
-                                  </button>
-                                  {task.description && (
-                                    <p className="text-sm text-muted-foreground mt-1" data-testid={`text-description-${task.id}`}>
-                                      {task.description}
-                                    </p>
-                                  )}
-                                </div>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" data-testid={`button-menu-${task.id}`}>
-                                      <MoreVertical className="w-4 h-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem data-testid={`menu-edit-${task.id}`}>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem data-testid={`menu-close-${task.id}`}>Close Task</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive" data-testid={`menu-delete-${task.id}`}>
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 text-sm">
-                                <div className="flex items-center gap-1">
-                                  {getStatusIcon(task.status)}
-                                  {getStatusBadge(task.status)}
-                                </div>
-                                {getPriorityBadge(task.priority)}
-                                {task.taskType && (
-                                  <Badge variant="outline" data-testid={`badge-type-${task.id}`}>
-                                    {task.taskType.name}
-                                  </Badge>
-                                )}
-                                {task.dueDate && (
-                                  <span className="text-muted-foreground flex items-center gap-1" data-testid={`text-due-${task.id}`}>
-                                    <Clock className="w-3 h-3" />
-                                    Due: {formatDate(task.dueDate)}
-                                  </span>
-                                )}
-                                {task.assignee && (
-                                  <span className="text-muted-foreground" data-testid={`text-assignee-${task.id}`}>
-                                    Assigned to: {task.assignee.firstName} {task.assignee.lastName}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <TaskTable />
                 )}
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
-
-        {/* Bulk Reassign Dialog */}
-        <Dialog open={bulkReassignOpen} onOpenChange={setBulkReassignOpen}>
-          <DialogContent data-testid="dialog-bulk-reassign">
-            <DialogHeader>
-              <DialogTitle>Reassign Tasks</DialogTitle>
-              <DialogDescription>
-                Reassign {selectedTasks.length} task(s) to a staff member
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="assignee">Assign To</Label>
-                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
-                  <SelectTrigger id="assignee" data-testid="select-bulk-assignee">
-                    <SelectValue placeholder="Select staff member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staff.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.firstName && member.lastName
-                          ? `${member.firstName} ${member.lastName}`
-                          : member.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setBulkReassignOpen(false);
-                    setSelectedAssignee("");
-                  }}
-                  data-testid="button-cancel-bulk-reassign"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleBulkReassign}
-                  disabled={!selectedAssignee || bulkReassignMutation.isPending}
-                  data-testid="button-confirm-bulk-reassign"
-                >
-                  {bulkReassignMutation.isPending ? "Reassigning..." : "Reassign"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Bulk Status Change Dialog */}
-        <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
-          <DialogContent data-testid="dialog-bulk-status">
-            <DialogHeader>
-              <DialogTitle>Change Task Status</DialogTitle>
-              <DialogDescription>
-                Change status for {selectedTasks.length} task(s)
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="status">New Status</Label>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                  <SelectTrigger id="status" data-testid="select-bulk-status">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setBulkStatusOpen(false);
-                    setSelectedStatus("");
-                  }}
-                  data-testid="button-cancel-bulk-status"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleBulkStatusChange}
-                  disabled={!selectedStatus || bulkStatusMutation.isPending}
-                  data-testid="button-confirm-bulk-status"
-                >
-                  {bulkStatusMutation.isPending ? "Updating..." : "Update Status"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Task Detail Dialog */}
-        <TaskDetailDialog
-          taskId={selectedTaskId}
-          open={taskDetailOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              handleCloseTaskDetail();
-            }
-          }}
-        />
       </div>
+
+      {/* Bulk Reassign Dialog */}
+      <Dialog open={bulkReassignOpen} onOpenChange={setBulkReassignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reassign Tasks</DialogTitle>
+            <DialogDescription>
+              Reassign {selectedTasks.length} selected task{selectedTasks.length !== 1 ? 's' : ''} to a new assignee.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="bulk-assignee">Assign To</Label>
+              <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                <SelectTrigger data-testid="select-bulk-assignee">
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {staff.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.firstName} {s.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setBulkReassignOpen(false)} data-testid="button-cancel-reassign">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkReassign}
+              disabled={!selectedAssignee || bulkReassignMutation.isPending}
+              data-testid="button-confirm-reassign"
+            >
+              {bulkReassignMutation.isPending ? "Reassigning..." : "Reassign"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Status Change Dialog */}
+      <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Status</DialogTitle>
+            <DialogDescription>
+              Change status for {selectedTasks.length} selected task{selectedTasks.length !== 1 ? 's' : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="bulk-status">New Status</Label>
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger data-testid="select-bulk-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setBulkStatusOpen(false)} data-testid="button-cancel-status">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkStatusChange}
+              disabled={!selectedStatus || bulkStatusMutation.isPending}
+              data-testid="button-confirm-status"
+            >
+              {bulkStatusMutation.isPending ? "Updating..." : "Update Status"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
