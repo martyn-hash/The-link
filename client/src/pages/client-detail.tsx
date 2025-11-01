@@ -12,7 +12,7 @@ import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +40,7 @@ import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
 import DocumentFolderView from "@/components/DocumentFolderView";
 import { CreateFolderDialog } from "@/components/CreateFolderDialog";
 import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6528,6 +6529,12 @@ export default function ClientDetail() {
     enabled: !!id && !!client,
   });
 
+  // Fetch internal tasks for this client
+  const { data: clientInternalTasks, isLoading: clientInternalTasksLoading } = useQuery<any[]>({
+    queryKey: [`/api/internal-tasks/client/${id}`],
+    enabled: !!id,
+  });
+
   // Fetch task template categories
   const { data: taskCategories } = useQuery<any[]>({
     queryKey: ['/api/task-template-categories'],
@@ -8019,6 +8026,103 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-6 mt-6">
+            {/* Internal Tasks Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5" />
+                    Internal Tasks
+                  </CardTitle>
+                  <CreateTaskDialog
+                    trigger={
+                      <Button
+                        variant="default"
+                        size="sm"
+                        data-testid="button-new-internal-task"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Task
+                      </Button>
+                    }
+                    defaultConnections={{ clientId: id }}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {clientInternalTasksLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : !clientInternalTasks || clientInternalTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No internal tasks for this client yet.</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Assigned To</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Due Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {clientInternalTasks.map((task: any) => (
+                          <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
+                            <TableCell className="font-medium">
+                              <RouterLink href={`/internal-tasks?task=${task.id}`}>
+                                <a className="hover:underline" data-testid={`link-task-${task.id}`}>
+                                  {task.title}
+                                </a>
+                              </RouterLink>
+                            </TableCell>
+                            <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  task.priority === 'urgent' ? 'destructive' :
+                                  task.priority === 'high' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-priority-${task.id}`}
+                              >
+                                {task.priority}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {task.assignee?.firstName} {task.assignee?.lastName}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  task.status === 'closed' ? 'outline' :
+                                  task.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${task.id}`}
+                              >
+                                {task.status === 'in_progress' ? 'In Progress' : task.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Client Requests Section */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
