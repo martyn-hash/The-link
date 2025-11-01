@@ -136,12 +136,7 @@ export async function resolveProjectAssignee(
   const firstStage = stages.sort((a, b) => a.order - b.order)[0];
   
   if (firstStage) {
-    // 2a. Try stage's direct user assignment
-    if (firstStage.assignedUserId) {
-      return firstStage.assignedUserId;
-    }
-    
-    // 2b. Try stage's role-based assignment
+    // 2a. Try stage's role-based assignment FIRST (client-specific)
     if (firstStage.assignedWorkRoleId && dueService.type === 'client' && dueService.clientId) {
       const workRole = await storage.getWorkRoleById(firstStage.assignedWorkRoleId);
       if (workRole) {
@@ -154,6 +149,11 @@ export async function resolveProjectAssignee(
           return roleUser.id;
         }
       }
+    }
+    
+    // 2b. Try stage's direct user assignment (fallback)
+    if (firstStage.assignedUserId) {
+      return firstStage.assignedUserId;
     }
   }
 
