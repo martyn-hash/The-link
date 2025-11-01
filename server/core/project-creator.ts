@@ -138,17 +138,27 @@ export async function resolveProjectAssignee(
   if (firstStage) {
     // 2a. Try stage's role-based assignment FIRST (client-specific)
     if (firstStage.assignedWorkRoleId && dueService.type === 'client' && dueService.clientId) {
+      console.log(`[resolveProjectAssignee] First stage has assignedWorkRoleId: ${firstStage.assignedWorkRoleId}`);
       const workRole = await storage.getWorkRoleById(firstStage.assignedWorkRoleId);
       if (workRole) {
+        console.log(`[resolveProjectAssignee] Work role found: ${workRole.name}`);
+        console.log(`[resolveProjectAssignee] Looking for ${workRole.name} assignment for client ${dueService.clientId}, project type ${projectType.id}`);
         const roleUser = await storage.resolveRoleAssigneeForClient(
           dueService.clientId,
           projectType.id,
           workRole.name
         );
         if (roleUser) {
+          console.log(`[resolveProjectAssignee] Role user found: ${roleUser.email}`);
           return roleUser.id;
+        } else {
+          console.warn(`[resolveProjectAssignee] No role user found for ${workRole.name}`);
         }
+      } else {
+        console.warn(`[resolveProjectAssignee] Work role not found for ID: ${firstStage.assignedWorkRoleId}`);
       }
+    } else {
+      console.log(`[resolveProjectAssignee] First stage does not have role assignment or not a client service. assignedWorkRoleId: ${firstStage.assignedWorkRoleId}, type: ${dueService.type}, clientId: ${dueService.clientId}`);
     }
     
     // 2b. Try stage's direct user assignment (fallback)
