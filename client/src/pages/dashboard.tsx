@@ -413,8 +413,8 @@ function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
   
   const ownersMap = new Map<string, User>();
   tasks.forEach(t => {
-    if (t.serviceOwner && t.serviceOwner.id) {
-      ownersMap.set(t.serviceOwner.id, t.serviceOwner);
+    if (t.projectOwner && t.projectOwner.id) {
+      ownersMap.set(t.projectOwner.id, t.projectOwner);
     }
   });
   const owners = Array.from(ownersMap.values()).sort((a, b) => 
@@ -427,7 +427,7 @@ function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
   const filteredTasks = tasks.filter(task => {
     if (serviceFilter !== "all" && (task as any).projectType?.id !== serviceFilter) return false;
     if (taskAssigneeFilter !== "all" && task.currentAssignee?.id !== taskAssigneeFilter) return false;
-    if (serviceOwnerFilter !== "all" && task.serviceOwner?.id !== serviceOwnerFilter) return false;
+    if (serviceOwnerFilter !== "all" && task.projectOwner?.id !== serviceOwnerFilter) return false;
     if (statusFilter !== "all" && task.currentStatus !== statusFilter) return false;
     
     // Date filters
@@ -1270,7 +1270,7 @@ function MyDashboardPanel({ user }: { user: any }) {
       // Dynamic date filter
       if (appliedFilters.dynamicDateFilter && appliedFilters.dynamicDateFilter !== "all") {
         const now = new Date();
-        const projectDate = project.startDate ? new Date(project.startDate) : null;
+        const projectDate = project.createdAt ? new Date(project.createdAt) : null;
         
         if (!projectDate) return false;
 
