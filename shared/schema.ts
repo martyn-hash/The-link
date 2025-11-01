@@ -333,6 +333,10 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_projects_project_owner_id").on(table.projectOwnerId),
+  index("idx_projects_current_assignee_id").on(table.currentAssigneeId),
+  index("idx_projects_project_type_id").on(table.projectTypeId),
+  index("idx_projects_archived").on(table.archived),
+  index("idx_projects_client_id").on(table.clientId),
 ]);
 
 // Project chronology table
