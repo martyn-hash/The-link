@@ -31,6 +31,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { InternalTask, TaskType, User } from "@shared/schema";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -179,10 +180,7 @@ export default function InternalTasks() {
             </h1>
             <p className="text-muted-foreground">Manage staff tasks and track progress</p>
           </div>
-          <Button data-testid="button-create-task">
-            <Plus className="w-4 h-4 mr-2" />
-            Create Task
-          </Button>
+          <CreateTaskDialog />
         </div>
 
         {/* Tabs and Filters */}
