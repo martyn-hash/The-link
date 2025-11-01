@@ -19,6 +19,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (November 2025)
 
+**Internal Tasks UX Enhancements - Nov 1, 2025**
+- **TopNavigation Component**: Added TopNavigation to /internal-tasks page with logo menu and horizontal navigation
+- **Admin Menu Update**: Added "Task Categories" link to admin dropdown menu
+- **Entity Connections**: Added 5 optional connection dropdowns to Create Task dialog (clients, people, projects, services, messages) with backend support via POST /api/internal-tasks/:id/connections
+- **Task Detail Dialog Fix**: Resolved dialog opening issue - handleOpenTaskDetail() now directly updates state for immediate response, while useEffect handles initial load, page reload, and browser back/forward navigation
+- **Backend Fix**: Corrected method name from getInternalTaskTypeById to getTaskTypeById in task detail endpoint
+
 **Dashboard Enhancement - Nov 1, 2025**
 - **Fixed Projects Page Filter**: Projects page now uses `currentAssigneeId` (database field) instead of computed `stageRoleAssignee`, resolving discrepancy where UI showed fewer projects than database
 - **New Dashboard Panels**: Added 4 panels to replace simplified dashboard:

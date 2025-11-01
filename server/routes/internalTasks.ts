@@ -186,7 +186,7 @@ export function registerInternalTaskRoutes(
         service,
         message
       ] = await Promise.all([
-        task.taskTypeId ? storage.getInternalTaskTypeById(task.taskTypeId) : null,
+        task.taskTypeId ? storage.getTaskTypeById(task.taskTypeId) : null,
         task.assignedTo ? storage.getUserById(task.assignedTo) : null,
         storage.getUserById(task.createdBy),
         storage.getTaskCommentsByTaskId(task.id),
@@ -245,6 +245,35 @@ export function registerInternalTaskRoutes(
     } catch (error) {
       console.error("Error creating task:", error);
       res.status(400).json({ message: "Failed to create task" });
+    }
+  });
+
+  // Add connections to a task
+  app.post("/api/internal-tasks/:id/connections", isAuthenticated, async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const { connections } = req.body;
+      
+      if (!Array.isArray(connections) || connections.length === 0) {
+        return res.status(400).json({ message: "Connections array is required" });
+      }
+
+      // Create each connection
+      const created = [];
+      for (const conn of connections) {
+        const connectionData = insertTaskConnectionSchema.parse({
+          taskId,
+          entityType: conn.entityType,
+          entityId: conn.entityId,
+        });
+        const result = await storage.createTaskConnection(connectionData);
+        created.push(result);
+      }
+
+      res.json(created);
+    } catch (error) {
+      console.error("Error creating task connections:", error);
+      res.status(400).json({ message: "Failed to create task connections" });
     }
   });
 

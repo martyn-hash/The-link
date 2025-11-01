@@ -43,6 +43,7 @@ import {
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { TaskDetailDialog } from "@/components/task-detail-dialog";
+import TopNavigation from "@/components/top-navigation";
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -67,22 +68,39 @@ export default function InternalTasks() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
 
+  // Sync dialog state with URL parameters
   useEffect(() => {
-    // Parse search params from the location string  
-    const searchStart = location.indexOf('?');
-    const search = searchStart >= 0 ? location.substring(searchStart) : '';
-    const params = new URLSearchParams(search);
-    const taskId = params.get("task");
-    console.log("[InternalTasks] URL changed, taskId from params:", taskId);
-    console.log("[InternalTasks] Current location:", location);
-    console.log("[InternalTasks] Parsed search:", search);
-    setSelectedTaskId(taskId);
-    setTaskDetailOpen(!!taskId);
-    console.log("[InternalTasks] Set taskDetailOpen to:", !!taskId);
+    const checkUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const taskId = params.get("task");
+      console.log("[InternalTasks] URL changed, taskId from params:", taskId);
+      console.log("[InternalTasks] Current location:", location);
+      console.log("[InternalTasks] Window search:", window.location.search);
+      setSelectedTaskId(taskId);
+      setTaskDetailOpen(!!taskId);
+      console.log("[InternalTasks] Set taskDetailOpen to:", !!taskId);
+    };
+
+    // Check immediately
+    checkUrl();
+
+    // Also listen to popstate for browser back/forward navigation
+    window.addEventListener('popstate', checkUrl);
+    
+    return () => {
+      window.removeEventListener('popstate', checkUrl);
+    };
   }, [location]);
 
   const handleOpenTaskDetail = (taskId: string) => {
     console.log("[InternalTasks] handleOpenTaskDetail called with taskId:", taskId);
+    
+    // Immediately update state to open the dialog
+    setSelectedTaskId(taskId);
+    setTaskDetailOpen(true);
+    console.log("[InternalTasks] State updated directly - taskId:", taskId, "open: true");
+    
+    // Also update URL for browser history
     const params = new URLSearchParams(window.location.search);
     params.set("task", taskId);
     const newLocation = `/internal-tasks?${params.toString()}`;
@@ -304,6 +322,8 @@ export default function InternalTasks() {
 
   return (
     <div className="min-h-screen bg-background">
+      <TopNavigation user={user} />
+      
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
