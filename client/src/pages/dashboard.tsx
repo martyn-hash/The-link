@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-// Navigation handled via window.location.href for reliability
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage } from "@shared/schema";
+import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
@@ -15,6 +15,15 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -37,7 +46,8 @@ import {
   Bell,
   Filter,
   BarChart3,
-  Home
+  Home,
+  Eye
 } from "lucide-react";
 
 // Dashboard data interfaces
@@ -374,6 +384,97 @@ function DashboardSummaryCards({
 }
 
 function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [serviceFilter, setServiceFilter] = useState("all");
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
+  const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dynamicDateFilter, setDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days">("all");
+  
+  const itemsPerPage = 6;
+  
+  // Get unique services, assignees, owners, and statuses from tasks using Maps for proper deduplication
+  const servicesMap = new Map<string, { id: string; name: string }>();
+  tasks.forEach(t => {
+    const pt = (t as any).projectType;
+    if (pt && pt.id) servicesMap.set(pt.id, { id: pt.id, name: pt.name });
+  });
+  const services = Array.from(servicesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  
+  const assigneesMap = new Map<string, User>();
+  tasks.forEach(t => {
+    if (t.currentAssignee && t.currentAssignee.id) {
+      assigneesMap.set(t.currentAssignee.id, t.currentAssignee);
+    }
+  });
+  const assignees = Array.from(assigneesMap.values()).sort((a, b) => 
+    `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+  );
+  
+  const ownersMap = new Map<string, User>();
+  tasks.forEach(t => {
+    if (t.serviceOwner && t.serviceOwner.id) {
+      ownersMap.set(t.serviceOwner.id, t.serviceOwner);
+    }
+  });
+  const owners = Array.from(ownersMap.values()).sort((a, b) => 
+    `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+  );
+  
+  const statuses = Array.from(new Set(tasks.map(t => t.currentStatus).filter(Boolean))).sort();
+  
+  // Apply filters
+  const filteredTasks = tasks.filter(task => {
+    if (serviceFilter !== "all" && (task as any).projectType?.id !== serviceFilter) return false;
+    if (taskAssigneeFilter !== "all" && task.currentAssignee?.id !== taskAssigneeFilter) return false;
+    if (serviceOwnerFilter !== "all" && task.serviceOwner?.id !== serviceOwnerFilter) return false;
+    if (statusFilter !== "all" && task.currentStatus !== statusFilter) return false;
+    
+    // Date filters
+    if (dynamicDateFilter !== "all" && task.dueDate) {
+      const dueDate = new Date(task.dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (dynamicDateFilter) {
+        case "overdue":
+          if (dueDate >= today) return false;
+          break;
+        case "today":
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          if (dueDate < today || dueDate >= tomorrow) return false;
+          break;
+        case "next7days":
+          const next7 = new Date(today);
+          next7.setDate(next7.getDate() + 7);
+          if (dueDate < today || dueDate >= next7) return false;
+          break;
+        case "next14days":
+          const next14 = new Date(today);
+          next14.setDate(next14.getDate() + 14);
+          if (dueDate < today || dueDate >= next14) return false;
+          break;
+        case "next30days":
+          const next30 = new Date(today);
+          next30.setDate(next30.getDate() + 30);
+          if (dueDate < today || dueDate >= next30) return false;
+          break;
+      }
+    }
+    
+    return true;
+  });
+  
+  // Pagination
+  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
+  const paginatedTasks = filteredTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, statusFilter, dynamicDateFilter]);
+  
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -385,46 +486,162 @@ function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
             </CardTitle>
             <CardDescription>Projects where you're the current assignee</CardDescription>
           </div>
-          <Badge variant="secondary">{tasks.length}</Badge>
+          <Badge variant="secondary" data-testid="badge-my-tasks-count">{filteredTasks.length}</Badge>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {tasks.slice(0, 8).map((task) => (
-            <div 
-              key={task.id} 
-              className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/projects/${task.id}`}
-              data-testid={`task-item-${task.id}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium">{task.client?.name}</span>
-                <Badge variant="outline" className="text-xs">
-                  {task.currentStatus?.replace(/_/g, ' ')}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{(task as any).projectType?.name || "Unknown Project Type"}</p>
-              {task.dueDate && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Due: {new Date(task.dueDate).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          ))}
-          {tasks.length > 8 && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full mt-2"
-              onClick={() => window.location.href = '/all-projects'}
-              data-testid="button-view-all-tasks"
-            >
-              View All {tasks.length} Tasks
-            </Button>
-          )}
+      <CardContent className="space-y-4">
+        {/* Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1">Service</Label>
+            <Select value={serviceFilter} onValueChange={setServiceFilter}>
+              <SelectTrigger data-testid="select-my-tasks-service">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Services</SelectItem>
+                {services.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger data-testid="select-my-tasks-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {statuses.map(s => (
+                  <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1">Due Date</Label>
+            <Select value={dynamicDateFilter} onValueChange={(v: any) => setDynamicDateFilter(v)}>
+              <SelectTrigger data-testid="select-my-tasks-date">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Dates</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="next7days">Next 7 Days</SelectItem>
+                <SelectItem value="next14days">Next 14 Days</SelectItem>
+                <SelectItem value="next30days">Next 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+        
+        {/* Table */}
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedTasks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No tasks found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedTasks.map(task => (
+                  <MyTaskRow key={task.id} task={task} />
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                data-testid="button-my-tasks-prev-page"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                data-testid="button-my-tasks-next-page"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function MyTaskRow({ task }: { task: ProjectWithRelations }) {
+  const navigate = useLocation()[1];
+  
+  return (
+    <TableRow data-testid={`row-my-task-${task.id}`}>
+      <TableCell className="font-medium">
+        <span data-testid={`text-client-${task.id}`}>
+          {task.client?.name || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-service-${task.id}`}>
+          {(task as any).projectType?.name || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <Badge variant="outline" className="text-xs" data-testid={`badge-status-${task.id}`}>
+          {task.currentStatus?.replace(/_/g, ' ') || '-'}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-due-date-${task.id}`}>
+          {task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => navigate(`/projects/${task.id}`)}
+          data-testid={`button-view-${task.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -678,6 +895,73 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
 }
 
 function MyProjectsPanel({ projects }: { projects: ProjectWithRelations[] }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [serviceFilter, setServiceFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dynamicDateFilter, setDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days">("all");
+  
+  const itemsPerPage = 6;
+  
+  // Get unique services and statuses from projects using Maps for proper deduplication
+  const servicesMap = new Map<string, { id: string; name: string }>();
+  projects.forEach(p => {
+    const pt = (p as any).projectType;
+    if (pt && pt.id) servicesMap.set(pt.id, { id: pt.id, name: pt.name });
+  });
+  const services = Array.from(servicesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  
+  const statuses = Array.from(new Set(projects.map(p => p.currentStatus).filter(Boolean))).sort();
+  
+  // Apply filters
+  const filteredProjects = projects.filter(project => {
+    if (serviceFilter !== "all" && (project as any).projectType?.id !== serviceFilter) return false;
+    if (statusFilter !== "all" && project.currentStatus !== statusFilter) return false;
+    
+    // Date filters
+    if (dynamicDateFilter !== "all" && project.dueDate) {
+      const dueDate = new Date(project.dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (dynamicDateFilter) {
+        case "overdue":
+          if (dueDate >= today) return false;
+          break;
+        case "today":
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          if (dueDate < today || dueDate >= tomorrow) return false;
+          break;
+        case "next7days":
+          const next7 = new Date(today);
+          next7.setDate(next7.getDate() + 7);
+          if (dueDate < today || dueDate >= next7) return false;
+          break;
+        case "next14days":
+          const next14 = new Date(today);
+          next14.setDate(next14.getDate() + 14);
+          if (dueDate < today || dueDate >= next14) return false;
+          break;
+        case "next30days":
+          const next30 = new Date(today);
+          next30.setDate(next30.getDate() + 30);
+          if (dueDate < today || dueDate >= next30) return false;
+          break;
+      }
+    }
+    
+    return true;
+  });
+  
+  // Pagination
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+  const paginatedProjects = filteredProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [serviceFilter, statusFilter, dynamicDateFilter]);
+  
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -689,46 +973,162 @@ function MyProjectsPanel({ projects }: { projects: ProjectWithRelations[] }) {
             </CardTitle>
             <CardDescription>Projects where you're the service owner</CardDescription>
           </div>
-          <Badge variant="secondary">{projects.length}</Badge>
+          <Badge variant="secondary" data-testid="badge-my-projects-count">{filteredProjects.length}</Badge>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {projects.slice(0, 8).map((project) => (
-            <div 
-              key={project.id} 
-              className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/projects/${project.id}`}
-              data-testid={`project-item-${project.id}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium">{project.client?.name}</span>
-                <Badge variant="outline" className="text-xs">
-                  {project.currentStatus?.replace(/_/g, ' ')}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
-              {project.dueDate && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Due: {new Date(project.dueDate).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          ))}
-          {projects.length > 8 && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full mt-2"
-              onClick={() => window.location.href = '/all-projects'}
-              data-testid="button-view-all-projects"
-            >
-              View All {projects.length} Projects
-            </Button>
-          )}
+      <CardContent className="space-y-4">
+        {/* Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1">Service</Label>
+            <Select value={serviceFilter} onValueChange={setServiceFilter}>
+              <SelectTrigger data-testid="select-my-projects-service">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Services</SelectItem>
+                {services.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger data-testid="select-my-projects-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {statuses.map(s => (
+                  <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1">Due Date</Label>
+            <Select value={dynamicDateFilter} onValueChange={(v: any) => setDynamicDateFilter(v)}>
+              <SelectTrigger data-testid="select-my-projects-date">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Dates</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="next7days">Next 7 Days</SelectItem>
+                <SelectItem value="next14days">Next 14 Days</SelectItem>
+                <SelectItem value="next30days">Next 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+        
+        {/* Table */}
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedProjects.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No projects found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedProjects.map(project => (
+                  <MyProjectRow key={project.id} project={project} />
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                data-testid="button-my-projects-prev-page"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                data-testid="button-my-projects-next-page"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function MyProjectRow({ project }: { project: ProjectWithRelations }) {
+  const navigate = useLocation()[1];
+  
+  return (
+    <TableRow data-testid={`row-my-project-${project.id}`}>
+      <TableCell className="font-medium">
+        <span data-testid={`text-client-${project.id}`}>
+          {project.client?.name || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-service-${project.id}`}>
+          {(project as any).projectType?.name || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <Badge variant="outline" className="text-xs" data-testid={`badge-status-${project.id}`}>
+          {project.currentStatus?.replace(/_/g, ' ') || '-'}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-due-date-${project.id}`}>
+          {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => navigate(`/projects/${project.id}`)}
+          data-testid={`button-view-${project.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }
 
