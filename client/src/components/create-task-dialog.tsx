@@ -47,7 +47,7 @@ const taskFormSchema = z.object({
   priority: z.enum(["low", "medium", "high", "urgent"]),
   status: z.enum(["open", "in_progress", "closed"]),
   assignedToId: z.string().uuid("Please select an assignee"),
-  dueDate: z.string().optional(),
+  dueDate: z.string().min(1, "Due date is required"),
 });
 
 type TaskFormData = z.infer<typeof taskFormSchema>;
@@ -172,7 +172,7 @@ export function CreateTaskDialog({
         priority: data.priority,
         status: data.status,
         assignedTo: data.assignedToId, // Backend expects 'assignedTo' not 'assignedToId'
-        dueDate: data.dueDate || null,
+        dueDate: data.dueDate,
         // createdBy will be added by the server from authenticated user
       });
 
@@ -421,7 +421,6 @@ export function CreateTaskDialog({
                     data-testid="input-task-due-date"
                   />
                 </FormControl>
-                <FormDescription>Optional due date for this task</FormDescription>
                 <FormMessage />
               </FormItem>
             )}

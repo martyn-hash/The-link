@@ -2390,7 +2390,7 @@ export const internalTasks = pgTable("internal_tasks", {
   taskTypeId: varchar("task_type_id").references(() => taskTypes.id, { onDelete: "set null" }),
   createdBy: varchar("created_by").notNull().references(() => users.id),
   assignedTo: varchar("assigned_to").notNull().references(() => users.id),
-  dueDate: timestamp("due_date"),
+  dueDate: timestamp("due_date").notNull(),
   closedAt: timestamp("closed_at"),
   closedBy: varchar("closed_by").references(() => users.id),
   closureNote: text("closure_note"),
