@@ -161,7 +161,59 @@ export function registerInternalTaskRoutes(
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
-      res.json(task);
+
+      // Fetch related data
+      const [
+        taskType,
+        assignee,
+        creator,
+        comments,
+        notes,
+        timeEntries,
+        client,
+        project,
+        person,
+        service,
+        message
+      ] = await Promise.all([
+        task.taskTypeId ? storage.getInternalTaskTypeById(task.taskTypeId) : null,
+        task.assignedTo ? storage.getUserById(task.assignedTo) : null,
+        storage.getUserById(task.createdBy),
+        storage.getTaskCommentsByTaskId(task.id),
+        storage.getTaskNotesByTaskId(task.id),
+        storage.getTaskTimeEntriesByTaskId(task.id),
+        task.clientId ? storage.getClientById(task.clientId) : null,
+        task.projectId ? storage.getProjectById(task.projectId) : null,
+        task.personId ? storage.getPersonById(task.personId) : null,
+        task.serviceId ? storage.getServiceById(task.serviceId) : null,
+        task.messageId ? storage.getMessageById(task.messageId) : null,
+      ]);
+
+      const taskWithRelations = {
+        ...task,
+        taskType,
+        assignee,
+        creator,
+        comments: comments.map(c => ({
+          ...c,
+          author: c.user
+        })),
+        notes: notes.map(n => ({
+          ...n,
+          author: n.user
+        })),
+        timeEntries: timeEntries.map(te => ({
+          ...te,
+          user: te.user
+        })),
+        client,
+        project,
+        person,
+        service,
+        message,
+      };
+
+      res.json(taskWithRelations);
     } catch (error) {
       console.error("Error fetching task:", error);
       res.status(500).json({ message: "Failed to fetch task" });

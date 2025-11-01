@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { TaskDetailDialog } from "@/components/task-detail-dialog";
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -52,6 +53,7 @@ interface InternalTaskWithRelations extends InternalTask {
 export default function InternalTasks() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [location, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"assigned" | "created" | "all">("assigned");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -60,6 +62,30 @@ export default function InternalTasks() {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  
+  // Handle task detail dialog via URL parameters
+  const params = new URLSearchParams(window.location.search);
+  const selectedTaskId = params.get("task");
+  const [taskDetailOpen, setTaskDetailOpen] = useState(!!selectedTaskId);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get("task");
+    setTaskDetailOpen(!!taskId);
+  }, [location]);
+
+  const handleOpenTaskDetail = (taskId: string) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("task", taskId);
+    setLocation(`/internal-tasks?${params.toString()}`);
+  };
+
+  const handleCloseTaskDetail = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("task");
+    const newSearch = params.toString();
+    setLocation(newSearch ? `/internal-tasks?${newSearch}` : "/internal-tasks");
+  };
 
   // Fetch staff members for bulk reassign
   const { data: staff = [] } = useQuery<User[]>({
@@ -408,11 +434,14 @@ export default function InternalTasks() {
                             <div className="flex-1 space-y-2">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
-                                  <Link href={`/internal-tasks/${task.id}`}>
-                                    <h3 className="font-semibold hover:underline cursor-pointer" data-testid={`link-task-${task.id}`}>
-                                      {task.title}
-                                    </h3>
-                                  </Link>
+                                  <button
+                                    type="button"
+                                    className="text-left font-semibold hover:underline cursor-pointer bg-transparent border-0 p-0"
+                                    data-testid={`link-task-${task.id}`}
+                                    onClick={() => handleOpenTaskDetail(task.id)}
+                                  >
+                                    {task.title}
+                                  </button>
                                   {task.description && (
                                     <p className="text-sm text-muted-foreground mt-1" data-testid={`text-description-${task.id}`}>
                                       {task.description}
@@ -500,11 +529,14 @@ export default function InternalTasks() {
                             <div className="flex-1 space-y-2">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
-                                  <Link href={`/internal-tasks/${task.id}`}>
-                                    <h3 className="font-semibold hover:underline cursor-pointer" data-testid={`link-task-${task.id}`}>
-                                      {task.title}
-                                    </h3>
-                                  </Link>
+                                  <button
+                                    type="button"
+                                    className="text-left font-semibold hover:underline cursor-pointer bg-transparent border-0 p-0"
+                                    data-testid={`link-task-${task.id}`}
+                                    onClick={() => handleOpenTaskDetail(task.id)}
+                                  >
+                                    {task.title}
+                                  </button>
                                   {task.description && (
                                     <p className="text-sm text-muted-foreground mt-1" data-testid={`text-description-${task.id}`}>
                                       {task.description}
@@ -592,11 +624,14 @@ export default function InternalTasks() {
                             <div className="flex-1 space-y-2">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
-                                  <Link href={`/internal-tasks/${task.id}`}>
-                                    <h3 className="font-semibold hover:underline cursor-pointer" data-testid={`link-task-${task.id}`}>
-                                      {task.title}
-                                    </h3>
-                                  </Link>
+                                  <button
+                                    type="button"
+                                    className="text-left font-semibold hover:underline cursor-pointer bg-transparent border-0 p-0"
+                                    data-testid={`link-task-${task.id}`}
+                                    onClick={() => handleOpenTaskDetail(task.id)}
+                                  >
+                                    {task.title}
+                                  </button>
                                   {task.description && (
                                     <p className="text-sm text-muted-foreground mt-1" data-testid={`text-description-${task.id}`}>
                                       {task.description}
@@ -749,6 +784,17 @@ export default function InternalTasks() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Task Detail Dialog */}
+        <TaskDetailDialog
+          taskId={selectedTaskId}
+          open={taskDetailOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCloseTaskDetail();
+            }
+          }}
+        />
       </div>
     </div>
   );
