@@ -19,7 +19,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (November 2025)
 
-**Dashboard Performance Optimization**
+**Dashboard Enhancement - Nov 1, 2025**
+- **Fixed Projects Page Filter**: Projects page now uses `currentAssigneeId` (database field) instead of computed `stageRoleAssignee`, resolving discrepancy where UI showed fewer projects than database
+- **New Dashboard Panels**: Added 4 panels to replace simplified dashboard:
+  - Recently Viewed: Shows last 5 viewed clients/projects
+  - Attention Needed: Highlights overdue and behind-schedule projects with orange styling
+  - My Tasks: Projects where user is current assignee
+  - My Projects: Projects where user is service owner
+- **Optimized Backend Queries**: Created 3 targeted endpoints replacing expensive `getAllProjects()` calls:
+  - `/api/dashboard/my-owned-projects`: Returns only projects where user is service owner
+  - `/api/dashboard/my-assigned-tasks`: Returns only projects where user is current assignee  
+  - `/api/dashboard/attention-needed`: Efficiently combines overdue + behind schedule logic
+- **Performance**: Individual queries run <5s, total dashboard load time under 4 seconds
+- **Data Integrity**: `currentAssigneeId` now single source of truth for project assignees throughout app
+
+**Dashboard Performance Optimization - Earlier November 2025**
 - Simplified home dashboard to show only "Recently Viewed" panel (removed complex metrics and project lists)
 - Eliminated 3 slow backend queries: `/api/dashboard/metrics` (~2.5s), `/api/dashboard/my-projects` (~2.1s), `/api/dashboard/my-tasks` (~2.3s)
 - Optimized `/api/dashboard` endpoint to skip expensive `getAllProjects()` call and project filtering
