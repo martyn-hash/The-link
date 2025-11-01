@@ -40,6 +40,7 @@ import TaskSubmissions from "@/pages/task-submissions";
 import TaskSubmissionDetail from "@/pages/task-submission-detail";
 import TaskInstanceDetail from "@/pages/task-instance-detail";
 import Admin from "@/pages/admin";
+import AdminTaskTypes from "@/pages/admin-task-types";
 import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
 import PortalLogin from "@/pages/portal/PortalLogin";
@@ -144,6 +145,7 @@ function Router() {
       <Route path="/internal-tasks" component={InternalTasks} />
       <Route path="/upload" component={Upload} />
       <Route path="/admin" component={Admin} />
+      <Route path="/admin/task-types" component={AdminTaskTypes} />
       <Route path="/admin/import" component={DataImport} />
       <Route path="/push-diagnostics" component={PushDiagnostics} />
       
