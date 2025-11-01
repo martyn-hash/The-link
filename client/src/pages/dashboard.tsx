@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 // Navigation handled via window.location.href for reliability
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -82,6 +83,41 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
+  // Fetch dashboard cache (lightweight statistics)
+  const { data: dashboardCache, isLoading: cacheLoading, refetch: refetchCache } = useQuery<{
+    myTasksCount: number;
+    myProjectsCount: number;
+    overdueTasksCount: number;
+    behindScheduleCount: number;
+    lastUpdated: string;
+  }>({
+    queryKey: ["/api/dashboard/cache"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes - cache is pre-computed
+  });
+
+  // Manual refresh mutation
+  const refreshCacheMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/dashboard/cache/refresh");
+    },
+    onSuccess: () => {
+      refetchCache();
+      toast({
+        title: "Success",
+        description: "Dashboard refreshed successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to refresh dashboard",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Fetch dashboard data (only for recently viewed)
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard"],
@@ -103,19 +139,6 @@ export default function Dashboard() {
   // Fetch my assigned tasks (current assignee)
   const { data: myAssignedTasks, isLoading: assignedTasksLoading } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/dashboard/my-assigned-tasks"],
-    enabled: isAuthenticated && !!user,
-    retry: false,
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-
-  // Fetch attention needed projects
-  const { data: attentionNeededData, isLoading: attentionNeededLoading } = useQuery<{
-    overdueProjects: ProjectWithRelations[];
-    behindScheduleProjects: ProjectWithRelations[];
-    attentionNeeded: ProjectWithRelations[];
-  }>({
-    queryKey: ["/api/dashboard/attention-needed"],
     enabled: isAuthenticated && !!user,
     retry: false,
     staleTime: 30000,
@@ -163,7 +186,7 @@ export default function Dashboard() {
     );
   }
 
-  const isAnyLoading = dashboardLoading || ownedProjectsLoading || assignedTasksLoading || attentionNeededLoading;
+  const isAnyLoading = dashboardLoading || ownedProjectsLoading || assignedTasksLoading || cacheLoading;
 
   if (isAnyLoading && !dashboardData) {
     return (
@@ -190,9 +213,13 @@ export default function Dashboard() {
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
 
-            {/* Attention Needed */}
-            {attentionNeededData && attentionNeededData.attentionNeeded.length > 0 && (
-              <AttentionNeededPanel data={attentionNeededData} />
+            {/* Dashboard Summary Cards */}
+            {dashboardCache && (
+              <DashboardSummaryCards 
+                cache={dashboardCache} 
+                onRefresh={() => refreshCacheMutation.mutate()}
+                isRefreshing={refreshCacheMutation.isPending}
+              />
             )}
 
             {/* My Tasks (Current Assignee) */}
@@ -223,6 +250,128 @@ export default function Dashboard() {
 }
 
 // Panel Components
+
+function DashboardSummaryCards({ 
+  cache, 
+  onRefresh, 
+  isRefreshing 
+}: { 
+  cache: {
+    myTasksCount: number;
+    myProjectsCount: number;
+    overdueTasksCount: number;
+    behindScheduleCount: number;
+    lastUpdated: string;
+  };
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}) {
+  const formatLastUpdated = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  const summaryCards = [
+    {
+      title: "My Tasks",
+      count: cache.myTasksCount,
+      icon: CheckCircle2,
+      color: "text-blue-500",
+      bgColor: "bg-blue-50 dark:bg-blue-950/20",
+      testId: "card-my-tasks"
+    },
+    {
+      title: "My Projects",
+      count: cache.myProjectsCount,
+      icon: FolderOpen,
+      color: "text-violet-500",
+      bgColor: "bg-violet-50 dark:bg-violet-950/20",
+      testId: "card-my-projects"
+    },
+    {
+      title: "Overdue Tasks",
+      count: cache.overdueTasksCount,
+      icon: AlertTriangle,
+      color: "text-red-500",
+      bgColor: "bg-red-50 dark:bg-red-950/20",
+      testId: "card-overdue-tasks"
+    },
+    {
+      title: "Behind Schedule",
+      count: cache.behindScheduleCount,
+      icon: Clock,
+      color: "text-amber-500",
+      bgColor: "bg-amber-50 dark:bg-amber-950/20",
+      testId: "card-behind-schedule"
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Dashboard Overview</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground" data-testid="text-last-updated">
+            Updated {formatLastUpdated(cache.lastUpdated)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            data-testid="button-refresh-dashboard"
+          >
+            {isRefreshing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <ArrowRight className="h-4 w-4 mr-2 rotate-180" />
+                Refresh
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.title} className="relative overflow-hidden" data-testid={card.testId}>
+              <CardHeader className={`pb-2 ${card.bgColor}`}>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {card.title}
+                  </CardTitle>
+                  <Icon className={`h-5 w-5 ${card.color}`} />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className={`text-3xl font-bold ${card.color}`} data-testid={`count-${card.testId}`}>
+                  {card.count}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
   return (

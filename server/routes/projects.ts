@@ -8,7 +8,10 @@ import {
   completeProjectSchema,
   csvProjectSchema,
   insertStageApprovalResponseSchema,
+  dashboardCache,
 } from "@shared/schema";
+import { db } from "../db";
+import { eq } from "drizzle-orm";
 import {
   runProjectSchedulingEnhanced,
   getOverdueServicesAnalysis,
@@ -1296,6 +1299,77 @@ export function registerProjectRoutes(
     } catch (error) {
       console.error("Error fetching my tasks:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch my tasks" });
+    }
+  });
+
+  // ==================================================
+  // DASHBOARD CACHE API ROUTES
+  // ==================================================
+
+  // Get cached dashboard statistics for current user
+  app.get("/api/dashboard/cache", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+
+      if (!effectiveUserId) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const cacheData = await db.select().from(dashboardCache).where(eq(dashboardCache.userId, effectiveUserId));
+
+      if (cacheData.length === 0) {
+        // No cache exists yet, trigger an update and return zeros
+        const { updateDashboardCache } = await import("../dashboard-cache-service");
+        await updateDashboardCache(effectiveUserId);
+        
+        // Fetch the newly created cache
+        const newCacheData = await db.select().from(dashboardCache).where(eq(dashboardCache.userId, effectiveUserId));
+        return res.json(newCacheData[0] || {
+          myTasksCount: 0,
+          myProjectsCount: 0,
+          overdueTasksCount: 0,
+          behindScheduleCount: 0,
+          lastUpdated: new Date(),
+        });
+      }
+
+      res.json(cacheData[0]);
+    } catch (error) {
+      console.error("Error fetching dashboard cache:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch dashboard cache" });
+    }
+  });
+
+  // Manually refresh dashboard cache for current user
+  app.post("/api/dashboard/cache/refresh", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+
+      if (!effectiveUserId) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { updateDashboardCache } = await import("../dashboard-cache-service");
+      const result = await updateDashboardCache(effectiveUserId);
+
+      if (result.status === 'error') {
+        return res.status(500).json({ 
+          message: "Failed to refresh dashboard cache",
+          errors: result.errors 
+        });
+      }
+
+      // Fetch the updated cache
+      const cacheData = await db.select().from(dashboardCache).where(eq(dashboardCache.userId, effectiveUserId));
+
+      res.json({
+        success: true,
+        cache: cacheData[0],
+        message: "Dashboard cache refreshed successfully"
+      });
+    } catch (error) {
+      console.error("Error refreshing dashboard cache:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to refresh dashboard cache" });
     }
   });
 }

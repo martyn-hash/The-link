@@ -201,6 +201,21 @@ export const dashboards = pgTable("dashboards", {
   index("idx_dashboards_homescreen").on(table.userId, table.isHomescreenDashboard),
 ]);
 
+// Dashboard cache table - Stores pre-computed dashboard statistics for performance
+export const dashboardCache = pgTable("dashboard_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  myTasksCount: integer("my_tasks_count").notNull().default(0),
+  myProjectsCount: integer("my_projects_count").notNull().default(0),
+  overdueTasksCount: integer("overdue_tasks_count").notNull().default(0),
+  behindScheduleCount: integer("behind_schedule_count").notNull().default(0),
+  lastUpdated: timestamp("last_updated").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_dashboard_cache_user_id").on(table.userId),
+  index("idx_dashboard_cache_last_updated").on(table.lastUpdated),
+]);
+
 // Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1236,6 +1251,18 @@ export const insertDashboardSchema = createInsertSchema(dashboards).omit({
 
 export const updateDashboardSchema = insertDashboardSchema.partial().omit({ userId: true });
 
+export const insertDashboardCacheSchema = createInsertSchema(dashboardCache).omit({
+  id: true,
+  createdAt: true,
+  lastUpdated: true,
+});
+
+export const updateDashboardCacheSchema = createInsertSchema(dashboardCache).omit({
+  id: true,
+  createdAt: true,
+  userId: true,
+}).partial();
+
 // UDF definition schema
 export const udfDefinitionSchema = z.object({
   id: z.string(),
@@ -1608,6 +1635,9 @@ export type UpdateUserColumnPreferences = z.infer<typeof updateUserColumnPrefere
 export type Dashboard = typeof dashboards.$inferSelect;
 export type InsertDashboard = z.infer<typeof insertDashboardSchema>;
 export type UpdateDashboard = z.infer<typeof updateDashboardSchema>;
+export type DashboardCache = typeof dashboardCache.$inferSelect;
+export type InsertDashboardCache = z.infer<typeof insertDashboardCacheSchema>;
+export type UpdateDashboardCache = z.infer<typeof updateDashboardCacheSchema>;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;

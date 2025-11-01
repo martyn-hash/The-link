@@ -6,6 +6,7 @@ import { runChSync } from "./ch-sync-service";
 import { runProjectScheduling } from "./project-scheduler";
 import { sendSchedulingSummaryEmail } from "./emailService";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
+import { updateDashboardCache } from "./dashboard-cache-service";
 import { storage } from "./storage";
 import fs from "fs";
 import path from "path";
@@ -190,5 +191,42 @@ app.use((req, res, next) => {
     });
     
     log('[Project Message Reminders] Scheduler initialized (runs every 10 minutes)');
+    
+    // Setup dashboard cache updates
+    // Overnight update: Runs at 03:00 UK time (3:00 AM GMT/BST) - Europe/London timezone
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        log('[Dashboard Cache] Starting overnight cache update...');
+        const result = await updateDashboardCache();
+        log(`[Dashboard Cache] Overnight update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
+        if (result.errors.length > 0) {
+          console.error('[Dashboard Cache] Overnight update errors:', result.errors);
+        }
+      } catch (error) {
+        console.error('[Dashboard Cache] Fatal error in overnight update:', error);
+      }
+    }, {
+      timezone: "Europe/London" // UK timezone (handles GMT/BST automatically)
+    });
+    
+    log('[Dashboard Cache] Overnight scheduler initialized (runs daily at 03:00 UK time)');
+    
+    // Hourly updates during business hours: 08:00-18:00 UK time
+    cron.schedule('0 8-18 * * *', async () => {
+      try {
+        log('[Dashboard Cache] Starting hourly cache update...');
+        const result = await updateDashboardCache();
+        log(`[Dashboard Cache] Hourly update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
+        if (result.errors.length > 0) {
+          console.error('[Dashboard Cache] Hourly update errors:', result.errors);
+        }
+      } catch (error) {
+        console.error('[Dashboard Cache] Fatal error in hourly update:', error);
+      }
+    }, {
+      timezone: "Europe/London" // UK timezone (handles GMT/BST automatically)
+    });
+    
+    log('[Dashboard Cache] Hourly scheduler initialized (runs every hour 08:00-18:00 UK time)');
   });
 })();
