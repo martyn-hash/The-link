@@ -10,6 +10,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 const CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes (same as backend)
 
@@ -172,7 +173,7 @@ export default function PortalLogin() {
       <Card className="w-full max-w-md border-[#0A7BBF]/20">
         <CardHeader className="text-center">
           <img 
-            src="/attached_assets/full_logo_transparent_600_1761924125378.png" 
+            src={logoPath} 
             alt="Growth Accountants" 
             className="h-16 mx-auto mb-4"
             data-testid="img-logo"
