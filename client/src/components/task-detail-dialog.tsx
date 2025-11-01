@@ -85,6 +85,9 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
   const [newComment, setNewComment] = useState("");
   const [newNote, setNewNote] = useState("");
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closureNote, setClosureNote] = useState("");
+  const [totalTimeSpent, setTotalTimeSpent] = useState("");
 
   // Fetch task details
   const { data: task, isLoading } = useQuery<InternalTaskWithRelations>({
@@ -216,6 +219,38 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
     },
   });
 
+  // Close task mutation
+  const closeTaskMutation = useMutation({
+    mutationFn: async ({ closureNote, totalTimeSpentMinutes }: { closureNote: string; totalTimeSpentMinutes: number }) => {
+      return await apiRequest("POST", `/api/internal-tasks/${taskId}/close`, {
+        closureNote,
+        totalTimeSpentMinutes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith("/api/internal-tasks"),
+      });
+      setCloseDialogOpen(false);
+      setClosureNote("");
+      setTotalTimeSpent("");
+      toast({
+        title: "Task closed",
+        description: "Task has been closed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to close task. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return "0m";
     const hours = Math.floor(minutes / 60);
@@ -308,7 +343,20 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
               <TabsContent value="details" className="space-y-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Task Details</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">Task Details</CardTitle>
+                      {task.status !== "closed" && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setCloseDialogOpen(true)}
+                          data-testid="button-close-task"
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Close Task
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -706,6 +754,82 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
           </div>
         )}
       </DialogContent>
+
+      {/* Close Task Dialog */}
+      <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+        <DialogContent data-testid="dialog-close-task">
+          <DialogHeader>
+            <DialogTitle>Close Task</DialogTitle>
+            <DialogDescription>
+              Enter closure details to mark this task as complete.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="closure-note">Closure Note *</Label>
+              <Textarea
+                id="closure-note"
+                value={closureNote}
+                onChange={(e) => setClosureNote(e.target.value)}
+                placeholder="Describe what was completed or the outcome..."
+                rows={4}
+                data-testid="textarea-closure-note"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="total-time">Total Time Spent (minutes) *</Label>
+              <Input
+                id="total-time"
+                type="number"
+                value={totalTimeSpent}
+                onChange={(e) => setTotalTimeSpent(e.target.value)}
+                placeholder="Enter total minutes spent"
+                min="0"
+                data-testid="input-total-time"
+              />
+              {totalTimeSpent && (
+                <p className="text-sm text-muted-foreground">
+                  ≈ {formatDuration(parseInt(totalTimeSpent))}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCloseDialogOpen(false);
+                  setClosureNote("");
+                  setTotalTimeSpent("");
+                }}
+                data-testid="button-cancel-close"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  const minutes = parseInt(totalTimeSpent);
+                  if (!closureNote.trim() || isNaN(minutes) || minutes <= 0) {
+                    toast({
+                      title: "Validation Error",
+                      description: "Please provide both closure note and valid time spent.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  closeTaskMutation.mutate({
+                    closureNote: closureNote.trim(),
+                    totalTimeSpentMinutes: minutes,
+                  });
+                }}
+                disabled={closeTaskMutation.isPending}
+                data-testid="button-confirm-close"
+              >
+                {closeTaskMutation.isPending ? "Closing..." : "Close Task"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
