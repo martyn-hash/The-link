@@ -29,20 +29,21 @@ interface UseServerConnectionOptions {
  */
 export function useServerConnection(options: UseServerConnectionOptions = {}) {
   const {
-    checkInterval = 10000, // Check every 10 seconds
+    checkInterval = 30000, // Check every 30 seconds (reduced frequency)
     healthEndpoint = '/api/health',
     enabled = true,
   } = options;
 
   const [status, setStatus] = useState<ConnectionStatus>('online');
   const [wasOffline, setWasOffline] = useState(false);
+  const [failureCount, setFailureCount] = useState(0);
 
   const checkConnection = useCallback(async () => {
     if (!enabled) return;
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout (increased for slow responses)
 
       const response = await fetch(healthEndpoint, {
         method: 'GET',
@@ -53,7 +54,9 @@ export function useServerConnection(options: UseServerConnectionOptions = {}) {
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        // Server is online
+        // Server is online - reset failure count
+        setFailureCount(0);
+
         if (wasOffline) {
           console.log('[Connection Monitor] Server is back online, refreshing data...');
           setStatus('online');
@@ -65,25 +68,37 @@ export function useServerConnection(options: UseServerConnectionOptions = {}) {
           setStatus('online');
         }
       } else {
-        // Server returned error
-        console.warn('[Connection Monitor] Server returned error:', response.status);
-        setStatus('offline');
-        setWasOffline(true);
+        // Server returned error - increment failure count
+        const newFailureCount = failureCount + 1;
+        setFailureCount(newFailureCount);
+
+        // Only mark as offline after 2 consecutive failures
+        if (newFailureCount >= 2) {
+          console.warn('[Connection Monitor] Server returned error:', response.status);
+          setStatus('offline');
+          setWasOffline(true);
+        }
       }
     } catch (error) {
-      // Server is unreachable
-      if (error instanceof Error) {
-        console.warn('[Connection Monitor] Server unreachable:', error.message);
-      }
+      // Server is unreachable - increment failure count
+      const newFailureCount = failureCount + 1;
+      setFailureCount(newFailureCount);
 
-      if (status === 'online') {
-        setStatus('reconnecting');
-      } else {
-        setStatus('offline');
+      // Only change status after 2 consecutive failures to avoid false positives
+      if (newFailureCount >= 2) {
+        if (error instanceof Error) {
+          console.warn('[Connection Monitor] Server unreachable:', error.message);
+        }
+
+        if (status === 'online') {
+          setStatus('reconnecting');
+        } else {
+          setStatus('offline');
+        }
+        setWasOffline(true);
       }
-      setWasOffline(true);
     }
-  }, [enabled, healthEndpoint, status, wasOffline]);
+  }, [enabled, healthEndpoint, status, wasOffline, failureCount]);
 
   // Initial connection check
   useEffect(() => {
