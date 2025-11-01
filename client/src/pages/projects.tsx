@@ -561,7 +561,7 @@ export default function Projects() {
   const taskAssignees = Array.from(
     new Map(
       (projects || [])
-        .map((p: ProjectWithRelations) => p.stageRoleAssignee)
+        .map((p: ProjectWithRelations) => p.currentAssignee)
         .filter((assignee): assignee is NonNullable<typeof assignee> => Boolean(assignee))
         .map(assignee => [assignee.id, assignee])
     ).values()
@@ -595,10 +595,10 @@ export default function Projects() {
       serviceMatch = project.projectType?.service?.id === serviceFilter;
     }
 
-    // Task Assignee filter (using stageRoleAssignee)
+    // Task Assignee filter (using currentAssigneeId)
     let taskAssigneeMatch = true;
     if (taskAssigneeFilter !== "all") {
-      taskAssigneeMatch = project.stageRoleAssignee?.id === taskAssigneeFilter;
+      taskAssigneeMatch = project.currentAssigneeId === taskAssigneeFilter;
     }
 
     // Service Owner filter

@@ -87,8 +87,39 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard"],
     enabled: isAuthenticated && !!user,
     retry: false,
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Fetch my owned projects (service owner)
+  const { data: myOwnedProjects, isLoading: ownedProjectsLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/dashboard/my-owned-projects"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    staleTime: 30000,
+    refetchInterval: 30000,
+  });
+
+  // Fetch my assigned tasks (current assignee)
+  const { data: myAssignedTasks, isLoading: assignedTasksLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/dashboard/my-assigned-tasks"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    staleTime: 30000,
+    refetchInterval: 30000,
+  });
+
+  // Fetch attention needed projects
+  const { data: attentionNeededData, isLoading: attentionNeededLoading } = useQuery<{
+    overdueProjects: ProjectWithRelations[];
+    behindScheduleProjects: ProjectWithRelations[];
+    attentionNeeded: ProjectWithRelations[];
+  }>({
+    queryKey: ["/api/dashboard/attention-needed"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   // Redirect to login if not authenticated
@@ -132,7 +163,9 @@ export default function Dashboard() {
     );
   }
 
-  if (dashboardLoading) {
+  const isAnyLoading = dashboardLoading || ownedProjectsLoading || assignedTasksLoading || attentionNeededLoading;
+
+  if (isAnyLoading && !dashboardData) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <TopNavigation user={user} />
@@ -156,6 +189,21 @@ export default function Dashboard() {
           <div className="space-y-6">
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
+
+            {/* Attention Needed */}
+            {attentionNeededData && attentionNeededData.attentionNeeded.length > 0 && (
+              <AttentionNeededPanel data={attentionNeededData} />
+            )}
+
+            {/* My Tasks (Current Assignee) */}
+            {myAssignedTasks && myAssignedTasks.length > 0 && (
+              <MyTasksPanel tasks={myAssignedTasks} />
+            )}
+
+            {/* My Projects (Service Owner) */}
+            {myOwnedProjects && myOwnedProjects.length > 0 && (
+              <MyProjectsPanel projects={myOwnedProjects} />
+            )}
           </div>
         </main>
       </div>
@@ -176,21 +224,24 @@ export default function Dashboard() {
 
 // Panel Components
 
-function MyTasksPanel({ data, user }: { data?: DashboardStats; user: any }) {
-  const myTasks = data?.myActiveTasks || [];
-
+function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-blue-500" />
-          My Tasks
-        </CardTitle>
-        <CardDescription>Tasks assigned to you</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-blue-500" />
+              My Tasks
+            </CardTitle>
+            <CardDescription>Projects where you're the current assignee</CardDescription>
+          </div>
+          <Badge variant="secondary">{tasks.length}</Badge>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
-          {myTasks.slice(0, 5).map((task) => (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {tasks.slice(0, 8).map((task) => (
             <div 
               key={task.id} 
               className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
@@ -211,8 +262,91 @@ function MyTasksPanel({ data, user }: { data?: DashboardStats; user: any }) {
               )}
             </div>
           ))}
-          {myTasks.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No active tasks</p>
+          {tasks.length > 8 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-2"
+              onClick={() => window.location.href = '/all-projects'}
+              data-testid="button-view-all-tasks"
+            >
+              View All {tasks.length} Tasks
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AttentionNeededPanel({ data }: { 
+  data: {
+    overdueProjects: ProjectWithRelations[];
+    behindScheduleProjects: ProjectWithRelations[];
+    attentionNeeded: ProjectWithRelations[];
+  } 
+}) {
+  return (
+    <Card className="border-orange-200 dark:border-orange-800">
+      <CardHeader className="pb-3 bg-orange-50/50 dark:bg-orange-950/20">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              Attention Needed
+            </CardTitle>
+            <CardDescription>Overdue or behind schedule projects</CardDescription>
+          </div>
+          <Badge variant="destructive">{data.attentionNeeded.length}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {data.attentionNeeded.slice(0, 8).map((project) => {
+            const isOverdue = data.overdueProjects.some(p => p.id === project.id);
+            const isBehindSchedule = data.behindScheduleProjects.some(p => p.id === project.id);
+            
+            return (
+              <div 
+                key={project.id} 
+                className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/30 cursor-pointer transition-colors"
+                onClick={() => window.location.href = `/projects/${project.id}`}
+                data-testid={`attention-needed-project-${project.id}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{project.client?.name}</span>
+                  <div className="flex gap-1">
+                    {isOverdue && (
+                      <Badge variant="destructive" className="text-xs">
+                        Overdue
+                      </Badge>
+                    )}
+                    {isBehindSchedule && (
+                      <Badge variant="secondary" className="text-xs">
+                        Behind Schedule
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
+                {project.dueDate && (
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    {isOverdue ? 'Was due:' : 'Due:'} {new Date(project.dueDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          {data.attentionNeeded.length > 8 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-2 border-orange-200 dark:border-orange-800"
+              onClick={() => window.location.href = '/all-projects'}
+              data-testid="button-view-all-attention-needed"
+            >
+              View All {data.attentionNeeded.length} Projects
+            </Button>
           )}
         </div>
       </CardContent>
@@ -394,21 +528,24 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
   );
 }
 
-function MyProjectsPanel({ data }: { data?: DashboardStats }) {
-  const myProjects = data?.myProjects || [];
-
+function MyProjectsPanel({ projects }: { projects: ProjectWithRelations[] }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <FolderOpen className="w-5 h-5 text-violet-500" />
-          My Projects
-        </CardTitle>
-        <CardDescription>All projects you're involved in</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-violet-500" />
+              My Projects
+            </CardTitle>
+            <CardDescription>Projects where you're the service owner</CardDescription>
+          </div>
+          <Badge variant="secondary">{projects.length}</Badge>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {myProjects.slice(0, 10).map((project) => (
+          {projects.slice(0, 8).map((project) => (
             <div 
               key={project.id} 
               className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
@@ -422,23 +559,25 @@ function MyProjectsPanel({ data }: { data?: DashboardStats }) {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
+              {project.dueDate && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Due: {new Date(project.dueDate).toLocaleDateString()}
+                </p>
+              )}
             </div>
           ))}
-          {myProjects.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No projects assigned</p>
+          {projects.length > 8 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-2"
+              onClick={() => window.location.href = '/all-projects'}
+              data-testid="button-view-all-projects"
+            >
+              View All {projects.length} Projects
+            </Button>
           )}
         </div>
-        {myProjects.length > 10 && (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="w-full mt-3"
-            onClick={() => window.location.href = '/all-projects'}
-            data-testid="button-view-all-projects"
-          >
-            View All {myProjects.length} Projects
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

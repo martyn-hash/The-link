@@ -835,6 +835,102 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
+  // GET /api/dashboard/my-owned-projects - Projects where user is the service owner
+  app.get("/api/dashboard/my-owned-projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Query projects where user is the project owner (service owner)
+      const myProjects = await storage.getAllProjects({
+        serviceOwnerId: effectiveUserId,
+        archived: false
+      });
+
+      // Filter out inactive and completed projects
+      const activeProjects = myProjects.filter(p => !p.inactive && p.currentStatus !== "completed");
+
+      res.json(activeProjects);
+    } catch (error) {
+      console.error("Error fetching my owned projects:", error);
+      res.status(500).json({ message: "Failed to fetch my owned projects" });
+    }
+  });
+
+  // GET /api/dashboard/my-assigned-tasks - Projects where user is the current assignee
+  app.get("/api/dashboard/my-assigned-tasks", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Query projects where user is the current assignee
+      const myTasks = await storage.getAllProjects({
+        assigneeId: effectiveUserId,
+        archived: false
+      });
+
+      // Filter out inactive and completed projects
+      const activeTasks = myTasks.filter(p => !p.inactive && p.currentStatus !== "completed");
+
+      res.json(activeTasks);
+    } catch (error) {
+      console.error("Error fetching my assigned tasks:", error);
+      res.status(500).json({ message: "Failed to fetch my assigned tasks" });
+    }
+  });
+
+  // GET /api/dashboard/attention-needed - Overdue and behind schedule projects for user
+  app.get("/api/dashboard/attention-needed", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Get all projects where user is involved (owner or assignee)
+      const [ownedProjects, assignedProjects] = await Promise.all([
+        storage.getAllProjects({ serviceOwnerId: effectiveUserId, archived: false }),
+        storage.getAllProjects({ assigneeId: effectiveUserId, archived: false })
+      ]);
+
+      // Combine and deduplicate projects
+      const allUserProjects = Array.from(
+        new Map([...ownedProjects, ...assignedProjects].map(p => [p.id, p])).values()
+      );
+
+      // Filter for active projects only
+      const activeProjects = allUserProjects.filter(p => !p.inactive && p.currentStatus !== "completed");
+
+      const now = new Date();
+
+      // Find overdue projects (due date in the past)
+      const overdueProjects = activeProjects.filter(project => {
+        if (!project.dueDate) return false;
+        return new Date(project.dueDate) < now;
+      });
+
+      // Find behind schedule projects (stuck in current stage for >7 days)
+      const behindScheduleProjects = activeProjects.filter(project => {
+        const lastChronology = project.chronology?.[0];
+        if (!lastChronology || !lastChronology.timestamp) return false;
+
+        const timeInCurrentStageMs = Date.now() - new Date(lastChronology.timestamp).getTime();
+        const timeInCurrentStageDays = timeInCurrentStageMs / (1000 * 60 * 60 * 24);
+
+        return timeInCurrentStageDays > 7;
+      });
+
+      // Combine and deduplicate (a project can be both overdue AND behind schedule)
+      const attentionNeeded = Array.from(
+        new Map([...overdueProjects, ...behindScheduleProjects].map(p => [p.id, p])).values()
+      );
+
+      res.json({
+        overdueProjects,
+        behindScheduleProjects,
+        attentionNeeded
+      });
+    } catch (error) {
+      console.error("Error fetching attention needed projects:", error);
+      res.status(500).json({ message: "Failed to fetch attention needed projects" });
+    }
+  });
+
   // ===== ANALYTICS ROUTES =====
 
   app.post("/api/analytics", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
