@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +15,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -41,10 +51,20 @@ interface InternalTaskWithRelations extends InternalTask {
 
 export default function InternalTasks() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"assigned" | "created" | "all">("assigned");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [selectedAssignee, setSelectedAssignee] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+
+  // Fetch staff members for bulk reassign
+  const { data: staff = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
 
   const { data: assignedTasks, isLoading: isLoadingAssigned } = useQuery<InternalTaskWithRelations[]>({
     queryKey: ['/api/internal-tasks/assigned', user?.id, statusFilter, priorityFilter],
@@ -120,6 +140,84 @@ export default function InternalTasks() {
       setSelectedTasks([...selectedTasks, taskId]);
     } else {
       setSelectedTasks(selectedTasks.filter(id => id !== taskId));
+    }
+  };
+
+  // Bulk reassign mutation
+  const bulkReassignMutation = useMutation({
+    mutationFn: async (assignedToId: string) => {
+      return await apiRequest("POST", "/api/internal-tasks/bulk/reassign", {
+        taskIds: selectedTasks,
+        assignedToId,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Tasks reassigned",
+        description: `${selectedTasks.length} task(s) have been reassigned successfully.`,
+      });
+      // Invalidate all task queries
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/internal-tasks');
+        }
+      });
+      setSelectedTasks([]);
+      setBulkReassignOpen(false);
+      setSelectedAssignee("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reassign tasks",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Bulk status change mutation
+  const bulkStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      return await apiRequest("POST", "/api/internal-tasks/bulk/status", {
+        taskIds: selectedTasks,
+        status,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Status updated",
+        description: `${selectedTasks.length} task(s) have been updated successfully.`,
+      });
+      // Invalidate all task queries
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/internal-tasks');
+        }
+      });
+      setSelectedTasks([]);
+      setBulkStatusOpen(false);
+      setSelectedStatus("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update task status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleBulkReassign = () => {
+    if (selectedAssignee) {
+      bulkReassignMutation.mutate(selectedAssignee);
+    }
+  };
+
+  const handleBulkStatusChange = () => {
+    if (selectedStatus) {
+      bulkStatusMutation.mutate(selectedStatus);
     }
   };
 
@@ -249,10 +347,20 @@ export default function InternalTasks() {
                     {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''} selected
                   </span>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" data-testid="button-bulk-reassign">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBulkReassignOpen(true)}
+                      data-testid="button-bulk-reassign"
+                    >
                       Reassign
                     </Button>
-                    <Button variant="outline" size="sm" data-testid="button-bulk-status">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBulkStatusOpen(true)}
+                      data-testid="button-bulk-status"
+                    >
                       Change Status
                     </Button>
                     <Button
@@ -545,6 +653,102 @@ export default function InternalTasks() {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* Bulk Reassign Dialog */}
+        <Dialog open={bulkReassignOpen} onOpenChange={setBulkReassignOpen}>
+          <DialogContent data-testid="dialog-bulk-reassign">
+            <DialogHeader>
+              <DialogTitle>Reassign Tasks</DialogTitle>
+              <DialogDescription>
+                Reassign {selectedTasks.length} task(s) to a staff member
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="assignee">Assign To</Label>
+                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                  <SelectTrigger id="assignee" data-testid="select-bulk-assignee">
+                    <SelectValue placeholder="Select staff member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {staff.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.firstName && member.lastName
+                          ? `${member.firstName} ${member.lastName}`
+                          : member.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setBulkReassignOpen(false);
+                    setSelectedAssignee("");
+                  }}
+                  data-testid="button-cancel-bulk-reassign"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleBulkReassign}
+                  disabled={!selectedAssignee || bulkReassignMutation.isPending}
+                  data-testid="button-confirm-bulk-reassign"
+                >
+                  {bulkReassignMutation.isPending ? "Reassigning..." : "Reassign"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Status Change Dialog */}
+        <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
+          <DialogContent data-testid="dialog-bulk-status">
+            <DialogHeader>
+              <DialogTitle>Change Task Status</DialogTitle>
+              <DialogDescription>
+                Change status for {selectedTasks.length} task(s)
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">New Status</Label>
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger id="status" data-testid="select-bulk-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setBulkStatusOpen(false);
+                    setSelectedStatus("");
+                  }}
+                  data-testid="button-cancel-bulk-status"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleBulkStatusChange}
+                  disabled={!selectedStatus || bulkStatusMutation.isPending}
+                  data-testid="button-confirm-bulk-status"
+                >
+                  {bulkStatusMutation.isPending ? "Updating..." : "Update Status"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
