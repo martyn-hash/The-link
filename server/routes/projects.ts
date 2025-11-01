@@ -1207,12 +1207,24 @@ export function registerProjectRoutes(
         p.projectOwnerId === effectiveUserId || p.currentAssigneeId === effectiveUserId
       );
 
+      // PERFORMANCE FIX: Batch load all stages for unique project types (fix N+1 query)
+      const uniqueProjectTypeIds = [...new Set(myRelevantProjects.map(p => p.projectTypeId))];
+      const stagesByProjectType = new Map<string, any[]>();
+      
+      // Load all stages in parallel
+      await Promise.all(
+        uniqueProjectTypeIds.map(async (projectTypeId) => {
+          const stages = await storage.getKanbanStagesByProjectTypeId(projectTypeId);
+          stagesByProjectType.set(projectTypeId, stages);
+        })
+      );
+
       // Calculate behind schedule count (time in current stage > maxInstanceTime)
       // Only count from user's relevant projects
       let behindScheduleCount = 0;
       for (const project of myRelevantProjects) {
-        // Get stage config for this project
-        const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+        // Get stage config from cached map
+        const stages = stagesByProjectType.get(project.projectTypeId) || [];
         const currentStageConfig = stages.find(s => s.name === project.currentStatus);
         
         if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
