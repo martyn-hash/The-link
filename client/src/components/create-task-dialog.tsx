@@ -37,6 +37,7 @@ import { Plus, X, Loader2 } from "lucide-react";
 import { type TaskType, type User } from "@shared/schema";
 import { format } from "date-fns";
 import { z } from "zod";
+import EntitySearch, { type SelectedEntity } from "@/components/entity-search";
 
 // Custom form schema that matches the form fields
 // Note: createdBy will be added by the server, assignedToId will be mapped to assignedTo
@@ -89,12 +90,8 @@ export function CreateTaskDialog({
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
   
-  // Store connections state (optional entity links)
-  const [connectionClientId, setConnectionClientId] = useState<string>(defaultConnections?.clientId || "");
-  const [connectionPersonId, setConnectionPersonId] = useState<string>(defaultConnections?.personId || "");
-  const [connectionProjectId, setConnectionProjectId] = useState<string>(defaultConnections?.projectId || "");
-  const [connectionServiceId, setConnectionServiceId] = useState<string>(defaultConnections?.serviceId || "");
-  const [connectionMessageId, setConnectionMessageId] = useState<string>(defaultConnections?.messageId || "");
+  // Store connections state (optional entity links) using new EntitySearch component
+  const [selectedEntities, setSelectedEntities] = useState<SelectedEntity[]>([]);
 
   // Fetch task types
   const { data: taskTypes = [], isLoading: loadingTypes } = useQuery<TaskType[]>({
@@ -104,34 +101,6 @@ export function CreateTaskDialog({
   // Fetch staff members
   const { data: staff = [], isLoading: loadingStaff } = useQuery<User[]>({
     queryKey: ["/api/users"],
-  });
-
-  // Fetch entities for connections (only when dialog is open)
-  const { data: clients = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/clients"],
-    enabled: open,
-    select: (data: any[]) => data.map(c => ({ id: c.id, name: c.name })),
-  });
-
-  const { data: people = [] } = useQuery<Array<{ id: string; firstName: string; lastName: string }>>({
-    queryKey: ["/api/people"],
-    enabled: open,
-    select: (data: any[]) => data.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
-  });
-
-  const { data: projects = [] } = useQuery<Array<{ id: string; clientName?: string; projectTypeName?: string }>>({
-    queryKey: ["/api/projects"],
-    enabled: open,
-  });
-
-  const { data: services = [] } = useQuery<Array<{ id: string; serviceName?: string; clientName?: string }>>({
-    queryKey: ["/api/scheduled-services/all"],
-    enabled: open,
-  });
-
-  const { data: messageThreads = [] } = useQuery<Array<{ id: string; subject?: string }>>({
-    queryKey: ["/api/project-messages/my-threads"],
-    enabled: open,
   });
 
   // Form setup with default values
@@ -161,6 +130,52 @@ export function CreateTaskDialog({
     });
   }, [defaultValues, form]);
 
+  // Hydrate entity connections from defaultConnections when dialog opens
+  useEffect(() => {
+    if (!open) return; // Only hydrate when dialog is opening
+    
+    if (!defaultConnections) {
+      setSelectedEntities([]);
+      return;
+    }
+
+    const entities: SelectedEntity[] = [];
+    
+    if (defaultConnections.clientId) {
+      entities.push({
+        id: defaultConnections.clientId,
+        type: 'client',
+        label: 'Preselected Client' // Will be updated when component loads
+      });
+    }
+    
+    if (defaultConnections.personId) {
+      entities.push({
+        id: defaultConnections.personId,
+        type: 'person',
+        label: 'Preselected Person'
+      });
+    }
+    
+    if (defaultConnections.projectId) {
+      entities.push({
+        id: defaultConnections.projectId,
+        type: 'project',
+        label: 'Preselected Project'
+      });
+    }
+    
+    if (defaultConnections.messageId) {
+      entities.push({
+        id: defaultConnections.messageId,
+        type: 'message',
+        label: 'Preselected Message'
+      });
+    }
+    
+    setSelectedEntities(entities);
+  }, [open, defaultConnections]);
+
   // Create task mutation
   const createTaskMutation = useMutation({
     mutationFn: async (data: TaskFormData) => {
@@ -177,15 +192,12 @@ export function CreateTaskDialog({
       });
 
       // Create connections if provided
-      const connectionList = [];
-      if (connectionClientId) connectionList.push({ entityType: "client" as const, entityId: connectionClientId });
-      if (connectionProjectId) connectionList.push({ entityType: "project" as const, entityId: connectionProjectId });
-      if (connectionPersonId) connectionList.push({ entityType: "person" as const, entityId: connectionPersonId });
-      if (connectionMessageId) connectionList.push({ entityType: "message" as const, entityId: connectionMessageId });
-      if (connectionServiceId) connectionList.push({ entityType: "service" as const, entityId: connectionServiceId });
+      if (selectedEntities.length > 0) {
+        const connectionList = selectedEntities.map(entity => ({
+          entityType: entity.type,
+          entityId: entity.id
+        }));
 
-      // Add connections if any
-      if (connectionList.length > 0) {
         await apiRequest("POST", `/api/internal-tasks/${task.id}/connections`, {
           connections: connectionList,
         });
@@ -210,11 +222,7 @@ export function CreateTaskDialog({
       
       // Reset form and connections
       form.reset();
-      setConnectionClientId("");
-      setConnectionPersonId("");
-      setConnectionProjectId("");
-      setConnectionServiceId("");
-      setConnectionMessageId("");
+      setSelectedEntities([]);
       setOpen(false);
       
       // Call success callback if provided
@@ -428,112 +436,18 @@ export function CreateTaskDialog({
 
           {/* Entity Connections Section */}
           <div className="border-t pt-4 mt-4">
-            <h3 className="text-sm font-semibold mb-3">Connections (Optional)</h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Link this task to related entities for better tracking and context
+            <h3 className="text-sm font-semibold mb-2">Connections (Optional)</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Link this task to related clients, people, projects, or messages
             </p>
             
-            <div className="space-y-3">
-              {/* Client Connection */}
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="connection-client" className="text-xs">Client (Optional)</Label>
-                <Select
-                  value={connectionClientId}
-                  onValueChange={setConnectionClientId}
-                >
-                  <SelectTrigger id="connection-client" data-testid="select-connection-client">
-                    <SelectValue placeholder="None selected" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Person Connection */}
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="connection-person" className="text-xs">Person (Optional)</Label>
-                <Select
-                  value={connectionPersonId}
-                  onValueChange={setConnectionPersonId}
-                >
-                  <SelectTrigger id="connection-person" data-testid="select-connection-person">
-                    <SelectValue placeholder="None selected" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {people.map((person) => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.firstName} {person.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Project Connection */}
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="connection-project" className="text-xs">Project (Optional)</Label>
-                <Select
-                  value={connectionProjectId}
-                  onValueChange={setConnectionProjectId}
-                >
-                  <SelectTrigger id="connection-project" data-testid="select-connection-project">
-                    <SelectValue placeholder="None selected" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.clientName} - {project.projectTypeName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Service Connection */}
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="connection-service" className="text-xs">Service (Optional)</Label>
-                <Select
-                  value={connectionServiceId}
-                  onValueChange={setConnectionServiceId}
-                >
-                  <SelectTrigger id="connection-service" data-testid="select-connection-service">
-                    <SelectValue placeholder="None selected" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.clientName} - {service.serviceName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Message Thread Connection */}
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="connection-message" className="text-xs">Message Thread (Optional)</Label>
-                <Select
-                  value={connectionMessageId}
-                  onValueChange={setConnectionMessageId}
-                >
-                  <SelectTrigger id="connection-message" data-testid="select-connection-message">
-                    <SelectValue placeholder="None selected" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {messageThreads.map((thread) => (
-                      <SelectItem key={thread.id} value={thread.id}>
-                        {thread.subject || `Thread ${thread.id.substring(0, 8)}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <EntitySearch
+              placeholder="Search for clients, people, projects, or messages..."
+              selectedEntities={selectedEntities}
+              onSelect={(entity) => setSelectedEntities([...selectedEntities, entity])}
+              onRemove={(entityId) => setSelectedEntities(selectedEntities.filter(e => e.id !== entityId))}
+              allowMultiple={true}
+            />
           </div>
 
           {/* Form Actions */}
