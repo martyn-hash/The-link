@@ -596,9 +596,9 @@ export default function InternalTaskDetail() {
         </div>
 
         {/* Main Content - Card-based Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Task Details Card */}
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Task Details Card - 2/3 of Row 1 */}
+          <div className="lg:col-span-2">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -754,8 +754,8 @@ export default function InternalTaskDetail() {
             </Card>
           </div>
 
-          {/* Connections Card */}
-          <div className="md:col-span-2">
+          {/* Connections Card - 1/3 of Row 1 */}
+          <div className="lg:col-span-1">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -770,8 +770,8 @@ export default function InternalTaskDetail() {
                     <Label className="mb-2 block">Add Connection</Label>
                     <EntitySearch
                       entityTypes={['client', 'project', 'person', 'message']}
-                      onSelect={(entityType, entityId) => {
-                        createConnectionMutation.mutate({ entityType, entityId });
+                      onSelect={(entity) => {
+                        createConnectionMutation.mutate({ entityType: entity.type, entityId: entity.id });
                       }}
                       placeholder="Search for clients, projects, people, or messages..."
                     />
@@ -895,63 +895,154 @@ export default function InternalTaskDetail() {
             </Card>
           </div>
 
-          {/* Progress Notes Card */}
-          <div className="md:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Progress Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {task.progressNotes && task.progressNotes.length > 0 ? (
-                    task.progressNotes.map((note) => (
-                      <div key={note.id} className="border rounded p-3 space-y-2" data-testid={`progress-note-${note.id}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold">
-                            {note.user ? `${note.user.firstName} ${note.user.lastName}` : 'Unknown User'}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                          </span>
+          {/* Row 2: Attachments and Progress Notes side by side */}
+          <div className="lg:col-span-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Attachments Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    Attachments ({documents.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Upload section */}
+                  <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                      disabled={uploadingFile}
+                      data-testid="input-file-upload"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingFile}
+                      data-testid="button-upload-document"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingFile ? "Uploading..." : "Upload Document"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Maximum file size: 10MB
+                    </p>
+                  </div>
+
+                  {/* Documents list */}
+                  {documents.length > 0 ? (
+                    <div className="space-y-2">
+                      {documents.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-3 border rounded hover:bg-muted/50"
+                          data-testid={`document-${doc.id}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate" data-testid="text-document-filename">
+                              {doc.fileName}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>{formatFileSize(doc.fileSize)}</span>
+                              <span>•</span>
+                              <span>
+                                {doc.uploader
+                                  ? `${doc.uploader.firstName} ${doc.uploader.lastName}`
+                                  : 'Unknown'}
+                              </span>
+                              <span>•</span>
+                              <span>{formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownload(doc)}
+                              data-testid="button-download-document"
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteDocumentMutation.mutate(doc.id)}
+                              disabled={deleteDocumentMutation.isPending}
+                              data-testid="button-delete-document"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <p className="text-sm whitespace-pre-wrap">{note.content}</p>
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      No progress notes yet. Document your progress!
+                      No attachments yet. Upload a document to get started.
                     </p>
                   )}
-                </div>
+                </CardContent>
+              </Card>
 
-                <div className="border-t pt-4 space-y-2">
-                  <Label htmlFor="new-progress-note">Add Progress Note</Label>
-                  <Textarea
-                    id="new-progress-note"
-                    value={newProgressNote}
-                    onChange={(e) => setNewProgressNote(e.target.value)}
-                    placeholder="Document task progress..."
-                    rows={3}
-                    data-testid="textarea-new-progress-note"
-                  />
-                  <Button
-                    onClick={() => addProgressNoteMutation.mutate(newProgressNote)}
-                    disabled={!newProgressNote.trim() || addProgressNoteMutation.isPending}
-                    data-testid="button-add-progress-note"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Add Progress Note
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              {/* Progress Notes Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Progress Notes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {task.progressNotes && task.progressNotes.length > 0 ? (
+                      task.progressNotes.map((note) => (
+                        <div key={note.id} className="border rounded p-3 space-y-2" data-testid={`progress-note-${note.id}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold">
+                              {note.user ? `${note.user.firstName} ${note.user.lastName}` : 'Unknown User'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{note.content}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No progress notes yet. Document your progress!
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="border-t pt-4 space-y-2">
+                    <Label htmlFor="new-progress-note">Add Progress Note</Label>
+                    <Textarea
+                      id="new-progress-note"
+                      value={newProgressNote}
+                      onChange={(e) => setNewProgressNote(e.target.value)}
+                      placeholder="Document task progress..."
+                      rows={3}
+                      data-testid="textarea-new-progress-note"
+                    />
+                    <Button
+                      onClick={() => addProgressNoteMutation.mutate(newProgressNote)}
+                      disabled={!newProgressNote.trim() || addProgressNoteMutation.isPending}
+                      data-testid="button-add-progress-note"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Add Progress Note
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
-          {/* Time Tracking Card */}
-          <div className="md:col-span-2">
+          {/* Time Tracking Card - Row 3 */}
+          <div className="lg:col-span-3">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -1035,95 +1126,6 @@ export default function InternalTaskDetail() {
             </Card>
           </div>
 
-          {/* Final placeholder - should be removed */}
-          <div className="md:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Paperclip className="w-4 h-4" />
-                  Attachments ({documents.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Upload section */}
-                <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                    disabled={uploadingFile}
-                    data-testid="input-file-upload"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingFile}
-                    data-testid="button-upload-document"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    {uploadingFile ? "Uploading..." : "Upload Document"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Maximum file size: 10MB
-                  </p>
-                </div>
-
-                {/* Documents list */}
-                {documents.length > 0 ? (
-                  <div className="space-y-2">
-                    {documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-3 border rounded hover:bg-muted/50"
-                        data-testid={`document-${doc.id}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate" data-testid="text-document-filename">
-                            {doc.fileName}
-                          </p>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span>{formatFileSize(doc.fileSize)}</span>
-                            <span>•</span>
-                            <span>
-                              {doc.uploader
-                                ? `${doc.uploader.firstName} ${doc.uploader.lastName}`
-                                : 'Unknown'}
-                            </span>
-                            <span>•</span>
-                            <span>{formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownload(doc)}
-                            data-testid="button-download-document"
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteDocumentMutation.mutate(doc.id)}
-                            disabled={deleteDocumentMutation.isPending}
-                            data-testid="button-delete-document"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No attachments yet. Upload a document to get started.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </div>
 
