@@ -450,7 +450,7 @@ export default function InternalTaskDetail() {
   if (taskLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="container mx-auto py-6 px-4">
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-64 w-full" />
@@ -462,7 +462,7 @@ export default function InternalTaskDetail() {
   if (!task) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="container mx-auto py-6 px-4">
           <Button
             variant="ghost"
@@ -483,7 +483,7 @@ export default function InternalTaskDetail() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <TopNavigation />
+      <TopNavigation user={user} />
 
       <div className="container mx-auto py-6 px-4 max-w-6xl">
         {/* Header with Back Button */}
