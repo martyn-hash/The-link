@@ -9,7 +9,7 @@ import QRCode from 'qrcode';
 import sgMail from '@sendgrid/mail';
 import crypto from 'crypto';
 import { db } from "../db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   insertUserSchema,
   insertDashboardSchema,
@@ -29,6 +29,7 @@ import {
   clientPeople as clientPeopleTable,
   clientServices as clientServicesTable,
   clientServiceRoleAssignments as clientServiceRoleAssignmentsTable,
+  sessions,
   type InsertPerson,
   type InsertClientService,
 } from "@shared/schema";
@@ -304,8 +305,20 @@ export async function registerAuthAndMiscRoutes(
   app.get("/api/users", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       const users = await storage.getAllUsers();
-      // Strip password hash from response for security
-      const sanitizedUsers = users.map(({ passwordHash, ...user }) => user);
+      
+      // Query active sessions to determine who's online
+      const activeSessions = await db
+        .select({ userId: sql<string>`(sess->>'userId')::text` })
+        .from(sessions)
+        .where(sql`expire > NOW()`);
+      
+      const onlineUserIds = new Set(activeSessions.map(s => s.userId).filter(Boolean));
+      
+      // Strip password hash from response and add online status
+      const sanitizedUsers = users.map(({ passwordHash, ...user }) => ({
+        ...user,
+        isOnline: onlineUserIds.has(user.id),
+      }));
       res.json(sanitizedUsers);
     } catch (error) {
       console.error("Error fetching users:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);

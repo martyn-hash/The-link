@@ -52,7 +52,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings, RefreshCw, Send, Bell } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings, RefreshCw, Send, Bell, Circle } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import type { User } from "@shared/schema";
 
 const createUserFormSchema = z.object({
@@ -733,7 +734,8 @@ export default function UserManagement() {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Created</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Last Login</TableHead>
                         <TableHead className="w-20">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -767,9 +769,28 @@ export default function UserManagement() {
                             </Badge>
                           </TableCell>
                           <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Circle 
+                                className={`w-2 h-2 ${(user as any).isOnline ? 'fill-green-500 text-green-500' : 'fill-gray-300 text-gray-300'}`}
+                                data-testid={`status-${user.id}`}
+                              />
+                              <span className="text-sm">
+                                {(user as any).isOnline ? 'Online' : 'Offline'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Calendar className="w-3 h-3" />
-                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
+                              {user.lastLoginAt ? (
+                                <>
+                                  <Calendar className="w-3 h-3" />
+                                  <span title={new Date(user.lastLoginAt).toLocaleString()}>
+                                    {formatDistanceToNow(new Date(user.lastLoginAt), { addSuffix: true })}
+                                  </span>
+                                </>
+                              ) : (
+                                <span>Never</span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
