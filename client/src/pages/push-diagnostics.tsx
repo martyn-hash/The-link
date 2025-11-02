@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import TopNavigation from "@/components/top-navigation";
 import { RefreshCw, CheckCircle2, XCircle, AlertCircle, Copy, Send } from "lucide-react";
 
 interface DiagnosticInfo {
@@ -31,6 +33,7 @@ interface DiagnosticInfo {
 }
 
 export default function PushDiagnostics() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [diagnostics, setDiagnostics] = useState<DiagnosticInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -176,14 +179,16 @@ export default function PushDiagnostics() {
     diagnostics.vapid.publicKey !== null;
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Push Notification Diagnostics</h1>
-          <p className="text-muted-foreground">
-            Check your push notification configuration and troubleshoot issues
-          </p>
-        </div>
+    <div className="min-h-screen bg-background">
+      <TopNavigation user={user} />
+      <div className="container mx-auto py-8 px-4 max-w-5xl">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Push Notification Diagnostics</h1>
+            <p className="text-muted-foreground">
+              Check your push notification configuration and troubleshoot issues
+            </p>
+          </div>
         <div className="flex gap-2">
           <Button
             onClick={testPushNotification}
@@ -464,6 +469,7 @@ export default function PushDiagnostics() {
           </ul>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

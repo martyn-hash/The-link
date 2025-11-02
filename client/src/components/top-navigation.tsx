@@ -173,7 +173,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       )}
                     </div>
 
-                    {/* Column 2: Messages, Internal Chat, Client Requests */}
+                    {/* Column 2: Messages, Internal Chat, Companies */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/messages" className="w-full">
@@ -204,6 +204,24 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
+                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
+                        <DropdownMenuItem asChild>
+                          <Link href="/companies" className="w-full">
+                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
+                              <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
+                                <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-foreground text-sm">Companies</div>
+                              </div>
+                            </div>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                    </div>
+
+                    {/* Column 3: Client Requests, People, Internal Tasks */}
+                    <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/client-requests" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-client-requests-menu">
@@ -216,6 +234,20 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
+                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
+                        <DropdownMenuItem asChild>
+                          <Link href="/people" className="w-full">
+                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-people-menu">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
+                                <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-foreground text-sm">People</div>
+                              </div>
+                            </div>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem asChild>
                         <Link href="/internal-tasks" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-internal-tasks-menu">
@@ -228,58 +260,6 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
-                    </div>
-
-                    {/* Column 3: User Profile, Companies, People */}
-                    <div className="space-y-1">
-                      <DropdownMenuItem asChild>
-                        <Link href="/profile" className="w-full">
-                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-user-profile">
-                            <Avatar className="w-8 h-8 shrink-0">
-                              <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
-                              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                                {getUserInitials()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground text-sm truncate">
-                                {getUserDisplayName()}
-                                {isImpersonating && (
-                                  <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </Link>
-                      </DropdownMenuItem>
-                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                        <>
-                          <DropdownMenuItem asChild>
-                            <Link href="/companies" className="w-full">
-                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
-                                <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
-                                  <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-foreground text-sm">Companies</div>
-                                </div>
-                              </div>
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href="/people" className="w-full">
-                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-people-menu">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
-                                  <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-foreground text-sm">People</div>
-                                </div>
-                              </div>
-                            </Link>
-                          </DropdownMenuItem>
-                        </>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -312,8 +292,32 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
             </div>
           )}
 
-          {/* Right Section: Empty for desktop, Profile icon for mobile */}
-          <div className="flex items-center">
+          {/* Right Section: User Profile for desktop, Profile icon for mobile */}
+          <div className="flex items-center gap-3">
+            {!isMobile && user && (
+              <Link href="/profile">
+                <Button 
+                  variant="ghost" 
+                  className="flex items-center gap-2 h-10 px-3 hover:bg-accent/50 transition-colors" 
+                  data-testid="button-desktop-profile"
+                >
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
+                    <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col items-start">
+                    <span className="text-sm font-medium text-foreground">
+                      {getUserDisplayName()}
+                      {isImpersonating && (
+                        <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
+                      )}
+                    </span>
+                  </div>
+                </Button>
+              </Link>
+            )}
             {isMobile && user && (
               <Link href="/profile">
                 <Button variant="ghost" size="icon" className="h-10 w-10" data-testid="button-mobile-profile">
