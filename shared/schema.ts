@@ -1352,8 +1352,8 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   createdAt: true,
 }).extend({
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).optional(),
-  nextStartDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
-  nextDueDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
+  nextStartDate: z.union([z.date(), z.string().datetime(), z.literal(""), z.null()]).optional(),
+  nextDueDate: z.union([z.date(), z.string().datetime(), z.literal(""), z.null()]).optional(),
   udfValues: z.record(z.any()).optional(),
 });
 

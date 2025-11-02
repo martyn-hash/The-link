@@ -2262,8 +2262,8 @@ export async function registerAuthAndMiscRoutes(
             serviceId: service.id,
             serviceOwnerId,
             frequency: row.frequency,
-            nextStartDate: nextStartDate ? nextStartDate.toISOString() : null,
-            nextDueDate: nextDueDate ? nextDueDate.toISOString() : null,
+            nextStartDate: nextStartDate,
+            nextDueDate: nextDueDate,
             isActive: row.is_active?.toLowerCase() !== 'no',
           };
 
