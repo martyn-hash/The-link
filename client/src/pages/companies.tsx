@@ -122,6 +122,41 @@ export default function Companies() {
     },
   });
 
+  // Bulk enrichment mutation
+  const enrichMutation = useMutation({
+    mutationFn: async (clientIds: string[]) => {
+      const response = await apiRequest("POST", "/api/companies-house/enrich-bulk", { clientIds });
+      return response as {
+        successful: string[];
+        failed: { clientId: string; clientName: string; error: string }[];
+        skipped: { clientId: string; clientName: string; reason: string }[];
+      };
+    },
+    onSuccess: (results) => {
+      setSyncResults(results);
+      setShowSyncDialog(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      setSelectedClients(new Set());
+      
+      const successCount = results.successful.length;
+      const failCount = results.failed.length;
+      const skipCount = results.skipped.length;
+      
+      toast({
+        title: "Enrichment Complete",
+        description: `Successfully enriched ${successCount} client${successCount !== 1 ? 's' : ''}${skipCount > 0 ? `, ${skipCount} skipped` : ''}${failCount > 0 ? `, ${failCount} failed` : ''}.`,
+        variant: successCount > 0 ? "default" : "destructive",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Enrichment Failed",
+        description: error.message || "Failed to enrich clients with Companies House data",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSelectAll = (checked: boolean, filteredClientIds?: string[]) => {
     // If filteredClientIds are provided, only select those; otherwise select all
     const clientIds = filteredClientIds || companiesHouseClients.map(c => c.id);
@@ -148,6 +183,18 @@ export default function Companies() {
       return;
     }
     syncMutation.mutate(Array.from(selectedClients));
+  };
+
+  const handleEnrichSelected = () => {
+    if (selectedClients.size === 0) {
+      toast({
+        title: "No Clients Selected",
+        description: "Please select at least one client to enrich.",
+        variant: "destructive",
+      });
+      return;
+    }
+    enrichMutation.mutate(Array.from(selectedClients));
   };
 
   const handleLoadView = (view: CompanyView) => {
@@ -271,6 +318,8 @@ export default function Companies() {
             onSelectAll={handleSelectAll}
             onSyncSelected={handleSyncSelected}
             isSyncing={syncMutation.isPending}
+            onEnrichSelected={handleEnrichSelected}
+            isEnriching={enrichMutation.isPending}
             selectedServices={selectedServices}
             selectedTags={selectedTags}
             daysUntilDueFilter={daysUntilDueFilter}

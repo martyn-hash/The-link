@@ -1729,6 +1729,135 @@ export function registerClientRoutes(
     }
   });
 
+  // POST /api/companies-house/enrich/:clientId - Enrich client with full Companies House data (admin only)
+  app.post("/api/companies-house/enrich/:clientId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { clientId } = req.params;
+
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      if (!client.companyNumber) {
+        return res.status(400).json({ message: "Client does not have a company number" });
+      }
+
+      console.log(`[API] CH enrichment triggered for client ${client.name} (${client.companyNumber}) by admin: ${req.user?.email}`);
+
+      // Fetch full company profile from Companies House
+      const companyProfile = await companiesHouseService.getCompanyProfile(client.companyNumber);
+      
+      // Transform CH data to client fields
+      const enrichedData = companiesHouseService.transformCompanyToClient(companyProfile);
+
+      // Update the client with enriched data
+      const updatedClient = await storage.updateClient(clientId, enrichedData);
+
+      console.log(`[API] Successfully enriched client ${client.name} with CH data`);
+
+      res.json({
+        message: `Client enriched successfully with Companies House data`,
+        client: updatedClient
+      });
+    } catch (error) {
+      console.error("Error enriching client with CH data:", error instanceof Error ? error.message : error);
+      res.status(500).json({
+        message: "Failed to enrich client with Companies House data",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/companies-house/enrich-bulk - Enrich multiple clients with Companies House data (admin only)
+  app.post("/api/companies-house/enrich-bulk", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const bodySchema = z.object({
+        clientIds: z.array(z.string()).min(1, "At least one client ID is required")
+      });
+
+      const bodyValidation = bodySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: bodyValidation.error.issues
+        });
+      }
+
+      const { clientIds } = bodyValidation.data;
+
+      console.log(`[API] Bulk CH enrichment triggered for ${clientIds.length} clients by admin: ${req.user?.email}`);
+
+      const results = {
+        successful: [] as string[],
+        failed: [] as { clientId: string; clientName: string; error: string }[],
+        skipped: [] as { clientId: string; clientName: string; reason: string }[]
+      };
+
+      for (const clientId of clientIds) {
+        try {
+          const client = await storage.getClientById(clientId);
+          
+          if (!client) {
+            results.failed.push({
+              clientId,
+              clientName: 'Unknown',
+              error: 'Client not found'
+            });
+            continue;
+          }
+
+          if (!client.companyNumber) {
+            results.skipped.push({
+              clientId,
+              clientName: client.name,
+              reason: 'No company number'
+            });
+            continue;
+          }
+
+          // Fetch and enrich
+          const companyProfile = await companiesHouseService.getCompanyProfile(client.companyNumber);
+          const enrichedData = companiesHouseService.transformCompanyToClient(companyProfile);
+          await storage.updateClient(clientId, enrichedData);
+
+          results.successful.push(client.name);
+          console.log(`[API] Successfully enriched client ${client.name}`);
+
+        } catch (error) {
+          const client = await storage.getClientById(clientId);
+          results.failed.push({
+            clientId,
+            clientName: client?.name || 'Unknown',
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+          console.error(`[API] Failed to enrich client ${clientId}:`, error);
+        }
+      }
+
+      res.json({
+        message: `Enriched ${results.successful.length} of ${clientIds.length} clients`,
+        successful: results.successful,
+        failed: results.failed,
+        skipped: results.skipped
+      });
+    } catch (error) {
+      console.error("Error in bulk CH enrichment:", error instanceof Error ? error.message : error);
+      res.status(500).json({
+        message: "Failed to process bulk enrichment",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // ==================================================
   // PORTAL USER MANAGEMENT ROUTES (Staff Only)
   // ==================================================

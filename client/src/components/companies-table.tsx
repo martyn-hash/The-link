@@ -208,6 +208,8 @@ interface CompaniesTableProps {
   onSelectAll: (checked: boolean, filteredClientIds?: string[]) => void;
   onSyncSelected: () => void;
   isSyncing: boolean;
+  onEnrichSelected: () => void;
+  isEnriching: boolean;
   selectedServices?: string[];
   selectedTags?: string[];
   daysUntilDueFilter?: string[];
@@ -220,6 +222,8 @@ export default function CompaniesTable({
   onSelectAll,
   onSyncSelected,
   isSyncing,
+  onEnrichSelected,
+  isEnriching,
   selectedServices = [],
   selectedTags = [],
   daysUntilDueFilter = [],
@@ -889,15 +893,27 @@ export default function CompaniesTable({
             </DialogContent>
           </Dialog>
           {selectedClients.size > 0 && (
-            <Button
-              onClick={onSyncSelected}
-              disabled={isSyncing}
-              size="sm"
-              data-testid="button-sync-selected"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
-              Sync Selected ({selectedClients.size})
-            </Button>
+            <>
+              <Button
+                onClick={onSyncSelected}
+                disabled={isSyncing}
+                size="sm"
+                variant="outline"
+                data-testid="button-sync-selected"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+                Sync Selected ({selectedClients.size})
+              </Button>
+              <Button
+                onClick={onEnrichSelected}
+                disabled={isEnriching}
+                size="sm"
+                data-testid="button-enrich-selected"
+              >
+                <Building className={`w-4 h-4 mr-2 ${isEnriching ? "animate-pulse" : ""}`} />
+                Enrich from CH ({selectedClients.size})
+              </Button>
+            </>
           )}
         </div>
       </div>

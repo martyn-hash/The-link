@@ -2298,11 +2298,57 @@ export async function registerAuthAndMiscRoutes(
           stats.rolesAssigned++;
         }
 
-        return stats;
+        return { stats, clientMap };
       });
 
-      console.log("Transactional import completed successfully:", result);
-      res.json(result);
+      console.log("Transactional import completed successfully:", result.stats);
+
+      // ============================================
+      // STEP 3: AUTO-ENRICH CLIENTS WITH COMPANIES HOUSE DATA
+      // ============================================
+      // After successful import, automatically enrich clients that have company numbers
+      const clientsToEnrich: string[] = [];
+      
+      // Check which clients have company numbers
+      for (const [clientRef, clientId] of result.clientMap.entries()) {
+        const clientRow = clients.find((r: any) => r.client_ref === clientRef);
+        if (clientRow?.company_number) {
+          clientsToEnrich.push(clientId);
+        }
+      }
+
+      console.log(`Auto-enriching ${clientsToEnrich.length} clients with Companies House data...`);
+
+      const enrichmentResults = {
+        successful: [] as string[],
+        failed: [] as string[],
+      };
+
+      // Enrich each client with company number
+      for (const clientId of clientsToEnrich) {
+        try {
+          const client = await storage.getClientById(clientId);
+          if (client && client.companyNumber) {
+            const companyProfile = await companiesHouseService.getCompanyProfile(client.companyNumber);
+            const enrichedData = companiesHouseService.transformCompanyToClient(companyProfile);
+            await storage.updateClient(clientId, enrichedData);
+            enrichmentResults.successful.push(client.name);
+            console.log(`Enriched client: ${client.name}`);
+          }
+        } catch (error) {
+          const client = await storage.getClientById(clientId);
+          enrichmentResults.failed.push(client?.name || 'Unknown');
+          console.error(`Failed to enrich client ${clientId}:`, error);
+        }
+      }
+
+      console.log(`Enrichment complete: ${enrichmentResults.successful.length} successful, ${enrichmentResults.failed.length} failed`);
+
+      res.json({
+        ...result.stats,
+        enriched: enrichmentResults.successful.length,
+        enrichmentFailed: enrichmentResults.failed.length,
+      });
 
     } catch (error) {
       console.error("Import transaction failed and was rolled back:", error);
