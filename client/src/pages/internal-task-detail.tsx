@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -70,17 +69,12 @@ interface InternalTaskWithRelations extends InternalTask {
   person?: Person | null;
   service?: Service | null;
   message?: Message | null;
-  comments?: Array<{
+  progressNotes?: Array<{
     id: string;
     content: string;
     createdAt: Date;
-    author: User;
-  }>;
-  notes?: Array<{
-    id: string;
-    content: string;
-    createdAt: Date;
-    author: User;
+    userId: string;
+    user?: User;
   }>;
   timeEntries?: Array<{
     id: string;
@@ -97,8 +91,7 @@ export default function InternalTaskDetail() {
   const [, setLocation] = useLocation();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [newComment, setNewComment] = useState("");
-  const [newNote, setNewNote] = useState("");
+  const [newProgressNote, setNewProgressNote] = useState("");
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [closureNote, setClosureNote] = useState("");
@@ -165,10 +158,10 @@ export default function InternalTaskDetail() {
     }
   }, [taskError, toast]);
 
-  // Add comment mutation
-  const addCommentMutation = useMutation({
+  // Add progress note mutation
+  const addProgressNoteMutation = useMutation({
     mutationFn: async (content: string) => {
-      return await apiRequest("POST", `/api/internal-tasks/${taskId}/comments`, { content });
+      return await apiRequest("POST", `/api/internal-tasks/${taskId}/progress-notes`, { content });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -177,30 +170,10 @@ export default function InternalTaskDetail() {
           typeof query.queryKey[0] === "string" &&
           query.queryKey[0].startsWith("/api/internal-tasks"),
       });
-      setNewComment("");
+      setNewProgressNote("");
       toast({
-        title: "Comment added",
-        description: "Your comment has been posted successfully.",
-      });
-    },
-  });
-
-  // Add note mutation
-  const addNoteMutation = useMutation({
-    mutationFn: async (content: string) => {
-      return await apiRequest("POST", `/api/internal-tasks/${taskId}/notes`, { content });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          typeof query.queryKey[0] === "string" &&
-          query.queryKey[0].startsWith("/api/internal-tasks"),
-      });
-      setNewNote("");
-      toast({
-        title: "Note added",
-        description: "Progress note has been added successfully.",
+        title: "Progress note added",
+        description: "Your progress note has been added successfully.",
       });
     },
   });
@@ -549,23 +522,10 @@ export default function InternalTaskDetail() {
           </div>
         </div>
 
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 mb-6">
-            <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
-            <TabsTrigger value="connections" data-testid="tab-connections">Connections</TabsTrigger>
-            <TabsTrigger value="comments" data-testid="tab-comments">
-              Comments {task.comments && task.comments.length > 0 && `(${task.comments.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="notes" data-testid="tab-notes">
-              Notes {task.notes && task.notes.length > 0 && `(${task.notes.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="time" data-testid="tab-time">Time Tracking</TabsTrigger>
-            <TabsTrigger value="attachments" data-testid="tab-attachments">Attachments</TabsTrigger>
-          </TabsList>
-
-          {/* Details Tab */}
-          <TabsContent value="details" className="space-y-4">
+        {/* Main Content - Card-based Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Task Details Card */}
+          <div className="md:col-span-2">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -719,10 +679,10 @@ export default function InternalTaskDetail() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          {/* Connections Tab */}
-          <TabsContent value="connections" className="space-y-4">
+          {/* Connections Card */}
+          <div className="md:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -768,65 +728,10 @@ export default function InternalTaskDetail() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          {/* Comments Tab */}
-          <TabsContent value="comments" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Comments
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {task.comments && task.comments.length > 0 ? (
-                    task.comments.map((comment) => (
-                      <div key={comment.id} className="border rounded p-3 space-y-2" data-testid={`comment-${comment.id}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold">
-                            {comment.author.firstName} {comment.author.lastName}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                          </span>
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No comments yet. Be the first to comment!
-                    </p>
-                  )}
-                </div>
-
-                <div className="border-t pt-4 space-y-2">
-                  <Label htmlFor="new-comment">Add Comment</Label>
-                  <Textarea
-                    id="new-comment"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Write a comment..."
-                    rows={3}
-                    data-testid="textarea-new-comment"
-                  />
-                  <Button
-                    onClick={() => addCommentMutation.mutate(newComment)}
-                    disabled={!newComment.trim() || addCommentMutation.isPending}
-                    data-testid="button-add-comment"
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    Add Comment
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Notes Tab */}
-          <TabsContent value="notes" className="space-y-4">
+          {/* Progress Notes Card */}
+          <div className="md:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -836,12 +741,12 @@ export default function InternalTaskDetail() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
-                  {task.notes && task.notes.length > 0 ? (
-                    task.notes.map((note) => (
-                      <div key={note.id} className="border rounded p-3 space-y-2" data-testid={`note-${note.id}`}>
+                  {task.progressNotes && task.progressNotes.length > 0 ? (
+                    task.progressNotes.map((note) => (
+                      <div key={note.id} className="border rounded p-3 space-y-2" data-testid={`progress-note-${note.id}`}>
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-semibold">
-                            {note.author.firstName} {note.author.lastName}
+                            {note.user ? `${note.user.firstName} ${note.user.lastName}` : 'Unknown User'}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
@@ -852,36 +757,36 @@ export default function InternalTaskDetail() {
                     ))
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      No notes yet. Add a progress note!
+                      No progress notes yet. Document your progress!
                     </p>
                   )}
                 </div>
 
                 <div className="border-t pt-4 space-y-2">
-                  <Label htmlFor="new-note">Add Progress Note</Label>
+                  <Label htmlFor="new-progress-note">Add Progress Note</Label>
                   <Textarea
-                    id="new-note"
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
+                    id="new-progress-note"
+                    value={newProgressNote}
+                    onChange={(e) => setNewProgressNote(e.target.value)}
                     placeholder="Document task progress..."
                     rows={3}
-                    data-testid="textarea-new-note"
+                    data-testid="textarea-new-progress-note"
                   />
                   <Button
-                    onClick={() => addNoteMutation.mutate(newNote)}
-                    disabled={!newNote.trim() || addNoteMutation.isPending}
-                    data-testid="button-add-note"
+                    onClick={() => addProgressNoteMutation.mutate(newProgressNote)}
+                    disabled={!newProgressNote.trim() || addProgressNoteMutation.isPending}
+                    data-testid="button-add-progress-note"
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    Add Note
+                    Add Progress Note
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          {/* Time Tracking Tab */}
-          <TabsContent value="time" className="space-y-4">
+          {/* Time Tracking Card */}
+          <div className="md:col-span-2">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -963,10 +868,10 @@ export default function InternalTaskDetail() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          {/* Attachments Tab */}
-          <TabsContent value="attachments" className="space-y-4">
+          {/* Final placeholder - should be removed */}
+          <div className="md:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -1053,8 +958,8 @@ export default function InternalTaskDetail() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
 
       {/* Close Task Dialog */}
