@@ -265,7 +265,7 @@ export const clients = pgTable("clients", {
 
 // People table - matches existing database structure
 export const people = pgTable("people", {
-  id: text("id").primaryKey(), // Existing field - uses text, not varchar
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`), // Auto-generate UUID for new records
   personNumber: text("person_number"), // Existing field
   fullName: text("full_name").notNull(), // Existing field - is NOT NULL
   title: text("title"), // Existing field

@@ -149,6 +149,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/admin/task-types" component={AdminTaskTypes} />
       <Route path="/admin/import" component={DataImport} />
+      <Route path="/data-import" component={DataImport} />
       <Route path="/push-diagnostics" component={PushDiagnostics} />
       
       {/* Catch-all NotFound route */}
