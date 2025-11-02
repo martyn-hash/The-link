@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -102,6 +102,11 @@ export function CreateTaskDialog({
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(true);
 
+  // Track if we've hydrated connections for the current dialog open state
+  const hasHydratedRef = useRef(false);
+  // Track if we've added the project's client (to avoid duplicate additions)
+  const hasAddedProjectClientRef = useRef(false);
+
   // Fetch task types
   const { data: taskTypes = [], isLoading: loadingTypes } = useQuery<TaskType[]>({
     queryKey: ["/api/internal-task-types"],
@@ -110,6 +115,12 @@ export function CreateTaskDialog({
   // Fetch staff members
   const { data: staff = [], isLoading: loadingStaff } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch project data if projectId is provided (to auto-add client connection)
+  const { data: project } = useQuery<any>({
+    queryKey: [`/api/projects/${defaultConnections?.projectId}`],
+    enabled: !!defaultConnections?.projectId && open,
   });
 
   // Form setup with default values
@@ -139,12 +150,22 @@ export function CreateTaskDialog({
     });
   }, [defaultValues, form]);
 
+  // Reset hydration flags when dialog closes
+  useEffect(() => {
+    if (!open) {
+      hasHydratedRef.current = false;
+      hasAddedProjectClientRef.current = false;
+    }
+  }, [open]);
+
   // Hydrate entity connections from defaultConnections when dialog opens
   useEffect(() => {
     if (!open) return; // Only hydrate when dialog is opening
+    if (hasHydratedRef.current) return; // Already hydrated for this open state
     
     if (!defaultConnections) {
       setSelectedEntities([]);
+      hasHydratedRef.current = true;
       return;
     }
 
@@ -154,7 +175,7 @@ export function CreateTaskDialog({
       entities.push({
         id: defaultConnections.clientId,
         type: 'client',
-        label: 'Preselected Client' // Will be updated when component loads
+        label: 'Preselected Client'
       });
     }
     
@@ -183,7 +204,33 @@ export function CreateTaskDialog({
     }
     
     setSelectedEntities(entities);
+    hasHydratedRef.current = true; // Mark as hydrated
   }, [open, defaultConnections]);
+
+  // Separate effect to auto-add project's client when project data loads
+  useEffect(() => {
+    if (!open) return;
+    if (!hasHydratedRef.current) return; // Wait for initial hydration
+    if (hasAddedProjectClientRef.current) return; // Already added client
+    if (!defaultConnections?.projectId) return; // No project connection
+    if (defaultConnections.clientId) return; // Client explicitly provided
+    if (!project?.client?.id) return; // Project data not loaded yet or no client
+    
+    // Add the project's client to existing connections
+    setSelectedEntities(prev => {
+      // Check if client already exists (in case user manually added it)
+      const clientExists = prev.some(e => e.type === 'client' && e.id === project.client.id);
+      if (clientExists) return prev;
+      
+      return [...prev, {
+        id: project.client.id,
+        type: 'client',
+        label: project.client.name || 'Project Client'
+      }];
+    });
+    
+    hasAddedProjectClientRef.current = true;
+  }, [open, project, defaultConnections, hasHydratedRef.current]);
 
   // Create task mutation
   const createTaskMutation = useMutation({
