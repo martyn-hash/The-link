@@ -65,6 +65,7 @@ import {
   taskComments,
   taskNotes,
   taskTimeEntries,
+  taskDocuments,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -215,6 +216,8 @@ import {
   type TaskTimeEntry,
   type InsertTaskTimeEntry,
   type StopTaskTimeEntry,
+  type TaskDocument,
+  type InsertTaskDocument,
   insertUserOauthAccountSchema,
 } from "@shared/schema";
 
@@ -3525,6 +3528,66 @@ export class DatabaseStorage implements IStorage {
   async createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology> {
     const [chronology] = await db.insert(projectChronology).values(entry).returning();
     return chronology;
+  }
+
+  // Helper function to log task activities to project chronology
+  async logTaskActivityToProject(
+    taskId: string,
+    activity: 'created' | 'updated' | 'note_added' | 'completed',
+    details: string,
+    userId: string
+  ): Promise<void> {
+    // Get project connection for this task
+    const [connection] = await db
+      .select()
+      .from(taskConnections)
+      .where(
+        and(
+          eq(taskConnections.taskId, taskId),
+          eq(taskConnections.entityType, 'project')
+        )
+      );
+
+    if (!connection) {
+      // Task is not connected to a project, skip logging
+      return;
+    }
+
+    // Get task details
+    const [task] = await db
+      .select()
+      .from(internalTasks)
+      .where(eq(internalTasks.id, taskId));
+
+    if (!task) return;
+
+    // Create appropriate chronology message based on activity
+    let message = '';
+    switch (activity) {
+      case 'created':
+        message = `Task created: ${task.title}`;
+        break;
+      case 'updated':
+        message = `Task updated: ${task.title} - ${details}`;
+        break;
+      case 'note_added':
+        message = `Progress note added to task "${task.title}": ${details}`;
+        break;
+      case 'completed':
+        message = `Task completed: ${task.title} - ${details}`;
+        break;
+    }
+
+    // Create chronology entry
+    await db.insert(projectChronology).values({
+      projectId: connection.entityId,
+      fromStatus: null,
+      toStatus: 'no_change',
+      assigneeId: task.assignedTo,
+      changedById: userId,
+      notes: message,
+      timestamp: new Date(),
+    });
   }
 
   async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; changedBy?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]> {
@@ -10630,6 +10693,49 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTaskTimeEntry(id: string): Promise<void> {
     await db.delete(taskTimeEntries).where(eq(taskTimeEntries.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Document operations
+  // ============================================
+
+  async createTaskDocument(document: InsertTaskDocument): Promise<TaskDocument> {
+    const [created] = await db
+      .insert(taskDocuments)
+      .values(document)
+      .returning();
+    return created;
+  }
+
+  async getTaskDocument(id: string): Promise<TaskDocument | undefined> {
+    const [document] = await db
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.id, id));
+    return document;
+  }
+
+  async getTaskDocuments(taskId: string): Promise<(TaskDocument & { uploader: User })[]> {
+    return await db
+      .select({
+        id: taskDocuments.id,
+        taskId: taskDocuments.taskId,
+        uploadedBy: taskDocuments.uploadedBy,
+        fileName: taskDocuments.fileName,
+        fileSize: taskDocuments.fileSize,
+        mimeType: taskDocuments.mimeType,
+        storagePath: taskDocuments.storagePath,
+        createdAt: taskDocuments.createdAt,
+        uploader: users,
+      })
+      .from(taskDocuments)
+      .leftJoin(users, eq(taskDocuments.uploadedBy, users.id))
+      .where(eq(taskDocuments.taskId, taskId))
+      .orderBy(desc(taskDocuments.createdAt));
+  }
+
+  async deleteTaskDocument(id: string): Promise<void> {
+    await db.delete(taskDocuments).where(eq(taskDocuments.id, id));
   }
 }
 

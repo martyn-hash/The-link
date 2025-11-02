@@ -97,6 +97,10 @@ export function CreateTaskDialog({
   
   // Store connections state (optional entity links) using new EntitySearch component
   const [selectedEntities, setSelectedEntities] = useState<SelectedEntity[]>([]);
+  
+  // Track if search is active to collapse form fields
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(true);
 
   // Fetch task types
   const { data: taskTypes = [], isLoading: loadingTypes } = useQuery<TaskType[]>({
@@ -257,191 +261,216 @@ export function CreateTaskDialog({
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {/* Title */}
-          <FormField
-            control={form.control}
-            name="title"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Title *</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    placeholder="Enter task title"
-                    data-testid="input-task-title"
+          {/* Collapsible Form Fields */}
+          <Collapsible open={isFormOpen} onOpenChange={setIsFormOpen}>
+            <div className="space-y-4">
+              {/* Title */}
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title *</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Enter task title"
+                        data-testid="input-task-title"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Description */}
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="Enter task description"
+                        rows={3}
+                        data-testid="input-task-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <CollapsibleContent>
+                <div className="space-y-4">
+                  {/* Task Type and Priority Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="taskTypeId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Task Type *</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={loadingTypes}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-task-type">
+                                <SelectValue placeholder="Select task type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {taskTypes.map((type) => (
+                                <SelectItem key={type.id} value={type.id}>
+                                  {type.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="priority"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Priority *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-task-priority">
+                                <SelectValue placeholder="Select priority" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="low">
+                                <Badge variant="secondary" className="bg-gray-100 text-gray-800">Low</Badge>
+                              </SelectItem>
+                              <SelectItem value="medium">
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-800">Medium</Badge>
+                              </SelectItem>
+                              <SelectItem value="high">
+                                <Badge variant="secondary" className="bg-orange-100 text-orange-800">High</Badge>
+                              </SelectItem>
+                              <SelectItem value="urgent">
+                                <Badge variant="secondary" className="bg-red-100 text-red-800">Urgent</Badge>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Assigned To and Status Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="assignedToId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Assign To *</FormLabel>
+                          <Select
+                            onValueChange={(value) => {
+                              console.log("[CreateTaskDialog] Assignee changed to:", value);
+                              field.onChange(value);
+                            }}
+                            value={field.value}
+                            disabled={loadingStaff}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-task-assignee">
+                                <SelectValue placeholder="Select staff member" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {staff.map((user) => (
+                                <SelectItem key={user.id} value={user.id} data-testid={`select-option-${user.id}`}>
+                                  {user.firstName && user.lastName
+                                    ? `${user.firstName} ${user.lastName}`
+                                    : user.email}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-task-status">
+                                <SelectValue placeholder="Select status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Due Date */}
+                  <FormField
+                    control={form.control}
+                    name="dueDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Due Date</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="date"
+                            data-testid="input-task-due-date"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Description */}
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    {...field}
-                    placeholder="Enter task description"
-                    rows={3}
-                    data-testid="input-task-description"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Task Type and Priority Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="taskTypeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Task Type *</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={loadingTypes}
-                  >
-                    <FormControl>
-                      <SelectTrigger data-testid="select-task-type">
-                        <SelectValue placeholder="Select task type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {taskTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="priority"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Priority *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-task-priority">
-                        <SelectValue placeholder="Select priority" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="low">
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-800">Low</Badge>
-                      </SelectItem>
-                      <SelectItem value="medium">
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">Medium</Badge>
-                      </SelectItem>
-                      <SelectItem value="high">
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-800">High</Badge>
-                      </SelectItem>
-                      <SelectItem value="urgent">
-                        <Badge variant="secondary" className="bg-red-100 text-red-800">Urgent</Badge>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {/* Assigned To and Status Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="assignedToId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Assign To *</FormLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      console.log("[CreateTaskDialog] Assignee changed to:", value);
-                      field.onChange(value);
-                    }}
-                    value={field.value}
-                    disabled={loadingStaff}
-                  >
-                    <FormControl>
-                      <SelectTrigger data-testid="select-task-assignee">
-                        <SelectValue placeholder="Select staff member" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {staff.map((user) => (
-                        <SelectItem key={user.id} value={user.id} data-testid={`select-option-${user.id}`}>
-                          {user.firstName && user.lastName
-                            ? `${user.firstName} ${user.lastName}`
-                            : user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-task-status">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {/* Due Date */}
-          <FormField
-            control={form.control}
-            name="dueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Date</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    type="date"
-                    data-testid="input-task-due-date"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
 
           {/* Entity Connections Section */}
           <div className="border-t pt-4 mt-4">
-            <h3 className="text-sm font-semibold mb-2">Connections (Optional)</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold">Connections (Optional)</h3>
+              {!isFormOpen && (
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2"
+                    data-testid="button-expand-form"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                    Show form fields
+                  </Button>
+                </CollapsibleTrigger>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground mb-3">
               Link this task to related clients, people, projects, or messages
             </p>
@@ -452,6 +481,8 @@ export function CreateTaskDialog({
               onSelect={(entity) => setSelectedEntities([...selectedEntities, entity])}
               onRemove={(entityId) => setSelectedEntities(selectedEntities.filter(e => e.id !== entityId))}
               allowMultiple={true}
+              onSearchStart={() => setIsFormOpen(false)}
+              onSearchClear={() => setIsFormOpen(true)}
             />
           </div>
 

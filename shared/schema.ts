@@ -2460,6 +2460,21 @@ export const taskTimeEntries = pgTable("task_time_entries", {
   index("idx_task_time_entries_start_time").on(table.startTime),
 ]);
 
+// Task documents table - for document attachments
+export const taskDocuments = pgTable("task_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  fileName: varchar("file_name").notNull(),
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  mimeType: varchar("mime_type").notNull(),
+  storagePath: varchar("storage_path").notNull(), // Path in object storage
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_documents_task_id").on(table.taskId),
+  index("idx_task_documents_uploaded_by").on(table.uploadedBy),
+]);
+
 // Zod schemas for risk assessments
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
@@ -2645,6 +2660,11 @@ export const stopTaskTimeEntrySchema = z.object({
   note: z.string().optional(),
 });
 
+export const insertTaskDocumentSchema = createInsertSchema(taskDocuments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const bulkReassignTasksSchema = z.object({
   taskIds: z.array(z.string().uuid()),
   assignedTo: z.string().uuid(),
@@ -2733,6 +2753,8 @@ export type UpdateTaskNote = z.infer<typeof updateTaskNoteSchema>;
 export type TaskTimeEntry = typeof taskTimeEntries.$inferSelect;
 export type InsertTaskTimeEntry = z.infer<typeof insertTaskTimeEntrySchema>;
 export type StopTaskTimeEntry = z.infer<typeof stopTaskTimeEntrySchema>;
+export type TaskDocument = typeof taskDocuments.$inferSelect;
+export type InsertTaskDocument = z.infer<typeof insertTaskDocumentSchema>;
 export type BulkReassignTasks = z.infer<typeof bulkReassignTasksSchema>;
 export type BulkUpdateTaskStatus = z.infer<typeof bulkUpdateTaskStatusSchema>;
 

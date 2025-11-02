@@ -39,12 +39,27 @@ import {
   PlayCircle,
   StopCircle,
   CheckCircle2,
+  Download,
+  Trash2,
+  Upload,
 } from "lucide-react";
 import TopNavigation from "@/components/top-navigation";
 import { formatDistanceToNow, format } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { InternalTask, TaskType, User, Client, Project, Person, Service, Message } from "@shared/schema";
+
+interface TaskDocument {
+  id: string;
+  taskId: string;
+  uploadedBy: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  storagePath: string;
+  createdAt: Date;
+  uploader?: User;
+}
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -88,6 +103,8 @@ export default function InternalTaskDetail() {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [closureNote, setClosureNote] = useState("");
   const [totalTimeSpent, setTotalTimeSpent] = useState("");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch task details
   const {
@@ -187,6 +204,105 @@ export default function InternalTaskDetail() {
       });
     },
   });
+
+  // Fetch documents
+  const { data: documents = [] } = useQuery<TaskDocument[]>({
+    queryKey: [`/api/internal-tasks/${taskId}/documents`],
+    enabled: !!taskId,
+  });
+
+  // Upload document mutation
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`/api/internal-tasks/${taskId}/documents`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Upload failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}/documents`] });
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      toast({
+        title: "Document uploaded",
+        description: "File has been uploaded successfully.",
+      });
+    },
+    onError: () => {
+      setUploadingFile(false);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload document. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete document mutation
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      return await apiRequest("DELETE", `/api/task-documents/${documentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}/documents`] });
+      toast({
+        title: "Document deleted",
+        description: "File has been removed successfully.",
+      });
+    },
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Maximum file size is 10MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setUploadingFile(true);
+      uploadDocumentMutation.mutate(file);
+    }
+  };
+
+  const handleDownload = async (doc: TaskDocument) => {
+    try {
+      const response = await fetch(`/api/task-documents/${doc.id}/download`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      toast({
+        title: "Download failed",
+        description: "Failed to download document.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   // Start timer mutation
   const startTimerMutation = useMutation({
@@ -855,13 +971,86 @@ export default function InternalTaskDetail() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Paperclip className="w-4 h-4" />
-                  Attachments
+                  Attachments ({documents.length})
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No attachments yet. File attachment feature coming soon.
-                </p>
+              <CardContent className="space-y-4">
+                {/* Upload section */}
+                <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    disabled={uploadingFile}
+                    data-testid="input-file-upload"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    data-testid="button-upload-document"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {uploadingFile ? "Uploading..." : "Upload Document"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Maximum file size: 10MB
+                  </p>
+                </div>
+
+                {/* Documents list */}
+                {documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-3 border rounded hover:bg-muted/50"
+                        data-testid={`document-${doc.id}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate" data-testid="text-document-filename">
+                            {doc.fileName}
+                          </p>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span>{formatFileSize(doc.fileSize)}</span>
+                            <span>•</span>
+                            <span>
+                              {doc.uploader
+                                ? `${doc.uploader.firstName} ${doc.uploader.lastName}`
+                                : 'Unknown'}
+                            </span>
+                            <span>•</span>
+                            <span>{formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(doc)}
+                            data-testid="button-download-document"
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteDocumentMutation.mutate(doc.id)}
+                            disabled={deleteDocumentMutation.isPending}
+                            data-testid="button-delete-document"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No attachments yet. Upload a document to get started.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

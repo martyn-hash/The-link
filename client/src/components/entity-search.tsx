@@ -44,6 +44,8 @@ interface EntitySearchProps {
   onRemove: (entityId: string) => void;
   allowMultiple?: boolean;
   className?: string;
+  onSearchStart?: () => void;
+  onSearchClear?: () => void;
 }
 
 export default function EntitySearch({ 
@@ -52,7 +54,9 @@ export default function EntitySearch({
   onSelect,
   onRemove,
   allowMultiple = true,
-  className = ""
+  className = "",
+  onSearchStart,
+  onSearchClear,
 }: EntitySearchProps) {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -77,7 +81,15 @@ export default function EntitySearch({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setSearchValue(newValue);
-    setShowDropdown(newValue.length >= 2);
+    const shouldShow = newValue.length >= 2;
+    setShowDropdown(shouldShow);
+    
+    // Notify parent when search starts or clears
+    if (shouldShow && newValue.length === 2) {
+      onSearchStart?.();
+    } else if (newValue.length === 0) {
+      onSearchClear?.();
+    }
   };
 
   const handleResultClick = (result: SearchResult) => {
@@ -104,6 +116,7 @@ export default function EntitySearch({
     // Clear search and close dropdown
     setSearchValue("");
     setShowDropdown(false);
+    onSearchClear?.();
   };
 
   const getResultIcon = (type: string) => {

@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import multer from "multer";
+import { Storage } from "@google-cloud/storage";
 import { storage } from "../storage";
 import {
   insertTaskTypeSchema,
@@ -15,7 +17,20 @@ import {
   stopTaskTimeEntrySchema,
   bulkReassignTasksSchema,
   bulkUpdateTaskStatusSchema,
+  insertTaskDocumentSchema,
 } from "@shared/schema";
+
+// Configure multer for task document uploads (all file types allowed)
+const taskDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
+});
+
+// Initialize GCS client for object storage
+const gcsStorage = new Storage();
+const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
 
 export function registerInternalTaskRoutes(
   app: Express,
@@ -241,6 +256,10 @@ export function registerInternalTaskRoutes(
       });
       
       const created = await storage.createInternalTask(taskData);
+      
+      // Log to project chronology if task is connected to a project
+      await storage.logTaskActivityToProject(created.id, 'created', '', userId);
+      
       res.json(created);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -277,10 +296,22 @@ export function registerInternalTaskRoutes(
     }
   });
 
-  app.patch("/api/internal-tasks/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/internal-tasks/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
       const taskData = updateInternalTaskSchema.parse(req.body);
       const updated = await storage.updateInternalTask(req.params.id, taskData);
+      
+      // Build update description
+      const updates = [];
+      if (taskData.status) updates.push(`status changed to ${taskData.status}`);
+      if (taskData.priority) updates.push(`priority changed to ${taskData.priority}`);
+      if (taskData.assignedTo) updates.push('assignee changed');
+      const details = updates.length > 0 ? updates.join(', ') : 'task properties updated';
+      
+      // Log to project chronology if task is connected to a project
+      await storage.logTaskActivityToProject(req.params.id, 'updated', details, userId);
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -293,6 +324,10 @@ export function registerInternalTaskRoutes(
       const closeData = closeInternalTaskSchema.parse(req.body);
       const userId = req.user?.effectiveUserId || req.user?.id;
       const closed = await storage.closeInternalTask(req.params.id, closeData, userId);
+      
+      // Log to project chronology if task is connected to a project
+      await storage.logTaskActivityToProject(req.params.id, 'completed', closeData.closureNote, userId);
+      
       res.json(closed);
     } catch (error) {
       console.error("Error closing task:", error);
@@ -445,6 +480,13 @@ export function registerInternalTaskRoutes(
         userId,
       });
       const created = await storage.createTaskNote(noteData);
+      
+      // Log to project chronology if task is connected to a project
+      const notePreview = noteData.note.length > 100 
+        ? noteData.note.substring(0, 100) + '...' 
+        : noteData.note;
+      await storage.logTaskActivityToProject(req.params.taskId, 'note_added', notePreview, userId);
+      
       res.json(created);
     } catch (error) {
       console.error("Error creating task note:", error);
@@ -538,6 +580,124 @@ export function registerInternalTaskRoutes(
     } catch (error) {
       console.error("Error deleting time entry:", error);
       res.status(400).json({ message: "Failed to delete time entry" });
+    }
+  });
+
+  // ============================================
+  // TASK DOCUMENTS ROUTES
+  // ============================================
+
+  app.get("/api/internal-tasks/:taskId/documents", isAuthenticated, async (req, res) => {
+    try {
+      const documents = await storage.getTaskDocuments(req.params.taskId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching task documents:", error);
+      res.status(500).json({ message: "Failed to fetch task documents" });
+    }
+  });
+
+  app.post("/api/internal-tasks/:taskId/documents", isAuthenticated, resolveEffectiveUser, taskDocumentUpload.single('file'), async (req: any, res: any) => {
+    try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      const file = req.file;
+      
+      if (!file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      // Generate unique filename to prevent collisions
+      const timestamp = Date.now();
+      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `${privateDir}/task-documents/${req.params.taskId}/${timestamp}-${sanitizedFilename}`;
+      
+      // Upload to GCS
+      const bucketName = privateDir.split('/')[1];
+      const filePath = storagePath.replace(`/${bucketName}/`, '');
+      const bucket = gcsStorage.bucket(bucketName);
+      const blob = bucket.file(filePath);
+      
+      await blob.save(file.buffer, {
+        metadata: {
+          contentType: file.mimetype,
+        },
+      });
+
+      // Save document metadata to database
+      const documentData = insertTaskDocumentSchema.parse({
+        taskId: req.params.taskId,
+        uploadedBy: userId,
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        storagePath,
+      });
+      
+      const created = await storage.createTaskDocument(documentData);
+      res.json(created);
+    } catch (error) {
+      console.error("Error uploading task document:", error);
+      res.status(400).json({ message: "Failed to upload document" });
+    }
+  });
+
+  app.get("/api/task-documents/:id/download", isAuthenticated, async (req, res) => {
+    try {
+      const document = await storage.getTaskDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Download from GCS
+      const bucketName = document.storagePath.split('/')[1];
+      const filePath = document.storagePath.replace(`/${bucketName}/`, '');
+      const bucket = gcsStorage.bucket(bucketName);
+      const file = bucket.file(filePath);
+      
+      const [exists] = await file.exists();
+      if (!exists) {
+        return res.status(404).json({ message: "File not found in storage" });
+      }
+
+      const [fileContents] = await file.download();
+      
+      res.set({
+        'Content-Type': document.mimeType,
+        'Content-Disposition': `attachment; filename="${document.fileName}"`,
+        'Content-Length': document.fileSize,
+      });
+      
+      res.send(fileContents);
+    } catch (error) {
+      console.error("Error downloading task document:", error);
+      res.status(500).json({ message: "Failed to download document" });
+    }
+  });
+
+  app.delete("/api/task-documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const document = await storage.getTaskDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Delete from GCS
+      const bucketName = document.storagePath.split('/')[1];
+      const filePath = document.storagePath.replace(`/${bucketName}/`, '');
+      const bucket = gcsStorage.bucket(bucketName);
+      const file = bucket.file(filePath);
+      
+      const [exists] = await file.exists();
+      if (exists) {
+        await file.delete();
+      }
+
+      // Delete from database
+      await storage.deleteTaskDocument(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting task document:", error);
+      res.status(400).json({ message: "Failed to delete document" });
     }
   });
 }
