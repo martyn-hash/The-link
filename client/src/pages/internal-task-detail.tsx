@@ -43,6 +43,7 @@ import {
   Upload,
 } from "lucide-react";
 import TopNavigation from "@/components/top-navigation";
+import EntitySearch from "@/components/entity-search";
 import { formatDistanceToNow, format } from "date-fns";
 import { useEffect, useState, useRef } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -372,6 +373,58 @@ export default function InternalTaskDetail() {
     },
   });
 
+  // Task connections query
+  const { data: taskConnections = [] } = useQuery<Array<{ id: string; taskId: string; entityType: string; entityId: string; createdAt: Date }>>({
+    queryKey: [`/api/internal-tasks/${taskId}/connections`],
+    enabled: !!taskId,
+  });
+
+  // Create connection mutation
+  const createConnectionMutation = useMutation({
+    mutationFn: async ({ entityType, entityId }: { entityType: string; entityId: string }) => {
+      return await apiRequest("POST", `/api/internal-tasks/${taskId}/connections`, {
+        connections: [{ entityType, entityId }],
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}/connections`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}`] });
+      toast({
+        title: "Connection added",
+        description: "Entity has been connected to this task.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create connection. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete connection mutation
+  const deleteConnectionMutation = useMutation({
+    mutationFn: async (connectionId: string) => {
+      return await apiRequest("DELETE", `/api/task-connections/${connectionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}/connections`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}`] });
+      toast({
+        title: "Connection removed",
+        description: "Entity has been disconnected from this task.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete connection. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return "0m";
     const hours = Math.floor(minutes / 60);
@@ -690,42 +743,134 @@ export default function InternalTaskDetail() {
                   Connected Entities
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {task.client && (
-                  <div className="flex items-center gap-2 p-2 border rounded" data-testid="connection-client">
-                    <Badge variant="outline">Client</Badge>
-                    <span className="font-medium">{task.client.name}</span>
+              <CardContent className="space-y-4">
+                {/* Add New Connection */}
+                {task.status !== "closed" && (
+                  <div>
+                    <Label className="mb-2 block">Add Connection</Label>
+                    <EntitySearch
+                      entityTypes={['client', 'project', 'person', 'message']}
+                      onSelect={(entityType, entityId) => {
+                        createConnectionMutation.mutate({ entityType, entityId });
+                      }}
+                      placeholder="Search for clients, projects, people, or messages..."
+                    />
                   </div>
                 )}
-                {task.project && (
-                  <div className="flex items-center gap-2 p-2 border rounded" data-testid="connection-project">
-                    <Badge variant="outline">Project</Badge>
-                    <span className="font-medium">{task.project.description}</span>
-                  </div>
-                )}
-                {task.person && (
-                  <div className="flex items-center gap-2 p-2 border rounded" data-testid="connection-person">
-                    <Badge variant="outline">Person</Badge>
-                    <span className="font-medium">{task.person.fullName}</span>
-                  </div>
-                )}
-                {task.service && (
-                  <div className="flex items-center gap-2 p-2 border rounded" data-testid="connection-service">
-                    <Badge variant="outline">Service</Badge>
-                    <span className="font-medium">{task.service.name}</span>
-                  </div>
-                )}
-                {task.message && (
-                  <div className="flex items-center gap-2 p-2 border rounded" data-testid="connection-message">
-                    <Badge variant="outline">Message</Badge>
-                    <span className="font-medium">Message #{task.message.id}</span>
-                  </div>
-                )}
-                {!task.client && !task.project && !task.person && !task.service && !task.message && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No connections to other entities.
-                  </p>
-                )}
+
+                {/* Display Existing Connections */}
+                <div className="space-y-2">
+                  {task.client && (
+                    <div className="flex items-center justify-between gap-2 p-2 border rounded" data-testid="connection-client">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Client</Badge>
+                        <span className="font-medium">{task.client.name}</span>
+                      </div>
+                      {task.status !== "closed" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const conn = taskConnections.find(c => c.entityType === 'client' && c.entityId === task.client?.id);
+                            if (conn) deleteConnectionMutation.mutate(conn.id);
+                          }}
+                          data-testid="button-delete-client-connection"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {task.project && (
+                    <div className="flex items-center justify-between gap-2 p-2 border rounded" data-testid="connection-project">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Project</Badge>
+                        <span className="font-medium">{task.project.description}</span>
+                      </div>
+                      {task.status !== "closed" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const conn = taskConnections.find(c => c.entityType === 'project' && c.entityId === task.project?.id);
+                            if (conn) deleteConnectionMutation.mutate(conn.id);
+                          }}
+                          data-testid="button-delete-project-connection"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {task.person && (
+                    <div className="flex items-center justify-between gap-2 p-2 border rounded" data-testid="connection-person">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Person</Badge>
+                        <span className="font-medium">{task.person.fullName}</span>
+                      </div>
+                      {task.status !== "closed" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const conn = taskConnections.find(c => c.entityType === 'person' && c.entityId === task.person?.id);
+                            if (conn) deleteConnectionMutation.mutate(conn.id);
+                          }}
+                          data-testid="button-delete-person-connection"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {task.service && (
+                    <div className="flex items-center justify-between gap-2 p-2 border rounded" data-testid="connection-service">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Service</Badge>
+                        <span className="font-medium">{task.service.name}</span>
+                      </div>
+                      {task.status !== "closed" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const conn = taskConnections.find(c => c.entityType === 'service' && c.entityId === task.service?.id);
+                            if (conn) deleteConnectionMutation.mutate(conn.id);
+                          }}
+                          data-testid="button-delete-service-connection"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {task.message && (
+                    <div className="flex items-center justify-between gap-2 p-2 border rounded" data-testid="connection-message">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Message</Badge>
+                        <span className="font-medium">Message #{task.message.id}</span>
+                      </div>
+                      {task.status !== "closed" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const conn = taskConnections.find(c => c.entityType === 'message' && c.entityId === task.message?.id);
+                            if (conn) deleteConnectionMutation.mutate(conn.id);
+                          }}
+                          data-testid="button-delete-message-connection"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {!task.client && !task.project && !task.person && !task.service && !task.message && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No connections to other entities. Use the search above to add connections.
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
