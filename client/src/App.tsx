@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { PortalPushNotificationPrompt } from "@/components/PortalPushNotificationPrompt";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
+import { FirstLoginPasswordDialog } from "@/components/FirstLoginPasswordDialog";
 import { PortalAuthProvider, usePortalAuth } from "@/contexts/PortalAuthContext";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
@@ -178,6 +179,7 @@ function AppContent() {
       <Router />
       <PWAUpdatePrompt />
       {isAuthenticated && <PushNotificationPrompt />}
+      {isAuthenticated && <FirstLoginPasswordDialog />}
       {isPortalAuthenticated && <PortalPushNotificationPrompt />}
     </>
   );

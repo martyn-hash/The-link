@@ -68,6 +68,7 @@ import {
   type User,
   type UpsertUser,
   type InsertUser,
+  type UpdateUser,
   type Client,
   type InsertClient,
   type Person,
@@ -269,7 +270,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, userData: Partial<InsertUser>): Promise<User>;
+  updateUser(id: string, userData: UpdateUser): Promise<User>;
   deleteUser(id: string): Promise<void>;
   getAllUsers(): Promise<User[]>;
   
