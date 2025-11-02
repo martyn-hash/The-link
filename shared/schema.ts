@@ -2418,30 +2418,17 @@ export const taskConnections = pgTable("task_connections", {
   index("idx_task_connections_entity").on(table.entityType, table.entityId),
 ]);
 
-// Task comments table - for collaboration
-export const taskComments = pgTable("task_comments", {
+// Task progress notes table - for tracking progress with timestamp and user
+export const taskProgressNotes = pgTable("task_progress_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
-  comment: text("comment").notNull(),
+  content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("idx_task_comments_task_id").on(table.taskId),
-  index("idx_task_comments_user_id").on(table.userId),
-]);
-
-// Task notes table - for progress tracking
-export const taskNotes = pgTable("task_notes", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  note: text("note").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_task_notes_task_id").on(table.taskId),
-  index("idx_task_notes_user_id").on(table.userId),
+  index("idx_task_progress_notes_task_id").on(table.taskId),
+  index("idx_task_progress_notes_user_id").on(table.userId),
+  index("idx_task_progress_notes_created_at").on(table.createdAt),
 ]);
 
 // Task time entries table - for time tracking
@@ -2620,24 +2607,9 @@ export const insertTaskConnectionSchema = createInsertSchema(taskConnections).om
   createdAt: true,
 });
 
-export const insertTaskCommentSchema = createInsertSchema(taskComments).omit({
+export const insertTaskProgressNoteSchema = createInsertSchema(taskProgressNotes).omit({
   id: true,
   createdAt: true,
-  updatedAt: true,
-});
-
-export const updateTaskCommentSchema = z.object({
-  comment: z.string().min(1, "Comment cannot be empty"),
-});
-
-export const insertTaskNoteSchema = createInsertSchema(taskNotes).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const updateTaskNoteSchema = z.object({
-  note: z.string().min(1, "Note cannot be empty"),
 });
 
 export const insertTaskTimeEntrySchema = createInsertSchema(taskTimeEntries).omit({
@@ -2744,12 +2716,8 @@ export type UpdateInternalTask = z.infer<typeof updateInternalTaskSchema>;
 export type CloseInternalTask = z.infer<typeof closeInternalTaskSchema>;
 export type TaskConnection = typeof taskConnections.$inferSelect;
 export type InsertTaskConnection = z.infer<typeof insertTaskConnectionSchema>;
-export type TaskComment = typeof taskComments.$inferSelect;
-export type InsertTaskComment = z.infer<typeof insertTaskCommentSchema>;
-export type UpdateTaskComment = z.infer<typeof updateTaskCommentSchema>;
-export type TaskNote = typeof taskNotes.$inferSelect;
-export type InsertTaskNote = z.infer<typeof insertTaskNoteSchema>;
-export type UpdateTaskNote = z.infer<typeof updateTaskNoteSchema>;
+export type TaskProgressNote = typeof taskProgressNotes.$inferSelect;
+export type InsertTaskProgressNote = z.infer<typeof insertTaskProgressNoteSchema>;
 export type TaskTimeEntry = typeof taskTimeEntries.$inferSelect;
 export type InsertTaskTimeEntry = z.infer<typeof insertTaskTimeEntrySchema>;
 export type StopTaskTimeEntry = z.infer<typeof stopTaskTimeEntrySchema>;

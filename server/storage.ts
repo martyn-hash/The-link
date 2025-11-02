@@ -62,8 +62,7 @@ import {
   taskTypes,
   internalTasks,
   taskConnections,
-  taskComments,
-  taskNotes,
+  taskProgressNotes,
   taskTimeEntries,
   taskDocuments,
   type User,
@@ -207,12 +206,8 @@ import {
   type CloseInternalTask,
   type TaskConnection,
   type InsertTaskConnection,
-  type TaskComment,
-  type InsertTaskComment,
-  type UpdateTaskComment,
-  type TaskNote,
-  type InsertTaskNote,
-  type UpdateTaskNote,
+  type TaskProgressNote,
+  type InsertTaskProgressNote,
   type TaskTimeEntry,
   type InsertTaskTimeEntry,
   type StopTaskTimeEntry,
@@ -896,17 +891,10 @@ export interface IStorage {
   getTaskConnectionsByTaskId(taskId: string): Promise<TaskConnection[]>;
   deleteTaskConnection(id: string): Promise<void>;
   
-  // Internal Tasks - Task Comment operations
-  createTaskComment(comment: InsertTaskComment): Promise<TaskComment>;
-  getTaskCommentsByTaskId(taskId: string): Promise<(TaskComment & { user: User })[]>;
-  updateTaskComment(id: string, comment: UpdateTaskComment): Promise<TaskComment>;
-  deleteTaskComment(id: string): Promise<void>;
-  
-  // Internal Tasks - Task Note operations
-  createTaskNote(note: InsertTaskNote): Promise<TaskNote>;
-  getTaskNotesByTaskId(taskId: string): Promise<(TaskNote & { user: User })[]>;
-  updateTaskNote(id: string, note: UpdateTaskNote): Promise<TaskNote>;
-  deleteTaskNote(id: string): Promise<void>;
+  // Internal Tasks - Task Progress Notes operations
+  createTaskProgressNote(note: InsertTaskProgressNote): Promise<TaskProgressNote>;
+  getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { author: User })[]>;
+  deleteTaskProgressNote(id: string): Promise<void>;
   
   // Internal Tasks - Task Time Entry operations
   createTaskTimeEntry(entry: InsertTaskTimeEntry): Promise<TaskTimeEntry>;
@@ -10530,93 +10518,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ============================================
-  // INTERNAL TASKS - Task Comment operations
+  // INTERNAL TASKS - Task Progress Notes operations
   // ============================================
 
-  async createTaskComment(comment: InsertTaskComment): Promise<TaskComment> {
+  async createTaskProgressNote(note: InsertTaskProgressNote): Promise<TaskProgressNote> {
     const [created] = await db
-      .insert(taskComments)
-      .values(comment)
-      .returning();
-    return created;
-  }
-
-  async getTaskCommentsByTaskId(taskId: string): Promise<(TaskComment & { user: User })[]> {
-    return await db
-      .select({
-        id: taskComments.id,
-        taskId: taskComments.taskId,
-        userId: taskComments.userId,
-        comment: taskComments.comment,
-        createdAt: taskComments.createdAt,
-        updatedAt: taskComments.updatedAt,
-        user: users,
-      })
-      .from(taskComments)
-      .leftJoin(users, eq(taskComments.userId, users.id))
-      .where(eq(taskComments.taskId, taskId))
-      .orderBy(taskComments.createdAt);
-  }
-
-  async updateTaskComment(id: string, comment: UpdateTaskComment): Promise<TaskComment> {
-    const [updated] = await db
-      .update(taskComments)
-      .set({ ...comment, updatedAt: new Date() })
-      .where(eq(taskComments.id, id))
-      .returning();
-    if (!updated) {
-      throw new Error("Comment not found");
-    }
-    return updated;
-  }
-
-  async deleteTaskComment(id: string): Promise<void> {
-    await db.delete(taskComments).where(eq(taskComments.id, id));
-  }
-
-  // ============================================
-  // INTERNAL TASKS - Task Note operations
-  // ============================================
-
-  async createTaskNote(note: InsertTaskNote): Promise<TaskNote> {
-    const [created] = await db
-      .insert(taskNotes)
+      .insert(taskProgressNotes)
       .values(note)
       .returning();
     return created;
   }
 
-  async getTaskNotesByTaskId(taskId: string): Promise<(TaskNote & { user: User })[]> {
+  async getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { author: User })[]> {
     return await db
       .select({
-        id: taskNotes.id,
-        taskId: taskNotes.taskId,
-        userId: taskNotes.userId,
-        note: taskNotes.note,
-        createdAt: taskNotes.createdAt,
-        updatedAt: taskNotes.updatedAt,
-        user: users,
+        id: taskProgressNotes.id,
+        taskId: taskProgressNotes.taskId,
+        userId: taskProgressNotes.userId,
+        content: taskProgressNotes.content,
+        createdAt: taskProgressNotes.createdAt,
+        author: users,
       })
-      .from(taskNotes)
-      .leftJoin(users, eq(taskNotes.userId, users.id))
-      .where(eq(taskNotes.taskId, taskId))
-      .orderBy(taskNotes.createdAt);
+      .from(taskProgressNotes)
+      .leftJoin(users, eq(taskProgressNotes.userId, users.id))
+      .where(eq(taskProgressNotes.taskId, taskId))
+      .orderBy(desc(taskProgressNotes.createdAt));
   }
 
-  async updateTaskNote(id: string, note: UpdateTaskNote): Promise<TaskNote> {
-    const [updated] = await db
-      .update(taskNotes)
-      .set({ ...note, updatedAt: new Date() })
-      .where(eq(taskNotes.id, id))
-      .returning();
-    if (!updated) {
-      throw new Error("Note not found");
-    }
-    return updated;
-  }
-
-  async deleteTaskNote(id: string): Promise<void> {
-    await db.delete(taskNotes).where(eq(taskNotes.id, id));
+  async deleteTaskProgressNote(id: string): Promise<void> {
+    await db.delete(taskProgressNotes).where(eq(taskProgressNotes.id, id));
   }
 
   // ============================================

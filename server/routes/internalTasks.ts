@@ -9,10 +9,7 @@ import {
   updateInternalTaskSchema,
   closeInternalTaskSchema,
   insertTaskConnectionSchema,
-  insertTaskCommentSchema,
-  updateTaskCommentSchema,
-  insertTaskNoteSchema,
-  updateTaskNoteSchema,
+  insertTaskProgressNoteSchema,
   insertTaskTimeEntrySchema,
   stopTaskTimeEntrySchema,
   bulkReassignTasksSchema,
@@ -192,45 +189,42 @@ export function registerInternalTaskRoutes(
         taskType,
         assignee,
         creator,
-        comments,
-        notes,
+        progressNotes,
         timeEntries,
-        client,
-        project,
-        person,
-        service,
-        message
+        connections
       ] = await Promise.all([
         task.taskTypeId ? storage.getTaskTypeById(task.taskTypeId) : null,
         task.assignedTo ? storage.getUser(task.assignedTo) : null,
         storage.getUser(task.createdBy),
-        storage.getTaskCommentsByTaskId(task.id),
-        storage.getTaskNotesByTaskId(task.id),
+        storage.getTaskProgressNotesByTaskId(task.id),
         storage.getTaskTimeEntriesByTaskId(task.id),
-        task.clientId ? storage.getClientById(task.clientId) : null,
-        task.projectId ? storage.getProjectById(task.projectId) : null,
-        task.personId ? storage.getPersonById(task.personId) : null,
-        task.serviceId ? storage.getServiceById(task.serviceId) : null,
-        task.messageId ? storage.getMessageById(task.messageId) : null,
+        storage.getTaskConnectionsByTaskId(task.id),
       ]);
+
+      // Fetch connected entities based on connections
+      let client = null, project = null, person = null, service = null, message = null;
+      
+      for (const conn of connections) {
+        if (conn.entityType === 'client' && !client) {
+          client = await storage.getClientById(conn.entityId);
+        } else if (conn.entityType === 'project' && !project) {
+          project = await storage.getProject(conn.entityId);
+        } else if (conn.entityType === 'person' && !person) {
+          person = await storage.getPersonById(conn.entityId);
+        } else if (conn.entityType === 'service' && !service) {
+          service = await storage.getServiceById(conn.entityId);
+        } else if (conn.entityType === 'message' && !message) {
+          message = await storage.getMessageById(conn.entityId);
+        }
+      }
 
       const taskWithRelations = {
         ...task,
         taskType,
         assignee,
         creator,
-        comments: comments.map(c => ({
-          ...c,
-          author: c.user
-        })),
-        notes: notes.map(n => ({
-          ...n,
-          author: n.user
-        })),
-        timeEntries: timeEntries.map(te => ({
-          ...te,
-          user: te.user
-        })),
+        progressNotes,
+        timeEntries,
         client,
         project,
         person,
@@ -407,111 +401,49 @@ export function registerInternalTaskRoutes(
   });
 
   // ============================================
-  // TASK COMMENTS ROUTES
+  // TASK PROGRESS NOTES ROUTES
   // ============================================
 
-  app.get("/api/internal-tasks/:taskId/comments", isAuthenticated, async (req, res) => {
+  app.get("/api/internal-tasks/:taskId/progress-notes", isAuthenticated, async (req, res) => {
     try {
-      const comments = await storage.getTaskCommentsByTaskId(req.params.taskId);
-      res.json(comments);
-    } catch (error) {
-      console.error("Error fetching task comments:", error);
-      res.status(500).json({ message: "Failed to fetch task comments" });
-    }
-  });
-
-  app.post("/api/internal-tasks/:taskId/comments", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      const userId = req.user?.effectiveUserId || req.user?.id;
-      const commentData = insertTaskCommentSchema.parse({
-        ...req.body,
-        taskId: req.params.taskId,
-        userId,
-      });
-      const created = await storage.createTaskComment(commentData);
-      res.json(created);
-    } catch (error) {
-      console.error("Error creating task comment:", error);
-      res.status(400).json({ message: "Failed to create task comment" });
-    }
-  });
-
-  app.patch("/api/task-comments/:id", isAuthenticated, async (req, res) => {
-    try {
-      const commentData = updateTaskCommentSchema.parse(req.body);
-      const updated = await storage.updateTaskComment(req.params.id, commentData);
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating task comment:", error);
-      res.status(400).json({ message: "Failed to update task comment" });
-    }
-  });
-
-  app.delete("/api/task-comments/:id", isAuthenticated, async (req, res) => {
-    try {
-      await storage.deleteTaskComment(req.params.id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting task comment:", error);
-      res.status(400).json({ message: "Failed to delete task comment" });
-    }
-  });
-
-  // ============================================
-  // TASK NOTES ROUTES
-  // ============================================
-
-  app.get("/api/internal-tasks/:taskId/notes", isAuthenticated, async (req, res) => {
-    try {
-      const notes = await storage.getTaskNotesByTaskId(req.params.taskId);
+      const notes = await storage.getTaskProgressNotesByTaskId(req.params.taskId);
       res.json(notes);
     } catch (error) {
-      console.error("Error fetching task notes:", error);
-      res.status(500).json({ message: "Failed to fetch task notes" });
+      console.error("Error fetching task progress notes:", error);
+      res.status(500).json({ message: "Failed to fetch task progress notes" });
     }
   });
 
-  app.post("/api/internal-tasks/:taskId/notes", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  app.post("/api/internal-tasks/:taskId/progress-notes", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const userId = req.user?.effectiveUserId || req.user?.id;
-      const noteData = insertTaskNoteSchema.parse({
+      const noteData = insertTaskProgressNoteSchema.parse({
         ...req.body,
         taskId: req.params.taskId,
         userId,
       });
-      const created = await storage.createTaskNote(noteData);
+      const created = await storage.createTaskProgressNote(noteData);
       
       // Log to project chronology if task is connected to a project
-      const notePreview = noteData.note.length > 100 
-        ? noteData.note.substring(0, 100) + '...' 
-        : noteData.note;
+      const notePreview = noteData.content.length > 100 
+        ? noteData.content.substring(0, 100) + '...' 
+        : noteData.content;
       await storage.logTaskActivityToProject(req.params.taskId, 'note_added', notePreview, userId);
       
       res.json(created);
     } catch (error) {
-      console.error("Error creating task note:", error);
-      res.status(400).json({ message: "Failed to create task note" });
+      console.error("Error creating task progress note:", error);
+      res.status(400).json({ message: "Failed to create task progress note" });
     }
   });
 
-  app.patch("/api/task-notes/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/task-progress-notes/:id", isAuthenticated, async (req, res) => {
     try {
-      const noteData = updateTaskNoteSchema.parse(req.body);
-      const updated = await storage.updateTaskNote(req.params.id, noteData);
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating task note:", error);
-      res.status(400).json({ message: "Failed to update task note" });
-    }
-  });
-
-  app.delete("/api/task-notes/:id", isAuthenticated, async (req, res) => {
-    try {
-      await storage.deleteTaskNote(req.params.id);
+      await storage.deleteTaskProgressNote(req.params.id);
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting task note:", error);
-      res.status(400).json({ message: "Failed to delete task note" });
+      console.error("Error deleting task progress note:", error);
+      res.status(400).json({ message: "Failed to delete task progress note" });
     }
   });
 
