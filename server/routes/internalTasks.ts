@@ -262,9 +262,10 @@ export function registerInternalTaskRoutes(
   });
 
   // Add connections to a task
-  app.post("/api/internal-tasks/:id/connections", isAuthenticated, async (req, res) => {
+  app.post("/api/internal-tasks/:id/connections", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const taskId = req.params.id;
+      const userId = req.user?.effectiveUserId || req.user?.id;
       const { connections } = req.body;
       
       if (!Array.isArray(connections) || connections.length === 0) {
@@ -273,6 +274,7 @@ export function registerInternalTaskRoutes(
 
       // Create each connection
       const created = [];
+      let hasProjectConnection = false;
       for (const conn of connections) {
         const connectionData = insertTaskConnectionSchema.parse({
           taskId,
@@ -281,6 +283,16 @@ export function registerInternalTaskRoutes(
         });
         const result = await storage.createTaskConnection(connectionData);
         created.push(result);
+        
+        // Track if we created a project connection
+        if (conn.entityType === 'project') {
+          hasProjectConnection = true;
+        }
+      }
+
+      // Log to project chronology if a project connection was created
+      if (hasProjectConnection) {
+        await storage.logTaskActivityToProject(taskId, 'created', '', userId);
       }
 
       res.json(created);
