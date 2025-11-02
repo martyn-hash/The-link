@@ -390,7 +390,8 @@ export default function InternalTaskDetail() {
   const createConnectionMutation = useMutation({
     mutationFn: async ({ entityType, entityId }: { entityType: string; entityId: string }) => {
       return await apiRequest("POST", `/api/internal-tasks/${taskId}/connections`, {
-        connections: [{ entityType, entityId }],
+        entityType,
+        entityId,
       });
     },
     onSuccess: () => {
@@ -995,7 +996,7 @@ export default function InternalTaskDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-3">
+                  <div className={`space-y-3 ${task.progressNotes && task.progressNotes.length >= 3 ? 'max-h-80 overflow-y-auto' : ''}`}>
                     {task.progressNotes && task.progressNotes.length > 0 ? (
                       task.progressNotes.map((note) => (
                         <div key={note.id} className="border rounded p-3 space-y-2" data-testid={`progress-note-${note.id}`}>

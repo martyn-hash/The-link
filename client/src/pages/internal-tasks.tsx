@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,6 +29,8 @@ import {
   ClipboardList,
   Clock,
   Eye,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
@@ -140,6 +142,8 @@ function TaskRow({ task, selected, onSelect, onViewClick }: {
   );
 }
 
+const ITEMS_PER_PAGE = 15;
+
 export default function InternalTasks() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -152,6 +156,7 @@ export default function InternalTasks() {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch staff members for bulk reassign
   const { data: staff = [] } = useQuery<User[]>({
@@ -217,15 +222,48 @@ export default function InternalTasks() {
   };
 
   const isLoading = activeTab === "assigned" ? isLoadingAssigned : activeTab === "created" ? isLoadingCreated : isLoadingAll;
-  const tasks = getCurrentTasks();
+  const allTasksData = getCurrentTasks();
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(allTasksData.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const tasks = useMemo(() => allTasksData.slice(startIndex, endIndex), [allTasksData, startIndex, endIndex]);
+  
+  // Reset to page 1 and clear selections when filters or tab changes
+  const handleTabChange = (value: typeof activeTab) => {
+    setActiveTab(value);
+    setCurrentPage(1);
+    setSelectedTasks([]);
+  };
+  
+  const handleFilterChange = (filterType: 'status' | 'priority', value: string) => {
+    if (filterType === 'status') {
+      setStatusFilter(value);
+    } else {
+      setPriorityFilter(value);
+    }
+    setCurrentPage(1);
+    setSelectedTasks([]);
+  };
+  
+  // Reset selections when page changes
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    setSelectedTasks([]);
+  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
+      // Select only tasks on current page
       setSelectedTasks(tasks.map(t => t.id));
     } else {
       setSelectedTasks([]);
     }
   };
+  
+  // Check if all tasks on current page are selected
+  const allCurrentPageSelected = tasks.length > 0 && tasks.every(t => selectedTasks.includes(t.id));
 
   const handleSelectTask = (taskId: string, checked: boolean) => {
     if (checked) {
@@ -322,7 +360,7 @@ export default function InternalTasks() {
           <TableRow>
             <TableHead className="w-12">
               <Checkbox
-                checked={selectedTasks.length === tasks.length && tasks.length > 0}
+                checked={allCurrentPageSelected}
                 onCheckedChange={handleSelectAll}
                 data-testid="checkbox-select-all"
               />
@@ -371,7 +409,7 @@ export default function InternalTasks() {
         {/* Tabs and Filters */}
         <Card>
           <CardContent className="p-6">
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
+            <Tabs value={activeTab} onValueChange={(value) => handleTabChange(value as typeof activeTab)}>
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                 <TabsList>
                   <TabsTrigger value="assigned" data-testid="tab-assigned">
@@ -401,7 +439,7 @@ export default function InternalTasks() {
                 </TabsList>
 
                 <div className="flex items-center gap-2">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={statusFilter} onValueChange={(value) => handleFilterChange('status', value)}>
                     <SelectTrigger className="w-[150px]" data-testid="select-status-filter">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
@@ -413,7 +451,7 @@ export default function InternalTasks() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <Select value={priorityFilter} onValueChange={(value) => handleFilterChange('priority', value)}>
                     <SelectTrigger className="w-[150px]" data-testid="select-priority-filter">
                       <SelectValue placeholder="Priority" />
                     </SelectTrigger>
@@ -473,7 +511,41 @@ export default function InternalTasks() {
                     No tasks assigned to you
                   </div>
                 ) : (
-                  <TaskTable />
+                  <>
+                    <TaskTable />
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-2">
+                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                          Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                            disabled={currentPage === 1}
+                            data-testid="button-prev-page"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm" data-testid="text-current-page">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage === totalPages}
+                            data-testid="button-next-page"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -487,7 +559,41 @@ export default function InternalTasks() {
                     No tasks created by you
                   </div>
                 ) : (
-                  <TaskTable />
+                  <>
+                    <TaskTable />
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-2">
+                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                          Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                            disabled={currentPage === 1}
+                            data-testid="button-prev-page"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm" data-testid="text-current-page">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage === totalPages}
+                            data-testid="button-next-page"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -501,7 +607,41 @@ export default function InternalTasks() {
                     No tasks found
                   </div>
                 ) : (
-                  <TaskTable />
+                  <>
+                    <TaskTable />
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-2">
+                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                          Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                            disabled={currentPage === 1}
+                            data-testid="button-prev-page"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm" data-testid="text-current-page">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage === totalPages}
+                            data-testid="button-next-page"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
             </Tabs>
