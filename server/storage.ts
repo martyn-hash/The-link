@@ -893,7 +893,7 @@ export interface IStorage {
   
   // Internal Tasks - Task Progress Notes operations
   createTaskProgressNote(note: InsertTaskProgressNote): Promise<TaskProgressNote>;
-  getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { author: User })[]>;
+  getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { user: User })[]>;
   deleteTaskProgressNote(id: string): Promise<void>;
   
   // Internal Tasks - Task Time Entry operations
@@ -10529,7 +10529,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { author: User })[]> {
+  async getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { user: User })[]> {
     return await db
       .select({
         id: taskProgressNotes.id,
@@ -10537,7 +10537,7 @@ export class DatabaseStorage implements IStorage {
         userId: taskProgressNotes.userId,
         content: taskProgressNotes.content,
         createdAt: taskProgressNotes.createdAt,
-        author: users,
+        user: users,
       })
       .from(taskProgressNotes)
       .leftJoin(users, eq(taskProgressNotes.userId, users.id))

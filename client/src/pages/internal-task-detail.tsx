@@ -769,10 +769,10 @@ export default function InternalTaskDetail() {
                   <div>
                     <Label className="mb-2 block">Add Connection</Label>
                     <EntitySearch
-                      entityTypes={['client', 'project', 'person', 'message']}
                       onSelect={(entity) => {
                         createConnectionMutation.mutate({ entityType: entity.type, entityId: entity.id });
                       }}
+                      onRemove={() => {}}
                       placeholder="Search for clients, projects, people, or messages..."
                     />
                   </div>
