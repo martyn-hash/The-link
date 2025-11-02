@@ -8070,6 +8070,7 @@ export default function ClientDetail() {
                           <TableHead>Assigned To</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Due Date</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -8112,6 +8113,17 @@ export default function ClientDetail() {
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
                               {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <RouterLink href={`/internal-tasks/${task.id}?from=client&clientId=${id}`}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  data-testid={`button-view-task-${task.id}`}
+                                >
+                                  View
+                                </Button>
+                              </RouterLink>
                             </TableCell>
                           </TableRow>
                         ))}
