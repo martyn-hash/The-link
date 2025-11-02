@@ -260,7 +260,7 @@ export default function EntitySearch({
 
       {/* Search Results Dropdown */}
       {showDropdown && (
-        <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-96 overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg overflow-auto">
           {isLoading && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               Searching...
