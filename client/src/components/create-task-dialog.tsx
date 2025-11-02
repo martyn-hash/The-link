@@ -126,6 +126,7 @@ export function CreateTaskDialog({
   // Form setup with default values
   const form = useForm<TaskFormData>({
     resolver: zodResolver(taskFormSchema),
+    mode: "onChange", // Validate on change to clear errors as user fills form
     defaultValues: {
       title: defaultValues?.title || "",
       description: defaultValues?.description || "",
@@ -425,9 +426,11 @@ export function CreateTaskDialog({
                         <FormItem>
                           <FormLabel>Assign To *</FormLabel>
                           <Select
-                            onValueChange={(value) => {
+                            onValueChange={async (value) => {
                               console.log("[CreateTaskDialog] Assignee changed to:", value);
                               field.onChange(value);
+                              // Explicitly clear and revalidate the field to ensure error state updates
+                              await form.trigger("assignedToId");
                             }}
                             value={field.value}
                             disabled={loadingStaff}
