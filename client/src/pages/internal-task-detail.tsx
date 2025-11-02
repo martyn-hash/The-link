@@ -1,4 +1,4 @@
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +99,13 @@ export default function InternalTaskDetail() {
   const [totalTimeSpent, setTotalTimeSpent] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Get context from URL parameters using wouter's useSearch hook
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const fromContext = urlParams.get('from');
+  const contextProjectId = urlParams.get('projectId');
+  const contextClientId = urlParams.get('clientId');
 
   // Fetch task details
   const {
@@ -464,7 +471,20 @@ export default function InternalTaskDetail() {
   };
 
   const handleBack = () => {
-    setLocation("/internal-tasks");
+    if (fromContext === 'project' && contextProjectId) {
+      setLocation(`/projects/${contextProjectId}`);
+    } else if (fromContext === 'client' && contextClientId) {
+      setLocation(`/clients/${contextClientId}`);
+    } else {
+      setLocation("/internal-tasks");
+    }
+  };
+
+  // Determine back button text based on context
+  const getBackButtonText = () => {
+    if (fromContext === 'project') return 'Back to Project';
+    if (fromContext === 'client') return 'Back to Client';
+    return 'Back to Tasks';
   };
 
   const handleCloseTask = () => {
@@ -524,7 +544,7 @@ export default function InternalTaskDetail() {
             data-testid="button-back"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Tasks
+            {getBackButtonText()}
           </Button>
           <div className="text-center py-12">
             <p className="text-muted-foreground">Task not found</p>
@@ -547,7 +567,7 @@ export default function InternalTaskDetail() {
           data-testid="button-back"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Tasks
+          {getBackButtonText()}
         </Button>
 
         {/* Task Title and Badges */}

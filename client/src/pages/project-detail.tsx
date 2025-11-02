@@ -477,6 +477,7 @@ export default function ProjectDetail() {
                           <TableHead>Status</TableHead>
                           <TableHead>Assigned To</TableHead>
                           <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -519,6 +520,17 @@ export default function ProjectDetail() {
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
                               {format(new Date(task.createdAt), 'MMM d, yyyy')}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <RouterLink href={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  data-testid={`button-view-task-${task.id}`}
+                                >
+                                  View
+                                </Button>
+                              </RouterLink>
                             </TableCell>
                           </TableRow>
                         ))}
