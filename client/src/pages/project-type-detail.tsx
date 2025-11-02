@@ -915,8 +915,9 @@ export default function ProjectTypeDetail() {
   const updateProjectTypeServiceLinkageMutation = useMutation({
     mutationFn: async (serviceId: string | null) => {
       if (!projectTypeId) throw new Error("No project type selected");
+      // Explicitly pass null when removing service linkage, not undefined
       return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, { 
-        serviceId: serviceId || undefined 
+        serviceId: serviceId 
       });
     },
     onSuccess: () => {
