@@ -4,14 +4,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, Users, Clock, CheckCircle, Settings, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import MagicLinkLoginForm from "@/components/magic-link-login-form";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 export default function Landing() {
-  const [adminFormOpen, setAdminFormOpen] = useState(false);
   const [resetFormOpen, setResetFormOpen] = useState(false);
   const [loginFormData, setLoginFormData] = useState({
     email: '',
@@ -21,15 +20,8 @@ export default function Landing() {
     email: '',
     newPassword: ''
   });
-  const [adminFormData, setAdminFormData] = useState({
-    email: '',
-    password: '',
-    firstName: '',
-    lastName: ''
-  });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const handleLoginInputChange = (field: string, value: string) => {
@@ -38,10 +30,6 @@ export default function Landing() {
 
   const handleResetInputChange = (field: string, value: string) => {
     setResetFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleAdminInputChange = (field: string, value: string) => {
-    setAdminFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -121,46 +109,6 @@ export default function Landing() {
       });
     } finally {
       setIsResetting(false);
-    }
-  };
-
-  const handleAdminCreation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch('/api/bootstrap-admin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(adminFormData),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Admin user created successfully! You can now sign in.",
-        });
-        setAdminFormOpen(false);
-        setAdminFormData({ email: '', password: '', firstName: '', lastName: '' });
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to create admin user",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create admin user. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -328,100 +276,6 @@ export default function Landing() {
             </form>
           </DialogContent>
         </Dialog>
-
-        {/* Discreet admin creation link at bottom */}
-        <div className="text-center mt-16 pt-8 border-t border-muted">
-          <Dialog open={adminFormOpen} onOpenChange={setAdminFormOpen}>
-            <DialogTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-muted-foreground hover:text-foreground text-xs"
-                data-testid="button-create-admin"
-              >
-                <Settings className="w-3 h-3 mr-1" />
-                First time setup
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Create Initial Admin User</DialogTitle>
-                <DialogDescription>
-                  Create the first admin user account to set up your system. This will enable full access to all features.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleAdminCreation} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    type="text"
-                    value={adminFormData.firstName}
-                    onChange={(e) => handleAdminInputChange('firstName', e.target.value)}
-                    required
-                    data-testid="input-first-name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    type="text"
-                    value={adminFormData.lastName}
-                    onChange={(e) => handleAdminInputChange('lastName', e.target.value)}
-                    required
-                    data-testid="input-last-name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={adminFormData.email}
-                    onChange={(e) => handleAdminInputChange('email', e.target.value)}
-                    required
-                    data-testid="input-email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={adminFormData.password}
-                    onChange={(e) => handleAdminInputChange('password', e.target.value)}
-                    required
-                    minLength={6}
-                    data-testid="input-password"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Minimum 6 characters
-                  </p>
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setAdminFormOpen(false)}
-                    className="flex-1"
-                    data-testid="button-cancel"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1"
-                    data-testid="button-submit"
-                  >
-                    {isSubmitting ? "Creating..." : "Create Admin"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
       </div>
     </div>
   );
