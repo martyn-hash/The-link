@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Upload, FileText, CheckCircle, AlertCircle, Info, Download } from "lucide-react";
 import Papa from "papaparse";
 
@@ -391,13 +392,15 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {validationResult.errors.length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Validation Errors</AlertTitle>
+                <AlertTitle>Validation Errors ({validationResult.errors.length})</AlertTitle>
                 <AlertDescription>
-                  <ul className="list-disc list-inside space-y-1">
-                    {validationResult.errors.map((error, idx) => (
-                      <li key={idx}>{error}</li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="max-h-96 pr-4">
+                    <ul className="list-disc list-inside space-y-2">
+                      {validationResult.errors.map((error, idx) => (
+                        <li key={idx} className="break-words whitespace-normal">{error}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 </AlertDescription>
               </Alert>
             )}
@@ -405,13 +408,15 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {validationResult.warnings.length > 0 && (
               <Alert>
                 <Info className="h-4 w-4" />
-                <AlertTitle>Warnings</AlertTitle>
+                <AlertTitle>Warnings ({validationResult.warnings.length})</AlertTitle>
                 <AlertDescription>
-                  <ul className="list-disc list-inside space-y-1">
-                    {validationResult.warnings.map((warning, idx) => (
-                      <li key={idx}>{warning}</li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="max-h-96 pr-4">
+                    <ul className="list-disc list-inside space-y-2">
+                      {validationResult.warnings.map((warning, idx) => (
+                        <li key={idx} className="break-words whitespace-normal">{warning}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 </AlertDescription>
               </Alert>
             )}
@@ -644,13 +649,15 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {importResult.errors.length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Errors Encountered</AlertTitle>
+                <AlertTitle>Errors Encountered ({importResult.errors.length})</AlertTitle>
                 <AlertDescription>
-                  <ul className="list-disc list-inside space-y-1">
-                    {importResult.errors.map((error, idx) => (
-                      <li key={idx}>{error}</li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="max-h-96 pr-4">
+                    <ul className="list-disc list-inside space-y-2">
+                      {importResult.errors.map((error, idx) => (
+                        <li key={idx} className="break-words whitespace-normal">{error}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 </AlertDescription>
               </Alert>
             )}
