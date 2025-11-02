@@ -10245,11 +10245,30 @@ export class DatabaseStorage implements IStorage {
     if (filters?.priority) {
       conditions.push(eq(internalTasks.priority, filters.priority));
     }
-    return await db
-      .select()
+    
+    const assigneeAlias = alias(users, 'assignee');
+    const creatorAlias = alias(users, 'creator');
+    
+    const results = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+        assignee: assigneeAlias,
+        creator: creatorAlias,
+      })
       .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
+      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
       .where(and(...conditions))
       .orderBy(desc(internalTasks.createdAt));
+    
+    return results.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.assignee || undefined,
+      creator: row.creator || undefined,
+    })) as any;
   }
 
   async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
@@ -10260,11 +10279,30 @@ export class DatabaseStorage implements IStorage {
     if (filters?.priority) {
       conditions.push(eq(internalTasks.priority, filters.priority));
     }
-    return await db
-      .select()
+    
+    const assigneeAlias = alias(users, 'assignee');
+    const creatorAlias = alias(users, 'creator');
+    
+    const results = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+        assignee: assigneeAlias,
+        creator: creatorAlias,
+      })
       .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
+      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
       .where(and(...conditions))
       .orderBy(desc(internalTasks.createdAt));
+    
+    return results.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.assignee || undefined,
+      creator: row.creator || undefined,
+    })) as any;
   }
 
   async getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]> {
@@ -10281,11 +10319,30 @@ export class DatabaseStorage implements IStorage {
     if (filters?.creatorId) {
       conditions.push(eq(internalTasks.createdBy, filters.creatorId));
     }
-    return await db
-      .select()
+    
+    const assigneeAlias = alias(users, 'assignee');
+    const creatorAlias = alias(users, 'creator');
+    
+    const results = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+        assignee: assigneeAlias,
+        creator: creatorAlias,
+      })
       .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
+      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(internalTasks.createdAt));
+    
+    return results.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.assignee || undefined,
+      creator: row.creator || undefined,
+    })) as any;
   }
 
   async getInternalTasksByClient(clientId: string): Promise<InternalTask[]> {

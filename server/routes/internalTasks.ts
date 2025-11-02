@@ -187,8 +187,8 @@ export function registerInternalTaskRoutes(
         message
       ] = await Promise.all([
         task.taskTypeId ? storage.getTaskTypeById(task.taskTypeId) : null,
-        task.assignedTo ? storage.getUserById(task.assignedTo) : null,
-        storage.getUserById(task.createdBy),
+        task.assignedTo ? storage.getUser(task.assignedTo) : null,
+        storage.getUser(task.createdBy),
         storage.getTaskCommentsByTaskId(task.id),
         storage.getTaskNotesByTaskId(task.id),
         storage.getTaskTimeEntriesByTaskId(task.id),
