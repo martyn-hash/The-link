@@ -30,6 +30,16 @@ The system employs a dual authentication system: **Staff Authentication** using 
 
 An automated nightly scheduler processes active `clientServices` and `peopleServices` to automatically generate projects based on defined frequencies (daily, weekly, monthly, etc.). It includes advanced date advancement logic that tracks "intended days" to prevent skipping billing/payroll cycles in shorter months. **Companies House API** is integrated for UK company data, with special handling for CH-connected services (e.g., accounts, confirmation statements), including nightly syncs and API key rotation for rate limit management. The system incorporates multiple layers of duplicate prevention and provides an admin dashboard for monitoring and manual triggers, alongside detailed audit logging (`projectSchedulingHistory`, `schedulingRunLogs`).
 
+### Internal Tasks System
+
+The internal tasks system provides comprehensive staff task management with advanced features for organization and collaboration:
+
+**Recent Enhancements (November 2025):**
+-   **Collapsible Task Creation Form**: The `CreateTaskDialog` component features a collapsible form UI powered by Radix UI Collapsible. When users begin searching for entity connections (clients, people, projects, messages), the form fields automatically collapse to provide more space for search results, improving UX. An "Show form fields" button appears to re-expand the form when needed.
+-   **Document Attachments**: Full document/file attachment capability integrated with Google Cloud Storage. Staff can upload documents to tasks via the task detail page, with files stored in the `.private/task-documents/{taskId}/` path in the GCS bucket. The `taskDocuments` table tracks metadata (fileName, fileSize, uploadedBy, uploadedAt), and signed URLs enable secure downloads. API routes support upload (POST), download (GET with signed URL), and deletion (DELETE) operations.
+-   **Enhanced Data Loading**: Backend API routes (`getAllInternalTasks`, `getInternalTasksByAssignee`, `getInternalTasksByCreator`) now include left joins to return full `taskType`, `assignee`, and `creator` objects with each task. This uses Drizzle ORM's `alias()` function (imported from `drizzle-orm/pg-core`) to join the `users` table multiple times under different aliases, ensuring rich relational data in responses for improved UI display.
+-   **Project Chronology Integration**: Tasks connected to projects automatically log activities to the project chronology. A `logTaskActivityToProject` helper function creates chronology entries for task creation, updates, note additions, and status changes to 'closed'. This provides full visibility of task-related activities within project timelines, facilitating better project tracking and accountability.
+
 ## External Dependencies
 
 ### Third-Party Services
