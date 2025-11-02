@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -50,7 +50,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type ViewMode = "kanban" | "list" | "dashboard";
@@ -78,6 +78,8 @@ interface Dashboard {
 
 // Note: Using shared month normalization utility for consistent filtering
 
+const ITEMS_PER_PAGE = 15;
+
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -87,6 +89,7 @@ export default function Projects() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
   const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Reset to list view when no service is selected for kanban
   useEffect(() => {
@@ -661,6 +664,29 @@ export default function Projects() {
     return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch;
   });
 
+  // Pagination for list view
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedProjects = useMemo(() => {
+    // Only paginate in list view
+    if (viewMode === "list") {
+      return filteredProjects.slice(startIndex, endIndex);
+    }
+    return filteredProjects;
+  }, [filteredProjects, startIndex, endIndex, viewMode]);
+
+  // Reset to page 1 when filters change or view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, customDateRange, viewMode]);
+
+  // Clamp current page if it exceeds total pages (e.g., after deletions or data refresh)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const getPageTitle = () => {
     return isManagerOrAdmin ? "All Projects" : "Projects";
@@ -983,17 +1009,52 @@ export default function Projects() {
             />
           ) : viewMode === "kanban" ? (
             <KanbanBoard 
-              projects={filteredProjects} 
+              projects={paginatedProjects} 
               user={user}
               onSwitchToList={() => setViewMode("list")}
             />
           ) : (
-            <TaskList 
-              projects={filteredProjects} 
-              user={user} 
-              serviceFilter={serviceFilter}
-              onSwitchToKanban={() => setViewMode("kanban")}
-            />
+            <>
+              <TaskList 
+                projects={paginatedProjects} 
+                user={user} 
+                serviceFilter={serviceFilter}
+                onSwitchToKanban={() => setViewMode("kanban")}
+              />
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                  <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                    Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <span className="text-sm" data-testid="text-current-page">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      data-testid="button-next-page"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>

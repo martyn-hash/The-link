@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import multer from "multer";
-import { Storage } from "@google-cloud/storage";
 import { storage } from "../storage";
+import { objectStorageClient } from "../objectStorage";
 import {
   insertTaskTypeSchema,
   updateTaskTypeSchema,
@@ -25,8 +25,7 @@ const taskDocumentUpload = multer({
   }
 });
 
-// Initialize GCS client for object storage
-const gcsStorage = new Storage();
+// Use Replit object storage client
 const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
 
 export function registerInternalTaskRoutes(
@@ -363,14 +362,20 @@ export function registerInternalTaskRoutes(
 
   app.post("/api/internal-tasks/:taskId/connections", isAuthenticated, async (req, res) => {
     try {
+      console.log("Creating connection with body:", req.body, "taskId:", req.params.taskId);
       const connectionData = insertTaskConnectionSchema.parse({
         ...req.body,
         taskId: req.params.taskId,
       });
+      console.log("Parsed connection data:", connectionData);
       const created = await storage.createTaskConnection(connectionData);
       res.json(created);
     } catch (error) {
       console.error("Error creating task connection:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
       res.status(400).json({ message: "Failed to create task connection" });
     }
   });
@@ -525,7 +530,7 @@ export function registerInternalTaskRoutes(
       // Upload to GCS
       const bucketName = privateDir.split('/')[1];
       const filePath = storagePath.replace(`/${bucketName}/`, '');
-      const bucket = gcsStorage.bucket(bucketName);
+      const bucket = objectStorageClient.bucket(bucketName);
       const blob = bucket.file(filePath);
       
       await blob.save(file.buffer, {
@@ -562,7 +567,7 @@ export function registerInternalTaskRoutes(
       // Download from GCS
       const bucketName = document.storagePath.split('/')[1];
       const filePath = document.storagePath.replace(`/${bucketName}/`, '');
-      const bucket = gcsStorage.bucket(bucketName);
+      const bucket = objectStorageClient.bucket(bucketName);
       const file = bucket.file(filePath);
       
       const [exists] = await file.exists();
@@ -595,7 +600,7 @@ export function registerInternalTaskRoutes(
       // Delete from GCS
       const bucketName = document.storagePath.split('/')[1];
       const filePath = document.storagePath.replace(`/${bucketName}/`, '');
-      const bucket = gcsStorage.bucket(bucketName);
+      const bucket = objectStorageClient.bucket(bucketName);
       const file = bucket.file(filePath);
       
       const [exists] = await file.exists();
