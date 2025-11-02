@@ -16,6 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Upload, FileText, CheckCircle, AlertCircle, Info, Download } from "lucide-react";
 import Papa from "papaparse";
 
@@ -60,6 +68,7 @@ export default function DataImport() {
   const [currentStep, setCurrentStep] = useState<'upload' | 'validate' | 'preview' | 'import' | 'complete'>('upload');
   const [importProgress, setImportProgress] = useState(0);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -392,7 +401,36 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {validationResult.errors.length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Validation Errors ({validationResult.errors.length})</AlertTitle>
+                <div className="flex items-center justify-between">
+                  <AlertTitle>Validation Errors ({validationResult.errors.length})</AlertTitle>
+                  <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="ml-4"
+                        data-testid="button-view-full-error"
+                      >
+                        View Full First Error
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle>Full Error Message</DialogTitle>
+                        <DialogDescription>
+                          Complete details of the first validation error
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="h-[60vh] pr-4">
+                        <div className="p-4 bg-destructive/10 rounded-md">
+                          <p className="text-sm font-mono whitespace-pre-wrap break-all">
+                            {validationResult.errors[0]}
+                          </p>
+                        </div>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
+                </div>
                 <AlertDescription>
                   <ScrollArea className="max-h-96 pr-4">
                     <ul className="list-disc list-inside space-y-2">

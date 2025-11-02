@@ -1957,8 +1957,8 @@ export async function registerAuthAndMiscRoutes(
           const service = await storage.getServiceByName(row.service_name);
           if (!service) {
             const allServices = await storage.getAllServices();
-            const serviceNames = allServices.map(s => s.name).slice(0, 5).join(', ');
-            errors.push(`Service "${row.service_name}" not found in system. Available services include: ${serviceNames}...`);
+            const serviceNames = allServices.map(s => s.name).join(', ');
+            errors.push(`Service "${row.service_name}" not found in system. Available services: ${serviceNames || '(none)'}`);
           }
         }
 
@@ -1986,8 +1986,8 @@ export async function registerAuthAndMiscRoutes(
           const workRole = await storage.getWorkRoleByName(row.work_role_name);
           if (!workRole) {
             const allWorkRoles = await storage.getAllWorkRoles();
-            const roleNames = allWorkRoles.map(r => r.name).slice(0, 5).join(', ');
-            errors.push(`Work role "${row.work_role_name}" not found in system. Available roles include: ${roleNames}...`);
+            const roleNames = allWorkRoles.map(r => r.name).join(', ');
+            errors.push(`Work role "${row.work_role_name}" not found in system. Available roles: ${roleNames || '(none)'}`);
           }
         }
 
@@ -2066,8 +2066,8 @@ export async function registerAuthAndMiscRoutes(
             const service = await storage.getServiceByName(row.service_name);
             if (!service) {
               const allServices = await storage.getAllServices();
-              const serviceNames = allServices.map(s => s.name).slice(0, 5).join(', ');
-              validationErrors.push(`Service "${row.service_name}" not found in system. Available services include: ${serviceNames}...`);
+              const serviceNames = allServices.map(s => s.name).join(', ');
+              validationErrors.push(`Service "${row.service_name}" not found in system. Available services: ${serviceNames || '(none)'}`);
             } else {
               serviceLookup.set(row.service_name, service);
             }
@@ -2113,8 +2113,8 @@ export async function registerAuthAndMiscRoutes(
             const workRole = await storage.getWorkRoleByName(row.work_role_name);
             if (!workRole) {
               const allWorkRoles = await storage.getAllWorkRoles();
-              const roleNames = allWorkRoles.map(r => r.name).slice(0, 5).join(', ');
-              validationErrors.push(`Work role "${row.work_role_name}" not found in system. Available roles include: ${roleNames}...`);
+              const roleNames = allWorkRoles.map(r => r.name).join(', ');
+              validationErrors.push(`Work role "${row.work_role_name}" not found in system. Available roles: ${roleNames || '(none)'}`);
             } else {
               workRoleLookup.set(row.work_role_name, workRole);
             }
