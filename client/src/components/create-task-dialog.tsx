@@ -263,9 +263,10 @@ export function CreateTaskDialog({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           {/* Collapsible Form Fields */}
           <Collapsible open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <div className="space-y-4">
-              {/* Title */}
-              <FormField
+            <CollapsibleContent>
+              <div className="space-y-4">
+                {/* Title */}
+                <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
@@ -303,8 +304,7 @@ export function CreateTaskDialog({
                 )}
               />
 
-              <CollapsibleContent>
-                <div className="space-y-4">
+                <div className="space-y-4 pt-4">
                   {/* Task Type and Priority Row */}
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
@@ -448,28 +448,32 @@ export function CreateTaskDialog({
                     )}
                   />
                 </div>
-              </CollapsibleContent>
-            </div>
+              </div>
+            </CollapsibleContent>
+
+            {/* Expand trigger - must be inside Collapsible */}
+            {!isFormOpen && (
+              <div className="py-2">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3"
+                    data-testid="button-expand-form"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Show form fields
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+            )}
           </Collapsible>
 
           {/* Entity Connections Section */}
           <div className="border-t pt-4 mt-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold">Connections (Optional)</h3>
-              {!isFormOpen && (
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2"
-                    data-testid="button-expand-form"
-                  >
-                    <ChevronDown className="h-4 w-4 mr-1" />
-                    Show form fields
-                  </Button>
-                </CollapsibleTrigger>
-              )}
             </div>
             <p className="text-xs text-muted-foreground mb-3">
               Link this task to related clients, people, projects, or messages

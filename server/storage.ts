@@ -266,6 +266,7 @@ import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
 import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, ne, not } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
