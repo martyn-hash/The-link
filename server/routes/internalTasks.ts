@@ -251,9 +251,6 @@ export function registerInternalTaskRoutes(
       
       const created = await storage.createInternalTask(taskData);
       
-      // Log to project chronology if task is connected to a project
-      await storage.logTaskActivityToProject(created.id, 'created', '', userId);
-      
       res.json(created);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -274,7 +271,6 @@ export function registerInternalTaskRoutes(
 
       // Create each connection
       const created = [];
-      let hasProjectConnection = false;
       for (const conn of connections) {
         const connectionData = insertTaskConnectionSchema.parse({
           taskId,
@@ -283,16 +279,6 @@ export function registerInternalTaskRoutes(
         });
         const result = await storage.createTaskConnection(connectionData);
         created.push(result);
-        
-        // Track if we created a project connection
-        if (conn.entityType === 'project') {
-          hasProjectConnection = true;
-        }
-      }
-
-      // Log to project chronology if a project connection was created
-      if (hasProjectConnection) {
-        await storage.logTaskActivityToProject(taskId, 'created', '', userId);
       }
 
       res.json(created);
@@ -308,16 +294,6 @@ export function registerInternalTaskRoutes(
       const taskData = updateInternalTaskSchema.parse(req.body);
       const updated = await storage.updateInternalTask(req.params.id, taskData);
       
-      // Build update description
-      const updates = [];
-      if (taskData.status) updates.push(`status changed to ${taskData.status}`);
-      if (taskData.priority) updates.push(`priority changed to ${taskData.priority}`);
-      if (taskData.assignedTo) updates.push('assignee changed');
-      const details = updates.length > 0 ? updates.join(', ') : 'task properties updated';
-      
-      // Log to project chronology if task is connected to a project
-      await storage.logTaskActivityToProject(req.params.id, 'updated', details, userId);
-      
       res.json(updated);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -330,9 +306,6 @@ export function registerInternalTaskRoutes(
       const closeData = closeInternalTaskSchema.parse(req.body);
       const userId = req.user?.effectiveUserId || req.user?.id;
       const closed = await storage.closeInternalTask(req.params.id, closeData, userId);
-      
-      // Log to project chronology if task is connected to a project
-      await storage.logTaskActivityToProject(req.params.id, 'completed', closeData.closureNote, userId);
       
       res.json(closed);
     } catch (error) {
@@ -435,12 +408,6 @@ export function registerInternalTaskRoutes(
         userId,
       });
       const created = await storage.createTaskProgressNote(noteData);
-      
-      // Log to project chronology if task is connected to a project
-      const notePreview = noteData.content.length > 100 
-        ? noteData.content.substring(0, 100) + '...' 
-        : noteData.content;
-      await storage.logTaskActivityToProject(req.params.taskId, 'note_added', notePreview, userId);
       
       res.json(created);
     } catch (error) {
