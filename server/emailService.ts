@@ -160,7 +160,6 @@ The Link Team
 
   return await sendEmail({
     to: recipientEmail,
-    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
     subject,
     text,
     html,
@@ -234,7 +233,6 @@ The Link Team
 
   return await sendEmail({
     to: assigneeEmail,
-    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
     subject,
     text,
     html,
@@ -337,7 +335,6 @@ The Link Team
 
   return await sendEmail({
     to: recipientEmail,
-    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
     subject,
     text,
     html,
@@ -491,7 +488,6 @@ The Link Automated Scheduling System
 
   return await sendEmail({
     to: recipientEmail,
-    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
     subject,
     text,
     html,
@@ -577,7 +573,6 @@ The Link Team
 
   return await sendEmail({
     to: recipientEmail,
-    from: process.env.FROM_EMAIL || "link@growth-accountants.com",
     subject,
     text,
     html,
