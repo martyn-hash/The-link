@@ -23,7 +23,16 @@ export async function sendEmail(params: EmailParams): Promise<boolean> {
     return false;
   }
 
-  const fromEmail = params.from || process.env.FROM_EMAIL || "link@growth-accountants.com";
+  // Extract email address if 'from' param already has a name
+  let emailAddress = params.from || process.env.FROM_EMAIL || "link@growth-accountants.com";
+  if (emailAddress.includes('<')) {
+    // Already has a name, extract just the email
+    const match = emailAddress.match(/<(.+)>/);
+    if (match) emailAddress = match[1];
+  }
+  
+  // Always use 'The Link' as sender name
+  const fromEmail = `The Link <${emailAddress}>`;
   
   try {
     const emailData: any = {
@@ -574,3 +583,128 @@ The Link Team
     html,
   });
 }
+
+export async function sendWelcomeEmail(
+  recipientEmail: string,
+  recipientName: string,
+  loginUrl: string = 'https://flow.growth.accountants'
+): Promise<boolean> {
+  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+  const subject = `Welcome to The Link - Your Account is Ready!`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
+          <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to The Link!</h1>
+        </div>
+        
+        <div style="padding: 40px 30px;">
+          <h2 style="color: #1e293b; margin-top: 0;">🎉 Your Account is Ready</h2>
+          <p style="color: #475569; font-size: 16px;">Hello ${recipientName},</p>
+          <p style="color: #475569; font-size: 16px;">
+            Your staff account has been created! You now have access to The Link, our workflow management system.
+          </p>
+          
+          <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
+            <h3 style="margin-top: 0; color: #0A7BBF; font-size: 18px;">🔐 First-Time Login Instructions</h3>
+            <p style="color: #374151; font-size: 15px; margin-bottom: 15px;">
+              For your first login, we recommend using the <strong>magic link</strong> feature for quick and secure access:
+            </p>
+            <ol style="color: #374151; font-size: 15px; line-height: 1.8; margin: 15px 0; padding-left: 20px;">
+              <li>Click the button below to visit the login page</li>
+              <li>Enter your email address: <strong style="color: #0A7BBF;">${recipientEmail}</strong></li>
+              <li>Click "Request Magic Link"</li>
+              <li>Check your email and click the link to log in instantly</li>
+            </ol>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${loginUrl}" 
+               style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
+              🚀 Go to Login Page
+            </a>
+          </div>
+          
+          <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #f59e0b;">
+            <h3 style="margin-top: 0; color: #92400e; font-size: 16px;">💡 Important: Set Up a Password</h3>
+            <p style="margin-bottom: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+              After your first login, you'll be prompted to set up a password. We <strong>highly recommend</strong> doing this for convenient future access!
+            </p>
+          </div>
+          
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e2e8f0;">
+            <h3 style="margin-top: 0; color: #475569; font-size: 16px;">📧 Your Login Details</h3>
+            <p style="margin-bottom: 8px; color: #374151;"><strong>Login URL:</strong></p>
+            <p style="margin: 0 0 15px 0; font-size: 14px;">
+              <a href="${loginUrl}" style="color: #0A7BBF; word-break: break-all;">${loginUrl}</a>
+            </p>
+            <p style="margin-bottom: 8px; color: #374151;"><strong>Your Email:</strong></p>
+            <p style="margin: 0; color: #0A7BBF; font-size: 14px; font-family: monospace; background-color: #f1f5f9; padding: 8px; border-radius: 4px;">
+              ${recipientEmail}
+            </p>
+          </div>
+          
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin-top: 30px;">
+            If you have any questions or need assistance, please don't hesitate to reach out to your team administrator.
+          </p>
+        </div>
+        
+        <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
+          <p style="margin: 0 0 10px 0;">
+            <strong style="color: #0A7BBF;">The Link</strong> by Growth Accountants
+          </p>
+          <p style="margin: 0; font-size: 13px;">
+            Your workflow management partner
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+Welcome to The Link!
+
+Hello ${recipientName},
+
+Your staff account has been created! You now have access to The Link, our workflow management system.
+
+FIRST-TIME LOGIN INSTRUCTIONS:
+
+For your first login, we recommend using the magic link feature for quick and secure access:
+
+1. Visit the login page: ${loginUrl}
+2. Enter your email address: ${recipientEmail}
+3. Click "Request Magic Link"
+4. Check your email and click the link to log in instantly
+
+IMPORTANT: SET UP A PASSWORD
+
+After your first login, you'll be prompted to set up a password. We highly recommend doing this for convenient future access!
+
+YOUR LOGIN DETAILS:
+- Login URL: ${loginUrl}
+- Your Email: ${recipientEmail}
+
+If you have any questions or need assistance, please don't hesitate to reach out to your team administrator.
+
+Best regards,
+The Link Team
+  `;
+
+  return await sendEmail({
+    to: recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+

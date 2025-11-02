@@ -105,6 +105,7 @@ export const users = pgTable("users", {
   notificationPreferences: jsonb("notification_preferences"), // Email, push, SMS preferences
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  lastLoginAt: timestamp("last_login_at"), // Track when user last logged in for first-login detection
 });
 
 // User notification preferences table
@@ -926,6 +927,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  lastLoginAt: true,
 });
 
 export const insertMagicLinkTokenSchema = createInsertSchema(magicLinkTokens).omit({
@@ -943,6 +945,12 @@ export const upsertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export const updateUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
 
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
@@ -1500,6 +1508,7 @@ export type User = typeof users.$inferSelect & {
 };
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
 export type Client = typeof clients.$inferSelect;

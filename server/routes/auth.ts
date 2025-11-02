@@ -338,6 +338,21 @@ export async function registerAuthAndMiscRoutes(
         passwordHash,
       });
 
+      // Send welcome email to new staff user
+      try {
+        const { sendWelcomeEmail } = await import('../emailService');
+        const userFullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'there';
+        await sendWelcomeEmail(
+          user.email || '',
+          userFullName,
+          'https://flow.growth.accountants'
+        );
+        console.log(`Welcome email sent to ${user.email}`);
+      } catch (emailError) {
+        // Don't fail user creation if email fails, just log the error
+        console.error('Failed to send welcome email:', emailError);
+      }
+
       // Remove password hash from response
       const { passwordHash: _, ...userResponse } = user;
       res.json(userResponse);
@@ -1508,7 +1523,7 @@ export async function registerAuthAndMiscRoutes(
 
       const msg = {
         to: email,
-        from: process.env.FROM_EMAIL || 'link@growth-accountants.com',
+        from: `The Link <${process.env.FROM_EMAIL || 'link@growth-accountants.com'}>`,
         subject: `Welcome to ${clientName || 'Client'} Portal`,
         html: `
           <!DOCTYPE html>

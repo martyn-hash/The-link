@@ -94,6 +94,9 @@ export async function setupAuth(app: Express) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
+      // Update last login timestamp
+      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+
       // Set user session
       req.session.userId = user.id;
       req.session.userEmail = user.email;
@@ -319,6 +322,9 @@ export async function setupAuth(app: Express) {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Update last login timestamp
+      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+
       // Mark token as used (atomic operation that will fail if already used)
       try {
         await storage.markMagicLinkTokenAsUsed(magicLinkToken.id);
@@ -342,6 +348,36 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Magic link verify error:", error);
       res.status(500).json({ message: "Magic link verification failed" });
+    }
+  });
+
+  // Check if user should be prompted to set up password
+  app.get("/api/auth/should-setup-password", async (req, res) => {
+    try {
+      if (!req.session || !req.session.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // User should set up password if:
+      // 1. They don't have a password set (!passwordHash)
+      // OR
+      // 2. This is their first login (lastLoginAt is null) and they logged in via magic link
+      const shouldSetupPassword = !user.passwordHash;
+      const isFirstLogin = !user.lastLoginAt;
+
+      res.json({
+        shouldSetupPassword,
+        isFirstLogin,
+        hasPassword: !!user.passwordHash
+      });
+    } catch (error) {
+      console.error("Error checking password setup status:", error);
+      res.status(500).json({ message: "Failed to check password setup status" });
     }
   });
 }

@@ -141,7 +141,6 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
     
     await sendEmail({
       to: email,
-      from: `The Link <${process.env.FROM_EMAIL || 'link@growth-accountants.com'}>`,
       subject: 'Your Client Portal Login Link - The Link',
       html: `
         <!DOCTYPE html>
@@ -317,7 +316,6 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
     
     await sendEmail({
       to: email,
-      from: `The Link <${process.env.FROM_EMAIL || 'link@growth-accountants.com'}>`,
       subject: 'Your Portal Login Code - The Link',
       html: `
         <!DOCTYPE html>
