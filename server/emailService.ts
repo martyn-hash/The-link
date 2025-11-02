@@ -589,8 +589,9 @@ export async function sendWelcomeEmail(
   recipientName: string,
   loginUrl: string = 'https://flow.growth.accountants'
 ): Promise<boolean> {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
-  const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
+  const protocol = replitDomain.includes('localhost') ? 'http://' : 'https://';
+  const logoUrl = `${protocol}${replitDomain}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const subject = `Welcome to The Link - Your Account is Ready!`;
   
   const html = `
@@ -621,22 +622,22 @@ export async function sendWelcomeEmail(
             <ol style="color: #374151; font-size: 15px; line-height: 1.8; margin: 15px 0; padding-left: 20px;">
               <li>Click the button below to visit the login page</li>
               <li>Enter your email address: <strong style="color: #0A7BBF;">${recipientEmail}</strong></li>
-              <li>Click "Request Magic Link"</li>
+              <li>Click "Magic Link"</li>
               <li>Check your email and click the link to log in instantly</li>
             </ol>
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
             <a href="${loginUrl}" 
-               style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
+               style="display: inline-block; background: #0A7BBF; color: #ffffff !important; padding: 18px 50px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 18px; box-shadow: 0 6px 20px rgba(10, 123, 191, 0.4); border: 3px solid #0869A3; transition: all 0.3s ease;">
               🚀 Go to Login Page
             </a>
           </div>
           
           <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #f59e0b;">
-            <h3 style="margin-top: 0; color: #92400e; font-size: 16px;">💡 Important: Set Up a Password</h3>
+            <h3 style="margin-top: 0; color: #92400e; font-size: 16px;">💡 Important: Password Required</h3>
             <p style="margin-bottom: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-              After your first login, you'll be prompted to set up a password. We <strong>highly recommend</strong> doing this for convenient future access!
+              After your first login, you will be <strong>required to set a password</strong>. For best security practices, please create this password using your password manager.
             </p>
           </div>
           
@@ -651,10 +652,6 @@ export async function sendWelcomeEmail(
               ${recipientEmail}
             </p>
           </div>
-          
-          <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin-top: 30px;">
-            If you have any questions or need assistance, please don't hesitate to reach out to your team administrator.
-          </p>
         </div>
         
         <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
@@ -683,18 +680,16 @@ For your first login, we recommend using the magic link feature for quick and se
 
 1. Visit the login page: ${loginUrl}
 2. Enter your email address: ${recipientEmail}
-3. Click "Request Magic Link"
+3. Click "Magic Link"
 4. Check your email and click the link to log in instantly
 
-IMPORTANT: SET UP A PASSWORD
+IMPORTANT: PASSWORD REQUIRED
 
-After your first login, you'll be prompted to set up a password. We highly recommend doing this for convenient future access!
+After your first login, you will be required to set a password. For best security practices, please create this password using your password manager.
 
 YOUR LOGIN DETAILS:
 - Login URL: ${loginUrl}
 - Your Email: ${recipientEmail}
-
-If you have any questions or need assistance, please don't hesitate to reach out to your team administrator.
 
 Best regards,
 The Link Team
