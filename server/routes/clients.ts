@@ -1210,6 +1210,26 @@ export function registerClientRoutes(
           });
         }
 
+        // Handle service owner change - update projectOwnerId on all active projects
+        if (validationResult.data.serviceOwnerId !== undefined &&
+            validationResult.data.serviceOwnerId !== existingClientService.serviceOwnerId) {
+          console.log(`[Routes] Service owner changed from ${existingClientService.serviceOwnerId || 'null'} to ${validationResult.data.serviceOwnerId || 'null'}`);
+          
+          // Find all active projects for this client service
+          const projects = await storage.getProjectsByClientServiceId(id);
+          const activeProjects = projects.filter(p => !p.inactive && !p.archived);
+          
+          console.log(`[Routes] Updating projectOwnerId on ${activeProjects.length} active projects`);
+          
+          // Update projectOwnerId on each active project
+          for (const project of activeProjects) {
+            await storage.updateProject(project.id, {
+              projectOwnerId: validationResult.data.serviceOwnerId || null,
+            });
+            console.log(`[Routes] Updated project ${project.id} owner to ${validationResult.data.serviceOwnerId || 'null'}`);
+          }
+        }
+
         // Handle role assignment updates with cascading task reassignment
         if (req.body.roleAssignments && Array.isArray(req.body.roleAssignments)) {
           console.log(`[Routes] Processing ${req.body.roleAssignments.length} role assignment updates`);
