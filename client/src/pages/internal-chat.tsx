@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
   MessageCircle,
   Send,
@@ -39,6 +40,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 
 interface ProjectMessageThread {
+  threadType: 'project';
   id: string;
   projectId: string;
   topic: string;
@@ -68,6 +70,52 @@ interface ProjectMessageThread {
     firstName: string | null;
     lastName: string | null;
   }>;
+}
+
+interface StaffMessageThread {
+  threadType: 'staff';
+  id: string;
+  topic: string;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+  unreadCount: number;
+  lastMessage: {
+    content: string;
+    createdAt: string;
+    userId: string | null;
+  } | null;
+  participants: Array<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  }>;
+}
+
+type MessageThread = ProjectMessageThread | StaffMessageThread;
+
+interface User {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+interface StaffMessage {
+  id: string;
+  threadId: string;
+  userId: string | null;
+  content: string;
+  attachments?: Array<{
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    objectPath: string;
+  }> | null;
+  createdAt: string;
+  user?: User;
 }
 
 interface ProjectMessage {
@@ -100,6 +148,12 @@ export default function InternalChat() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [threadSearchTerm, setThreadSearchTerm] = useState('');
+  const [showNewThreadDialog, setShowNewThreadDialog] = useState(false);
+  const [newThreadTopic, setNewThreadTopic] = useState('');
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [selectedThreadType, setSelectedThreadType] = useState<'project' | 'staff' | null>(null);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [initialMessage, setInitialMessage] = useState('');
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -112,46 +166,81 @@ export default function InternalChat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-    }
-  }, [isAuthenticated, authLoading, toast]);
-
-  // Fetch all threads the user participates in
-  const { data: allThreads, isLoading: threadsLoading } = useQuery<ProjectMessageThread[]>({
+  // Fetch project message threads
+  const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
     queryKey: ['/api/project-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
       const response = await fetch(`/api/project-messages/my-threads?includeArchived=${archiveFilter === 'archived'}`, {
         credentials: 'include'
       });
-      if (!response.ok) throw new Error('Failed to fetch threads');
+      if (!response.ok) throw new Error('Failed to fetch project threads');
       return response.json();
     },
     enabled: isAuthenticated && !!user,
     refetchInterval: 30000,
   });
 
-  // Fetch messages for selected thread
-  const { data: messages, isLoading: messagesLoading } = useQuery<ProjectMessage[]>({
-    queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'],
+  // Fetch standalone staff message threads
+  const { data: staffThreads, isLoading: staffThreadsLoading } = useQuery<StaffMessageThread[]>({
+    queryKey: ['/api/staff-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
-      const response = await fetch(`/api/internal/project-messages/threads/${selectedThreadId}/messages`, {
+      const response = await fetch(`/api/staff-messages/my-threads?includeArchived=${archiveFilter === 'archived'}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch staff threads');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+  });
+
+  // Merge both thread types
+  const allThreads: MessageThread[] = [
+    ...(projectThreads?.map(t => ({ ...t, threadType: 'project' as const })) || []),
+    ...(staffThreads?.map(t => ({ ...t, threadType: 'staff' as const })) || []),
+  ].sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+
+  const threadsLoading = projectThreadsLoading || staffThreadsLoading;
+
+  // Fetch all users for participant selection
+  const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+    queryFn: async () => {
+      const response = await fetch('/api/users', {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch users');
+      return response.json();
+    },
+    enabled: isAuthenticated && showNewThreadDialog,
+  });
+
+  // Fetch messages for selected thread (works for both project and staff threads)
+  const { data: messages, isLoading: messagesLoading} = useQuery<(ProjectMessage | StaffMessage)[]>({
+    queryKey: [selectedThreadType === 'staff' ? '/api/staff-messages/threads' : '/api/internal/project-messages/threads', selectedThreadId, 'messages'],
+    queryFn: async () => {
+      const baseUrl = selectedThreadType === 'staff' 
+        ? `/api/staff-messages/threads/${selectedThreadId}/messages`
+        : `/api/internal/project-messages/threads/${selectedThreadId}/messages`;
+      const response = await fetch(baseUrl, {
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch messages');
       return response.json();
     },
-    enabled: !!selectedThreadId && isAuthenticated,
+    enabled: !!selectedThreadId && !!selectedThreadType && isAuthenticated,
     refetchInterval: 10000,
   });
+
+  // Infer thread type when thread is selected (handles URL navigation and programmatic selection)
+  useEffect(() => {
+    if (selectedThreadId && !selectedThreadType) {
+      const thread = allThreads.find(t => t.id === selectedThreadId);
+      if (thread) {
+        setSelectedThreadType(thread.threadType);
+      }
+    }
+  }, [selectedThreadId, selectedThreadType, allThreads]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -170,23 +259,35 @@ export default function InternalChat() {
 
   const markAsReadMutation = useMutation({
     mutationFn: async ({ threadId, messageId }: { threadId: string; messageId: string }) => {
-      await apiRequest('POST', `/api/internal/project-messages/threads/${threadId}/mark-read`, { lastReadMessageId: messageId });
+      const endpoint = selectedThreadType === 'staff'
+        ? `/api/staff-messages/threads/${threadId}/mark-read`
+        : `/api/internal/project-messages/threads/${threadId}/mark-read`;
+      await apiRequest('PUT', endpoint, { lastReadMessageId: messageId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
     },
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: (data: { content: string; attachments?: any[] }) =>
-      apiRequest('POST', `/api/internal/project-messages/threads/${selectedThreadId}/messages`, data),
+    mutationFn: (data: { content: string; attachments?: any[] }) => {
+      const endpoint = selectedThreadType === 'staff'
+        ? `/api/staff-messages/threads/${selectedThreadId}/messages`
+        : `/api/internal/project-messages/threads/${selectedThreadId}/messages`;
+      return apiRequest('POST', endpoint, data);
+    },
     onSuccess: () => {
       setNewMessage('');
       setSelectedFiles([]);
       setRecordedAudio(null);
       setAudioUrl(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'] });
+      const queryKey = selectedThreadType === 'staff'
+        ? ['/api/staff-messages/threads', selectedThreadId, 'messages']
+        : ['/api/internal/project-messages/threads', selectedThreadId, 'messages'];
+      queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
     },
     onError: (error: any) => {
       toast({
@@ -197,24 +298,59 @@ export default function InternalChat() {
     },
   });
 
+  const createStaffThreadMutation = useMutation({
+    mutationFn: (data: { topic: string; participantUserIds: string[]; initialMessage?: { content: string } }) =>
+      apiRequest('POST', '/api/staff-messages/threads', data),
+    onSuccess: (newThread: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
+      setShowNewThreadDialog(false);
+      setNewThreadTopic('');
+      setSelectedParticipants([]);
+      setSelectedThreadId(newThread.id);
+      setSelectedThreadType('staff');
+      toast({
+        title: "Success",
+        description: "Thread created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create thread",
+        variant: "destructive",
+      });
+    },
+  });
+
   const archiveThreadMutation = useMutation({
-    mutationFn: (threadId: string) =>
-      apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/archive`, {}),
+    mutationFn: (threadId: string) => {
+      const endpoint = selectedThreadType === 'staff'
+        ? `/api/staff-messages/threads/${threadId}/archive`
+        : `/api/internal/project-messages/threads/${threadId}/archive`;
+      return apiRequest('PUT', endpoint, {});
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
       toast({
         title: "Success",
         description: "Thread archived",
       });
       setSelectedThreadId(null);
+      setSelectedThreadType(null);
     },
   });
 
   const unarchiveThreadMutation = useMutation({
-    mutationFn: (threadId: string) =>
-      apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/unarchive`, {}),
+    mutationFn: (threadId: string) => {
+      const endpoint = selectedThreadType === 'staff'
+        ? `/api/staff-messages/threads/${threadId}/unarchive`
+        : `/api/internal/project-messages/threads/${threadId}/unarchive`;
+      return apiRequest('PUT', endpoint, {});
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
       toast({
         title: "Success",
         description: "Thread unarchived",
@@ -352,9 +488,13 @@ export default function InternalChat() {
   const filteredThreads = allThreads?.filter(thread => {
     if (threadSearchTerm) {
       const searchLower = threadSearchTerm.toLowerCase();
-      return thread.topic.toLowerCase().includes(searchLower) ||
-             thread.project.description.toLowerCase().includes(searchLower) ||
-             thread.client.name.toLowerCase().includes(searchLower);
+      const topicMatches = thread.topic.toLowerCase().includes(searchLower);
+      if (thread.threadType === 'project') {
+        return topicMatches ||
+               thread.project.description.toLowerCase().includes(searchLower) ||
+               thread.client.name.toLowerCase().includes(searchLower);
+      }
+      return topicMatches;
     }
     return true;
   });
@@ -407,14 +547,27 @@ export default function InternalChat() {
                   <Users className="w-5 h-5" />
                   Internal Chat
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] })}
-                  data-testid="button-refresh"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setShowNewThreadDialog(true)}
+                    data-testid="button-new-thread"
+                  >
+                    New Thread
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+                      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
+                    }}
+                    data-testid="button-refresh"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-3 mt-4">
                 <Input
@@ -455,7 +608,10 @@ export default function InternalChat() {
                   {filteredThreads.map((thread) => (
                     <button
                       key={thread.id}
-                      onClick={() => setSelectedThreadId(thread.id)}
+                      onClick={() => {
+                        setSelectedThreadId(thread.id);
+                        setSelectedThreadType(thread.threadType);
+                      }}
                       className={`w-full text-left p-2 hover:bg-muted/50 transition-colors ${
                         selectedThreadId === thread.id ? 'bg-muted' : ''
                       }`}
@@ -463,12 +619,21 @@ export default function InternalChat() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                            <span className="text-sm text-muted-foreground truncate" data-testid={`text-project-${thread.id}`}>
-                              {thread.project.description}
-                            </span>
-                          </div>
+                          {thread.threadType === 'project' ? (
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground truncate" data-testid={`text-project-${thread.id}`}>
+                                {thread.project.description}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground truncate">
+                                {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                              </span>
+                            </div>
+                          )}
                           <p className="font-semibold text-sm mt-0.5 truncate" data-testid={`text-topic-${thread.id}`}>
                             {thread.topic}
                           </p>
@@ -506,18 +671,22 @@ export default function InternalChat() {
                 <CardHeader className="border-b">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Building2 className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground" data-testid="text-selected-company">
-                          {selectedThread.client.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground" data-testid="text-selected-project">
-                          {selectedThread.project.description}
-                        </span>
-                      </div>
+                      {selectedThread.threadType === 'project' && (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Building2 className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground" data-testid="text-selected-company">
+                              {selectedThread.client.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground" data-testid="text-selected-project">
+                              {selectedThread.project.description}
+                            </span>
+                          </div>
+                        </>
+                      )}
                       <CardTitle className="text-lg" data-testid="text-selected-topic">{selectedThread.topic}</CardTitle>
                       <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                         <Users className="w-4 h-4" />
@@ -527,15 +696,17 @@ export default function InternalChat() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
-                        data-testid="button-view-project"
-                      >
-                        <ExternalLink className="w-4 h-4 mr-1" />
-                        View Project
-                      </Button>
+                      {selectedThread.threadType === 'project' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
+                          data-testid="button-view-project"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-1" />
+                          View Project
+                        </Button>
+                      )}
                       {selectedThread.isArchived ? (
                         <Button
                           variant="outline"
@@ -745,6 +916,157 @@ export default function InternalChat() {
         </div>
       </div>
       <BottomNav user={user} onSearchClick={() => {}} />
+      
+      {/* New Staff Thread Dialog */}
+      <Dialog open={showNewThreadDialog} onOpenChange={setShowNewThreadDialog}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-new-thread">
+          <DialogHeader>
+            <DialogTitle>Create New Staff Thread</DialogTitle>
+            <DialogDescription>
+              Start a new conversation with team members
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="topic">Topic</Label>
+              <Input
+                id="topic"
+                placeholder="Enter thread topic..."
+                value={newThreadTopic}
+                onChange={(e) => setNewThreadTopic(e.target.value)}
+                data-testid="input-thread-topic"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Participants</Label>
+              <div className="border rounded-md p-2 min-h-[100px]">
+                {selectedParticipants.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedParticipants.map((userId) => {
+                      const user = allUsers?.find(u => u.id === userId);
+                      return user ? (
+                        <div key={userId} className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-md">
+                          <span className="text-sm">{getUserDisplayName(user)}</span>
+                          <button
+                            onClick={() => setSelectedParticipants(prev => prev.filter(id => id !== userId))}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mb-2">No participants selected</p>
+                )}
+                <Input
+                  placeholder="Search users..."
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  data-testid="input-search-participants"
+                />
+                {participantSearch && (
+                  <div className="mt-2 max-h-[150px] overflow-y-auto space-y-1 relative z-50">
+                    {usersLoading ? (
+                      <div className="text-sm text-muted-foreground p-2">Loading users...</div>
+                    ) : allUsers && allUsers.length > 0 ? (
+                      <>
+                        {allUsers
+                          .filter(u => 
+                            !selectedParticipants.includes(u.id) &&
+                            (getUserDisplayName(u).toLowerCase().includes(participantSearch.toLowerCase()) ||
+                             u.email.toLowerCase().includes(participantSearch.toLowerCase()))
+                          )
+                          .map(u => (
+                            <button
+                              type="button"
+                              key={u.id}
+                              onClick={() => {
+                                setSelectedParticipants(prev => [...prev, u.id]);
+                                setParticipantSearch('');
+                              }}
+                              className="w-full text-left px-2 py-1.5 hover:bg-muted rounded-md text-sm bg-background border"
+                              data-testid={`button-add-participant-${u.id}`}
+                            >
+                              <div className="font-medium">{getUserDisplayName(u)}</div>
+                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                            </button>
+                          ))}
+                        {allUsers.filter(u => 
+                          !selectedParticipants.includes(u.id) &&
+                          (getUserDisplayName(u).toLowerCase().includes(participantSearch.toLowerCase()) ||
+                           u.email.toLowerCase().includes(participantSearch.toLowerCase()))
+                        ).length === 0 && (
+                          <div className="text-sm text-muted-foreground p-2">No users found matching "{participantSearch}"</div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-sm text-muted-foreground p-2">No users available</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="initial-message">Initial Message (Optional)</Label>
+              <Textarea
+                id="initial-message"
+                placeholder="Enter your first message..."
+                value={initialMessage}
+                onChange={(e) => setInitialMessage(e.target.value)}
+                className="min-h-[80px]"
+                data-testid="input-initial-message"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNewThreadDialog(false);
+                setNewThreadTopic('');
+                setSelectedParticipants([]);
+                setInitialMessage('');
+                setParticipantSearch('');
+              }}
+              data-testid="button-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (newThreadTopic && selectedParticipants.length > 0) {
+                  createStaffThreadMutation.mutate({
+                    topic: newThreadTopic,
+                    participantUserIds: selectedParticipants,
+                    initialMessage: initialMessage ? { content: initialMessage } : undefined,
+                  });
+                } else {
+                  toast({
+                    title: "Validation Error",
+                    description: "Please enter a topic and select at least one participant",
+                    variant: "destructive",
+                  });
+                }
+              }}
+              disabled={createStaffThreadMutation.isPending || !newThreadTopic || selectedParticipants.length === 0}
+              data-testid="button-create-thread"
+            >
+              {createStaffThreadMutation.isPending ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Thread'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

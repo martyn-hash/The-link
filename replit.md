@@ -59,6 +59,26 @@ The internal tasks system provides comprehensive staff task management with adva
 -   **Progress Notes User Attribution**: Progress notes correctly display the full name of the user who created each note. The backend `getTaskProgressNotesByTaskId` function returns a `user` field (containing firstName, lastName) by joining the users table, which the frontend renders as "{firstName} {lastName}" with timestamp. This ensures proper user attribution for all task activity.
 -   **Client Detail Integration**: The client detail page Tasks tab includes an Internal Tasks section with a table showing all tasks connected to the client. The table includes an Actions column with a "View" button for each task that navigates to the task detail page with contextual query parameters (`?from=client&clientId=<id>`), enabling proper navigation tracking and back-button functionality.
 
+### Standalone Staff-to-Staff Messaging
+
+The `/internal-chat` page now supports standalone staff-to-staff message threads independent of projects, enabling direct team conversations:
+
+**Implementation (November 2025):**
+-   **Database Schema**: Added `staffMessageThreads`, `staffMessages`, and `staffMessageParticipants` tables parallel to project messaging but without `projectId` fields. Threads track topic, isArchived status, and lastMessageAt for sorting.
+-   **Storage Layer**: Implemented full CRUD operations in `server/storage.ts`: `createStaffMessageThread`, `getStaffMessageThreadsForUser`, `archiveStaffMessageThread`, `unarchiveStaffMessageThread`, `createStaffMessage`, `getStaffMessagesByThreadId`, and `markStaffMessagesAsRead`.
+-   **API Routes**: Added `/api/staff-messages/*` endpoints in `server/routes/messages.ts` for thread creation (`POST /threads`), fetching user threads (`GET /my-threads`), sending messages (`POST /threads/:id/messages`), marking as read (`PUT /threads/:id/mark-read`), and archive controls (`PUT /threads/:id/archive|unarchive`).
+-   **Frontend UI** (`client/src/pages/internal-chat.tsx`):
+    - Discriminated union types: `ProjectMessageThread` with `threadType: 'project'` and `StaffMessageThread` with `threadType: 'staff'`
+    - Unified thread list displaying both types, sorted by `lastMessageAt`
+    - "New Thread" button opens dialog for creating staff threads
+    - Thread-type aware mutations route to correct endpoints based on `selectedThreadType`
+    - Thread type inference effect auto-sets `selectedThreadType` when thread is selected
+    - Conditional rendering: Project threads show company/project info; staff threads show only topic and participants
+-   **New Thread Dialog**: Features topic input (required), participant search with real-time filtering (searches by name/email, excludes already-selected, allows adding yourself), optional initial message, and creates thread via POST to `/api/staff-messages/threads` with auto-selection on success.
+-   **Push Notification Integration**: Staff messages use `sendNewStaffMessageNotification` template service from `server/notification-template-service.ts`, integrated into messaging routes for automated notifications when messages are sent.
+-   **Archive/Unarchive**: Both mutations check `selectedThreadType` to route to correct staff or project endpoints, invalidate both thread type caches, and properly manage selection state (archive clears selection, unarchive maintains it).
+-   **Bug Fixes**: Removed automatic redirect to `/api/login` on unauthenticated access (page now returns null cleanly), added missing imports (`DialogFooter`, `Label`) and state variables (`participantSearch`, `initialMessage`), fixed participant search filter to allow users to add themselves to threads, added loading states and "no results" messaging.
+
 ## External Dependencies
 
 ### Third-Party Services
