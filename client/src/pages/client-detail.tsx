@@ -350,7 +350,7 @@ function ProjectLink({ projectId }: { projectId: string }) {
       className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
       data-testid={`link-project-${projectId}`}
     >
-      {project.client?.name || 'Unknown Project'}
+      {project.description || project.client?.name || 'Unknown Project'}
     </button>
   );
 }

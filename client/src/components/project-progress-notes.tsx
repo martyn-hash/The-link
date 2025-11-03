@@ -172,6 +172,9 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
     const formData = {
       ...values,
       personId: values.personId === 'none' ? null : values.personId,
+      actualContactTime: new Date(values.actualContactTime).toISOString(),
+      clientId,
+      projectId,
     };
     addCommunicationMutation.mutate(formData);
   };

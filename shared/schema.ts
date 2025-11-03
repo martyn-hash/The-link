@@ -2148,6 +2148,8 @@ export const insertCommunicationSchema = createInsertSchema(communications).omit
   loggedAt: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  actualContactTime: z.coerce.date(),
 });
 
 // Zod schemas for client portal and messaging
