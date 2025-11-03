@@ -204,20 +204,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
-                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                        <DropdownMenuItem asChild>
-                          <Link href="/companies" className="w-full">
-                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
-                              <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
-                                <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-foreground text-sm">Companies</div>
-                              </div>
+                      <DropdownMenuItem asChild>
+                        <Link href="/companies" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
+                            <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
+                              <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                             </div>
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Companies</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
                     </div>
 
                     {/* Column 3: Client Requests, People, Internal Tasks */}
@@ -234,20 +232,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
-                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                        <DropdownMenuItem asChild>
-                          <Link href="/people" className="w-full">
-                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-people-menu">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
-                                <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-foreground text-sm">People</div>
-                              </div>
+                      <DropdownMenuItem asChild>
+                        <Link href="/people" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-people-menu">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
+                              <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                             </div>
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">People</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link href="/internal-tasks" className="w-full">
                           <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-internal-tasks-menu">
