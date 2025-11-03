@@ -146,7 +146,8 @@ export function registerProjectRoutes(
         dateTo: normalize(req.query.dateTo),
       };
 
-      const projects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', filters);
+      // All authenticated users can see all projects
+      const projects = await storage.getAllProjects(filters);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
