@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -65,22 +65,19 @@ export function MediaLibrary({ mode = "gallery", selectedIconId, onSelectIcon }:
     }
   };
 
-  // Load URLs for all icons
-  const loadIconUrls = async () => {
-    if (!icons) return;
-    for (const icon of icons) {
-      if (!iconUrls[icon.id]) {
-        await fetchIconUrl(icon.id);
-      }
-    }
-  };
-
   // Load URLs when icons change
-  useState(() => {
-    if (icons && icons.length > 0) {
-      loadIconUrls();
-    }
-  });
+  useEffect(() => {
+    const loadIconUrls = async () => {
+      if (!icons || icons.length === 0) return;
+      for (const icon of icons) {
+        if (!iconUrls[icon.id]) {
+          await fetchIconUrl(icon.id);
+        }
+      }
+    };
+
+    loadIconUrls();
+  }, [icons]);
 
   // Upload mutation
   const uploadMutation = useMutation({
