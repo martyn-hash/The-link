@@ -6,7 +6,9 @@ import { useLocation } from "wouter";
 import type { ProjectWithRelations } from "@shared/schema";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter } from "lucide-react";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -42,6 +44,15 @@ const formatChangeReason = (reason: string): string => {
 
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const [, setLocation] = useLocation();
+  
+  // Filter state - track which categories are selected
+  const [filters, setFilters] = useState({
+    stageChanges: true,
+    taskCreated: true,
+    taskCompleted: true,
+    progressNotes: true,
+    messageThreads: true,
+  });
 
   // Helper function to format time duration
   const formatDuration = (totalMinutes: number | null) => {
@@ -196,6 +207,31 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [project.chronology, tasks, communications, messageThreads, formatDuration]);
 
+  // Filter timeline based on selected filters
+  const filteredTimeline = useMemo(() => {
+    return timeline.filter(entry => {
+      // Map entry type to filter category
+      if (entry.type === 'stage_change') {
+        return filters.stageChanges;
+      }
+      if (entry.type === 'task_created') {
+        return filters.taskCreated;
+      }
+      if (entry.type === 'task_completed') {
+        return filters.taskCompleted;
+      }
+      if (entry.type === 'phone_call' || entry.type === 'note' || 
+          entry.type === 'sms_sent' || entry.type === 'sms_received' ||
+          entry.type === 'email_sent' || entry.type === 'email_received') {
+        return filters.progressNotes;
+      }
+      if (entry.type === 'message_thread') {
+        return filters.messageThreads;
+      }
+      return true; // Show unknown types by default
+    });
+  }, [timeline, filters]);
+
   // Get icon for entry type
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -258,11 +294,76 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           Project Timeline
         </h4>
         <span className="text-sm text-muted-foreground">
-          {timeline.length} {timeline.length === 1 ? 'entry' : 'entries'}
+          {filteredTimeline.length} of {timeline.length} {timeline.length === 1 ? 'entry' : 'entries'}
         </span>
       </div>
 
-      {!timeline.length ? (
+      {/* Filter Controls */}
+      <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg border">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Filter:</span>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-stage-changes"
+              checked={filters.stageChanges}
+              onCheckedChange={(checked) => setFilters(prev => ({ ...prev, stageChanges: checked as boolean }))}
+              data-testid="checkbox-filter-stage-changes"
+            />
+            <Label htmlFor="filter-stage-changes" className="text-sm cursor-pointer">
+              Stage Changes
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-task-created"
+              checked={filters.taskCreated}
+              onCheckedChange={(checked) => setFilters(prev => ({ ...prev, taskCreated: checked as boolean }))}
+              data-testid="checkbox-filter-task-created"
+            />
+            <Label htmlFor="filter-task-created" className="text-sm cursor-pointer">
+              Task Created
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-task-completed"
+              checked={filters.taskCompleted}
+              onCheckedChange={(checked) => setFilters(prev => ({ ...prev, taskCompleted: checked as boolean }))}
+              data-testid="checkbox-filter-task-completed"
+            />
+            <Label htmlFor="filter-task-completed" className="text-sm cursor-pointer">
+              Task Completed
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-progress-notes"
+              checked={filters.progressNotes}
+              onCheckedChange={(checked) => setFilters(prev => ({ ...prev, progressNotes: checked as boolean }))}
+              data-testid="checkbox-filter-progress-notes"
+            />
+            <Label htmlFor="filter-progress-notes" className="text-sm cursor-pointer">
+              Progress Notes
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-message-threads"
+              checked={filters.messageThreads}
+              onCheckedChange={(checked) => setFilters(prev => ({ ...prev, messageThreads: checked as boolean }))}
+              data-testid="checkbox-filter-message-threads"
+            />
+            <Label htmlFor="filter-message-threads" className="text-sm cursor-pointer">
+              Message Threads
+            </Label>
+          </div>
+        </div>
+      </div>
+
+      {!filteredTimeline.length ? (
         <div className="text-center py-8 text-muted-foreground">
           <p className="text-sm">No timeline entries available</p>
         </div>
@@ -280,7 +381,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {timeline.map((entry) => (
+            {filteredTimeline.map((entry) => (
               <TableRow key={entry.id} data-testid={`timeline-row-${entry.id}`}>
                 <TableCell data-testid={`cell-timestamp-${entry.id}`}>
                   <div className="flex flex-col">
