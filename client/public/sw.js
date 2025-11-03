@@ -1,11 +1,9 @@
-const STATIC_CACHE = 'the-link-static-v7';
-const API_CACHE = 'the-link-api-v7';
+const STATIC_CACHE = 'the-link-static-v8';
+const API_CACHE = 'the-link-api-v8';
 const NETWORK_TIMEOUT = 3000; // 3 seconds
 
-const staticAssets = [
-  '/',
-  '/index.html'
-];
+// Don't precache index.html - always fetch fresh to get latest bundle references
+const staticAssets = [];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -39,6 +37,13 @@ self.addEventListener('message', (event) => {
 // Helper: Check if request is for API
 function isApiRequest(url) {
   return url.pathname.startsWith('/api/');
+}
+
+// Helper: Check if request is for HTML document (navigation)
+function isHtmlNavigation(request) {
+  return request.mode === 'navigate' || 
+         request.destination === 'document' ||
+         request.headers.get('Accept')?.includes('text/html');
 }
 
 // Helper: Check if request is HTTP(S)
@@ -182,13 +187,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
+  // HTML navigation requests: always fetch from network to get latest bundle references
+  // This ensures users get new features immediately without clearing cache
+  if (isHtmlNavigation(event.request)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
   // API requests: network-first with offline fallback
   if (isApiRequest(url)) {
     event.respondWith(networkFirstWithTimeout(event.request));
     return;
   }
   
-  // Static assets: cache-first
+  // Static assets (JS, CSS with content hashes): cache-first for performance
+  // These can be cached aggressively since filenames change when content changes
   event.respondWith(cacheFirst(event.request));
 });
 

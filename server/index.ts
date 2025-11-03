@@ -82,6 +82,27 @@ app.use((req, res, next) => {
     }
   });
 
+  // Add Cache-Control headers for HTML navigation requests to ensure fresh content loads
+  // This prevents caching of index.html so users get latest bundle references immediately
+  app.use((req, res, next) => {
+    // Set no-cache headers for all HTML navigation requests (non-API, non-static-asset routes)
+    // This catches requests for /, /portal/login, and other SPA routes
+    const isApiRequest = req.path.startsWith('/api/');
+    const isStaticAsset = req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|json|webp)$/);
+    const isManifest = req.path === '/manifest.json';
+    
+    if (!isApiRequest && !isStaticAsset && !isManifest) {
+      // Set headers proactively for HTML navigation requests
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+    }
+    
+    next();
+  });
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
