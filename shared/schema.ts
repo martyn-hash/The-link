@@ -2040,6 +2040,60 @@ export const projectMessageParticipants = pgTable("project_message_participants"
   uniqueThreadUser: unique("unique_project_thread_user").on(table.threadId, table.userId),
 }));
 
+// Standalone Staff Message Threads - staff-to-staff messaging NOT tied to projects
+export const staffMessageThreads = pgTable("staff_message_threads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  topic: varchar("topic").notNull(), // Thread topic/subject
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id, { onDelete: "set null" }),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  lastMessageByUserId: varchar("last_message_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for last message sorting
+  lastMessageIdx: index("staff_message_threads_last_message_idx").on(table.lastMessageAt),
+  // Index for archived status
+  isArchivedIdx: index("staff_message_threads_is_archived_idx").on(table.isArchived),
+}));
+
+// Standalone Staff Messages - individual messages within standalone staff threads
+export const staffMessages = pgTable("staff_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => staffMessageThreads.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "set null" }), // Staff member who sent message
+  attachments: jsonb("attachments"), // Array of attachment metadata {fileName, fileSize, fileType, objectPath}
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread message lookups
+  threadIdCreatedAtIdx: index("staff_messages_thread_id_created_at_idx").on(table.threadId, table.createdAt),
+  // Index for user messages
+  userIdIdx: index("staff_messages_user_id_idx").on(table.userId),
+}));
+
+// Standalone Staff Message Participants - tracks which staff members are in each standalone thread
+export const staffMessageParticipants = pgTable("staff_message_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => staffMessageThreads.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lastReadAt: timestamp("last_read_at"), // When participant last read messages
+  lastReadMessageId: varchar("last_read_message_id").references(() => staffMessages.id, { onDelete: "set null" }), // Last message they read
+  joinedAt: timestamp("joined_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread participants
+  threadIdIdx: index("staff_message_participants_thread_id_idx").on(table.threadId),
+  // Index for user participation lookups
+  userIdIdx: index("staff_message_participants_user_id_idx").on(table.userId),
+  // Unique constraint to prevent duplicate participants
+  uniqueThreadUser: unique("unique_staff_thread_user").on(table.threadId, table.userId),
+}));
+
 // Document folders table - organizes documents into folders (batches)
 export const documentFolders = pgTable("document_folders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2126,6 +2180,25 @@ export const insertProjectMessageSchema = createInsertSchema(projectMessages).om
 });
 
 export const insertProjectMessageParticipantSchema = createInsertSchema(projectMessageParticipants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Zod schemas for standalone staff messaging
+export const insertStaffMessageThreadSchema = createInsertSchema(staffMessageThreads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStaffMessageSchema = createInsertSchema(staffMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStaffMessageParticipantSchema = createInsertSchema(staffMessageParticipants).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -2692,6 +2765,12 @@ export type ProjectMessage = typeof projectMessages.$inferSelect;
 export type InsertProjectMessage = z.infer<typeof insertProjectMessageSchema>;
 export type ProjectMessageParticipant = typeof projectMessageParticipants.$inferSelect;
 export type InsertProjectMessageParticipant = z.infer<typeof insertProjectMessageParticipantSchema>;
+export type StaffMessageThread = typeof staffMessageThreads.$inferSelect;
+export type InsertStaffMessageThread = z.infer<typeof insertStaffMessageThreadSchema>;
+export type StaffMessage = typeof staffMessages.$inferSelect;
+export type InsertStaffMessage = z.infer<typeof insertStaffMessageSchema>;
+export type StaffMessageParticipant = typeof staffMessageParticipants.$inferSelect;
+export type InsertStaffMessageParticipant = z.infer<typeof insertStaffMessageParticipantSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type UserActivityTracking = typeof userActivityTracking.$inferSelect;
