@@ -168,7 +168,7 @@ export default function Projects() {
 
   // Fetch all services (for dropdown population)
   const { data: allServices = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/services"],
+    queryKey: ["/api/services/with-active-clients"],
     enabled: isAuthenticated && !!user,
     retry: false,
     select: (data: any[]) => data.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))

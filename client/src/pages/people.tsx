@@ -426,17 +426,6 @@ export default function People() {
     );
   }
 
-  if (!user.isAdmin && !user.canSeeAdminMenu) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-muted-foreground mb-2">Access Denied</h1>
-          <p className="text-muted-foreground">You need admin or manager privileges to access people management.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />

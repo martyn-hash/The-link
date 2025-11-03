@@ -116,18 +116,6 @@ export default function Clients() {
     );
   }
 
-  // Access control - only admins and managers can access client management
-  if (!user.isAdmin && !user.canSeeAdminMenu) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-muted-foreground mb-2">Access Denied</h1>
-          <p className="text-muted-foreground">You need admin or manager privileges to access client management.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
@@ -207,7 +195,7 @@ export default function Clients() {
                   <p className="text-muted-foreground text-center max-w-md mb-4">
                     There are no clients in the system yet. Clients will appear here as they are added to the system.
                   </p>
-                  {user?.role === 'admin' && (
+                  {user?.isAdmin && (
                     <Button onClick={handleCreateClient} data-testid="button-create-first-client">
                       <Plus className="w-4 h-4 mr-2" />
                       Create Your First Client
@@ -243,7 +231,7 @@ export default function Clients() {
                           </CardDescription>
                         )}
                       </div>
-                      {user?.role === 'admin' && (
+                      {user?.isAdmin && (
                         <Button
                           variant="ghost"
                           size="sm"
