@@ -39,7 +39,7 @@ The system includes a comprehensive push notification template management system
 -   **Multiple Templates Per Type**: Removed uniqueness constraint to allow multiple active templates per notification type. The system randomly selects from active templates for variety and engagement.
 -   **Notification Icons Table**: `notificationIcons` table with Google Cloud Storage integration for storing uploaded icons/badges. Sharp library handles automatic image processing (192x192 and 512x512 PWA-compliant sizes).
 -   **Template Variables**: Dynamic variable substitution (e.g., `{staffName}`, `{clientName}`, `{message}`) for personalized notifications
--   **Admin UI**: Admin-only interface at `/push-notification-templates` for managing templates, testing notifications, and toggling active status
+-   **Admin UI**: Admin-only interface at `/admin/push-templates` (with alias at `/push-notification-templates`) for managing templates, testing notifications, and toggling active status
 -   **API Routes**: `/api/push/templates` (CRUD operations), `/api/notification-icons` (icon upload/delete with multer and Sharp processing)
 -   **Notification Service**: `server/notification-template-service.ts` with separate functions for staff and client message notifications (`sendNewStaffMessageNotification`, `sendNewClientMessageNotification`)
 

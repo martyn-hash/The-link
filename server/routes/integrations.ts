@@ -10,6 +10,7 @@ import {
   pushSubscribeSchema,
   pushUnsubscribeSchema,
   pushSendSchema,
+  createNotificationTemplateSchema,
   updateNotificationTemplateSchema,
   testNotificationTemplateSchema,
   ringCentralAuthenticateSchema,
@@ -752,6 +753,26 @@ export function registerIntegrationRoutes(
     } catch (error) {
       console.error("Error fetching notification template:", error);
       res.status(500).json({ message: "Failed to fetch notification template" });
+    }
+  });
+
+  // POST /api/push/templates - Create notification template
+  app.post("/api/push/templates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate request body
+      const validation = createNotificationTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid template data",
+          errors: validation.error.errors 
+        });
+      }
+
+      const created = await storage.createPushNotificationTemplate(validation.data);
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating notification template:", error);
+      res.status(500).json({ message: "Failed to create notification template" });
     }
   });
 

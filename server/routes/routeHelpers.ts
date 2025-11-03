@@ -37,6 +37,16 @@ export const pushSendSchema = z.object({
 });
 
 // Push notification template schemas
+export const createNotificationTemplateSchema = z.object({
+  templateType: z.enum(["new_message_staff", "new_message_client", "document_request", "task_assigned", "project_stage_change", "status_update", "reminder"]),
+  name: z.string().min(1, "Name is required"),
+  titleTemplate: z.string().min(1, "Title template is required"),
+  bodyTemplate: z.string().min(1, "Body template is required"),
+  iconUrl: z.string().nullable().optional(),
+  badgeUrl: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
 export const updateNotificationTemplateSchema = z.object({
   titleTemplate: z.string().min(1, "Title template is required").optional(),
   bodyTemplate: z.string().min(1, "Body template is required").optional(),
