@@ -52,6 +52,9 @@ import {
   projectMessageThreads,
   projectMessages,
   projectMessageParticipants,
+  staffMessageThreads,
+  staffMessages,
+  staffMessageParticipants,
   taskTemplateCategories,
   taskTemplates,
   taskTemplateSections,
@@ -178,6 +181,12 @@ import {
   type InsertProjectMessage,
   type ProjectMessageParticipant,
   type InsertProjectMessageParticipant,
+  type StaffMessageThread,
+  type InsertStaffMessageThread,
+  type StaffMessage,
+  type InsertStaffMessage,
+  type StaffMessageParticipant,
+  type InsertStaffMessageParticipant,
   type TaskTemplateCategory,
   type InsertTaskTemplateCategory,
   type UpdateTaskTemplateCategory,
@@ -799,6 +808,35 @@ export interface IStorage {
       oldestUnreadAt: Date;
     }>;
   }>>;
+  
+  // Standalone Staff Message Thread operations
+  createStaffMessageThread(thread: InsertStaffMessageThread): Promise<StaffMessageThread>;
+  getStaffMessageThreadById(id: string): Promise<StaffMessageThread | undefined>;
+  getStaffMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<StaffMessageThread & {
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>>;
+  updateStaffMessageThread(id: string, thread: Partial<InsertStaffMessageThread>): Promise<StaffMessageThread>;
+  deleteStaffMessageThread(id: string): Promise<void>;
+  archiveStaffMessageThread(id: string, archivedBy: string): Promise<StaffMessageThread>;
+  unarchiveStaffMessageThread(id: string): Promise<StaffMessageThread>;
+  
+  // Standalone Staff Message operations
+  createStaffMessage(message: InsertStaffMessage): Promise<StaffMessage>;
+  getStaffMessageById(id: string): Promise<StaffMessage | undefined>;
+  getStaffMessagesByThreadId(threadId: string): Promise<StaffMessage[]>;
+  updateStaffMessage(id: string, message: Partial<InsertStaffMessage>): Promise<StaffMessage>;
+  deleteStaffMessage(id: string): Promise<void>;
+  
+  // Standalone Staff Message Participant operations
+  createStaffMessageParticipant(participant: InsertStaffMessageParticipant): Promise<StaffMessageParticipant>;
+  getStaffMessageParticipantsByThreadId(threadId: string): Promise<StaffMessageParticipant[]>;
+  getStaffMessageParticipantsByUserId(userId: string): Promise<StaffMessageParticipant[]>;
+  updateStaffMessageParticipant(id: string, participant: Partial<InsertStaffMessageParticipant>): Promise<StaffMessageParticipant>;
+  deleteStaffMessageParticipant(id: string): Promise<void>;
+  markStaffMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void>;
+  getUnreadStaffMessagesForUser(userId: string): Promise<{ threadId: string; count: number }[]>;
   
   // Client Portal Session operations (using built-in token fields)
   createClientPortalSession(data: { clientPortalUserId: string; token: string; expiresAt: Date }): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date }>;
@@ -9329,6 +9367,295 @@ export class DatabaseStorage implements IStorage {
     }
     
     return Array.from(userMap.values()).filter(u => u.threads.length > 0);
+  }
+
+  // ========== Standalone Staff Message Thread operations ==========
+  async createStaffMessageThread(thread: InsertStaffMessageThread): Promise<StaffMessageThread> {
+    const [newThread] = await db
+      .insert(staffMessageThreads)
+      .values(thread)
+      .returning();
+    return newThread;
+  }
+
+  async getStaffMessageThreadById(id: string): Promise<StaffMessageThread | undefined> {
+    const [thread] = await db
+      .select()
+      .from(staffMessageThreads)
+      .where(eq(staffMessageThreads.id, id));
+    return thread;
+  }
+
+  async getStaffMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<StaffMessageThread & {
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>> {
+    // Get all threads where user is a participant
+    const participantRecords = await db
+      .select({ threadId: staffMessageParticipants.threadId })
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.userId, userId));
+    
+    if (participantRecords.length === 0) {
+      return [];
+    }
+    
+    const threadIds = participantRecords.map(p => p.threadId);
+    
+    // Get threads
+    let query = db
+      .select()
+      .from(staffMessageThreads)
+      .where(inArray(staffMessageThreads.id, threadIds));
+    
+    // Apply archive filter
+    if (!filters?.includeArchived) {
+      query = query.where(eq(staffMessageThreads.isArchived, false)) as any;
+    }
+    
+    const threads = await query.orderBy(desc(staffMessageThreads.lastMessageAt));
+    
+    // Enrich each thread with participants, last message, and unread count
+    const enrichedThreads = await Promise.all(threads.map(async (thread) => {
+      // Get participants
+      const participantRecords = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(staffMessageParticipants)
+        .innerJoin(users, eq(staffMessageParticipants.userId, users.id))
+        .where(eq(staffMessageParticipants.threadId, thread.id));
+      
+      // Get last message
+      const [lastMsg] = await db
+        .select({
+          content: staffMessages.content,
+          createdAt: staffMessages.createdAt,
+          userId: staffMessages.userId,
+        })
+        .from(staffMessages)
+        .where(eq(staffMessages.threadId, thread.id))
+        .orderBy(desc(staffMessages.createdAt))
+        .limit(1);
+      
+      // Get unread count for this user
+      const [participant] = await db
+        .select()
+        .from(staffMessageParticipants)
+        .where(and(
+          eq(staffMessageParticipants.threadId, thread.id),
+          eq(staffMessageParticipants.userId, userId)
+        ));
+      
+      let unreadCount = 0;
+      if (participant) {
+        const unreadMessages = await db
+          .select()
+          .from(staffMessages)
+          .where(and(
+            eq(staffMessages.threadId, thread.id),
+            ne(staffMessages.userId, userId), // Exclude user's own messages
+            participant.lastReadAt 
+              ? sql`${staffMessages.createdAt} > ${participant.lastReadAt}`
+              : sql`true` // If never read, count all messages from others
+          ));
+        unreadCount = unreadMessages.length;
+      }
+      
+      return {
+        ...thread,
+        unreadCount,
+        lastMessage: lastMsg || null,
+        participants: participantRecords,
+      };
+    }));
+    
+    return enrichedThreads;
+  }
+
+  async updateStaffMessageThread(id: string, thread: Partial<InsertStaffMessageThread>): Promise<StaffMessageThread> {
+    const [updated] = await db
+      .update(staffMessageThreads)
+      .set({ ...thread, updatedAt: new Date() })
+      .where(eq(staffMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMessageThread(id: string): Promise<void> {
+    await db.delete(staffMessageThreads).where(eq(staffMessageThreads.id, id));
+  }
+
+  async archiveStaffMessageThread(id: string, archivedBy: string): Promise<StaffMessageThread> {
+    const [updated] = await db
+      .update(staffMessageThreads)
+      .set({ 
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedBy,
+        updatedAt: new Date()
+      })
+      .where(eq(staffMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async unarchiveStaffMessageThread(id: string): Promise<StaffMessageThread> {
+    const [updated] = await db
+      .update(staffMessageThreads)
+      .set({ 
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date()
+      })
+      .where(eq(staffMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ========== Standalone Staff Message operations ==========
+  async createStaffMessage(message: InsertStaffMessage): Promise<StaffMessage> {
+    const [newMessage] = await db
+      .insert(staffMessages)
+      .values(message)
+      .returning();
+    
+    // Update thread's lastMessageAt and lastMessageByUserId
+    await db
+      .update(staffMessageThreads)
+      .set({ 
+        lastMessageAt: new Date(),
+        lastMessageByUserId: message.userId
+      })
+      .where(eq(staffMessageThreads.id, message.threadId));
+    
+    return newMessage;
+  }
+
+  async getStaffMessageById(id: string): Promise<StaffMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(staffMessages)
+      .where(eq(staffMessages.id, id));
+    return message;
+  }
+
+  async getStaffMessagesByThreadId(threadId: string): Promise<StaffMessage[]> {
+    const messages = await db
+      .select()
+      .from(staffMessages)
+      .where(eq(staffMessages.threadId, threadId))
+      .orderBy(staffMessages.createdAt);
+    return messages;
+  }
+
+  async updateStaffMessage(id: string, message: Partial<InsertStaffMessage>): Promise<StaffMessage> {
+    const [updated] = await db
+      .update(staffMessages)
+      .set({ ...message, updatedAt: new Date() })
+      .where(eq(staffMessages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMessage(id: string): Promise<void> {
+    await db.delete(staffMessages).where(eq(staffMessages.id, id));
+  }
+
+  // ========== Standalone Staff Message Participant operations ==========
+  async createStaffMessageParticipant(participant: InsertStaffMessageParticipant): Promise<StaffMessageParticipant> {
+    const [newParticipant] = await db
+      .insert(staffMessageParticipants)
+      .values(participant)
+      .returning();
+    return newParticipant;
+  }
+
+  async getStaffMessageParticipantsByThreadId(threadId: string): Promise<StaffMessageParticipant[]> {
+    const participants = await db
+      .select()
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.threadId, threadId))
+      .orderBy(staffMessageParticipants.joinedAt);
+    return participants;
+  }
+
+  async getStaffMessageParticipantsByUserId(userId: string): Promise<StaffMessageParticipant[]> {
+    const participants = await db
+      .select()
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.userId, userId))
+      .orderBy(desc(staffMessageParticipants.joinedAt));
+    return participants;
+  }
+
+  async updateStaffMessageParticipant(id: string, participant: Partial<InsertStaffMessageParticipant>): Promise<StaffMessageParticipant> {
+    const [updated] = await db
+      .update(staffMessageParticipants)
+      .set({ ...participant, updatedAt: new Date() })
+      .where(eq(staffMessageParticipants.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMessageParticipant(id: string): Promise<void> {
+    await db.delete(staffMessageParticipants).where(eq(staffMessageParticipants.id, id));
+  }
+
+  async markStaffMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void> {
+    await db
+      .update(staffMessageParticipants)
+      .set({ 
+        lastReadAt: new Date(),
+        lastReadMessageId,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(staffMessageParticipants.threadId, threadId),
+        eq(staffMessageParticipants.userId, userId)
+      ));
+  }
+
+  async getUnreadStaffMessagesForUser(userId: string): Promise<{ threadId: string; count: number }[]> {
+    // Get all threads the user is participating in
+    const participantRecords = await db
+      .select({
+        threadId: staffMessageParticipants.threadId,
+        lastReadMessageId: staffMessageParticipants.lastReadMessageId,
+        lastReadAt: staffMessageParticipants.lastReadAt,
+      })
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.userId, userId));
+    
+    const unreadCounts: { threadId: string; count: number }[] = [];
+    
+    for (const participant of participantRecords) {
+      // Count unread messages (messages after lastReadAt, excluding user's own messages)
+      const unreadMessages = await db
+        .select()
+        .from(staffMessages)
+        .where(and(
+          eq(staffMessages.threadId, participant.threadId),
+          ne(staffMessages.userId, userId), // Exclude user's own messages
+          participant.lastReadAt 
+            ? sql`${staffMessages.createdAt} > ${participant.lastReadAt}`
+            : sql`true` // If never read, count all messages from others
+        ));
+      
+      if (unreadMessages.length > 0) {
+        unreadCounts.push({
+          threadId: participant.threadId,
+          count: unreadMessages.length,
+        });
+      }
+    }
+    
+    return unreadCounts;
   }
 
   // Client Portal Session operations - using built-in token fields
