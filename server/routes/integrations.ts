@@ -1281,7 +1281,7 @@ export function registerIntegrationRoutes(
       // Prepare SMS data for VoodooSMS API
       const smsData = {
         to: formattedPhoneNumber,
-        from: "CRM", // Default sender ID
+        from: "GrowthAcc", // Default sender ID
         msg: message,
         external_reference: `client_${clientId}_${Date.now()}`
       };
