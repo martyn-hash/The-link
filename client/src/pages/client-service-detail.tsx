@@ -519,9 +519,9 @@ export default function ClientServiceDetail() {
                           <FormLabel>{roleAssignment.roleName}</FormLabel>
                           <Select 
                             onValueChange={(value) => {
-                              field.onChange(value || null);
+                              field.onChange(value === "unassigned" ? null : value);
                             }} 
-                            value={field.value || undefined}
+                            value={field.value || "unassigned"}
                           >
                             <FormControl>
                               <SelectTrigger data-testid={`select-role-${roleAssignment.workRoleId}`}>
@@ -529,7 +529,7 @@ export default function ClientServiceDetail() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="">Unassigned</SelectItem>
+                              <SelectItem value="unassigned">Unassigned</SelectItem>
                               {users.map((user) => (
                                 <SelectItem key={user.id} value={user.id}>
                                   {user.firstName} {user.lastName}
