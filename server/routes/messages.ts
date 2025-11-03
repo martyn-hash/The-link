@@ -1151,4 +1151,194 @@ export function registerMessageRoutes(
       res.status(500).json({ message: "Failed to serve attachment" });
     }
   });
+
+  // ========== Standalone Staff Message Routes ==========
+  
+  // Get all standalone staff message threads for current user
+  app.get("/api/staff-messages/my-threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const { includeArchived } = req.query;
+      
+      const threads = await storage.getStaffMessageThreadsForUser(effectiveUserId, {
+        includeArchived: includeArchived === 'true',
+      });
+      
+      res.json(threads);
+    } catch (error) {
+      console.error("Error fetching user's staff message threads:", error);
+      res.status(500).json({ message: "Failed to fetch threads" });
+    }
+  });
+
+  // Create a new standalone staff message thread
+  app.post("/api/staff-messages/threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { topic, participantUserIds, initialMessage } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      if (!topic || !participantUserIds || !Array.isArray(participantUserIds)) {
+        return res.status(400).json({ message: "topic and participantUserIds are required" });
+      }
+
+      // Create the thread
+      const thread = await storage.createStaffMessageThread({
+        topic,
+        createdByUserId: effectiveUserId,
+        lastMessageAt: new Date(),
+      });
+
+      // Add participants (including the creator)
+      const allParticipants = Array.from(new Set([effectiveUserId, ...participantUserIds]));
+      await Promise.all(
+        allParticipants.map((userId) =>
+          storage.createStaffMessageParticipant({
+            threadId: thread.id,
+            userId,
+          })
+        )
+      );
+
+      // If there's an initial message, create it
+      if (initialMessage && initialMessage.content) {
+        await storage.createStaffMessage({
+          threadId: thread.id,
+          content: initialMessage.content,
+          userId: effectiveUserId,
+          attachments: initialMessage.attachments || null,
+        });
+      }
+
+      res.status(201).json(thread);
+    } catch (error) {
+      console.error("Error creating staff message thread:", error);
+      res.status(500).json({ message: "Failed to create thread" });
+    }
+  });
+
+  // Get messages for a standalone staff thread
+  app.get("/api/staff-messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Check if thread exists
+      const thread = await storage.getStaffMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+
+      // Verify user is a participant in this thread
+      const participants = await storage.getStaffMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+
+      const messages = await storage.getStaffMessagesByThreadId(threadId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching staff messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Send a message in a standalone staff thread
+  app.post("/api/staff-messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const { content, attachments } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      if (!content) {
+        return res.status(400).json({ message: "content is required" });
+      }
+
+      // Check if thread exists
+      const thread = await storage.getStaffMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+
+      // Verify user is a participant in this thread
+      const participants = await storage.getStaffMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+
+      // Create the message
+      const message = await storage.createStaffMessage({
+        threadId,
+        content,
+        userId: effectiveUserId,
+        attachments: attachments || null,
+      });
+
+      // Send push notifications to participants (except sender) using template service
+      try {
+        const sender = await storage.getUser(effectiveUserId);
+        const senderName = sender?.firstName && sender?.lastName
+          ? `${sender.firstName} ${sender.lastName}`
+          : sender?.email || 'Someone';
+
+        // Get all participants except the sender
+        const otherParticipants = participants.filter(p => p.userId !== effectiveUserId);
+
+        if (otherParticipants.length > 0) {
+          const recipientUserIds = otherParticipants.map(p => p.userId);
+          const url = `/internal-chat?thread=${threadId}`;
+          
+          await sendNewStaffMessageNotification(
+            recipientUserIds,
+            senderName,
+            content,
+            url
+          );
+        }
+      } catch (pushError) {
+        console.error('[Push] Error sending staff message notifications:', pushError);
+        // Don't fail the message send if push fails
+      }
+
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error sending staff message:", error);
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  // Mark messages as read in a standalone staff thread
+  app.put("/api/staff-messages/threads/:threadId/mark-read", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const { lastReadMessageId } = req.body;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      if (!lastReadMessageId) {
+        return res.status(400).json({ message: "lastReadMessageId is required" });
+      }
+
+      // Check if thread exists
+      const thread = await storage.getStaffMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+
+      // Verify user is a participant in this thread
+      const participants = await storage.getStaffMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+
+      // Mark messages as read
+      await storage.markStaffMessagesAsRead(threadId, effectiveUserId, lastReadMessageId);
+
+      res.json({ message: "Marked as read" });
+    } catch (error) {
+      console.error("Error marking staff messages as read:", error);
+      res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
 }
