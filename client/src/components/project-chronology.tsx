@@ -43,6 +43,33 @@ const formatChangeReason = (reason: string): string => {
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const [, setLocation] = useLocation();
 
+  // Helper function to format time duration
+  const formatDuration = (totalMinutes: number | null) => {
+    if (!totalMinutes || totalMinutes === 0) return "0m";
+    
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+    
+    if (totalMinutes < 60) {
+      return `${totalMinutes}m`;
+    }
+    
+    if (totalMinutes < 60 * 24) {
+      if (minutes === 0) {
+        return `${hours}h`;
+      }
+      return `${hours}h ${minutes}m`;
+    }
+    
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    
+    return parts.join(' ');
+  };
+
   // Fetch project tasks
   const { data: tasks } = useQuery<any[]>({
     queryKey: ['/api/internal-tasks/project', project.id],
@@ -166,34 +193,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
 
     // Sort by timestamp descending (newest first)
     return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  }, [project.chronology, tasks, communications, messageThreads]);
-
-  // Helper function to format time duration
-  const formatDuration = (totalMinutes: number | null) => {
-    if (!totalMinutes || totalMinutes === 0) return "0m";
-    
-    const days = Math.floor(totalMinutes / (60 * 24));
-    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-    const minutes = totalMinutes % 60;
-    
-    if (totalMinutes < 60) {
-      return `${totalMinutes}m`;
-    }
-    
-    if (totalMinutes < 60 * 24) {
-      if (minutes === 0) {
-        return `${hours}h`;
-      }
-      return `${hours}h ${minutes}m`;
-    }
-    
-    const parts = [];
-    if (days > 0) parts.push(`${days}d`);
-    if (hours > 0) parts.push(`${hours}h`);
-    if (minutes > 0) parts.push(`${minutes}m`);
-    
-    return parts.join(' ');
-  };
+  }, [project.chronology, tasks, communications, messageThreads, formatDuration]);
 
   // Get icon for entry type
   const getTypeIcon = (type: string) => {
