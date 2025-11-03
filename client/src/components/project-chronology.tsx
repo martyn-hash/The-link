@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import type { ProjectWithRelations } from "@shared/schema";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText } from "lucide-react";
+import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle } from "lucide-react";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -16,7 +16,7 @@ interface ProjectChronologyProps {
 interface TimelineEntry {
   id: string;
   timestamp: Date;
-  type: 'stage_change' | 'task_created' | 'task_completed' | 'communication' | 'message_thread';
+  type: 'stage_change' | 'task_created' | 'task_completed' | 'phone_call' | 'note' | 'sms_sent' | 'sms_received' | 'email_sent' | 'email_received' | 'message_thread';
   detail: string;
   assignedTo?: string;
   changedBy?: string;
@@ -153,15 +153,16 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     if (communications) {
       communications.forEach((comm: any) => {
         const typeLabels: Record<string, string> = {
-          phone_call: 'Phone call',
+          phone_call: 'Phone Call',
           note: 'Note',
-          sms_sent: 'SMS sent',
-          sms_received: 'SMS received',
-          email_sent: 'Email sent',
-          email_received: 'Email received',
+          sms_sent: 'SMS Sent',
+          sms_received: 'SMS Received',
+          email_sent: 'Email Sent',
+          email_received: 'Email Received',
         };
 
-        const detail = comm.content || `${typeLabels[comm.type] || comm.type}`;
+        // Use subject as detail, fall back to type label
+        const detail = comm.subject || typeLabels[comm.type] || comm.type;
         
         // Use actualContactTime as primary timestamp, fall back to loggedAt or createdAt
         const commTimestamp = comm.actualContactTime || comm.loggedAt || comm.createdAt;
@@ -169,7 +170,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         entries.push({
           id: `comm-${comm.id}`,
           timestamp: new Date(commTimestamp),
-          type: 'communication',
+          type: comm.type, // Use actual communication type instead of generic 'communication'
           detail,
           changedBy: comm.user ? `${comm.user.firstName} ${comm.user.lastName}` : 'System',
           rawData: comm,
@@ -204,8 +205,18 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         return <Badge variant="outline" className="gap-1"><CheckCircle className="w-3 h-3" />Task Created</Badge>;
       case 'task_completed':
         return <Badge variant="outline" className="gap-1 bg-green-100 dark:bg-green-900/20"><CheckCircle className="w-3 h-3" />Task Completed</Badge>;
-      case 'communication':
-        return <Badge variant="outline" className="gap-1"><Phone className="w-3 h-3" />Communication</Badge>;
+      case 'phone_call':
+        return <Badge variant="outline" className="gap-1"><Phone className="w-3 h-3" />Phone Call</Badge>;
+      case 'note':
+        return <Badge variant="outline" className="gap-1"><StickyNote className="w-3 h-3" />Note</Badge>;
+      case 'sms_sent':
+        return <Badge variant="outline" className="gap-1"><MessageCircle className="w-3 h-3" />SMS Sent</Badge>;
+      case 'sms_received':
+        return <Badge variant="outline" className="gap-1"><MessageCircle className="w-3 h-3" />SMS Received</Badge>;
+      case 'email_sent':
+        return <Badge variant="outline" className="gap-1"><Mail className="w-3 h-3" />Email Sent</Badge>;
+      case 'email_received':
+        return <Badge variant="outline" className="gap-1"><Mail className="w-3 h-3" />Email Received</Badge>;
       case 'message_thread':
         return <Badge variant="outline" className="gap-1"><MessageSquare className="w-3 h-3" />Message Thread</Badge>;
       default:
@@ -223,7 +234,12 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       case 'message_thread':
         setLocation(`/messages?thread=${entry.rawData.id}`);
         break;
-      case 'communication':
+      case 'phone_call':
+      case 'note':
+      case 'sms_sent':
+      case 'sms_received':
+      case 'email_sent':
+      case 'email_received':
         // Could open a modal or navigate to communication detail
         // For now, just log
         console.log('View communication:', entry.rawData);
