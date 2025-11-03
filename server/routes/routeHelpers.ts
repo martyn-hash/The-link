@@ -36,6 +36,21 @@ export const pushSendSchema = z.object({
   requireInteraction: z.boolean().optional(),
 });
 
+// Push notification template schemas
+export const updateNotificationTemplateSchema = z.object({
+  titleTemplate: z.string().min(1, "Title template is required").optional(),
+  bodyTemplate: z.string().min(1, "Body template is required").optional(),
+  iconUrl: z.string().min(1).optional(),
+  badgeUrl: z.string().min(1).nullable().optional(),
+  isActive: z.boolean().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field must be provided for update",
+});
+
+export const testNotificationTemplateSchema = z.object({
+  sampleData: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+
 // Analytics query schema
 export const analyticsQuerySchema = z.object({
   filters: z.object({

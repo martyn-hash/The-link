@@ -8,6 +8,8 @@ import {
   pushSubscribeSchema,
   pushUnsubscribeSchema,
   pushSendSchema,
+  updateNotificationTemplateSchema,
+  testNotificationTemplateSchema,
   ringCentralAuthenticateSchema,
   ringCentralLogCallSchema,
   ringCentralRequestTranscriptSchema,
@@ -754,9 +756,17 @@ export function registerIntegrationRoutes(
   app.patch("/api/push/templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const { id } = req.params;
-      const updateData = req.body;
+      
+      // Validate request body
+      const validation = updateNotificationTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid template data",
+          errors: validation.error.errors 
+        });
+      }
 
-      const updated = await storage.updatePushNotificationTemplate(id, updateData);
+      const updated = await storage.updatePushNotificationTemplate(id, validation.data);
       res.json(updated);
     } catch (error) {
       console.error("Error updating notification template:", error);
@@ -768,6 +778,16 @@ export function registerIntegrationRoutes(
   app.post("/api/push/templates/test", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Validate request body
+      const validation = testNotificationTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid test data",
+          errors: validation.error.errors 
+        });
+      }
+      
       const { templateId, sampleData } = req.body;
 
       if (!templateId) {

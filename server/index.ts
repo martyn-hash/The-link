@@ -7,7 +7,7 @@ import { runProjectScheduling } from "./project-scheduler";
 import { sendSchedulingSummaryEmail } from "./emailService";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
-import { storage } from "./storage";
+import { storage, initializeDefaultNotificationTemplates } from "./storage";
 import { seedTaskTypes } from "./seedData";
 import fs from "fs";
 import path from "path";
@@ -105,6 +105,9 @@ app.use((req, res, next) => {
     
     // Seed initial task types
     await seedTaskTypes();
+    
+    // Initialize default notification templates
+    await initializeDefaultNotificationTemplates();
     
     // Setup nightly project scheduling
     // Runs every day at 1:00 AM UTC (before CH sync to ensure projects are created first)
