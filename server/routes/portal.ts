@@ -4,6 +4,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
 import { validateFileUpload, MAX_FILE_SIZE } from "../utils/fileValidation";
 import { createDocumentsFromAttachments } from "../utils/documentHelpers";
 import { verifyThreadAccess } from "../middleware/attachmentAccess";
+import { sendNewClientMessageNotification } from "../notification-template-service";
 import { z } from "zod";
 
 // Push notification schemas
@@ -335,6 +336,31 @@ export async function registerPortalRoutes(app: Express): Promise<void> {
           attachments,
           clientPortalUserId: portalUserId,
         });
+      }
+
+      // Send push notifications to staff members using template service
+      try {
+        // Get client name for notification
+        const client = await storage.getClientById(clientId);
+        const clientName = client?.name || 'A client';
+        
+        // Get all staff users (all users are staff in this system)
+        const allStaffUsers = await storage.getAllUsers();
+        const staffUserIds = allStaffUsers.map(user => user.id);
+        
+        if (staffUserIds.length > 0) {
+          const url = `/messages?thread=${threadId}`;
+          
+          await sendNewClientMessageNotification(
+            staffUserIds,
+            clientName,
+            content || (attachments && attachments.length > 0 ? `Sent ${attachments.length} attachment${attachments.length > 1 ? 's' : ''}` : ''),
+            url
+          );
+        }
+      } catch (pushError) {
+        console.error('[Push] Error sending notifications to staff:', pushError);
+        // Don't fail the message send if push fails
       }
 
       res.status(201).json(message);

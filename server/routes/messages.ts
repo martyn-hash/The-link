@@ -5,6 +5,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
 import { sendPushNotificationToMultiple, type PushNotificationPayload } from "../push-service";
 import { validateFileUpload, MAX_FILE_SIZE } from "../utils/fileValidation";
 import { createDocumentsFromAttachments } from "../utils/documentHelpers";
+import { sendNewStaffMessageNotification, sendNewClientMessageNotification } from "../notification-template-service";
 import {
   insertCommunicationSchema,
 } from "@shared/schema";
@@ -467,7 +468,7 @@ export function registerMessageRoutes(
         });
       }
 
-      // Send push notifications to portal users
+      // Send push notifications to portal users using template service
       try {
         const portalUsers = await storage.getClientPortalUsersByClientId(thread.clientId);
         const allSubscriptions: any[] = [];
@@ -921,7 +922,7 @@ export function registerMessageRoutes(
         attachments: attachments || null,
       });
 
-      // Send push notifications to participants (except sender)
+      // Send push notifications to participants (except sender) using template service
       try {
         const sender = await storage.getUser(effectiveUserId);
         const senderName = sender?.firstName && sender?.lastName
@@ -932,44 +933,15 @@ export function registerMessageRoutes(
         const otherParticipants = participants.filter(p => p.userId !== effectiveUserId);
 
         if (otherParticipants.length > 0) {
-          // Get all subscriptions for these users
-          let allSubscriptions: any[] = [];
-          for (const participant of otherParticipants) {
-            const subs = await storage.getPushSubscriptionsByUserId(participant.userId);
-            allSubscriptions = allSubscriptions.concat(subs);
-          }
-
-          if (allSubscriptions.length > 0) {
-            // Get project for URL
-            const project = await storage.getProject(thread.projectId);
-            const body = content.length > 100 ? content.substring(0, 97) + '...' : content;
-
-            const payload: PushNotificationPayload = {
-              title: `${senderName} in ${thread.topic}`,
-              body,
-              icon: '/pwa-icon-192.png',
-              badge: '/pwa-icon-192.png',
-              tag: `project-message-${message.id}`,
-              url: `/projects/${thread.projectId}?tab=messages&thread=${threadId}`
-            };
-
-            const result = await sendPushNotificationToMultiple(
-              allSubscriptions.map(sub => ({
-                endpoint: sub.endpoint,
-                keys: sub.keys as { p256dh: string; auth: string }
-              })),
-              payload
-            );
-
-            console.log(`[Push] Sent project message notification to ${result.successful}/${allSubscriptions.length} staff subscriptions`);
-
-            // Clean up expired subscriptions
-            if (result.expiredSubscriptions.length > 0) {
-              for (const endpoint of result.expiredSubscriptions) {
-                await storage.deletePushSubscription(endpoint);
-              }
-            }
-          }
+          const recipientUserIds = otherParticipants.map(p => p.userId);
+          const url = `/projects/${thread.projectId}?tab=messages&thread=${threadId}`;
+          
+          await sendNewStaffMessageNotification(
+            recipientUserIds,
+            senderName,
+            content,
+            url
+          );
         }
       } catch (pushError) {
         console.error('[Push] Error sending project message notifications:', pushError);
