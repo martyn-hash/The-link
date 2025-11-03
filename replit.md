@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Link is a comprehensive full-stack CRM and project management application tailored for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery through intelligent scheduling, manage client relationships, and provide a seamless client portal experience for communications and document exchange. Key capabilities include managing clients, contacts, services, projects, and communications, with a strong focus on automation, compliance tracking, and a mobile-first, app-like user experience. It features automated project generation from scheduled services, Companies House integration for UK company data, and a multi-tenant architecture with robust access controls.
+The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, manages client relationships, and provides a seamless client portal for communication and document exchange. Key features include client, contact, service, project, and communication management, with a focus on automation, compliance, and a mobile-first user experience. It supports automated project generation, Companies House integration for UK company data, and a multi-tenant architecture with robust access controls.
 
 ## User Preferences
 
@@ -10,93 +10,60 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 
-The frontend is built with **React and TypeScript**, utilizing **Wouter** for client-side routing and **TanStack Query** for server state management and caching. The design system leverages **shadcn/ui** components built on Radix UI primitives and **Tailwind CSS**. A mobile-first design approach ensures responsive layouts, transforming desktop tables into mobile card views, with a fixed bottom navigation, touch-optimized interactions, and full-screen bottom-sheet modals. State management primarily relies on TanStack Query for server state and local React state for UI interactions, intentionally avoiding a global state management library.
+The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state, and shadcn/ui with Tailwind CSS for design. It follows a mobile-first approach with responsive layouts and touch-optimized interactions.
 
-### Backend Architecture
+### Backend
 
-The backend is an **Express.js** server written in **TypeScript**, featuring a modular RESTful API structure. It includes a robust middleware stack for authentication, authorization, request validation, and error handling. Core business logic is encapsulated in protected modules for service mapping, project creation, and scheduling, ensuring centralized control and idempotency. Critical design decisions include UTC date normalization for all date operations and comprehensive audit trails for scheduling. The system also includes a nightly automated project creation scheduler.
+The backend is an Express.js server in TypeScript, providing a modular RESTful API. It includes middleware for authentication, authorization, and validation. Core logic handles service mapping, project creation, and scheduling, with UTC date normalization and audit trails. A nightly scheduler automates project creation.
 
 ### Data Storage
 
-The primary database is **PostgreSQL (Neon)**, accessed via **Drizzle ORM** for type-safe operations and managed with manual migrations. The schema design uses UUIDs for primary keys, soft deletes, JSONB fields for flexible metadata, and comprehensive indexing. It supports entities like users, clients, projects, services, communications, documents, and a task system, with specific tables for scheduling audit and access control. **Google Cloud Storage** is used for object storage, managed through Replit App Storage, with signed URLs for secure file access and metadata stored in the `documents` table.
+PostgreSQL (Neon) is the primary database, accessed via Drizzle ORM. The schema uses UUIDs, soft deletes, JSONB fields, and indexing for entities like users, clients, projects, services, and tasks. Google Cloud Storage, managed through Replit App Storage, handles object storage with signed URLs for secure document access.
 
 ### Authentication & Authorization
 
-The system employs a dual authentication system: **Staff Authentication** using Replit Auth (OIDC) with session-based, role-based access control, and **Client Portal Authentication** using passwordless email verification with 6-digit codes and magic links. Access control patterns ensure staff have full access with role-based restrictions, while portal users are strictly isolated to their associated clients, with all queries filtered by `clientId`.
+Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. Client portal authentication uses passwordless email verification. Access controls ensure staff roles are respected and portal users are isolated to their clients.
 
 ### Service Scheduling & Project Automation
 
-An automated nightly scheduler processes active `clientServices` and `peopleServices` to automatically generate projects based on defined frequencies (daily, weekly, monthly, etc.). It includes advanced date advancement logic that tracks "intended days" to prevent skipping billing/payroll cycles in shorter months. **Companies House API** is integrated for UK company data, with special handling for CH-connected services (e.g., accounts, confirmation statements), including nightly syncs and API key rotation for rate limit management. The system incorporates multiple layers of duplicate prevention and provides an admin dashboard for monitoring and manual triggers, alongside detailed audit logging (`projectSchedulingHistory`, `schedulingRunLogs`).
+An automated nightly scheduler generates projects from active client and people services based on defined frequencies. It includes advanced date logic and integrates with the Companies House API for UK company data, managing syncs and API keys. Duplicate prevention and an admin dashboard for monitoring are included.
+
+### Client Service Role Assignment & Task Cascading
+
+The system manages role assignments for client services with automatic task synchronization. When role assignments change, active projects generated from that service are updated with corresponding role-based task assignments. Backend verification ensures security. The client service detail page displays related projects.
 
 ### Push Notification Template Management
 
-The system includes a comprehensive push notification template management system for customizable push notifications to staff and client portal users:
-
-**Features (November 2025):**
--   **Template Types**: Seven notification types: `new_message_staff` (staff-to-staff messages), `new_message_client` (client-to-staff messages), `document_request`, `task_assigned`, `status_update`, `reminder`, `project_stage_change`
--   **Multiple Templates Per Type**: Removed uniqueness constraint to allow multiple active templates per notification type. The system randomly selects from active templates for variety and engagement.
--   **Notification Icons Table**: `notificationIcons` table with Google Cloud Storage integration for storing uploaded icons/badges. Sharp library handles automatic image processing (192x192 and 512x512 PWA-compliant sizes).
--   **Template Variables**: Dynamic variable substitution (e.g., `{staffName}`, `{clientName}`, `{message}`) for personalized notifications
--   **Admin UI**: Admin-only interface at `/admin/push-templates` (with alias at `/push-notification-templates`) for managing templates, testing notifications, and toggling active status. Features tabbed UI with "Template Details" and "Icon Library" tabs, collapsible media library with upload/gallery/picker modes, and browse buttons for icon/badge selection.
--   **API Routes**: `/api/push/templates` (CRUD operations), `/api/notification-icons` (icon upload/delete with multer and Sharp processing)
--   **Notification Service**: `server/notification-template-service.ts` with separate functions for staff and client message notifications (`sendNewStaffMessageNotification`, `sendNewClientMessageNotification`)
--   **Messaging Integration**: Integrated into messaging routes for automated notifications:
-    - **Staff-to-staff messages** (`POST /api/internal/project-messages/threads/:threadId/messages`): Uses `new_message_staff` templates to notify thread participants (excluding sender) when staff send internal project messages
-    - **Client-to-staff messages** (`POST /api/portal/threads/:threadId/messages`): Uses `new_message_client` templates to notify all staff users when client portal users send messages
-    - Both integrations use the template service for dynamic title/body rendering with context variables, custom icons/badges, and random template selection for engagement variety
+A system for managing customizable push notification templates allows for seven types of notifications with multiple active templates per type. Notifications use dynamic variables for personalization and can include custom icons stored in Google Cloud Storage. An admin UI allows management and testing of templates.
 
 ### Internal Tasks System
 
-The internal tasks system provides comprehensive staff task management with advanced features for organization and collaboration:
-
-**Recent Enhancements (November 2025):**
--   **Collapsible Task Creation Form**: The `CreateTaskDialog` component features a collapsible form UI powered by Radix UI Collapsible. When users begin searching for entity connections (clients, people, projects, messages), the form fields automatically collapse to provide more space for search results, improving UX. An "Show form fields" button appears to re-expand the form when needed. Form validation runs in `onChange` mode to ensure errors clear immediately when users correct invalid fields.
--   **Document Attachments**: Full document/file attachment capability integrated with Google Cloud Storage. Staff can upload documents to tasks via the task detail page, with files stored in the `.private/task-documents/{taskId}/` path in the GCS bucket. The `taskDocuments` table tracks metadata (fileName, fileSize, uploadedBy, uploadedAt), and signed URLs enable secure downloads. API routes support upload (POST), download (GET with signed URL), and deletion (DELETE) operations.
--   **Enhanced Data Loading**: Backend API routes (`getAllInternalTasks`, `getInternalTasksByAssignee`, `getInternalTasksByCreator`) now include left joins to return full `taskType`, `assignee`, and `creator` objects with each task. This uses Drizzle ORM's `alias()` function (imported from `drizzle-orm/pg-core`) to join the `users` table multiple times under different aliases, ensuring rich relational data in responses for improved UI display.
--   **Task Detail Page Layout**: The task detail page uses a responsive 3-row grid layout for optimal information organization: Row 1 contains Task Details (2/3 width) and Connected Entities (1/3 width); Row 2 contains Attachments (1/2 width) and Progress Notes (1/2 width); Row 3 contains Time Tracking (full width). This layout provides clear visual hierarchy and efficient use of screen space.
--   **Progress Notes User Attribution**: Progress notes correctly display the full name of the user who created each note. The backend `getTaskProgressNotesByTaskId` function returns a `user` field (containing firstName, lastName) by joining the users table, which the frontend renders as "{firstName} {lastName}" with timestamp. This ensures proper user attribution for all task activity.
--   **Client Detail Integration**: The client detail page Tasks tab includes an Internal Tasks section with a table showing all tasks connected to the client. The table includes an Actions column with a "View" button for each task that navigates to the task detail page with contextual query parameters (`?from=client&clientId=<id>`), enabling proper navigation tracking and back-button functionality.
+The internal tasks system provides comprehensive staff task management. Features include a collapsible task creation form, document attachments integrated with Google Cloud Storage for secure file handling, and enhanced data loading for tasks including assignee and creator details. The task detail page has a responsive layout, and progress notes include user attribution. Client detail pages integrate relevant internal tasks.
 
 ### Standalone Staff-to-Staff Messaging
 
-The `/internal-chat` page now supports standalone staff-to-staff message threads independent of projects, enabling direct team conversations:
-
-**Implementation (November 2025):**
--   **Database Schema**: Added `staffMessageThreads`, `staffMessages`, and `staffMessageParticipants` tables parallel to project messaging but without `projectId` fields. Threads track topic, isArchived status, and lastMessageAt for sorting.
--   **Storage Layer**: Implemented full CRUD operations in `server/storage.ts`: `createStaffMessageThread`, `getStaffMessageThreadsForUser`, `archiveStaffMessageThread`, `unarchiveStaffMessageThread`, `createStaffMessage`, `getStaffMessagesByThreadId`, and `markStaffMessagesAsRead`.
--   **API Routes**: Added `/api/staff-messages/*` endpoints in `server/routes/messages.ts` for thread creation (`POST /threads`), fetching user threads (`GET /my-threads`), sending messages (`POST /threads/:id/messages`), marking as read (`PUT /threads/:id/mark-read`), and archive controls (`PUT /threads/:id/archive|unarchive`).
--   **Frontend UI** (`client/src/pages/internal-chat.tsx`):
-    - Discriminated union types: `ProjectMessageThread` with `threadType: 'project'` and `StaffMessageThread` with `threadType: 'staff'`
-    - Unified thread list displaying both types, sorted by `lastMessageAt`
-    - "New Thread" button opens dialog for creating staff threads
-    - Thread-type aware mutations route to correct endpoints based on `selectedThreadType`
-    - Thread type inference effect auto-sets `selectedThreadType` when thread is selected
-    - Conditional rendering: Project threads show company/project info; staff threads show only topic and participants
--   **New Thread Dialog**: Features topic input (required), participant search with real-time filtering (searches by name/email, excludes already-selected, allows adding yourself), optional initial message, and creates thread via POST to `/api/staff-messages/threads` with auto-selection on success.
--   **Push Notification Integration**: Staff messages use `sendNewStaffMessageNotification` template service from `server/notification-template-service.ts`, integrated into messaging routes for automated notifications when messages are sent.
--   **Archive/Unarchive**: Both mutations check `selectedThreadType` to route to correct staff or project endpoints, invalidate both thread type caches, and properly manage selection state (archive clears selection, unarchive maintains it).
--   **Bug Fixes**: Removed automatic redirect to `/api/login` on unauthenticated access (page now returns null cleanly), added missing imports (`DialogFooter`, `Label`) and state variables (`participantSearch`, `initialMessage`), fixed participant search filter to allow users to add themselves to threads, added loading states and "no results" messaging.
+The `/internal-chat` page supports independent staff-to-staff message threads. It uses dedicated database tables and API routes for thread creation, messaging, and archiving. The frontend unifies both project and staff message threads, with a "New Thread" dialog for creating staff-specific conversations. Push notifications are integrated for new staff messages.
 
 ## External Dependencies
 
 ### Third-Party Services
 
--   **Companies House API**: For UK company data, filing deadlines, and officer information.
--   **Microsoft Graph API**: For staff email integration (Outlook/Office 365), enabling sending and logging emails.
--   **RingCentral**: For VoIP phone system integration, including call logging.
--   **SendGrid**: For transactional email delivery (e.g., magic links, notifications).
--   **VoodooSMS**: Planned integration for client SMS communications.
--   **Replit Platform Services**: Utilized for Object Storage (Google Cloud Storage backend), Auth (OIDC provider), and the overall deployment environment.
+-   **Companies House API**: UK company data.
+-   **Microsoft Graph API**: Staff email integration.
+-   **RingCentral**: VoIP phone system integration.
+-   **SendGrid**: Transactional email delivery.
+-   **VoodooSMS**: Planned client SMS communications.
+-   **Replit Platform Services**: Object Storage (Google Cloud Storage backend), Auth (OIDC provider), deployment environment.
 
 ### Frontend Libraries
 
--   **UI Components**: `@radix-ui/*` (accessible primitives), `@dnd-kit/*` (drag-and-drop), `react-quill` (rich text editor), `react-hook-form` with `zod` (form management and validation), `sonner` (toast notifications).
--   **Utilities**: `date-fns` (date manipulation), `clsx` + `tailwind-merge` (utility class management), `@getaddress/autocomplete` (UK address lookup).
+-   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `react-quill`, `react-hook-form` with `zod`, `sonner`.
+-   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
 
 ### Build & Development Tools
 
--   **Build Pipeline**: **Vite** (frontend build), **esbuild** (server bundling), **TypeScript** (type safety), **PostCSS** (CSS processing).
+-   **Build Pipeline**: Vite, esbuild, TypeScript, PostCSS.
 -   **Development Enhancements**: `@replit/vite-plugin-runtime-error-modal`, `@replit/vite-plugin-cartographer`, `tsx`.
--   **Database Tools**: `drizzle-kit` (schema management), `drizzle-orm` (type-safe query builder).
+-   **Database Tools**: `drizzle-kit`, `drizzle-orm`.
