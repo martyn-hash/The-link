@@ -332,6 +332,29 @@ const emailEditorFormats = [
   'align', 'link'
 ];
 
+// Project Link Component - displays project name with link
+function ProjectLink({ projectId }: { projectId: string }) {
+  const [, setLocation] = useLocation();
+  const { data: project } = useQuery<any>({
+    queryKey: ['/api/projects', projectId],
+    enabled: !!projectId,
+  });
+
+  if (!project) {
+    return <span className="text-sm text-muted-foreground">Loading...</span>;
+  }
+
+  return (
+    <button
+      onClick={() => setLocation(`/projects/${projectId}`)}
+      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+      data-testid={`link-project-${projectId}`}
+    >
+      {project.client?.name || 'Unknown Project'}
+    </button>
+  );
+}
+
 // Communications Timeline Component
 function CommunicationsTimeline({ clientId, user }: { clientId: string; user: any }) {
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
@@ -709,6 +732,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                 <TableHead>Date/Time</TableHead>
                 <TableHead>Subject/Content</TableHead>
                 <TableHead>Created By</TableHead>
+                <TableHead>Connected To</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -771,6 +795,13 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                          item.createdBy ? `User ${item.createdBy}` : 'System'}
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell data-testid={`cell-connected-${item.id}`}>
+                    {item.projectId ? (
+                      <ProjectLink projectId={item.projectId} />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {item.type === 'message_thread' ? (

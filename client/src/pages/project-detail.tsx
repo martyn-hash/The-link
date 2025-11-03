@@ -26,6 +26,7 @@ import ProjectInfo from "@/components/project-info";
 import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
 import ProjectMessaging from "@/components/ProjectMessaging";
+import { ProjectProgressNotes } from "@/components/project-progress-notes";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
@@ -95,6 +96,12 @@ export default function ProjectDetail() {
   const { data: projectInternalTasks, isLoading: projectInternalTasksLoading } = useQuery<any[]>({
     queryKey: [`/api/internal-tasks/project/${projectId}`],
     enabled: !!projectId,
+  });
+
+  // Fetch client people for progress notes
+  const { data: clientPeople } = useQuery<any[]>({
+    queryKey: [`/api/clients/${project?.clientId}/people`],
+    enabled: !!project?.clientId,
   });
 
   // Find current stage and check if it allows completion
@@ -408,10 +415,11 @@ export default function ProjectDetail() {
 
         {/* Tabs Layout */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full max-w-3xl grid-cols-3">
+          <TabsList className="grid w-full max-w-4xl grid-cols-4">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
             <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
+            <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6">
@@ -540,6 +548,14 @@ export default function ProjectDetail() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="progress-notes" className="mt-6">
+            <ProjectProgressNotes 
+              projectId={projectId!} 
+              clientId={project?.clientId || ''} 
+              clientPeople={clientPeople}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -666,6 +666,7 @@ export interface IStorage {
   getAllCommunications(): Promise<(Communication & { client: Client; person?: Person; user: User })[]>;
   getCommunicationsByClientId(clientId: string): Promise<(Communication & { person?: Person; user: User })[]>;
   getCommunicationsByPersonId(personId: string): Promise<(Communication & { client: Client; user: User })[]>;
+  getCommunicationsByProjectId(projectId: string): Promise<(Communication & { person?: Person; user: User })[]>;
   getCommunicationById(id: string): Promise<(Communication & { client: Client; person?: Person; user: User }) | undefined>;
   createCommunication(communication: InsertCommunication): Promise<Communication>;
   updateCommunication(id: string, communication: Partial<InsertCommunication>): Promise<Communication>;
@@ -8149,6 +8150,26 @@ export class DatabaseStorage implements IStorage {
     return results.map(result => ({
       ...result.communication,
       client: result.client,
+      user: result.user,
+    }));
+  }
+
+  async getCommunicationsByProjectId(projectId: string): Promise<(Communication & { person?: Person; user: User })[]> {
+    const results = await db
+      .select({
+        communication: communications,
+        person: people,
+        user: users,
+      })
+      .from(communications)
+      .leftJoin(people, eq(communications.personId, people.id))
+      .innerJoin(users, eq(communications.userId, users.id))
+      .where(eq(communications.projectId, projectId))
+      .orderBy(desc(communications.loggedAt));
+
+    return results.map(result => ({
+      ...result.communication,
+      person: result.person || undefined,
       user: result.user,
     }));
   }

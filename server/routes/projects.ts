@@ -203,6 +203,18 @@ export function registerProjectRoutes(
     }
   });
 
+  // GET /api/projects/:id/communications - Get all communications (progress notes) for a specific project
+  app.get("/api/projects/:id/communications", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const projectId = req.params.id;
+      const communications = await storage.getCommunicationsByProjectId(projectId);
+      res.json(communications);
+    } catch (error) {
+      console.error("Error fetching project communications:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch project communications" });
+    }
+  });
+
   app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;

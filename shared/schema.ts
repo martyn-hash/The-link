@@ -1783,6 +1783,7 @@ export const communications = pgTable("communications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   personId: varchar("person_id").references(() => people.id, { onDelete: "set null" }), // Optional - for person-specific comms
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }), // Optional - for project-specific comms (progress notes)
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Who logged/sent this
   type: communicationTypeEnum("type").notNull(),
   subject: varchar("subject"), // For emails primarily
@@ -1799,6 +1800,8 @@ export const communications = pgTable("communications", {
   clientIdLoggedAtIdx: index("communications_client_id_logged_at_idx").on(table.clientId, table.loggedAt),
   // Index for efficient person communication lookups  
   personIdLoggedAtIdx: index("communications_person_id_logged_at_idx").on(table.personId, table.loggedAt),
+  // Index for efficient project communication lookups
+  projectIdLoggedAtIdx: index("communications_project_id_logged_at_idx").on(table.projectId, table.loggedAt),
   // Index for thread lookups
   threadIdIdx: index("communications_thread_id_idx").on(table.threadId),
 }));
