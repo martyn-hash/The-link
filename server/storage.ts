@@ -10966,32 +10966,36 @@ export class DatabaseStorage implements IStorage {
 
     const taskIds = connections.map(c => c.taskId);
     
-    const assigneeAlias = alias(users, 'assignee');
-    const creatorAlias = alias(users, 'creator');
-    const completedByAlias = alias(users, 'completedBy');
-    
-    const results = await db
+    const tasksWithTypes = await db
       .select({
         task: internalTasks,
         taskType: taskTypes,
-        assignee: assigneeAlias,
-        creator: creatorAlias,
-        completedBy: completedByAlias,
       })
       .from(internalTasks)
       .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
-      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
-      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
-      .leftJoin(completedByAlias, eq(internalTasks.completedBy, completedByAlias.id))
       .where(inArray(internalTasks.id, taskIds))
       .orderBy(desc(internalTasks.createdAt));
     
-    return results.map(row => ({
+    const allUserIds = new Set<string>();
+    tasksWithTypes.forEach(row => {
+      if (row.task.assignedTo) allUserIds.add(row.task.assignedTo);
+      if (row.task.createdBy) allUserIds.add(row.task.createdBy);
+      if (row.task.completedBy) allUserIds.add(row.task.completedBy);
+    });
+    
+    const usersList = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, Array.from(allUserIds)));
+    
+    const usersMap = new Map(usersList.map(u => [u.id, u]));
+    
+    return tasksWithTypes.map(row => ({
       ...row.task,
       taskType: row.taskType || undefined,
-      assignee: row.assignee || undefined,
-      creator: row.creator || undefined,
-      completedBy: row.completedBy || undefined,
+      assignee: row.task.assignedTo ? usersMap.get(row.task.assignedTo) : undefined,
+      creator: row.task.createdBy ? usersMap.get(row.task.createdBy) : undefined,
+      completedBy: row.task.completedBy ? usersMap.get(row.task.completedBy) : undefined,
     })) as any;
   }
 
@@ -11012,32 +11016,36 @@ export class DatabaseStorage implements IStorage {
 
     const taskIds = connections.map(c => c.taskId);
     
-    const assigneeAlias = alias(users, 'assignee');
-    const creatorAlias = alias(users, 'creator');
-    const completedByAlias = alias(users, 'completedBy');
-    
-    const results = await db
+    const tasksWithTypes = await db
       .select({
         task: internalTasks,
         taskType: taskTypes,
-        assignee: assigneeAlias,
-        creator: creatorAlias,
-        completedBy: completedByAlias,
       })
       .from(internalTasks)
       .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
-      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
-      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
-      .leftJoin(completedByAlias, eq(internalTasks.completedBy, completedByAlias.id))
       .where(inArray(internalTasks.id, taskIds))
       .orderBy(desc(internalTasks.createdAt));
     
-    return results.map(row => ({
+    const allUserIds = new Set<string>();
+    tasksWithTypes.forEach(row => {
+      if (row.task.assignedTo) allUserIds.add(row.task.assignedTo);
+      if (row.task.createdBy) allUserIds.add(row.task.createdBy);
+      if (row.task.completedBy) allUserIds.add(row.task.completedBy);
+    });
+    
+    const usersList = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, Array.from(allUserIds)));
+    
+    const usersMap = new Map(usersList.map(u => [u.id, u]));
+    
+    return tasksWithTypes.map(row => ({
       ...row.task,
       taskType: row.taskType || undefined,
-      assignee: row.assignee || undefined,
-      creator: row.creator || undefined,
-      completedBy: row.completedBy || undefined,
+      assignee: row.task.assignedTo ? usersMap.get(row.task.assignedTo) : undefined,
+      creator: row.task.createdBy ? usersMap.get(row.task.createdBy) : undefined,
+      completedBy: row.task.completedBy ? usersMap.get(row.task.completedBy) : undefined,
     })) as any;
   }
 
