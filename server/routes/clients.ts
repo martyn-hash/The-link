@@ -1171,7 +1171,7 @@ export function registerClientRoutes(
 
       console.log('[DEBUG] PUT /api/client-services/:id - Request body:', JSON.stringify(req.body, null, 2));
 
-      const validationResult = insertClientServiceSchema.partial().safeParse(req.body);
+      const validationResult = insertClientServiceSchema.partial().passthrough().safeParse(req.body);
 
       console.log('[DEBUG] Validation result:', validationResult.success ? 'SUCCESS' : 'FAILED');
       if (validationResult.success) {
