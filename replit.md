@@ -30,6 +30,19 @@ The system employs a dual authentication system: **Staff Authentication** using 
 
 An automated nightly scheduler processes active `clientServices` and `peopleServices` to automatically generate projects based on defined frequencies (daily, weekly, monthly, etc.). It includes advanced date advancement logic that tracks "intended days" to prevent skipping billing/payroll cycles in shorter months. **Companies House API** is integrated for UK company data, with special handling for CH-connected services (e.g., accounts, confirmation statements), including nightly syncs and API key rotation for rate limit management. The system incorporates multiple layers of duplicate prevention and provides an admin dashboard for monitoring and manual triggers, alongside detailed audit logging (`projectSchedulingHistory`, `schedulingRunLogs`).
 
+### Push Notification Template Management
+
+The system includes a comprehensive push notification template management system for customizable push notifications to staff and client portal users:
+
+**Features (November 2025):**
+-   **Template Types**: Seven notification types: `new_message_staff` (staff-to-staff messages), `new_message_client` (client-to-staff messages), `document_request`, `task_assigned`, `status_update`, `reminder`, `project_stage_change`
+-   **Multiple Templates Per Type**: Removed uniqueness constraint to allow multiple active templates per notification type. The system randomly selects from active templates for variety and engagement.
+-   **Notification Icons Table**: `notificationIcons` table with Google Cloud Storage integration for storing uploaded icons/badges. Sharp library handles automatic image processing (192x192 and 512x512 PWA-compliant sizes).
+-   **Template Variables**: Dynamic variable substitution (e.g., `{staffName}`, `{clientName}`, `{message}`) for personalized notifications
+-   **Admin UI**: Admin-only interface at `/push-notification-templates` for managing templates, testing notifications, and toggling active status
+-   **API Routes**: `/api/push/templates` (CRUD operations), `/api/notification-icons` (icon upload/delete with multer and Sharp processing)
+-   **Notification Service**: `server/notification-template-service.ts` with separate functions for staff and client message notifications (`sendNewStaffMessageNotification`, `sendNewClientMessageNotification`)
+
 ### Internal Tasks System
 
 The internal tasks system provides comprehensive staff task management with advanced features for organization and collaboration:

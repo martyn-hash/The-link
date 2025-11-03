@@ -32,11 +32,17 @@ const TEMPLATE_INFO: Record<string, {
   sampleData: Record<string, string>;
   variables: string[];
 }> = {
-  new_message: {
-    label: "New Message",
-    description: "Sent when a user receives a new message in a thread",
+  new_message_staff: {
+    label: "New Message (Staff to Staff)",
+    description: "Sent when a staff member receives a new message from another staff member",
     sampleData: { staffName: "John Smith", message: "Hello, this is a test message..." },
     variables: ["staffName", "message"]
+  },
+  new_message_client: {
+    label: "New Message (Client to Staff)",
+    description: "Sent when a staff member receives a new message from a client",
+    sampleData: { clientName: "Acme Corp", message: "Hello, this is a test message..." },
+    variables: ["clientName", "message"]
   },
   document_request: {
     label: "Document Request",
