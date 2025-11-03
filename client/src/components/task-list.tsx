@@ -610,16 +610,8 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     }
   };
 
-  const visibleProjects = sortedProjects.filter(project => {
-    if (user.isAdmin || user.canSeeAdminMenu) {
-      return true;
-    }
-    return (
-      project.currentAssigneeId === user.id ||
-      project.clientManagerId === user.id ||
-      project.bookkeeperId === user.id
-    );
-  });
+  // All authenticated users can see all projects
+  const visibleProjects = sortedProjects;
 
   // Get columns in order and filter to visible ones
   const orderedColumns = columnOrder
