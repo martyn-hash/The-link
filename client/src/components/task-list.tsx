@@ -265,31 +265,20 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   // Apply saved preferences on load
   useEffect(() => {
     if (savedPreferences) {
-      // Merge new columns from ALL_COLUMNS that don't exist in saved preferences
+      // Apply column order - just use saved order directly
       if (savedPreferences.columnOrder) {
-        const allColumnIds = ALL_COLUMNS.map(col => col.id);
-        const savedColumnIds = savedPreferences.columnOrder;
-        
-        // Find any new columns that weren't in the saved order
-        const newColumns = allColumnIds.filter(id => !savedColumnIds.includes(id));
-        
-        // Add new columns to the end of the order
-        const mergedOrder = [...savedColumnIds, ...newColumns];
-        setColumnOrder(mergedOrder);
+        setColumnOrder(savedPreferences.columnOrder);
       }
       
+      // Apply visible columns - use saved preferences directly without merging defaults
+      // This ensures user's explicit hide/show choices are respected
       if (savedPreferences.visibleColumns) {
-        // Also merge any newly added columns that should be visible by default
-        const savedVisibleIds = savedPreferences.visibleColumns;
-        const newDefaultVisibleColumns = ALL_COLUMNS
-          .filter(col => col.defaultVisible && !savedVisibleIds.includes(col.id))
-          .map(col => col.id);
-        
-        const mergedVisible = [...savedVisibleIds, ...newDefaultVisibleColumns];
-        setVisibleColumns(mergedVisible);
+        setVisibleColumns(savedPreferences.visibleColumns);
       }
       
-      if (savedPreferences.columnWidths) setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
+      if (savedPreferences.columnWidths) {
+        setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
+      }
     }
   }, [savedPreferences]);
 
@@ -332,19 +321,17 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   };
 
   const toggleColumnVisibility = (columnId: string) => {
-    setVisibleColumns((prev) => {
-      const newVisible = prev.includes(columnId)
-        ? prev.filter((id) => id !== columnId)
-        : [...prev, columnId];
-      // Save to backend after toggling
-      setTimeout(() => {
-        savePreferencesMutation.mutate({
-          columnOrder,
-          visibleColumns: newVisible,
-          columnWidths,
-        });
-      }, 100);
-      return newVisible;
+    const newVisible = visibleColumns.includes(columnId)
+      ? visibleColumns.filter((id) => id !== columnId)
+      : [...visibleColumns, columnId];
+    
+    setVisibleColumns(newVisible);
+    
+    // Save to backend immediately (no setTimeout to avoid race conditions)
+    savePreferencesMutation.mutate({
+      columnOrder,
+      visibleColumns: newVisible,
+      columnWidths,
     });
   };
 

@@ -332,43 +332,25 @@ export default function CompaniesTable({
     },
   });
 
-  // Apply saved preferences on load, but merge with defaults
+  // Apply saved preferences on load
   useEffect(() => {
     if (savedPreferences && ALL_COLUMNS.length > 0) {
+      // Apply column order - just use saved order directly
       if (savedPreferences.columnOrder) {
-        // Merge saved order with any new columns that weren't saved yet
-        const savedIds = savedPreferences.columnOrder;
-        const allCurrentIds = ALL_COLUMNS.map(col => col.id);
-        const newIds = allCurrentIds.filter(id => !savedIds.includes(id));
-        const actionsIndex = savedIds.indexOf('actions');
-        if (newIds.length > 0 && actionsIndex !== -1) {
-          const merged = [...savedIds];
-          merged.splice(actionsIndex, 0, ...newIds);
-          setColumnOrder(merged);
-        } else if (newIds.length > 0) {
-          setColumnOrder([...savedIds, ...newIds]);
-        } else {
-          setColumnOrder(savedIds);
-        }
+        setColumnOrder(savedPreferences.columnOrder);
       }
       
+      // Apply visible columns - use saved preferences directly without merging defaults
+      // This ensures user's explicit hide/show choices are respected
       if (savedPreferences.visibleColumns) {
-        // Merge saved visible columns with any new default-visible columns
-        const defaultVisibleIds = ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
-        const savedVisible = savedPreferences.visibleColumns;
-        const newDefaultVisible = defaultVisibleIds.filter(id => !savedVisible.includes(id));
-        if (newDefaultVisible.length > 0) {
-          setVisibleColumns([...savedVisible, ...newDefaultVisible]);
-        } else {
-          setVisibleColumns(savedVisible);
-        }
+        setVisibleColumns(savedPreferences.visibleColumns);
       }
       
       if (savedPreferences.columnWidths) {
         setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
       }
     }
-  }, [savedPreferences, ALL_COLUMNS]);
+  }, [savedPreferences]);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -400,19 +382,17 @@ export default function CompaniesTable({
   };
 
   const toggleColumnVisibility = (columnId: string) => {
-    setVisibleColumns((prev) => {
-      const newVisible = prev.includes(columnId)
-        ? prev.filter((id) => id !== columnId)
-        : [...prev, columnId];
-      // Save to backend after toggling
-      setTimeout(() => {
-        savePreferencesMutation.mutate({
-          columnOrder,
-          visibleColumns: newVisible,
-          columnWidths,
-        });
-      }, 100);
-      return newVisible;
+    const newVisible = visibleColumns.includes(columnId)
+      ? visibleColumns.filter((id) => id !== columnId)
+      : [...visibleColumns, columnId];
+    
+    setVisibleColumns(newVisible);
+    
+    // Save to backend immediately (no setTimeout to avoid race conditions)
+    savePreferencesMutation.mutate({
+      columnOrder,
+      visibleColumns: newVisible,
+      columnWidths,
     });
   };
 
