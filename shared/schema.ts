@@ -1947,6 +1947,7 @@ export const pushTemplateTypeEnum = pgEnum("push_template_type", [
   "new_message",
   "document_request", 
   "task_assigned",
+  "project_stage_change",
   "status_update",
   "reminder"
 ]);

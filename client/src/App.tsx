@@ -43,6 +43,7 @@ import Admin from "@/pages/admin";
 import AdminTaskTypes from "@/pages/admin-task-types";
 import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
+import PushNotificationTemplates from "@/pages/push-notification-templates";
 import PortalLogin from "@/pages/portal/PortalLogin";
 import PortalVerify from "@/pages/portal/PortalVerify";
 import PortalInstall from "@/pages/portal/PortalInstall";
@@ -149,6 +150,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/admin/task-types" component={AdminTaskTypes} />
       <Route path="/admin/import" component={DataImport} />
+      <Route path="/admin/push-templates" component={PushNotificationTemplates} />
       <Route path="/data-import" component={DataImport} />
       <Route path="/push-diagnostics" component={PushDiagnostics} />
       

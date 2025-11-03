@@ -40,6 +40,7 @@ import {
   userOauthAccounts,
   userActivityTracking,
   pushSubscriptions,
+  pushNotificationTemplates,
   documentFolders,
   documents,
   riskAssessments,
@@ -152,6 +153,8 @@ import {
   type InsertUserActivityTracking,
   type PushSubscription,
   type InsertPushSubscription,
+  type PushNotificationTemplate,
+  type InsertPushNotificationTemplate,
   type DocumentFolder,
   type InsertDocumentFolder,
   type Document,
@@ -673,6 +676,12 @@ export interface IStorage {
   getPushSubscriptionsByClientPortalUserId(clientPortalUserId: string): Promise<PushSubscription[]>;
   deletePushSubscription(endpoint: string): Promise<void>;
   deletePushSubscriptionsByUserId(userId: string): Promise<void>;
+
+  // Push notification template operations
+  getAllPushNotificationTemplates(): Promise<PushNotificationTemplate[]>;
+  getPushNotificationTemplateByType(templateType: string): Promise<PushNotificationTemplate | undefined>;
+  updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate>;
+  createPushNotificationTemplate(template: InsertPushNotificationTemplate): Promise<PushNotificationTemplate>;
 
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
@@ -5353,6 +5362,31 @@ export class DatabaseStorage implements IStorage {
       const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
       const failed = results.length - successful;
       console.log(`Stage change notifications for project ${projectId}: ${successful} successful, ${failed} failed`);
+
+      // Send push notifications to users with active subscriptions
+      try {
+        const { sendProjectStageChangeNotification } = await import('./notification-template-service');
+        
+        for (const user of finalUsersToNotify) {
+          try {
+            await sendProjectStageChangeNotification(
+              projectId,
+              projectWithClient.description,
+              projectWithClient.client.name,
+              oldStageName || 'Unknown',
+              newStageName,
+              user.id,
+              `${user.firstName} ${user.lastName || ''}`.trim()
+            );
+          } catch (pushError) {
+            console.error(`Failed to send push notification to user ${user.id}:`, pushError);
+            // Continue with other users even if one fails
+          }
+        }
+      } catch (error) {
+        console.error(`Error sending push notifications for project ${projectId}:`, error);
+        // Don't throw - push notification failures shouldn't break the flow
+      }
       
     } catch (error) {
       console.error(`Error in sendStageChangeNotifications for project ${projectId}:`, error);
@@ -8177,6 +8211,43 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionsByUserId(userId: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  }
+
+  // Push notification template operations
+  async getAllPushNotificationTemplates(): Promise<PushNotificationTemplate[]> {
+    return await db
+      .select()
+      .from(pushNotificationTemplates)
+      .orderBy(pushNotificationTemplates.templateType);
+  }
+
+  async getPushNotificationTemplateByType(templateType: string): Promise<PushNotificationTemplate | undefined> {
+    const result = await db
+      .select()
+      .from(pushNotificationTemplates)
+      .where(eq(pushNotificationTemplates.templateType, templateType))
+      .limit(1);
+    return result[0];
+  }
+
+  async updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate> {
+    const [updated] = await db
+      .update(pushNotificationTemplates)
+      .set({
+        ...template,
+        updatedAt: new Date(),
+      })
+      .where(eq(pushNotificationTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createPushNotificationTemplate(template: InsertPushNotificationTemplate): Promise<PushNotificationTemplate> {
+    const [newTemplate] = await db
+      .insert(pushNotificationTemplates)
+      .values(template)
+      .returning();
+    return newTemplate;
   }
 
   // Document folder operations

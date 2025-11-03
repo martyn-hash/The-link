@@ -719,6 +719,127 @@ export function registerIntegrationRoutes(
   });
 
   // ==================================================
+  // PUSH NOTIFICATION TEMPLATE API ROUTES (ADMIN)
+  // ==================================================
+
+  // GET /api/push/templates - Get all notification templates
+  app.get("/api/push/templates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const templates = await storage.getAllPushNotificationTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching notification templates:", error);
+      res.status(500).json({ message: "Failed to fetch notification templates" });
+    }
+  });
+
+  // GET /api/push/templates/:type - Get template by type
+  app.get("/api/push/templates/:type", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { type } = req.params;
+      const template = await storage.getPushNotificationTemplateByType(type);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching notification template:", error);
+      res.status(500).json({ message: "Failed to fetch notification template" });
+    }
+  });
+
+  // PATCH /api/push/templates/:id - Update notification template
+  app.patch("/api/push/templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      const updated = await storage.updatePushNotificationTemplate(id, updateData);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating notification template:", error);
+      res.status(500).json({ message: "Failed to update notification template" });
+    }
+  });
+
+  // POST /api/push/templates/test - Test a notification template with sample data
+  app.post("/api/push/templates/test", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const { templateId, sampleData } = req.body;
+
+      if (!templateId) {
+        return res.status(400).json({ message: "Template ID is required" });
+      }
+
+      const subscriptions = await storage.getPushSubscriptionsByUserId(effectiveUserId);
+
+      if (subscriptions.length === 0) {
+        return res.status(404).json({
+          message: "No push subscriptions found for your account",
+          hint: "Please enable push notifications from your settings first"
+        });
+      }
+
+      // Get all templates to find the one being tested
+      const templates = await storage.getAllPushNotificationTemplates();
+      const template = templates.find(t => t.id === templateId);
+
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      // Render the template with sample data
+      let title = template.titleTemplate;
+      let body = template.bodyTemplate;
+
+      // Replace placeholders with sample data
+      if (sampleData) {
+        Object.entries(sampleData).forEach(([key, value]) => {
+          const placeholder = new RegExp(`\\{${key}\\}`, 'g');
+          title = title.replace(placeholder, String(value));
+          body = body.replace(placeholder, String(value));
+        });
+      }
+
+      const payload: PushNotificationPayload = {
+        title: `[TEST] ${title}`,
+        body,
+        icon: template.iconUrl || "/pwa-icon-192.png",
+        badge: template.badgeUrl || undefined,
+        tag: "test-template",
+        url: "/"
+      };
+
+      const result = await sendPushNotificationToMultiple(
+        subscriptions.map(sub => ({
+          endpoint: sub.endpoint,
+          keys: sub.keys as { p256dh: string; auth: string }
+        })),
+        payload
+      );
+
+      if (result.expiredSubscriptions.length > 0) {
+        for (const endpoint of result.expiredSubscriptions) {
+          await storage.deletePushSubscription(endpoint);
+        }
+      }
+
+      res.json({
+        message: "Test notification sent",
+        successful: result.successful,
+        failed: result.failed,
+        expiredRemoved: result.expiredSubscriptions.length
+      });
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      res.status(500).json({ message: "Failed to send test notification" });
+    }
+  });
+
+  // ==================================================
   // EMAIL API ROUTES
   // ==================================================
 
