@@ -148,9 +148,9 @@ export async function sendProjectStageChangeNotification(
 }
 
 /**
- * Send a notification for a new message
+ * Send a notification for a new message from staff to staff
  */
-export async function sendNewMessageNotification(
+export async function sendNewStaffMessageNotification(
   recipientUserIds: string[],
   senderName: string,
   message: string,
@@ -158,7 +158,7 @@ export async function sendNewMessageNotification(
 ): Promise<void> {
   try {
     await sendTemplateNotification(
-      'new_message',
+      'new_message_staff',
       recipientUserIds,
       {
         staffName: senderName,
@@ -167,7 +167,31 @@ export async function sendNewMessageNotification(
       url
     );
   } catch (error) {
-    console.error('[Notification Template] Error sending new message notification:', error);
+    console.error('[Notification Template] Error sending new staff message notification:', error);
+  }
+}
+
+/**
+ * Send a notification for a new message from client to staff
+ */
+export async function sendNewClientMessageNotification(
+  recipientUserIds: string[],
+  clientName: string,
+  message: string,
+  url: string
+): Promise<void> {
+  try {
+    await sendTemplateNotification(
+      'new_message_client',
+      recipientUserIds,
+      {
+        clientName,
+        message: message.substring(0, 100) // Truncate long messages
+      },
+      url
+    );
+  } catch (error) {
+    console.error('[Notification Template] Error sending new client message notification:', error);
   }
 }
 

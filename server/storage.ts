@@ -41,6 +41,7 @@ import {
   userActivityTracking,
   pushSubscriptions,
   pushNotificationTemplates,
+  notificationIcons,
   documentFolders,
   documents,
   riskAssessments,
@@ -155,6 +156,8 @@ import {
   type InsertPushSubscription,
   type PushNotificationTemplate,
   type InsertPushNotificationTemplate,
+  type NotificationIcon,
+  type InsertNotificationIcon,
   type DocumentFolder,
   type InsertDocumentFolder,
   type Document,
@@ -682,6 +685,13 @@ export interface IStorage {
   getPushNotificationTemplateByType(templateType: string): Promise<PushNotificationTemplate | undefined>;
   updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate>;
   createPushNotificationTemplate(template: InsertPushNotificationTemplate): Promise<PushNotificationTemplate>;
+  deletePushNotificationTemplate(id: string): Promise<void>;
+
+  // Notification icon operations
+  getAllNotificationIcons(): Promise<NotificationIcon[]>;
+  getNotificationIconById(id: string): Promise<NotificationIcon | undefined>;
+  createNotificationIcon(icon: InsertNotificationIcon): Promise<NotificationIcon>;
+  deleteNotificationIcon(id: string): Promise<void>;
 
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
@@ -8222,12 +8232,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPushNotificationTemplateByType(templateType: string): Promise<PushNotificationTemplate | undefined> {
-    const result = await db
+    // Get all active templates of this type
+    const results = await db
       .select()
       .from(pushNotificationTemplates)
-      .where(eq(pushNotificationTemplates.templateType, templateType))
-      .limit(1);
-    return result[0];
+      .where(and(
+        eq(pushNotificationTemplates.templateType, templateType),
+        eq(pushNotificationTemplates.isActive, true)
+      ));
+    
+    // If no templates found, return undefined
+    if (results.length === 0) return undefined;
+    
+    // Return a random template from the active templates
+    const randomIndex = Math.floor(Math.random() * results.length);
+    return results[randomIndex];
   }
 
   async updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate> {
@@ -8248,6 +8267,39 @@ export class DatabaseStorage implements IStorage {
       .values(template)
       .returning();
     return newTemplate;
+  }
+
+  async deletePushNotificationTemplate(id: string): Promise<void> {
+    await db.delete(pushNotificationTemplates).where(eq(pushNotificationTemplates.id, id));
+  }
+
+  // Notification icon operations
+  async getAllNotificationIcons(): Promise<NotificationIcon[]> {
+    return await db
+      .select()
+      .from(notificationIcons)
+      .orderBy(notificationIcons.createdAt);
+  }
+
+  async getNotificationIconById(id: string): Promise<NotificationIcon | undefined> {
+    const result = await db
+      .select()
+      .from(notificationIcons)
+      .where(eq(notificationIcons.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createNotificationIcon(icon: InsertNotificationIcon): Promise<NotificationIcon> {
+    const [newIcon] = await db
+      .insert(notificationIcons)
+      .values(icon)
+      .returning();
+    return newIcon;
+  }
+
+  async deleteNotificationIcon(id: string): Promise<void> {
+    await db.delete(notificationIcons).where(eq(notificationIcons.id, id));
   }
 
   // Document folder operations
@@ -10757,10 +10809,19 @@ export async function initializeDefaultNotificationTemplates(): Promise<void> {
 
     const defaultTemplates: InsertPushNotificationTemplate[] = [
       {
-        templateType: 'new_message',
-        name: 'New Message',
-        titleTemplate: 'New Message',
-        bodyTemplate: 'You have a new message',
+        templateType: 'new_message_staff',
+        name: 'New Message from Staff',
+        titleTemplate: 'New Team Message',
+        bodyTemplate: '{staffName} sent you a message',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'new_message_client',
+        name: 'New Message from Client',
+        titleTemplate: 'New Client Message',
+        bodyTemplate: '{clientName} sent you a message',
         iconUrl: '/pwa-icon-192.png',
         badgeUrl: null,
         isActive: true,

@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import fetch from 'node-fetch';
+import multer from 'multer';
+import sharp from 'sharp';
 import {
   validateParams,
   sendEmailSchema,
@@ -32,6 +34,7 @@ import {
   getTranscriptionResult
 } from "../utils/userRingCentralClient";
 import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "../push-service";
+import { objectStorageClient } from "../objectStorage";
 
 export function registerIntegrationRoutes(
   app: Express,
@@ -856,6 +859,179 @@ export function registerIntegrationRoutes(
     } catch (error) {
       console.error("Error sending test notification:", error);
       res.status(500).json({ message: "Failed to send test notification" });
+    }
+  });
+
+  // DELETE /api/push/templates/:id - Delete notification template
+  app.delete("/api/push/templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePushNotificationTemplate(id);
+      res.json({ message: "Template deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting notification template:", error);
+      res.status(500).json({ message: "Failed to delete notification template" });
+    }
+  });
+
+  // ==================================================
+  // NOTIFICATION ICON API ROUTES
+  // ==================================================
+
+  // Configure multer for in-memory file uploads
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB max
+    },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    }
+  });
+
+  // GET /api/notification-icons - Get all notification icons
+  app.get("/api/notification-icons", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const icons = await storage.getAllNotificationIcons();
+      res.json(icons);
+    } catch (error) {
+      console.error("Error fetching notification icons:", error);
+      res.status(500).json({ message: "Failed to fetch notification icons" });
+    }
+  });
+
+  // POST /api/notification-icons - Upload a new notification icon
+  app.post("/api/notification-icons", isAuthenticated, resolveEffectiveUser, requireAdmin, upload.single('icon'), async (req: any, res: any) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const file = req.file;
+      const iconId = crypto.randomUUID();
+      
+      // Get bucket name from environment
+      const bucketName = process.env.GCS_BUCKET_NAME || '';
+      if (!bucketName) {
+        return res.status(500).json({ message: "Object storage not configured" });
+      }
+      
+      const bucket = objectStorageClient.bucket(bucketName);
+      
+      // Process image with sharp - resize to standard PWA icon sizes (192x192 and 512x512)
+      const sizes = [192, 512];
+      const processedImages = await Promise.all(
+        sizes.map(async (size) => {
+          const buffer = await sharp(file.buffer)
+            .resize(size, size, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+            .png()
+            .toBuffer();
+          
+          return { size, buffer, metadata: await sharp(buffer).metadata() };
+        })
+      );
+      
+      // Store both sizes
+      for (const { size, buffer } of processedImages) {
+        const fileName = `${file.originalname.split('.')[0]}-${size}.png`;
+        const filePath = `.private/notification-icons/${iconId}/${fileName}`;
+        await bucket.file(filePath).save(buffer, {
+          metadata: { contentType: 'image/png' }
+        });
+      }
+
+      // Store metadata for the 192x192 version (primary icon)
+      const primaryImage = processedImages[0];
+      const fileName = `${file.originalname.split('.')[0]}-192.png`;
+      const storagePath = `.private/notification-icons/${iconId}/${fileName}`;
+      
+      const icon = await storage.createNotificationIcon({
+        fileName,
+        storagePath,
+        fileSize: primaryImage.buffer.length,
+        mimeType: 'image/png',
+        width: primaryImage.metadata.width || 192,
+        height: primaryImage.metadata.height || 192,
+        uploadedBy: effectiveUserId,
+      });
+
+      res.json(icon);
+    } catch (error) {
+      console.error("Error uploading notification icon:", error);
+      res.status(500).json({ message: "Failed to upload notification icon" });
+    }
+  });
+
+  // GET /api/notification-icons/:id/download - Get signed URL for icon download
+  app.get("/api/notification-icons/:id/download", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const icon = await storage.getNotificationIconById(id);
+
+      if (!icon) {
+        return res.status(404).json({ message: "Icon not found" });
+      }
+
+      const bucketName = process.env.GCS_BUCKET_NAME || '';
+      if (!bucketName) {
+        return res.status(500).json({ message: "Object storage not configured" });
+      }
+
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(icon.storagePath);
+
+      const [url] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'read',
+        expires: Date.now() + 60 * 60 * 1000, // 1 hour
+      });
+
+      res.json({ url });
+    } catch (error) {
+      console.error("Error downloading notification icon:", error);
+      res.status(500).json({ message: "Failed to download notification icon" });
+    }
+  });
+
+  // DELETE /api/notification-icons/:id - Delete notification icon
+  app.delete("/api/notification-icons/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const icon = await storage.getNotificationIconById(id);
+
+      if (!icon) {
+        return res.status(404).json({ message: "Icon not found" });
+      }
+
+      const bucketName = process.env.GCS_BUCKET_NAME || '';
+      if (!bucketName) {
+        return res.status(500).json({ message: "Object storage not configured" });
+      }
+
+      const bucket = objectStorageClient.bucket(bucketName);
+      
+      // Delete both 192 and 512 versions
+      const basePath = icon.storagePath.replace(/\/[^/]+$/, ''); // Remove filename
+      try {
+        await bucket.file(icon.storagePath).delete();
+        await bucket.file(`${basePath}/${icon.fileName.replace('-192', '-512')}`).delete();
+      } catch (storageError) {
+        console.warn("Error deleting files from storage:", storageError);
+        // Continue with database deletion even if storage deletion fails
+      }
+
+      // Delete from database
+      await storage.deleteNotificationIcon(id);
+
+      res.json({ message: "Icon deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting notification icon:", error);
+      res.status(500).json({ message: "Failed to delete notification icon" });
     }
   });
 

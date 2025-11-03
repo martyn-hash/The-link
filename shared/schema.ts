@@ -1944,7 +1944,8 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 
 // Push notification template type enum
 export const pushTemplateTypeEnum = pgEnum("push_template_type", [
-  "new_message",
+  "new_message_staff",
+  "new_message_client",
   "document_request", 
   "task_assigned",
   "project_stage_change",
@@ -1966,7 +1967,21 @@ export const pushNotificationTemplates = pgTable("push_notification_templates", 
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   templateTypeIdx: index("push_templates_type_idx").on(table.templateType),
-  uniqueTemplateType: unique("unique_template_type").on(table.templateType),
+}));
+
+// Notification icons table - stores uploaded icon/badge images for push notifications
+export const notificationIcons = pgTable("notification_icons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fileName: varchar("file_name").notNull(), // Original filename
+  storagePath: text("storage_path").notNull(), // Path in GCS (.private/notification-icons/{id}/{filename})
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  mimeType: varchar("mime_type").notNull(), // image/png, image/jpeg, etc.
+  width: integer("width"), // Image width in pixels
+  height: integer("height"), // Image height in pixels
+  uploadedBy: varchar("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uploadedByIdx: index("notification_icons_uploaded_by_idx").on(table.uploadedBy),
 }));
 
 // Project Message Threads - staff-to-staff messaging for project discussions
@@ -2137,6 +2152,11 @@ export const insertPushNotificationTemplateSchema = createInsertSchema(pushNotif
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertNotificationIconSchema = createInsertSchema(notificationIcons).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
@@ -2682,6 +2702,8 @@ export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
 export type PushNotificationTemplate = typeof pushNotificationTemplates.$inferSelect;
 export type InsertPushNotificationTemplate = z.infer<typeof insertPushNotificationTemplateSchema>;
+export type NotificationIcon = typeof notificationIcons.$inferSelect;
+export type InsertNotificationIcon = z.infer<typeof insertNotificationIconSchema>;
 export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;
