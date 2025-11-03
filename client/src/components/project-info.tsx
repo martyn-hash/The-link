@@ -11,10 +11,13 @@ interface ProjectInfoProps {
   user: User;
 }
 
+interface RoleAssignment {
+  roleName: string;
+  user: User | null;
+}
+
 interface ServiceRolesResponse {
-  bookkeeper: User | null;
-  clientManager: User | null;
-  serviceOwner: User | null;
+  roles: RoleAssignment[];
 }
 
 // Helper function to format stage names for display
@@ -57,11 +60,11 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
   // Check if user has permission to modify projects
   const canModifyProject = () => {
     return (
-      user.role === 'admin' ||
-      user.role === 'manager' ||
+      user.isAdmin ||
+      user.canSeeAdminMenu ||
       project.currentAssigneeId === user.id ||
-      (user.role === 'client_manager' && project.clientManagerId === user.id) ||
-      (user.role === 'bookkeeper' && project.bookkeeperId === user.id)
+      project.clientManagerId === user.id ||
+      project.bookkeeperId === user.id
     );
   };
 
@@ -117,44 +120,30 @@ export default function ProjectInfo({ project, user }: ProjectInfoProps) {
       <div>
         <h4 className="font-semibold text-foreground mb-4">Project Details</h4>
         <div className="space-y-3">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Bookkeeper:</span>
-            {isLoadingServiceRoles ? (
-              <span className="font-medium">Loading...</span>
-            ) : serviceRoles?.bookkeeper ? (
-              <span className="font-medium">
-                {serviceRoles.bookkeeper.firstName} {serviceRoles.bookkeeper.lastName}
-              </span>
-            ) : (
-              <span className="font-medium text-muted-foreground">Not assigned</span>
-            )}
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Client Manager:</span>
-            {isLoadingServiceRoles ? (
-              <span className="font-medium">Loading...</span>
-            ) : serviceRoles?.clientManager ? (
-              <span className="font-medium">
-                {serviceRoles.clientManager.firstName} {serviceRoles.clientManager.lastName}
-              </span>
-            ) : (
-              <span className="font-medium text-muted-foreground">Not assigned</span>
-            )}
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Service Owner:</span>
-            {isLoadingServiceRoles ? (
-              <span className="font-medium">Loading...</span>
-            ) : serviceRoles?.serviceOwner ? (
-              <span className="font-medium" data-testid="text-service-owner">
-                {serviceRoles.serviceOwner.firstName} {serviceRoles.serviceOwner.lastName}
-              </span>
-            ) : (
-              <span className="font-medium text-muted-foreground" data-testid="text-service-owner-none">
-                Not assigned
-              </span>
-            )}
-          </div>
+          {isLoadingServiceRoles ? (
+            <div className="flex justify-between">
+              <span className="font-medium">Loading roles...</span>
+            </div>
+          ) : serviceRoles?.roles && serviceRoles.roles.length > 0 ? (
+            serviceRoles.roles.map((roleAssignment) => (
+              <div key={roleAssignment.roleName} className="flex justify-between">
+                <span className="text-muted-foreground">{roleAssignment.roleName}:</span>
+                {roleAssignment.user ? (
+                  <span className="font-medium" data-testid={`text-role-${roleAssignment.roleName.toLowerCase().replace(/\s+/g, '-')}`}>
+                    {roleAssignment.user.firstName} {roleAssignment.user.lastName}
+                  </span>
+                ) : (
+                  <span className="font-medium text-muted-foreground" data-testid={`text-role-${roleAssignment.roleName.toLowerCase().replace(/\s+/g, '-')}-none`}>
+                    Not assigned
+                  </span>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">No roles assigned</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Time in Current Stage:</span>
             <span className="font-medium" data-testid="text-time-in-stage">
