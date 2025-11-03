@@ -60,6 +60,13 @@ const updateServiceSchema = z.object({
   frequency: z.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one-off']).optional(),
   serviceOwnerId: z.string().optional(),
   isActive: z.boolean().optional(),
+  roleAssignments: z.array(z.object({
+    id: z.string(),
+    workRoleId: z.string(),
+    roleName: z.string(),
+    userId: z.string().nullable(),
+    oldUserId: z.string().nullable(), // Track old user for task reassignment
+  })).optional(),
 });
 
 type UpdateServiceData = z.infer<typeof updateServiceSchema>;
@@ -80,10 +87,10 @@ export default function ClientServiceDetail() {
     enabled: !!id,
   });
 
-  // Fetch related projects
+  // Fetch related projects for this client service
   const { data: projects = [] } = useQuery<ProjectWithRelations[]>({
-    queryKey: [`/api/projects/service/${clientService?.serviceId}`],
-    enabled: !!clientService?.serviceId,
+    queryKey: [`/api/client-services/${id}/projects`],
+    enabled: !!id,
   });
 
   // Fetch all users for service owner dropdown
@@ -100,6 +107,7 @@ export default function ClientServiceDetail() {
       frequency: "monthly",
       serviceOwnerId: "",
       isActive: true,
+      roleAssignments: [],
     },
   });
 
@@ -112,6 +120,13 @@ export default function ClientServiceDetail() {
         frequency: clientService.frequency as any,
         serviceOwnerId: clientService.serviceOwnerId || "",
         isActive: clientService.isActive !== false,
+        roleAssignments: clientService.roleAssignments?.map(ra => ({
+          id: ra.id,
+          workRoleId: ra.workRoleId,
+          roleName: ra.workRole.name,
+          userId: ra.userId,
+          oldUserId: ra.userId, // Store current user as old user for comparison
+        })) || [],
       });
     }
   }, [clientService, editForm]);
@@ -484,6 +499,51 @@ export default function ClientServiceDetail() {
                   </FormItem>
                 )}
               />
+
+              {/* Role Assignments Section */}
+              {editForm.watch('roleAssignments') && editForm.watch('roleAssignments')!.length > 0 && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <h4 className="font-medium mb-2">Role Assignments</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Change user assignments for each role. Tasks in active projects will be automatically reassigned to the new user.
+                    </p>
+                  </div>
+                  {editForm.watch('roleAssignments')!.map((roleAssignment, index) => (
+                    <FormField
+                      key={roleAssignment.id}
+                      control={editForm.control}
+                      name={`roleAssignments.${index}.userId`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{roleAssignment.roleName}</FormLabel>
+                          <Select 
+                            onValueChange={(value) => {
+                              field.onChange(value || null);
+                            }} 
+                            value={field.value || undefined}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid={`select-role-${roleAssignment.workRoleId}`}>
+                                <SelectValue placeholder="Select user (optional)" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="">Unassigned</SelectItem>
+                              {users.map((user) => (
+                                <SelectItem key={user.id} value={user.id}>
+                                  {user.firstName} {user.lastName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button

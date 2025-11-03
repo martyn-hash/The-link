@@ -1210,6 +1210,72 @@ export function registerClientRoutes(
           });
         }
 
+        // Handle role assignment updates with cascading task reassignment
+        if (req.body.roleAssignments && Array.isArray(req.body.roleAssignments)) {
+          console.log(`[Routes] Processing ${req.body.roleAssignments.length} role assignment updates`);
+          
+          for (const roleUpdate of req.body.roleAssignments) {
+            const { id: assignmentId, userId: newUserId } = roleUpdate;
+            
+            // SECURITY: Load the current role assignment from storage to get the authoritative oldUserId
+            // Never trust client-provided oldUserId as it could be manipulated
+            const currentAssignment = await storage.getClientServiceRoleAssignmentById(assignmentId);
+            
+            if (!currentAssignment) {
+              console.error(`[Routes] Invalid role assignment ID: ${assignmentId}`);
+              continue; // Skip invalid assignment IDs
+            }
+            
+            const authoritativeOldUserId = currentAssignment.userId;
+            
+            // Only process if user has actually changed
+            if (newUserId !== authoritativeOldUserId) {
+              console.log(`[Routes] Updating role assignment ${assignmentId}: ${authoritativeOldUserId || 'null'} -> ${newUserId || 'null'}`);
+              
+              // Update the role assignment (explicitly handle null to clear assignment)
+              await storage.updateClientServiceRoleAssignment(assignmentId, {
+                userId: newUserId === null ? null : newUserId,
+              });
+
+              // Find all active projects for this client service
+              const projects = await storage.getProjectsByClientServiceId(id);
+              const activeProjects = projects.filter(p => !p.inactive && !p.archived);
+
+              console.log(`[Routes] Found ${activeProjects.length} active projects for task reassignment`);
+
+              // For each active project, reassign tasks from old user to new user (or unassign if new user is null)
+              for (const project of activeProjects) {
+                // Get all internal tasks connected to this project assigned to the old user
+                if (authoritativeOldUserId) {
+                  const tasks = await storage.getInternalTasksByAssignee(authoritativeOldUserId);
+                  
+                  // Get task connections for each task to filter by project
+                  const projectTasks: any[] = [];
+                  for (const task of tasks) {
+                    const taskConnections = await storage.getTaskConnectionsByTaskId(task.id);
+                    const hasProjectConnection = taskConnections.some(
+                      conn => conn.entityType === 'project' && conn.entityId === project.id
+                    );
+                    if (hasProjectConnection) {
+                      projectTasks.push(task);
+                    }
+                  }
+
+                  console.log(`[Routes] Found ${projectTasks.length} tasks to reassign from ${authoritativeOldUserId} for project ${project.id}`);
+
+                  // Reassign each task (or unassign if newUserId is null)
+                  for (const task of projectTasks) {
+                    await storage.updateInternalTask(task.id, {
+                      assignedTo: newUserId || null,
+                    });
+                    console.log(`[Routes] ${newUserId ? `Reassigned task ${task.id} to ${newUserId}` : `Unassigned task ${task.id}`}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+
         return res.json(clientService);
       } catch (mapperError: any) {
         console.error('[Routes] Service mapper error:', mapperError);
@@ -1256,6 +1322,39 @@ export function registerClientRoutes(
     } catch (error) {
       console.error("Error deleting client service:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to delete client service" });
+    }
+  });
+
+  // GET /api/client-services/:id/projects - Get all projects for a client service
+  app.get("/api/client-services/:id/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = z.object({
+        id: z.string().min(1, "Client service ID is required").uuid("Invalid client service ID format")
+      }).safeParse(req.params);
+
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid client service ID format",
+          errors: paramValidation.error.issues
+        });
+      }
+
+      const { id } = paramValidation.data;
+
+      // Verify client service exists
+      const clientService = await storage.getClientServiceById(id);
+      if (!clientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      // Get projects via projectSchedulingHistory
+      const projects = await storage.getProjectsByClientServiceId(id);
+
+      res.status(200).json(projects);
+
+    } catch (error) {
+      console.error("Error fetching projects for client service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch projects" });
     }
   });
 

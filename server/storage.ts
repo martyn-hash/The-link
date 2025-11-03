@@ -276,7 +276,7 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, ne, not } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, isNotNull, ne, not } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export interface IStorage {
@@ -346,6 +346,7 @@ export interface IStorage {
   getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
   getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
   getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByClientServiceId(clientServiceId: string): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
@@ -580,6 +581,7 @@ export interface IStorage {
   // Client Service Role Assignments CRUD
   getClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]>;
   getActiveClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]>;
+  getClientServiceRoleAssignmentById(id: string): Promise<ClientServiceRoleAssignment | undefined>;
   createClientServiceRoleAssignment(assignment: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment>;
   updateClientServiceRoleAssignment(id: string, assignment: Partial<InsertClientServiceRoleAssignment>): Promise<ClientServiceRoleAssignment>;
   deactivateClientServiceRoleAssignment(id: string): Promise<ClientServiceRoleAssignment>;
@@ -3266,6 +3268,75 @@ export class DatabaseStorage implements IStorage {
       };
     }));
     
+    return projectsWithAssignees;
+  }
+
+  async getProjectsByClientServiceId(clientServiceId: string): Promise<ProjectWithRelations[]> {
+    // Query projectSchedulingHistory to find all projects created for this client service
+    const schedulingHistory = await db
+      .select({ projectId: projectSchedulingHistory.projectId })
+      .from(projectSchedulingHistory)
+      .where(
+        and(
+          eq(projectSchedulingHistory.clientServiceId, clientServiceId),
+          isNotNull(projectSchedulingHistory.projectId)
+        )
+      );
+
+    // Extract unique project IDs
+    const projectIds = Array.from(new Set(schedulingHistory.map(h => h.projectId).filter((id): id is string => id !== null)));
+
+    if (projectIds.length === 0) {
+      return [];
+    }
+
+    // Fetch the full project details for these project IDs
+    const results = await db.query.projects.findMany({
+      where: inArray(projects.id, projectIds),
+      with: {
+        client: true,
+        bookkeeper: true,
+        clientManager: true,
+        currentAssignee: true,
+        projectOwner: true,
+        projectType: {
+          with: {
+            service: true,
+          },
+        },
+        chronology: {
+          with: {
+            assignee: true,
+            changedBy: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
+          },
+          orderBy: desc(projectChronology.timestamp),
+        },
+      },
+      orderBy: [desc(projects.createdAt)],
+    });
+
+    // Convert null relations to undefined and populate stage role assignee
+    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
+      const stageRoleAssignee = await this.resolveStageRoleAssignee(project);
+      return {
+        ...project,
+        currentAssignee: project.currentAssignee || undefined,
+        projectOwner: project.projectOwner || undefined,
+        stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
+          fieldResponses: c.fieldResponses || [],
+        })),
+      };
+    }));
+
     return projectsWithAssignees;
   }
 
@@ -6731,6 +6802,15 @@ export class DatabaseStorage implements IStorage {
     console.log(`[DEBUG] Successfully processed ${validRoleAssignments.length} valid role assignments`);
     
     return validRoleAssignments;
+  }
+
+  async getClientServiceRoleAssignmentById(id: string): Promise<ClientServiceRoleAssignment | undefined> {
+    const [assignment] = await db
+      .select()
+      .from(clientServiceRoleAssignments)
+      .where(eq(clientServiceRoleAssignments.id, id));
+    
+    return assignment;
   }
 
   async createClientServiceRoleAssignment(assignmentData: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment> {
