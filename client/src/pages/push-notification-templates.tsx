@@ -11,9 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Bell, Send, CheckCircle2, AlertCircle, Loader2, Plus, Trash2, Edit } from "lucide-react";
+import { Bell, Send, CheckCircle2, AlertCircle, Loader2, Plus, Trash2, Edit, Image as ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MediaLibrary } from "@/components/MediaLibrary";
 
 interface NotificationTemplate {
   id: string;
@@ -442,6 +444,10 @@ function TemplateFormDialog({ template, templateType, onClose, onSave, isLoading
     iconUrl: template?.iconUrl || '',
     badgeUrl: template?.badgeUrl || '',
   });
+  const [activeTab, setActiveTab] = useState("details");
+  const [selectedIconId, setSelectedIconId] = useState<string | null>(null);
+  const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(null);
+  const [iconPickerMode, setIconPickerMode] = useState<"icon" | "badge" | null>(null);
 
   const isOpen = !!(template || templateType);
   const info = template ? TEMPLATE_INFO[template.templateType] : (templateType ? TEMPLATE_INFO[templateType] : null);
@@ -464,6 +470,10 @@ function TemplateFormDialog({ template, templateType, onClose, onSave, isLoading
         badgeUrl: '',
       });
     }
+    setActiveTab("details");
+    setSelectedIconId(null);
+    setSelectedBadgeId(null);
+    setIconPickerMode(null);
   }, [template, templateType]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -490,9 +500,26 @@ function TemplateFormDialog({ template, templateType, onClose, onSave, isLoading
     }
   };
 
+  const handleSelectIcon = (iconId: string, downloadUrl: string) => {
+    if (iconPickerMode === "icon") {
+      setFormData({ ...formData, iconUrl: downloadUrl });
+      setSelectedIconId(iconId);
+    } else if (iconPickerMode === "badge") {
+      setFormData({ ...formData, badgeUrl: downloadUrl });
+      setSelectedBadgeId(iconId);
+    }
+    setActiveTab("details");
+    setIconPickerMode(null);
+  };
+
+  const handleBrowseIcons = (mode: "icon" | "badge") => {
+    setIconPickerMode(mode);
+    setActiveTab("icons");
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl" data-testid="dialog-template-form">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-template-form">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>
@@ -513,7 +540,16 @@ function TemplateFormDialog({ template, templateType, onClose, onSave, isLoading
             )}
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Template Details</TabsTrigger>
+              <TabsTrigger value="icons">
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Icon Library
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="space-y-4 py-4">
             <div>
               <Label htmlFor="name">Template Name</Label>
               <Input
@@ -554,28 +590,66 @@ function TemplateFormDialog({ template, templateType, onClose, onSave, isLoading
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="iconUrl">Icon URL (optional)</Label>
-                <Input
-                  id="iconUrl"
-                  value={formData.iconUrl}
-                  onChange={(e) => setFormData({ ...formData, iconUrl: e.target.value })}
-                  placeholder="/pwa-icon-192.png"
-                  data-testid="input-template-icon"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="iconUrl"
+                    value={formData.iconUrl}
+                    onChange={(e) => setFormData({ ...formData, iconUrl: e.target.value })}
+                    placeholder="/pwa-icon-192.png"
+                    data-testid="input-template-icon"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleBrowseIcons("icon")}
+                    data-testid="button-browse-icon"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label htmlFor="badgeUrl">Badge URL (optional)</Label>
-                <Input
-                  id="badgeUrl"
-                  value={formData.badgeUrl}
-                  onChange={(e) => setFormData({ ...formData, badgeUrl: e.target.value })}
-                  placeholder="/badge-icon.png"
-                  data-testid="input-template-badge"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="badgeUrl"
+                    value={formData.badgeUrl}
+                    onChange={(e) => setFormData({ ...formData, badgeUrl: e.target.value })}
+                    placeholder="/badge-icon.png"
+                    data-testid="input-template-badge"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleBrowseIcons("badge")}
+                    data-testid="button-browse-badge"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+            </TabsContent>
 
-          <DialogFooter>
+            <TabsContent value="icons" className="py-4">
+              {iconPickerMode && (
+                <div className="mb-4 p-3 bg-muted rounded-lg">
+                  <p className="text-sm font-medium">
+                    {iconPickerMode === "icon" ? "Select an icon" : "Select a badge"} from the library below
+                  </p>
+                </div>
+              )}
+              <MediaLibrary
+                mode="picker"
+                selectedIconId={iconPickerMode === "icon" ? selectedIconId : selectedBadgeId}
+                onSelectIcon={handleSelectIcon}
+              />
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="mt-4">
             <Button
               type="button"
               variant="outline"

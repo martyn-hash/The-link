@@ -122,9 +122,7 @@ export function MediaLibrary({ mode = "gallery", selectedIconId, onSelectIcon }:
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (iconId: string) => {
-      return apiRequest(`/api/notification-icons/${iconId}`, {
-        method: "DELETE",
-      });
+      return apiRequest("DELETE", `/api/notification-icons/${iconId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notification-icons"] });
