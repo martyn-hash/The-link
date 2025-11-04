@@ -946,61 +946,6 @@ function MyDashboardPanel({ user }: { user: any }) {
         )}
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* My Projects Count - Green */}
-        <Card className="border-l-4 border-l-green-500" data-testid="card-my-projects">
-          <CardHeader className="pb-2">
-            <CardDescription>My Projects</CardDescription>
-            <CardTitle className="text-3xl text-green-600 dark:text-green-500">
-              {displayMetrics?.myProjectsCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Projects you own</p>
-          </CardContent>
-        </Card>
-
-        {/* My Tasks Count - Blue */}
-        <Card className="border-l-4 border-l-blue-500" data-testid="card-my-tasks">
-          <CardHeader className="pb-2">
-            <CardDescription>My Tasks</CardDescription>
-            <CardTitle className="text-3xl text-blue-600 dark:text-blue-500">
-              {displayMetrics?.myTasksCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Tasks assigned to you</p>
-          </CardContent>
-        </Card>
-
-        {/* Behind Schedule Count - Orange */}
-        <Card className="border-l-4 border-l-orange-500" data-testid="card-behind-schedule">
-          <CardHeader className="pb-2">
-            <CardDescription>Behind Schedule</CardDescription>
-            <CardTitle className="text-3xl text-orange-600 dark:text-orange-500">
-              {displayMetrics?.behindScheduleCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Projects over stage time limit</p>
-          </CardContent>
-        </Card>
-
-        {/* Late Projects Count - Red */}
-        <Card className="border-l-4 border-l-red-500" data-testid="card-late-projects">
-          <CardHeader className="pb-2">
-            <CardDescription>Late Projects</CardDescription>
-            <CardTitle className="text-3xl text-red-600 dark:text-red-500">
-              {displayMetrics?.lateCount || 0}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Projects past due date</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* My Projects Table */}
       <div data-testid="section-my-projects">
         <h2 className="text-2xl font-semibold mb-4">My Projects</h2>
