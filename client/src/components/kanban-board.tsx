@@ -129,9 +129,26 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     const { active, over } = event;
     setActiveId(null);
 
-    // Only handle status change if dropped over a valid column
-    if (over && typeof over.id === 'string' && over.id.startsWith('column-')) {
-      const targetStatusName = over.id.replace('column-', '');
+    if (!over || typeof over.id !== 'string') {
+      setOveredColumn(null);
+      return;
+    }
+
+    let targetStatusName: string | null = null;
+
+    // Check if dropped over a column directly
+    if (over.id.startsWith('column-')) {
+      targetStatusName = over.id.replace('column-', '');
+    } else {
+      // Dropped over a project card - find which column the target project is in
+      const targetProject = projects.find(p => p.id === over.id);
+      if (targetProject) {
+        targetStatusName = targetProject.currentStatus;
+      }
+    }
+
+    // Handle status change if we found a valid target status
+    if (targetStatusName) {
       const draggedProjectId = active.id as string;
       const draggedProject = projects.find(p => p.id === draggedProjectId);
       
