@@ -182,6 +182,23 @@ export default function Projects() {
     }
   }, [location]); // Only run when location changes
 
+  // Sync behindSchedule filter state to URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const currentBehindSchedule = searchParams.get('behindSchedule');
+    
+    if (behindScheduleOnly && currentBehindSchedule !== 'true') {
+      searchParams.set('behindSchedule', 'true');
+      window.history.replaceState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
+    } else if (!behindScheduleOnly && currentBehindSchedule === 'true') {
+      searchParams.delete('behindSchedule');
+      const newUrl = searchParams.toString() 
+        ? `${window.location.pathname}?${searchParams.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [behindScheduleOnly]);
+
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
     enabled: isAuthenticated && !!user,
@@ -1144,6 +1161,8 @@ export default function Projects() {
         setUserFilter={setUserFilter}
         showArchived={showArchived}
         setShowArchived={setShowArchived}
+        behindScheduleOnly={behindScheduleOnly}
+        setBehindScheduleOnly={setBehindScheduleOnly}
         dynamicDateFilter={dynamicDateFilter}
         setDynamicDateFilter={setDynamicDateFilter}
         customDateRange={customDateRange}

@@ -66,6 +66,8 @@ interface FilterPanelProps {
   setUserFilter: (value: string) => void;
   showArchived: boolean;
   setShowArchived: (value: boolean) => void;
+  behindScheduleOnly: boolean;
+  setBehindScheduleOnly: (value: boolean) => void;
   dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
   setDynamicDateFilter: (value: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom") => void;
   customDateRange: { from: Date | undefined; to: Date | undefined };
@@ -94,6 +96,8 @@ export default function FilterPanel({
   setUserFilter,
   showArchived,
   setShowArchived,
+  behindScheduleOnly,
+  setBehindScheduleOnly,
   dynamicDateFilter,
   setDynamicDateFilter,
   customDateRange,
@@ -123,6 +127,7 @@ export default function FilterPanel({
         serviceOwnerFilter,
         userFilter,
         showArchived,
+        behindScheduleOnly,
         dynamicDateFilter,
         customDateRange: customDateRange.from && customDateRange.to ? {
           from: customDateRange.from.toISOString(),
@@ -166,6 +171,7 @@ export default function FilterPanel({
     setServiceOwnerFilter("all");
     setUserFilter("all");
     setShowArchived(false);
+    setBehindScheduleOnly(false);
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
   };
@@ -180,6 +186,7 @@ export default function FilterPanel({
     setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
     setUserFilter(filters.userFilter || "all");
     setShowArchived(filters.showArchived || false);
+    setBehindScheduleOnly(filters.behindScheduleOnly || false);
     setDynamicDateFilter(filters.dynamicDateFilter || "all");
     
     if (filters.customDateRange) {
@@ -203,6 +210,7 @@ export default function FilterPanel({
     if (serviceOwnerFilter !== "all") count++;
     if (userFilter !== "all" && isManagerOrAdmin) count++;
     if (showArchived) count++;
+    if (behindScheduleOnly) count++;
     if (dynamicDateFilter !== "all") count++;
     return count;
   };
@@ -470,6 +478,22 @@ export default function FilterPanel({
                 checked={showArchived}
                 onCheckedChange={setShowArchived}
                 data-testid="switch-show-archived-filter"
+              />
+            </div>
+
+            <Separator />
+
+            {/* Behind Schedule Toggle */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="behind-schedule-filter" className="flex items-center gap-2 cursor-pointer">
+                <CalendarIcon className="w-4 h-4" />
+                Behind Schedule Only
+              </Label>
+              <Switch
+                id="behind-schedule-filter"
+                checked={behindScheduleOnly}
+                onCheckedChange={setBehindScheduleOnly}
+                data-testid="switch-behind-schedule-filter"
               />
             </div>
 
