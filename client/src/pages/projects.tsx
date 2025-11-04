@@ -401,6 +401,27 @@ export default function Projects() {
     }
   };
 
+  // Handler to reset all filters and show all projects
+  const handleViewAllProjects = () => {
+    // Reset list/kanban filters to defaults
+    setServiceFilter("all");
+    setTaskAssigneeFilter("all");
+    setServiceOwnerFilter("all");
+    setUserFilter("all");
+    setShowArchived(false);
+    setDynamicDateFilter("all");
+    setCustomDateRange({ from: undefined, to: undefined });
+    setBehindScheduleOnly(false);
+    
+    // Switch to list view (default view mode)
+    setViewMode("list");
+    
+    toast({
+      title: "Filters Reset",
+      description: "Showing all projects",
+    });
+  };
+
   // Save dashboard mutation
   const saveDashboardMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string; filters: any; widgets: Widget[]; visibility: "private" | "shared"; isHomescreenDashboard?: boolean; isCreating?: boolean }) => {
@@ -856,6 +877,16 @@ export default function Projects() {
                 onLoadKanbanView={handleLoadSavedView}
                 onLoadDashboard={handleLoadDashboard}
               />
+
+              {/* View All Projects button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleViewAllProjects}
+                data-testid="button-view-all-projects"
+              >
+                View All Projects
+              </Button>
 
               {/* Dashboard-specific buttons */}
               {viewMode === "dashboard" && (
