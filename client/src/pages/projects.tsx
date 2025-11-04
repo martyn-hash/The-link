@@ -352,9 +352,6 @@ export default function Projects() {
       setDashboardWidgets(dashboard.widgets || []);
       setDashboardEditMode(false);
       
-      // Switch to dashboard view mode
-      setViewMode("dashboard");
-      
       // Set description and homescreen dashboard states
       setDashboardDescription(dashboard.description || "");
       setDashboardIsHomescreen(dashboard.isHomescreenDashboard || false);
