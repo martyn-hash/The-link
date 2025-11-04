@@ -21,6 +21,7 @@ import {
   companyViews,
   userColumnPreferences,
   dashboards,
+  userProjectPreferences,
   services,
   workRoles,
   serviceRoles,
@@ -119,6 +120,9 @@ import {
   type Dashboard,
   type InsertDashboard,
   type UpdateDashboard,
+  type UserProjectPreferences,
+  type InsertUserProjectPreferences,
+  type UpdateUserProjectPreferences,
   type Service,
   type InsertService,
   type WorkRole,
@@ -517,6 +521,12 @@ export interface IStorage {
   deleteDashboard(id: string): Promise<void>;
   getHomescreenDashboard(userId: string): Promise<Dashboard | undefined>;
   clearHomescreenDashboards(userId: string): Promise<void>;
+  
+  // User project preferences operations
+  getUserProjectPreferences(userId: string): Promise<UserProjectPreferences | undefined>;
+  upsertUserProjectPreferences(preferences: InsertUserProjectPreferences): Promise<UserProjectPreferences>;
+  deleteUserProjectPreferences(userId: string): Promise<void>;
+  clearDefaultView(userId: string): Promise<void>;
   
   // Analytics operations
   getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]>;
@@ -1362,6 +1372,48 @@ export class DatabaseStorage implements IStorage {
       .update(dashboards)
       .set({ isHomescreenDashboard: false })
       .where(eq(dashboards.userId, userId));
+  }
+
+  // User project preferences operations
+  async getUserProjectPreferences(userId: string): Promise<UserProjectPreferences | undefined> {
+    const [preferences] = await db
+      .select()
+      .from(userProjectPreferences)
+      .where(eq(userProjectPreferences.userId, userId));
+    return preferences;
+  }
+
+  async upsertUserProjectPreferences(preferences: InsertUserProjectPreferences): Promise<UserProjectPreferences> {
+    const [result] = await db
+      .insert(userProjectPreferences)
+      .values(preferences)
+      .onConflictDoUpdate({
+        target: userProjectPreferences.userId,
+        set: {
+          defaultViewId: preferences.defaultViewId,
+          defaultViewType: preferences.defaultViewType,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async deleteUserProjectPreferences(userId: string): Promise<void> {
+    await db
+      .delete(userProjectPreferences)
+      .where(eq(userProjectPreferences.userId, userId));
+  }
+
+  async clearDefaultView(userId: string): Promise<void> {
+    await db
+      .update(userProjectPreferences)
+      .set({
+        defaultViewId: null,
+        defaultViewType: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(userProjectPreferences.userId, userId));
   }
 
   // Analytics operations
