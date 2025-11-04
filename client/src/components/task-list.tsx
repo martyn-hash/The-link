@@ -24,6 +24,7 @@ import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
+import { normalizeChronology, normalizeDate } from "@/lib/chronology";
 import { useMemo } from "react";
 import {
   DndContext,
@@ -387,28 +388,18 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     return `${hours}h`;
   };
 
-  // Calculate business hours in current stage for a project
+  // Calculate business hours in current stage for a project using shared chronology utility
   const getBusinessHoursInStage = (project: ProjectWithRelations) => {
-    const createdAt = project.createdAt 
-      ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
-      : undefined;
+    const normalizedChronology = normalizeChronology(project.chronology);
+    const createdAt = normalizeDate(project.createdAt);
     
-    const transformedChronology = (project.chronology || [])
-      .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
-        return entry.timestamp !== null && entry.timestamp !== undefined;
-      })
-      .map((entry) => ({
-        toStatus: entry.toStatus,
-        timestamp: entry.timestamp instanceof Date 
-          ? entry.timestamp.toISOString() 
-          : typeof entry.timestamp === 'string'
-          ? entry.timestamp
-          : new Date(entry.timestamp).toISOString()
-      }));
+    if (normalizedChronology.length === 0 || !createdAt) {
+      return 0;
+    }
     
     try {
       return calculateCurrentInstanceTime(
-        transformedChronology,
+        normalizedChronology,
         project.currentStatus,
         createdAt
       );

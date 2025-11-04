@@ -10,6 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
 import { format } from "date-fns";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
+import { normalizeChronology, normalizeDate } from "@/lib/chronology";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,34 +52,18 @@ export default function SwipeableProjectCard({ project, canComplete = false }: S
     return projectStages.find(s => s.name === project.currentStatus);
   }, [projectStages, project.currentStatus]);
 
-  // Calculate current business hours in stage
+  // Calculate current business hours in stage using shared chronology utility
   const currentBusinessHours = useMemo(() => {
-    if (!project.chronology || project.chronology.length === 0) return 0;
+    const normalizedChronology = normalizeChronology(project.chronology);
+    const createdAt = normalizeDate(project.createdAt);
     
-    const createdAt = project.createdAt instanceof Date 
-      ? project.createdAt.toISOString()
-      : typeof project.createdAt === 'string'
-      ? project.createdAt
-      : new Date(project.createdAt).toISOString();
-    
-    // Normalize chronology entries to match calculateCurrentInstanceTime schema
-    // Match desktop table implementation - only filter out entries missing timestamp
-    const transformedChronology = project.chronology
-      .filter((entry: any) => {
-        return entry.timestamp !== null && entry.timestamp !== undefined;
-      })
-      .map((entry: any) => ({
-        toStatus: entry.toStatus,
-        timestamp: entry.timestamp instanceof Date 
-          ? entry.timestamp.toISOString() 
-          : typeof entry.timestamp === 'string'
-          ? entry.timestamp
-          : new Date(entry.timestamp).toISOString()
-      }));
+    if (normalizedChronology.length === 0 || !createdAt) {
+      return 0;
+    }
     
     try {
       return calculateCurrentInstanceTime(
-        transformedChronology,
+        normalizedChronology,
         project.currentStatus,
         createdAt
       );
