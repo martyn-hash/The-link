@@ -60,12 +60,6 @@ export default function MobileMenu({ user }: MobileMenuProps) {
     { href: "/messages", label: "Messages", icon: MessageCircle, show: true },
     { href: "/companies", label: "Companies", icon: Building, show: true },
     { href: "/people", label: "People", icon: Users, show: true },
-    { 
-      href: "/scheduled-services", 
-      label: "Services", 
-      icon: Calendar, 
-      show: user?.isAdmin || user?.canSeeAdminMenu 
-    },
   ];
 
   return (

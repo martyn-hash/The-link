@@ -276,6 +276,9 @@ function DashboardSummaryCards({
   onRefresh: () => void;
   isRefreshing: boolean;
 }) {
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+
   const formatLastUpdated = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -290,6 +293,32 @@ function DashboardSummaryCards({
     
     const diffDays = Math.floor(diffHours / 24);
     return `${diffDays}d ago`;
+  };
+
+  const handleCardClick = (cardType: string) => {
+    const params = new URLSearchParams();
+    
+    switch (cardType) {
+      case 'My Tasks':
+        // Filter by current assignee = current user
+        params.set('taskAssigneeFilter', user?.id || '');
+        break;
+      case 'My Projects':
+        // Filter by service owner = current user
+        params.set('serviceOwnerFilter', user?.id || '');
+        break;
+      case 'Overdue Tasks':
+        // Filter by overdue date
+        params.set('dynamicDateFilter', 'overdue');
+        break;
+      case 'Behind Schedule':
+        // Behind schedule projects - we'll use a special filter
+        // This requires custom handling in the projects page
+        params.set('behindSchedule', 'true');
+        break;
+    }
+    
+    setLocation(`/projects?${params.toString()}`);
   };
 
   const summaryCards = [
@@ -361,7 +390,12 @@ function DashboardSummaryCards({
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.title} className="relative overflow-hidden" data-testid={card.testId}>
+            <Card 
+              key={card.title} 
+              className="relative overflow-hidden cursor-pointer hover:shadow-lg transition-shadow" 
+              data-testid={card.testId}
+              onClick={() => handleCardClick(card.title)}
+            >
               <CardHeader className={`pb-2 ${card.bgColor}`}>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium text-muted-foreground">

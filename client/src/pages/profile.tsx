@@ -11,6 +11,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 // Components
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -1063,6 +1064,7 @@ export default function Profile() {
         </div>
       </div>
     </div>
+    <BottomNav user={user} onSearchClick={() => {}} />
     </div>
   );
 }
