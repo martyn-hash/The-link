@@ -223,18 +223,6 @@ export const dashboardCache = pgTable("dashboard_cache", {
   index("idx_dashboard_cache_last_updated").on(table.lastUpdated),
 ]);
 
-// User project preferences table - Stores user preferences for the projects page
-export const userProjectPreferences = pgTable("user_project_preferences", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
-  defaultViewId: varchar("default_view_id"), // ID of the default view (projectView or dashboard)
-  defaultViewType: varchar("default_view_type"), // 'list', 'kanban', or 'dashboard'
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_user_project_preferences_user_id").on(table.userId),
-]);
-
 // Clients table - Companies House integration (matches existing database schema)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1293,16 +1281,6 @@ export const updateDashboardCacheSchema = createInsertSchema(dashboardCache).omi
   userId: true,
 }).partial();
 
-export const insertUserProjectPreferencesSchema = createInsertSchema(userProjectPreferences).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  defaultViewType: z.enum(['list', 'kanban', 'dashboard']).nullable().optional(),
-});
-
-export const updateUserProjectPreferencesSchema = insertUserProjectPreferencesSchema.partial().omit({ userId: true });
-
 // UDF definition schema
 export const udfDefinitionSchema = z.object({
   id: z.string(),
@@ -1679,9 +1657,6 @@ export type UpdateDashboard = z.infer<typeof updateDashboardSchema>;
 export type DashboardCache = typeof dashboardCache.$inferSelect;
 export type InsertDashboardCache = z.infer<typeof insertDashboardCacheSchema>;
 export type UpdateDashboardCache = z.infer<typeof updateDashboardCacheSchema>;
-export type UserProjectPreferences = typeof userProjectPreferences.$inferSelect;
-export type InsertUserProjectPreferences = z.infer<typeof insertUserProjectPreferencesSchema>;
-export type UpdateUserProjectPreferences = z.infer<typeof updateUserProjectPreferencesSchema>;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;
