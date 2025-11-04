@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
+import ChangeStatusModal from "./ChangeStatusModal";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,9 +40,22 @@ const getColorStyle = (hexColor: string): { backgroundColor: string } => {
   return { backgroundColor: hexColor || "#6b7280" };
 };
 
+// Droppable Column component for drag-and-drop zones
+function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id });
+  return <div ref={setNodeRef}>{children}</div>;
+}
+
 export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  
+  // State for ChangeStatusModal
+  const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<ProjectWithRelations | null>(null);
+  const [targetStatus, setTargetStatus] = useState<string | null>(null);
+  const [overedColumn, setOveredColumn] = useState<string | null>(null);
   
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
@@ -92,10 +106,51 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     setActiveId(event.active.id as string);
   };
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (over && typeof over.id === 'string' && over.id.startsWith('column-')) {
+      // Extract status name from column ID (e.g., "column-in_review" -> "in_review")
+      const columnStatus = over.id.replace('column-', '');
+      setOveredColumn(columnStatus);
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
     setActiveId(null);
-    // Note: Drag and drop status changes would be implemented here
-    // For now, users can only change status through the project modal
+
+    // Only handle status change if dropped over a valid column
+    if (over && typeof over.id === 'string' && over.id.startsWith('column-')) {
+      const targetStatusName = over.id.replace('column-', '');
+      const draggedProjectId = active.id as string;
+      const draggedProject = projects.find(p => p.id === draggedProjectId);
+      
+      // Check if the project is being moved to a different status
+      if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
+        setSelectedProject(draggedProject);
+        setTargetStatus(targetStatusName);
+        setShowChangeStatusModal(true);
+      }
+    }
+    
+    // Reset overed column
+    setOveredColumn(null);
+  };
+
+  // Callback when status is successfully updated
+  const handleStatusUpdated = () => {
+    // Refetch projects to reflect the new status
+    queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    setShowChangeStatusModal(false);
+    setSelectedProject(null);
+    setTargetStatus(null);
+  };
+
+  // Callback when modal is closed without updating
+  const handleModalClose = () => {
+    setShowChangeStatusModal(false);
+    setSelectedProject(null);
+    setTargetStatus(null);
   };
 
   const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
@@ -181,6 +236,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       <DndContext
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
         <div className="flex space-x-6 h-full overflow-x-auto">
@@ -188,57 +244,59 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
             const stageProjects = projectsByStatus[status] || [];
             
             return (
-              <div key={status} className="flex-1 min-w-80">
-                <Card className="h-full">
-                  <CardHeader className="sticky top-0 bg-card border-b border-border rounded-t-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={getColorStyle(config.color)}
-                        />
-                        <h3 className="font-semibold text-foreground text-sm">
-                          {config.title}
-                        </h3>
-                        <Badge variant="secondary" className="text-xs">
-                          {stageProjects.length}
-                        </Badge>
-                      </div>
-                      <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Assigned to {config.assignedTo}
-                    </p>
-                  </CardHeader>
-                  
-                  <CardContent className="p-4 space-y-3 min-h-96">
-                    <SortableContext
-                      items={stageProjects.map(p => p.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {stageProjects.map((project) => {
-                        // Find the stage configuration for this project's current status
-                        const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
-                        
-                        return (
-                          <ProjectCard
-                            key={project.id}
-                            project={project}
-                            stageConfig={currentStageConfig}
-                            onOpenModal={() => navigateToProject(project.id)}
+              <DroppableColumn key={status} id={`column-${status}`}>
+                <div className="flex-1 min-w-80">
+                  <Card className="h-full">
+                    <CardHeader className="sticky top-0 bg-card border-b border-border rounded-t-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={getColorStyle(config.color)}
                           />
-                        );
-                      })}
-                    </SortableContext>
-                    
-                    {stageProjects.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <p className="text-sm">No projects in this stage</p>
+                          <h3 className="font-semibold text-foreground text-sm">
+                            {config.title}
+                          </h3>
+                          <Badge variant="secondary" className="text-xs">
+                            {stageProjects.length}
+                          </Badge>
+                        </div>
+                        <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Assigned to {config.assignedTo}
+                      </p>
+                    </CardHeader>
+                    
+                    <CardContent className="p-4 space-y-3 min-h-96">
+                      <SortableContext
+                        items={stageProjects.map(p => p.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {stageProjects.map((project) => {
+                          // Find the stage configuration for this project's current status
+                          const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
+                          
+                          return (
+                            <ProjectCard
+                              key={project.id}
+                              project={project}
+                              stageConfig={currentStageConfig}
+                              onOpenModal={() => navigateToProject(project.id)}
+                            />
+                          );
+                        })}
+                      </SortableContext>
+                      
+                      {stageProjects.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p className="text-sm">No projects in this stage</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </DroppableColumn>
             );
           })}
         </div>
@@ -255,6 +313,17 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
         </DragOverlay>
       </DndContext>
 
+      {/* Change Status Modal for drag-and-drop status changes */}
+      {selectedProject && (
+        <ChangeStatusModal
+          isOpen={showChangeStatusModal}
+          onClose={handleModalClose}
+          project={selectedProject}
+          user={user}
+          onStatusUpdated={handleStatusUpdated}
+          initialNewStatus={targetStatus || undefined}
+        />
+      )}
     </div>
   );
 }

@@ -62,6 +62,7 @@ interface ChangeStatusModalProps {
   project: ProjectWithRelations;
   user: User;
   onStatusUpdated?: () => void;
+  initialNewStatus?: string; // Pre-select a status (for drag-and-drop from kanban)
 }
 
 // Helper function to format stage names for display
@@ -127,6 +128,7 @@ export default function ChangeStatusModal({
   project,
   user,
   onStatusUpdated,
+  initialNewStatus,
 }: ChangeStatusModalProps) {
   const [newStatus, setNewStatus] = useState("");
   const [changeReason, setChangeReason] = useState("");
@@ -136,6 +138,13 @@ export default function ChangeStatusModal({
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Set initial new status when modal opens (for drag-and-drop)
+  useEffect(() => {
+    if (isOpen && initialNewStatus) {
+      setNewStatus(initialNewStatus);
+    }
+  }, [isOpen, initialNewStatus]);
 
   // Fetch kanban stages for this project's project type
   const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
