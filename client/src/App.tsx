@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -63,21 +63,8 @@ import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [location] = useLocation();
 
-  // Public routes that should render immediately without auth check
-  const publicRoutes = [
-    '/login',
-    '/portal/login',
-    '/portal/verify',
-    '/portal/install',
-    '/magic-link-verify'
-  ];
-  
-  const isPublicRoute = publicRoutes.some(route => location.startsWith(route));
-
-  // Only show loading screen for protected routes
-  if (isLoading && !isPublicRoute) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0A7BBF]/10 via-white to-[#76CA23]/10 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
         <div className="text-center">

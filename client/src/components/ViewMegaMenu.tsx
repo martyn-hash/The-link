@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Trash2, List, Columns3, LayoutDashboard } from "lucide-react";
+import { Star, Trash2, List, Columns3, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ProjectView, Dashboard } from "@shared/schema";
+import type { ProjectView, Dashboard, UserProjectPreferences } from "@shared/schema";
 
 interface ViewMegaMenuProps {
   currentViewMode: "list" | "kanban" | "dashboard";
@@ -39,9 +39,38 @@ export default function ViewMegaMenu({
     queryKey: ["/api/dashboards"],
   });
 
+  // Fetch user preferences to see which view is marked as default
+  const { data: preferences } = useQuery<UserProjectPreferences>({
+    queryKey: ["/api/user-project-preferences"],
+  });
+
   // Separate views by type
   const listViews = savedViews.filter(v => v.viewMode === "list");
   const kanbanViews = savedViews.filter(v => v.viewMode === "kanban");
+
+  // Set default view mutation
+  const setDefaultViewMutation = useMutation({
+    mutationFn: async (data: { viewType: "list" | "kanban" | "dashboard"; viewId?: string }) => {
+      return apiRequest("POST", "/api/user-project-preferences", {
+        defaultViewType: data.viewType,
+        defaultViewId: data.viewId || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
+      toast({
+        title: "Default view updated",
+        description: "This view will load automatically when you visit the projects page.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update default view",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Delete view mutation
   const deleteViewMutation = useMutation({
@@ -85,6 +114,29 @@ export default function ViewMegaMenu({
     },
   });
 
+  const handleSetDefault = (viewType: "list" | "kanban" | "dashboard", viewId?: string) => {
+    setDefaultViewMutation.mutate({ viewType, viewId });
+  };
+
+  const handleUnsetDefault = () => {
+    // Delete the preference to unset default
+    apiRequest("DELETE", "/api/user-project-preferences")
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
+        toast({
+          title: "Default view cleared",
+          description: "No default view will be loaded automatically.",
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Error",
+          description: "Failed to clear default view",
+          variant: "destructive",
+        });
+      });
+  };
+
   const handleLoadView = (view: ProjectView) => {
     if (view.viewMode === "list") {
       onLoadListView(view);
@@ -97,6 +149,10 @@ export default function ViewMegaMenu({
   const handleLoadDashboard = (dashboard: Dashboard) => {
     onLoadDashboard(dashboard);
     setMenuOpen(false);
+  };
+
+  const isViewDefault = (viewType: "list" | "kanban" | "dashboard", viewId: string) => {
+    return preferences?.defaultViewType === viewType && preferences?.defaultViewId === viewId;
   };
 
   const hasAnyViews = listViews.length > 0 || kanbanViews.length > 0 || dashboards.length > 0;
@@ -151,6 +207,26 @@ export default function ViewMegaMenu({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isViewDefault("list", view.id)) {
+                          handleUnsetDefault();
+                        } else {
+                          handleSetDefault("list", view.id);
+                        }
+                      }}
+                      className="transition-opacity"
+                      data-testid={`button-star-list-${view.id}`}
+                    >
+                      <Star
+                        className={`h-3.5 w-3.5 ${
+                          isViewDefault("list", view.id)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground hover:text-yellow-400"
+                        }`}
+                      />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         deleteViewMutation.mutate(view.id);
                       }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -192,6 +268,26 @@ export default function ViewMegaMenu({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isViewDefault("kanban", view.id)) {
+                          handleUnsetDefault();
+                        } else {
+                          handleSetDefault("kanban", view.id);
+                        }
+                      }}
+                      className="transition-opacity"
+                      data-testid={`button-star-kanban-${view.id}`}
+                    >
+                      <Star
+                        className={`h-3.5 w-3.5 ${
+                          isViewDefault("kanban", view.id)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground hover:text-yellow-400"
+                        }`}
+                      />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         deleteViewMutation.mutate(view.id);
                       }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -229,6 +325,26 @@ export default function ViewMegaMenu({
                       data-testid={`button-load-dashboard-${dashboard.id}`}
                     >
                       {dashboard.name}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isViewDefault("dashboard", dashboard.id)) {
+                          handleUnsetDefault();
+                        } else {
+                          handleSetDefault("dashboard", dashboard.id);
+                        }
+                      }}
+                      className="transition-opacity"
+                      data-testid={`button-star-dashboard-${dashboard.id}`}
+                    >
+                      <Star
+                        className={`h-3.5 w-3.5 ${
+                          isViewDefault("dashboard", dashboard.id)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground hover:text-yellow-400"
+                        }`}
+                      />
                     </button>
                     <button
                       onClick={(e) => {
