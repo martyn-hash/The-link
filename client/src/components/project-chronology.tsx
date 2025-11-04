@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight } from "lucide-react";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -22,7 +23,7 @@ interface TimelineEntry {
   detail: string;
   assignedTo?: string;
   changedBy?: string;
-  timeInChange?: string;
+  timeInStage?: string;
   rawData: any;
 }
 
@@ -53,6 +54,12 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     progressNotes: true,
     messageThreads: true,
   });
+
+  // Modal state for viewing details
+  const [selectedStageChange, setSelectedStageChange] = useState<any | null>(null);
+  const [selectedProgressNote, setSelectedProgressNote] = useState<any | null>(null);
+  const [isViewingStageChange, setIsViewingStageChange] = useState(false);
+  const [isViewingProgressNote, setIsViewingProgressNote] = useState(false);
 
   // Helper function to format time duration
   const formatDuration = (totalMinutes: number | null) => {
@@ -123,7 +130,6 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           detail,
           assignedTo: entry.assignee ? `${entry.assignee.firstName} ${entry.assignee.lastName}` : undefined,
           changedBy: entry.changedBy ? `${entry.changedBy.firstName} ${entry.changedBy.lastName}` : 'System',
-          timeInChange: entry.timeInPreviousStage ? formatDuration(entry.timeInPreviousStage) : undefined,
           rawData: entry,
         });
       });
@@ -204,8 +210,23 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     }
 
     // Sort by timestamp descending (newest first)
-    return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  }, [project.chronology, tasks, communications, messageThreads, formatDuration]);
+    const sorted = entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    // Post-process to shift timeInPreviousStage to the correct row
+    // For each stage change with timeInPreviousStage, assign that time to the next entry
+    // (which represents the period when the project was IN that previous stage)
+    for (let i = 0; i < sorted.length; i++) {
+      const entry = sorted[i];
+      if (entry.type === 'stage_change' && entry.rawData.timeInPreviousStage) {
+        // Find the next entry in the timeline (chronologically earlier)
+        if (i + 1 < sorted.length) {
+          sorted[i + 1].timeInStage = formatDuration(entry.rawData.timeInPreviousStage);
+        }
+      }
+    }
+    
+    return sorted;
+  }, [project.chronology, tasks, communications, messageThreads]);
 
   // Filter timeline based on selected filters
   const filteredTimeline = useMemo(() => {
@@ -276,13 +297,12 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       case 'sms_received':
       case 'email_sent':
       case 'email_received':
-        // Could open a modal or navigate to communication detail
-        // For now, just log
-        console.log('View communication:', entry.rawData);
+        setSelectedProgressNote(entry.rawData);
+        setIsViewingProgressNote(true);
         break;
       case 'stage_change':
-        // Could open a modal with full chronology details
-        console.log('View stage change:', entry.rawData);
+        setSelectedStageChange(entry.rawData);
+        setIsViewingStageChange(true);
         break;
     }
   };
@@ -376,7 +396,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               <TableHead>Detail</TableHead>
               <TableHead>Assigned To</TableHead>
               <TableHead>Changed By</TableHead>
-              <TableHead>Time in Change</TableHead>
+              <TableHead>Time in Stage</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -411,7 +431,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                 </TableCell>
                 <TableCell data-testid={`cell-time-${entry.id}`}>
                   <span className="text-sm text-muted-foreground">
-                    {entry.timeInChange || '—'}
+                    {entry.timeInStage || '—'}
                   </span>
                 </TableCell>
                 <TableCell>
@@ -430,6 +450,217 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           </TableBody>
         </Table>
       )}
+
+      {/* Stage Change Detail Modal */}
+      <Dialog open={isViewingStageChange} onOpenChange={setIsViewingStageChange}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Stage Change Details</DialogTitle>
+          </DialogHeader>
+          {selectedStageChange && (
+            <div className="space-y-4">
+              {/* Header Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="col-span-2">
+                  <span className="text-xs text-muted-foreground">Stage Transition</span>
+                  <div className="mt-2 flex items-center gap-3">
+                    {selectedStageChange.fromStatus ? (
+                      <>
+                        <Badge variant="outline" className="text-sm" data-testid="modal-badge-from-stage">
+                          {formatStageName(selectedStageChange.fromStatus)}
+                        </Badge>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                        <Badge variant="default" className="text-sm" data-testid="modal-badge-to-stage">
+                          {formatStageName(selectedStageChange.toStatus)}
+                        </Badge>
+                      </>
+                    ) : (
+                      <Badge variant="default" className="text-sm" data-testid="modal-badge-created-stage">
+                        Project created in {formatStageName(selectedStageChange.toStatus)}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Timestamp</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid="text-modal-timestamp">
+                      {selectedStageChange.timestamp 
+                        ? format(new Date(selectedStageChange.timestamp), 'MMM d, yyyy h:mm a')
+                        : 'Unknown time'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Changed By</span>
+                  <div className="mt-1">
+                    {selectedStageChange.changedBy ? (
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid="text-modal-changed-by">
+                          {selectedStageChange.changedBy.firstName} {selectedStageChange.changedBy.lastName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid="text-modal-system">System</span>
+                    )}
+                  </div>
+                </div>
+                {selectedStageChange.assignee && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">Assigned To</span>
+                    <div className="mt-1">
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid="text-modal-assignee">
+                          {selectedStageChange.assignee.firstName} {selectedStageChange.assignee.lastName}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {selectedStageChange.timeInPreviousStage && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">Time in Previous Stage</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium" data-testid="text-modal-time">
+                        {formatDuration(selectedStageChange.timeInPreviousStage)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Change Reason */}
+              {selectedStageChange.changeReason && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Change Reason</span>
+                  <p className="text-sm font-medium mt-2" data-testid="text-modal-change-reason">
+                    {formatChangeReason(selectedStageChange.changeReason)}
+                  </p>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedStageChange.notes && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Notes</span>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-notes">{selectedStageChange.notes}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={() => setIsViewingStageChange(false)}
+                  data-testid="button-close-stage-change-detail"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Progress Note Detail Modal */}
+      <Dialog open={isViewingProgressNote} onOpenChange={setIsViewingProgressNote}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Progress Note Details</DialogTitle>
+          </DialogHeader>
+          {selectedProgressNote && (
+            <div className="space-y-4">
+              {/* Header Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <span className="text-xs text-muted-foreground">Type</span>
+                  <div className="mt-1">
+                    <Badge variant="outline" data-testid="modal-badge-note-type">
+                      {selectedProgressNote.type === 'phone_call' && 'Phone Call'}
+                      {selectedProgressNote.type === 'note' && 'Note'}
+                      {selectedProgressNote.type === 'sms_sent' && 'SMS Sent'}
+                      {selectedProgressNote.type === 'sms_received' && 'SMS Received'}
+                      {selectedProgressNote.type === 'email_sent' && 'Email Sent'}
+                      {selectedProgressNote.type === 'email_received' && 'Email Received'}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Timestamp</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid="text-modal-note-timestamp">
+                      {selectedProgressNote.actualContactTime || selectedProgressNote.loggedAt || selectedProgressNote.createdAt
+                        ? format(new Date(selectedProgressNote.actualContactTime || selectedProgressNote.loggedAt || selectedProgressNote.createdAt), 'MMM d, yyyy h:mm a')
+                        : 'Unknown time'}
+                    </span>
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-xs text-muted-foreground">Logged By</span>
+                  <div className="mt-1">
+                    {selectedProgressNote.user ? (
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid="text-modal-note-user">
+                          {selectedProgressNote.user.firstName} {selectedProgressNote.user.lastName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid="text-modal-note-system">System</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Subject */}
+              {selectedProgressNote.subject && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Subject</span>
+                  <p className="text-sm font-medium mt-2" data-testid="text-modal-note-subject">
+                    {selectedProgressNote.subject}
+                  </p>
+                </div>
+              )}
+
+              {/* Content/Notes */}
+              {selectedProgressNote.notes && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Content</span>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-note-content">{selectedProgressNote.notes}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Duration (for phone calls) */}
+              {selectedProgressNote.duration && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Duration</span>
+                  <p className="text-sm mt-2" data-testid="text-modal-note-duration">
+                    {selectedProgressNote.duration} minutes
+                  </p>
+                </div>
+              )}
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={() => setIsViewingProgressNote(false)}
+                  data-testid="button-close-progress-note-detail"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
