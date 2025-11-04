@@ -15,6 +15,7 @@ import {
   insertDashboardSchema,
   updateDashboardSchema,
   insertUserColumnPreferencesSchema,
+  insertUserProjectPreferencesSchema,
   insertCompanyViewSchema,
   insertProjectViewSchema,
   updateUserNotificationPreferencesSchema,
@@ -812,6 +813,58 @@ export async function registerAuthAndMiscRoutes(
     } catch (error) {
       console.error("Error deleting dashboard:", error instanceof Error ? error.message : error);
       res.status(400).json({ message: "Failed to delete dashboard" });
+    }
+  });
+
+  // ===== USER PROJECT PREFERENCES ROUTES =====
+
+  app.get("/api/project-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const preferences = await storage.getUserProjectPreferences(effectiveUserId);
+      res.json(preferences || {});
+    } catch (error) {
+      console.error("Error fetching project preferences:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch project preferences" });
+    }
+  });
+
+  app.post("/api/project-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const validPreferencesData = insertUserProjectPreferencesSchema.parse({
+        ...req.body,
+        userId: effectiveUserId, // Security: Always use authenticated user ID
+      });
+
+      const preferences = await storage.upsertUserProjectPreferences(validPreferencesData);
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error saving project preferences:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to save project preferences" });
+    }
+  });
+
+  app.delete("/api/project-preferences/default", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      await storage.clearDefaultView(effectiveUserId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error clearing default view:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to clear default view" });
     }
   });
 
