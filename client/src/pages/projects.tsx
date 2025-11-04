@@ -150,6 +150,10 @@ export default function Projects() {
     to: undefined,
   });
 
+  // Save view modal state
+  const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+
   // Delete confirmation state
   const [deleteViewDialogOpen, setDeleteViewDialogOpen] = useState(false);
   const [viewToDelete, setViewToDelete] = useState<any | null>(null);
@@ -419,6 +423,58 @@ export default function Projects() {
     toast({
       title: "Filters Reset",
       description: "Showing all projects",
+    });
+  };
+
+  // Save view mutation
+  const saveViewMutation = useMutation({
+    mutationFn: async (data: { name: string; filters: any; viewMode: "list" | "kanban" }) => {
+      return apiRequest("POST", "/api/project-views", data);
+    },
+    onSuccess: (savedView: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+      setSaveViewDialogOpen(false);
+      setNewViewName("");
+      toast({
+        title: "View saved successfully",
+        description: `"${savedView.name}" has been saved`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save view",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handler to save current view
+  const handleSaveCurrentView = () => {
+    if (!newViewName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a view name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const filters = {
+      serviceFilter,
+      taskAssigneeFilter,
+      serviceOwnerFilter,
+      userFilter,
+      showArchived,
+      dynamicDateFilter,
+      customDateRange,
+      behindScheduleOnly,
+    };
+
+    saveViewMutation.mutate({
+      name: newViewName.trim(),
+      filters: JSON.stringify(filters),
+      viewMode,
     });
   };
 
@@ -877,6 +933,18 @@ export default function Projects() {
                 onLoadKanbanView={handleLoadSavedView}
                 onLoadDashboard={handleLoadDashboard}
               />
+
+              {/* Save Current View button - only show for list/kanban */}
+              {(viewMode === "list" || viewMode === "kanban") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSaveViewDialogOpen(true)}
+                  data-testid="button-save-view"
+                >
+                  Save Current View
+                </Button>
+              )}
 
               {/* View All Projects button */}
               <Button
@@ -1584,6 +1652,52 @@ export default function Projects() {
             </Button>
             <Button onClick={handleAddWidgetToNewDashboard} data-testid="button-confirm-add-new-widget">
               Add Widget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save View Dialog */}
+      <Dialog open={saveViewDialogOpen} onOpenChange={setSaveViewDialogOpen}>
+        <DialogContent data-testid="dialog-save-view">
+          <DialogHeader>
+            <DialogTitle>Save Current View</DialogTitle>
+            <DialogDescription>
+              Save your current filters and view mode for quick access later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="view-name">View Name</Label>
+              <Input
+                id="view-name"
+                value={newViewName}
+                onChange={(e) => setNewViewName(e.target.value)}
+                placeholder="e.g., My Active Projects"
+                data-testid="input-view-name"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p>Current view mode: <strong>{viewMode === "list" ? "List" : "Kanban"}</strong></p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSaveViewDialogOpen(false);
+                setNewViewName("");
+              }}
+              data-testid="button-cancel-save-view"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCurrentView}
+              disabled={saveViewMutation.isPending}
+              data-testid="button-confirm-save-view"
+            >
+              {saveViewMutation.isPending ? "Saving..." : "Save View"}
             </Button>
           </DialogFooter>
         </DialogContent>
