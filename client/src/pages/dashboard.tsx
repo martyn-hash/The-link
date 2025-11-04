@@ -137,24 +137,6 @@ export default function Dashboard() {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  // Fetch my owned projects (service owner)
-  const { data: myOwnedProjects, isLoading: ownedProjectsLoading } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/dashboard/my-owned-projects"],
-    enabled: isAuthenticated && !!user,
-    retry: false,
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-
-  // Fetch my assigned tasks (current assignee)
-  const { data: myAssignedTasks, isLoading: assignedTasksLoading } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/dashboard/my-assigned-tasks"],
-    enabled: isAuthenticated && !!user,
-    retry: false,
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -196,7 +178,7 @@ export default function Dashboard() {
     );
   }
 
-  const isAnyLoading = dashboardLoading || ownedProjectsLoading || assignedTasksLoading || cacheLoading;
+  const isAnyLoading = dashboardLoading || cacheLoading;
 
   if (isAnyLoading && !dashboardData) {
     return (
@@ -230,16 +212,6 @@ export default function Dashboard() {
                 onRefresh={() => refreshCacheMutation.mutate()}
                 isRefreshing={refreshCacheMutation.isPending}
               />
-            )}
-
-            {/* My Tasks (Current Assignee) */}
-            {myAssignedTasks && myAssignedTasks.length > 0 && (
-              <MyTasksPanel tasks={myAssignedTasks} />
-            )}
-
-            {/* My Projects (Service Owner) */}
-            {myOwnedProjects && myOwnedProjects.length > 0 && (
-              <MyProjectsPanel projects={myOwnedProjects} />
             )}
           </div>
         </main>
@@ -414,35 +386,6 @@ function DashboardSummaryCards({
         })}
       </div>
     </div>
-  );
-}
-
-function MyTasksPanel({ tasks }: { tasks: ProjectWithRelations[] }) {
-  const { user } = useAuth();
-  if (!user) return null;
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-blue-500" />
-              My Tasks
-            </CardTitle>
-            <CardDescription>Projects where you're the current assignee</CardDescription>
-          </div>
-          <Badge variant="secondary" data-testid="badge-my-tasks-count">{tasks.length}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <TaskList 
-          projects={tasks} 
-          user={user}
-          viewType="my-tasks"
-        />
-      </CardContent>
-    </Card>
   );
 }
 
@@ -690,35 +633,6 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MyProjectsPanel({ projects }: { projects: ProjectWithRelations[] }) {
-  const { user } = useAuth();
-  if (!user) return null;
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <FolderOpen className="w-5 h-5 text-violet-500" />
-              My Projects
-            </CardTitle>
-            <CardDescription>Projects where you're the service owner</CardDescription>
-          </div>
-          <Badge variant="secondary" data-testid="badge-my-projects-count">{projects.length}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <TaskList 
-          projects={projects} 
-          user={user}
-          viewType="my-projects"
-        />
       </CardContent>
     </Card>
   );

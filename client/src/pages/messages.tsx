@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { isUnauthorizedError } from '@/lib/authUtils';
 import TopNavigation from '@/components/top-navigation';
 import BottomNav from '@/components/bottom-nav';
@@ -143,6 +144,7 @@ interface ProjectMessage {
 export default function Messages() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [archiveFilter, setArchiveFilter] = useState<'open' | 'archived'>('open');
@@ -151,6 +153,7 @@ export default function Messages() {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [threadSearchTerm, setThreadSearchTerm] = useState('');
   const [showNewThreadDialog, setShowNewThreadDialog] = useState(false);
+  const [showMobileThreadView, setShowMobileThreadView] = useState(false);
   const [newThreadTopic, setNewThreadTopic] = useState('');
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [selectedThreadType, setSelectedThreadType] = useState<'project' | 'staff' | null>(null);
@@ -659,10 +662,16 @@ export default function Messages() {
               </TabsList>
 
               {activeTab === 'internal' && (
-                <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Thread
-                </Button>
+                isMobile ? (
+                  <Button onClick={() => setShowNewThreadDialog(true)} size="sm" data-testid="button-new-thread">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                ) : (
+                  <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Thread
+                  </Button>
+                )
               )}
             </div>
 
@@ -710,6 +719,9 @@ export default function Messages() {
                           onClick={() => {
                             setSelectedThreadId(thread.id);
                             setSelectedThreadType(thread.threadType);
+                            if (isMobile) {
+                              setShowMobileThreadView(true);
+                            }
                           }}
                           className={`w-full text-left p-2 hover:bg-muted/50 transition-colors ${
                             selectedThreadId === thread.id ? 'bg-muted' : ''
@@ -763,7 +775,8 @@ export default function Messages() {
                 </CardContent>
               </Card>
 
-              {/* Message View */}
+              {/* Message View - Hidden on mobile */}
+              {!isMobile && (
               <Card className="flex-1 flex flex-col" data-testid="message-view-card">
                 {selectedThreadId && selectedThread ? (
                   <>
@@ -1012,12 +1025,178 @@ export default function Messages() {
                   </div>
                 )}
               </Card>
+              )}
             </div>
           </Tabs>
         </div>
       </div>
       
       <BottomNav user={user} onSearchClick={() => {}} />
+
+      {/* Mobile Thread View Dialog */}
+      {isMobile && selectedThreadId && selectedThread && (
+        <Dialog open={showMobileThreadView} onOpenChange={setShowMobileThreadView}>
+          <DialogContent className="max-w-full h-[90vh] p-0 flex flex-col">
+            <DialogHeader className="border-b p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  {selectedThread.threadType === 'project' && (
+                    <>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {selectedThread.client.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {selectedThread.project.description}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  <DialogTitle>{selectedThread.topic}</DialogTitle>
+                  <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                    <Users className="w-4 h-4" />
+                    <span>
+                      {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messagesLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : messages && messages.length > 0 ? (
+                messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${
+                      message.userId === user?.id ? 'flex-row-reverse' : ''
+                    }`}
+                  >
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                      <AvatarFallback>
+                        {message.user
+                          ? `${message.user.firstName?.[0] || ''}${message.user.lastName?.[0] || ''}`
+                          : 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className={`flex-1 space-y-1 ${message.userId === user?.id ? 'text-right' : ''}`}>
+                      <div className="flex items-center gap-2 text-sm">
+                        {message.userId === user?.id ? (
+                          <>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                            </span>
+                            <span className="font-medium">You</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium">
+                              {message.user ? getUserDisplayName(message.user) : 'Unknown User'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <div
+                        className={`inline-block rounded-lg px-3 py-2 ${
+                          message.userId === user?.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                      </div>
+                      {message.attachments && message.attachments.length > 0 && (
+                        <AttachmentList attachments={message.attachments} compact={true} />
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>No messages yet</p>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <div className="border-t p-4 space-y-2">
+              {selectedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-muted px-2 py-1 rounded text-sm">
+                      <File className="w-4 h-4" />
+                      <span className="max-w-[150px] truncate">{file.name}</span>
+                      <button
+                        onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {recordedAudio && audioUrl && (
+                <div className="bg-muted p-2 rounded flex items-center gap-2">
+                  <VoiceNotePlayer audioUrl={audioUrl} />
+                  <button
+                    onClick={() => {
+                      setRecordedAudio(null);
+                      setAudioUrl(null);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Type a message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  className="flex-1 min-h-[60px] resize-none"
+                  disabled={uploadingFiles}
+                />
+
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={(!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) || uploadingFiles || sendMessageMutation.isPending}
+                  size="sm"
+                >
+                  {uploadingFiles || sendMessageMutation.isPending ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* New Staff Thread Dialog */}
       <Dialog open={showNewThreadDialog} onOpenChange={setShowNewThreadDialog}>

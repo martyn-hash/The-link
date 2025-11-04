@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -84,11 +85,13 @@ export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [location] = useLocation();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
   const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
+  const [behindScheduleOnly, setBehindScheduleOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Reset to list view when no service is selected for kanban
@@ -153,6 +156,31 @@ export default function Projects() {
 
   // Dashboard selector menu state
   const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
+
+  // Read URL query parameters and set filters on mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    const taskAssignee = searchParams.get('taskAssigneeFilter');
+    if (taskAssignee && taskAssignee !== taskAssigneeFilter) {
+      setTaskAssigneeFilter(taskAssignee);
+    }
+    
+    const serviceOwner = searchParams.get('serviceOwnerFilter');
+    if (serviceOwner && serviceOwner !== serviceOwnerFilter) {
+      setServiceOwnerFilter(serviceOwner);
+    }
+    
+    const dateFilter = searchParams.get('dynamicDateFilter');
+    if (dateFilter && (dateFilter === 'overdue' || dateFilter === 'today' || dateFilter === 'next7days' || dateFilter === 'next14days' || dateFilter === 'next30days')) {
+      setDynamicDateFilter(dateFilter as any);
+    }
+    
+    const behindSchedule = searchParams.get('behindSchedule');
+    if (behindSchedule === 'true') {
+      setBehindScheduleOnly(true);
+    }
+  }, [location]); // Only run when location changes
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { archived: showArchived }],
@@ -661,7 +689,39 @@ export default function Projects() {
       }
     }
 
-    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch;
+    // Behind schedule filter - check if project exceeds stage max time
+    let behindScheduleMatch = true;
+    if (behindScheduleOnly) {
+      behindScheduleMatch = false; // Default to false, only match if truly behind
+      
+      if (!project.completionStatus && project.projectType?.kanbanStages) {
+        const currentStageConfig = project.projectType.kanbanStages.find(
+          (s: any) => s.name === project.currentStatus
+        );
+        
+        if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
+          // Get time in current stage from chronology
+          const chronology = project.chronology || [];
+          const sortedChronology = [...chronology].sort((a, b) => 
+            new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+          );
+          
+          const lastEntry = sortedChronology.find((entry: any) => entry.toStatus === project.currentStatus);
+          const startTime = lastEntry?.timestamp || project.createdAt;
+          
+          if (startTime) {
+            // Simple hour calculation (not business hours, but close enough for filtering)
+            const now = new Date();
+            const start = new Date(startTime);
+            const hoursDiff = (now.getTime() - start.getTime()) / (1000 * 60 * 60);
+            
+            behindScheduleMatch = hoursDiff > currentStageConfig.maxInstanceTime;
+          }
+        }
+      }
+    }
+
+    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch && behindScheduleMatch;
   });
 
   // Pagination for list view
