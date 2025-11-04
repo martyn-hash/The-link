@@ -29,11 +29,13 @@ import ProjectMessaging from "@/components/ProjectMessaging";
 import { ProjectProgressNotes } from "@/components/project-progress-notes";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useActivityTracker } from "@/lib/activityTracker";
 import { format } from "date-fns";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface RoleAssigneeResponse {
   user: User | null;
@@ -48,11 +50,13 @@ export default function ProjectDetail() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const { trackProjectView } = useActivityTracker();
+  const isMobile = useIsMobile();
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completionType, setCompletionType] = useState<'completed_successfully' | 'completed_unsuccessfully' | null>(null);
   const [showStageErrorDialog, setShowStageErrorDialog] = useState(false);
   const [stageErrorMessage, setStageErrorMessage] = useState<{ currentStage: string; validStages: string[] } | null>(null);
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
+  const [currentTab, setCurrentTab] = useState<string>("overview");
 
   // Track project view activity when component mounts
   useEffect(() => {
@@ -414,7 +418,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Tabs Layout */}
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
           <TabsList className="grid w-full max-w-4xl grid-cols-4">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
@@ -422,7 +426,13 @@ export default function ProjectDetail() {
             <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="mt-6">
+          <SwipeableTabsWrapper
+            tabs={["overview", "messages", "tasks", "progress-notes"]}
+            currentTab={currentTab}
+            onTabChange={setCurrentTab}
+            enabled={isMobile}
+          >
+            <TabsContent value="overview" className="mt-6">
             <div className="space-y-6">
               {/* Row 1: Full-width project info */}
               <div className="bg-card border border-border rounded-lg p-6">
@@ -557,6 +567,7 @@ export default function ProjectDetail() {
               clientPeople={clientPeople}
             />
           </TabsContent>
+          </SwipeableTabsWrapper>
         </Tabs>
       </div>
 

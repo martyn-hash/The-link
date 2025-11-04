@@ -11,6 +11,7 @@ import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6359,48 +6360,6 @@ export default function ClientDetail() {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const debugMetricsRef = useRef<any[]>([]);
 
-  // Mobile swipe navigation for tabs
-  useEffect(() => {
-    if (!isMobile) return;
-
-    const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
-    let touchStartX = 0;
-    let touchEndX = 0;
-
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartX = e.changedTouches[0].screenX;
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      touchEndX = e.changedTouches[0].screenX;
-      handleSwipe();
-    };
-
-    const handleSwipe = () => {
-      const swipeThreshold = 50; // Minimum distance for swipe
-      const currentIndex = tabs.indexOf(activeTab);
-      
-      if (touchStartX - touchEndX > swipeThreshold && currentIndex < tabs.length - 1) {
-        // Swipe left - go to next tab
-        setActiveTab(tabs[currentIndex + 1]);
-      } else if (touchEndX - touchStartX > swipeThreshold && currentIndex > 0) {
-        // Swipe right - go to previous tab
-        setActiveTab(tabs[currentIndex - 1]);
-      }
-    };
-
-    const tabsContainer = document.querySelector('[data-tab-content="true"]');
-    if (tabsContainer) {
-      tabsContainer.addEventListener('touchstart', handleTouchStart as any);
-      tabsContainer.addEventListener('touchend', handleTouchEnd as any);
-
-      return () => {
-        tabsContainer.removeEventListener('touchstart', handleTouchStart as any);
-        tabsContainer.removeEventListener('touchend', handleTouchEnd as any);
-      };
-    }
-  }, [isMobile, activeTab]);
-
   // Scroll active client tab into view on mobile when activeTab changes
   useEffect(() => {
     if (!isMobile) return;
@@ -7121,6 +7080,12 @@ export default function ClientDetail() {
             </div>
           </div>
 
+          <SwipeableTabsWrapper
+            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"]}
+            currentTab={activeTab}
+            onTabChange={setActiveTab}
+            enabled={isMobile}
+          >
           <TabsContent value="overview" className="space-y-6 mt-6">
             {/* Company Details */}
             <Card>
@@ -8288,6 +8253,7 @@ export default function ClientDetail() {
           <TabsContent value="risk" className="space-y-6 mt-6">
             <RiskAssessmentTab clientId={id} />
           </TabsContent>
+          </SwipeableTabsWrapper>
         </Tabs>
         </div>
       </div>
