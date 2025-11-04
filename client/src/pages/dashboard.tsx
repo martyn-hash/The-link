@@ -213,6 +213,11 @@ export default function Dashboard() {
                 isRefreshing={refreshCacheMutation.isPending}
               />
             )}
+
+            {/* Desktop only: My Projects & My Tasks data views */}
+            {!isMobile && (
+              <MyDashboardPanel user={user} />
+            )}
           </div>
         </main>
       </div>

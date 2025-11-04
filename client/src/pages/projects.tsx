@@ -201,7 +201,7 @@ export default function Projects() {
   }, [behindScheduleOnly]);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/projects", { archived: showArchived }],
+    queryKey: ["/api/projects", { showArchived }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
