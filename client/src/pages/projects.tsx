@@ -256,21 +256,18 @@ export default function Projects() {
       if (defaultViewType === "list") {
         const defaultView = savedViews.find((v: any) => v.id === defaultViewId && v.viewMode === "list");
         if (defaultView) {
-          setViewMode("list");
           handleLoadSavedView(defaultView);
           setHasAutoLoaded(true);
         }
       } else if (defaultViewType === "kanban") {
         const defaultView = savedViews.find((v: any) => v.id === defaultViewId && v.viewMode === "kanban");
         if (defaultView) {
-          setViewMode("kanban");
           handleLoadSavedView(defaultView);
           setHasAutoLoaded(true);
         }
       } else if (defaultViewType === "dashboard") {
         const defaultDashboard = dashboards.find((d: Dashboard) => d.id === defaultViewId);
         if (defaultDashboard) {
-          setViewMode("dashboard");
           handleLoadDashboard(defaultDashboard);
           setHasAutoLoaded(true);
         }

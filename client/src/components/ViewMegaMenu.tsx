@@ -213,7 +213,7 @@ export default function ViewMegaMenu({
                           handleSetDefault("list", view.id);
                         }
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="transition-opacity"
                       data-testid={`button-star-list-${view.id}`}
                     >
                       <Star
@@ -274,7 +274,7 @@ export default function ViewMegaMenu({
                           handleSetDefault("kanban", view.id);
                         }
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="transition-opacity"
                       data-testid={`button-star-kanban-${view.id}`}
                     >
                       <Star
@@ -335,7 +335,7 @@ export default function ViewMegaMenu({
                           handleSetDefault("dashboard", dashboard.id);
                         }
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="transition-opacity"
                       data-testid={`button-star-dashboard-${dashboard.id}`}
                     >
                       <Star

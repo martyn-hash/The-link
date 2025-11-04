@@ -525,6 +525,7 @@ export interface IStorage {
   // User project preferences operations
   getUserProjectPreferences(userId: string): Promise<UserProjectPreferences | undefined>;
   upsertUserProjectPreferences(preferences: InsertUserProjectPreferences): Promise<UserProjectPreferences>;
+  deleteUserProjectPreferences(userId: string): Promise<void>;
   clearDefaultView(userId: string): Promise<void>;
   
   // Analytics operations
@@ -1396,6 +1397,12 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  async deleteUserProjectPreferences(userId: string): Promise<void> {
+    await db
+      .delete(userProjectPreferences)
+      .where(eq(userProjectPreferences.userId, userId));
   }
 
   async clearDefaultView(userId: string): Promise<void> {
