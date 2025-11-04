@@ -13,6 +13,7 @@ import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
+import ViewMegaMenu from "@/components/ViewMegaMenu";
 import PullToRefresh from "react-simple-pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -154,9 +155,6 @@ export default function Projects() {
   const [viewToDelete, setViewToDelete] = useState<any | null>(null);
   const [deleteDashboardDialogOpen, setDeleteDashboardDialogOpen] = useState(false);
   const [dashboardToDelete, setDashboardToDelete] = useState<Dashboard | null>(null);
-
-  // Dashboard selector menu state
-  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
 
   // Read URL query parameters and set filters on mount
   useEffect(() => {
@@ -346,9 +344,6 @@ export default function Projects() {
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
       }
-      
-      // Close the dashboard selector menu
-      setDashboardMenuOpen(false);
       
       toast({
         title: "Dashboard Loaded",
@@ -811,155 +806,17 @@ export default function Projects() {
             </div>
             
             <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
-              {/* Conditionally show dropdowns based on view mode */}
-              {viewMode === "list" ? (
-                // List View: Show saved views dropdown
-                savedViews.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-[200px]" data-testid="select-load-view">
-                        Load saved view...
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[250px]">
-                      {savedViews.map(view => (
-                        <DropdownMenuItem
-                          key={view.id}
-                          className="flex items-center justify-between cursor-pointer"
-                          onSelect={(e) => {
-                            e.preventDefault();
-                          }}
-                        >
-                          <span
-                            className="flex-1 cursor-pointer flex items-center gap-2"
-                            onClick={() => handleLoadSavedView(view)}
-                          >
-                            {view.viewMode === "kanban" && <Columns3 className="h-4 w-4 text-muted-foreground" data-testid="icon-kanban-view" />}
-                            {view.name}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 ml-2 hover:bg-destructive hover:text-destructive-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setViewToDelete(view);
-                              setDeleteViewDialogOpen(true);
-                            }}
-                            data-testid={`button-delete-view-${view.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )
-              ) : viewMode === "dashboard" ? (
-                // Dashboard View: Show dashboards mega-menu and create button
+              {/* Unified View Mega Menu */}
+              <ViewMegaMenu
+                currentViewMode={viewMode}
+                onLoadListView={handleLoadSavedView}
+                onLoadKanbanView={handleLoadSavedView}
+                onLoadDashboard={handleLoadDashboard}
+              />
+
+              {/* Dashboard-specific buttons */}
+              {viewMode === "dashboard" && (
                 <>
-                  {dashboards.length > 0 && (
-                    <DropdownMenu open={dashboardMenuOpen} onOpenChange={setDashboardMenuOpen}>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" data-testid="button-dashboard-selector">
-                          Select Dashboard
-                          <ChevronDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent 
-                        align="end" 
-                        className="w-[600px] p-0"
-                        onMouseLeave={() => setDashboardMenuOpen(false)}
-                      >
-                        <div className="grid grid-cols-[1fr_1px_1fr] gap-4 p-4">
-                          {/* Left Column: My Dashboards */}
-                          <div className="space-y-3">
-                            <h3 className="font-semibold text-sm text-foreground px-2">My Dashboards</h3>
-                            {dashboards.filter(d => d.visibility === "private" || d.userId === user?.id).length > 0 ? (
-                              <div className="space-y-2">
-                                {dashboards
-                                  .filter(d => d.visibility === "private" || d.userId === user?.id)
-                                  .map(dashboard => (
-                                    <Card
-                                      key={dashboard.id}
-                                      className="hover:bg-accent transition-colors cursor-pointer"
-                                      data-testid={`dashboard-item-${dashboard.id}`}
-                                    >
-                                      <CardContent className="p-3">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div
-                                            className="flex-1"
-                                            onClick={() => handleLoadDashboard(dashboard)}
-                                          >
-                                            <h4 className="font-medium text-sm text-foreground">{dashboard.name}</h4>
-                                            {dashboard.description && (
-                                              <p className="text-xs text-muted-foreground mt-1">{dashboard.description}</p>
-                                            )}
-                                          </div>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 hover:bg-destructive hover:text-destructive-foreground flex-shrink-0"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDashboardToDelete(dashboard);
-                                              setDeleteDashboardDialogOpen(true);
-                                            }}
-                                            data-testid={`button-delete-dashboard-${dashboard.id}`}
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      </CardContent>
-                                    </Card>
-                                  ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground px-2 py-4">No dashboards yet</p>
-                            )}
-                          </div>
-
-                          {/* Divider */}
-                          <div className="border-l border-border h-full" />
-
-                          {/* Right Column: Shared Dashboards */}
-                          <div className="space-y-3">
-                            <h3 className="font-semibold text-sm text-foreground px-2">Shared Dashboards</h3>
-                            {dashboards.filter(d => d.visibility === "shared" && d.userId !== user?.id).length > 0 ? (
-                              <div className="space-y-2">
-                                {dashboards
-                                  .filter(d => d.visibility === "shared" && d.userId !== user?.id)
-                                  .map(dashboard => {
-                                    const owner = users?.find(u => u.id === dashboard.userId);
-                                    return (
-                                      <Card
-                                        key={dashboard.id}
-                                        className="hover:bg-accent transition-colors cursor-pointer"
-                                        data-testid={`shared-dashboard-item-${dashboard.id}`}
-                                        onClick={() => handleLoadDashboard(dashboard)}
-                                      >
-                                        <CardContent className="p-3">
-                                          <h4 className="font-medium text-sm text-foreground">{dashboard.name}</h4>
-                                          {dashboard.description && (
-                                            <p className="text-xs text-muted-foreground mt-1">{dashboard.description}</p>
-                                          )}
-                                          <p className="text-xs text-muted-foreground mt-1">
-                                            by {owner?.email || dashboard.userId}
-                                          </p>
-                                        </CardContent>
-                                      </Card>
-                                    );
-                                  })}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground px-2 py-4">No dashboards yet</p>
-                            )}
-                          </div>
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  
                   {/* Create Dashboard button always visible */}
                   <Button
                     variant="outline"
@@ -1019,7 +876,7 @@ export default function Projects() {
                     </>
                   )}
                 </>
-              ) : null}
+              )}
 
               {/* View Mode Toggle */}
               {isManagerOrAdmin && (
