@@ -38,6 +38,8 @@ import {
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
+import PullToRefresh from 'react-simple-pull-to-refresh';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ProjectMessageThread {
   threadType: 'project';
@@ -142,6 +144,7 @@ export default function InternalChat() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
+  const isMobile = useIsMobile();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [archiveFilter, setArchiveFilter] = useState<'open' | 'archived'>('open');
   const [newMessage, setNewMessage] = useState('');
@@ -201,6 +204,20 @@ export default function InternalChat() {
   ].sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
 
   const threadsLoading = projectThreadsLoading || staffThreadsLoading;
+
+  // Pull-to-refresh handler - invalidates all message-related queries
+  const handleRefresh = async () => {
+    if (!user) return;
+    
+    await queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+    await queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
+    if (selectedThreadId) {
+      const queryKey = selectedThreadType === 'staff' 
+        ? ['/api/staff-messages/threads', selectedThreadId, 'messages']
+        : ['/api/internal/project-messages/threads', selectedThreadId, 'messages'];
+      await queryClient.invalidateQueries({ queryKey });
+    }
+  };
 
   // Fetch all users for participant selection
   const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
@@ -731,68 +748,148 @@ export default function InternalChat() {
                 </CardHeader>
 
                 <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messagesLoading ? (
-                    <div className="space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-16 w-full" />
-                      ))}
-                    </div>
-                  ) : messages && messages.length > 0 ? (
-                    <>
-                      {messages.map((message) => {
-                        const isCurrentUser = message.userId === user?.id;
-                        return (
-                          <div
-                            key={message.id}
-                            className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                            data-testid={`message-${message.id}`}
-                          >
-                            <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
-                              <div className="flex items-center gap-2 mb-1">
-                                {!isCurrentUser && message.user && (
-                                  <>
-                                    <Avatar className="w-6 h-6">
-                                      <AvatarFallback className="text-xs">
-                                        {getUserInitials(message.user)}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs text-muted-foreground">
-                                      {getUserDisplayName(message.user)}
-                                    </span>
-                                  </>
-                                )}
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                                </span>
-                              </div>
-                              <div
-                                className={`rounded-lg p-3 ${
-                                  isCurrentUser
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted'
-                                }`}
-                              >
-                                <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
-                                {message.attachments && message.attachments.length > 0 && (
-                                  <div className="mt-2">
-                                    <AttachmentList
-                                      attachments={message.attachments}
-                                      readonly={true}
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                  {isMobile ? (
+                    <PullToRefresh
+                      onRefresh={handleRefresh}
+                      pullingContent=""
+                      refreshingContent={
+                        <div className="flex items-center justify-center py-4">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                        </div>
+                      }
+                    >
+                      <div className="space-y-4">
+                        {messagesLoading ? (
+                          <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                              <Skeleton key={i} className="h-16 w-full" />
+                            ))}
                           </div>
-                        );
-                      })}
-                      <div ref={messagesEndRef} />
-                    </>
+                        ) : messages && messages.length > 0 ? (
+                          <>
+                            {messages.map((message) => {
+                              const isCurrentUser = message.userId === user?.id;
+                              return (
+                                <div
+                                  key={message.id}
+                                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                                  data-testid={`message-${message.id}`}
+                                >
+                                  <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      {!isCurrentUser && message.user && (
+                                        <>
+                                          <Avatar className="w-6 h-6">
+                                            <AvatarFallback className="text-xs">
+                                              {getUserInitials(message.user)}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                          <span className="text-xs text-muted-foreground">
+                                            {getUserDisplayName(message.user)}
+                                          </span>
+                                        </>
+                                      )}
+                                      <span className="text-xs text-muted-foreground">
+                                        {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                                      </span>
+                                    </div>
+                                    <div
+                                      className={`rounded-lg p-3 ${
+                                        isCurrentUser
+                                          ? 'bg-primary text-primary-foreground'
+                                          : 'bg-muted'
+                                      }`}
+                                    >
+                                      <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                      {message.attachments && message.attachments.length > 0 && (
+                                        <div className="mt-2">
+                                          <AttachmentList
+                                            attachments={message.attachments}
+                                            readonly={true}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <div ref={messagesEndRef} />
+                          </>
+                        ) : (
+                          <div className="text-center text-muted-foreground py-8">
+                            <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                            <p>No messages yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </PullToRefresh>
                   ) : (
-                    <div className="text-center text-muted-foreground py-8">
-                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>No messages yet</p>
-                    </div>
+                    <>
+                      {messagesLoading ? (
+                        <div className="space-y-3">
+                          {[1, 2, 3].map((i) => (
+                            <Skeleton key={i} className="h-16 w-full" />
+                          ))}
+                        </div>
+                      ) : messages && messages.length > 0 ? (
+                        <>
+                          {messages.map((message) => {
+                            const isCurrentUser = message.userId === user?.id;
+                            return (
+                              <div
+                                key={message.id}
+                                className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                                data-testid={`message-${message.id}`}
+                              >
+                                <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    {!isCurrentUser && message.user && (
+                                      <>
+                                        <Avatar className="w-6 h-6">
+                                          <AvatarFallback className="text-xs">
+                                            {getUserInitials(message.user)}
+                                          </AvatarFallback>
+                                          </Avatar>
+                                        <span className="text-xs text-muted-foreground">
+                                          {getUserDisplayName(message.user)}
+                                        </span>
+                                      </>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                                    </span>
+                                  </div>
+                                  <div
+                                    className={`rounded-lg p-3 ${
+                                      isCurrentUser
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-muted'
+                                    }`}
+                                  >
+                                    <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                    {message.attachments && message.attachments.length > 0 && (
+                                      <div className="mt-2">
+                                        <AttachmentList
+                                          attachments={message.attachments}
+                                          readonly={true}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div ref={messagesEndRef} />
+                        </>
+                      ) : (
+                        <div className="text-center text-muted-foreground py-8">
+                          <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No messages yet</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </CardContent>
 

@@ -13,6 +13,7 @@ import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
+import PullToRefresh from "react-simple-pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -232,6 +233,17 @@ export default function Projects() {
     enabled: isAuthenticated && !!user,
     retry: false,
   });
+
+  // Pull-to-refresh handler - invalidates all project-related queries
+  const handleRefresh = async () => {
+    if (!isAuthenticated || !user) return;
+    
+    await queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/services/with-active-clients"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+  };
 
   // Normalize dashboard service filter when allServices loads
   // This handles race condition where dashboard is loaded before services are available
@@ -1052,84 +1064,183 @@ export default function Projects() {
         
         {/* Main Content */}
         <main className="flex-1 overflow-hidden pb-0 md:pb-0" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
-          {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading projects...</p>
-              </div>
-            </div>
-          ) : viewMode === "dashboard" ? (
-            <DashboardBuilder
-              filters={{
-                serviceFilter: dashboardServiceFilter,
-                taskAssigneeFilter: dashboardTaskAssigneeFilter,
-                serviceOwnerFilter: dashboardServiceOwnerFilter,
-                userFilter: dashboardUserFilter,
-                showArchived: dashboardShowArchived,
-                dynamicDateFilter: dashboardDynamicDateFilter,
-                customDateRange: dashboardCustomDateRange,
-              }}
-              widgets={dashboardWidgets}
-              editMode={dashboardEditMode}
-              onAddWidget={() => {
-                setIsCreatingDashboard(true);
-                setCurrentDashboard(null);
-                setNewDashboardName("");
-                setNewDashboardWidgets([]);
-                setCreateDashboardModalOpen(true);
-              }}
-              onRemoveWidget={(widgetId) => {
-                setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
-              }}
-              currentDashboard={currentDashboard}
-            />
-          ) : viewMode === "kanban" ? (
-            <KanbanBoard 
-              projects={paginatedProjects} 
-              user={user}
-              onSwitchToList={() => setViewMode("list")}
-            />
-          ) : (
-            <>
-              <TaskList 
-                projects={paginatedProjects} 
-                user={user} 
-                serviceFilter={serviceFilter}
-                onSwitchToKanban={() => setViewMode("kanban")}
-              />
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 px-4 pb-4">
-                  <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
-                    Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+          {isMobile ? (
+            <PullToRefresh
+              onRefresh={handleRefresh}
+              pullingContent=""
+              refreshingContent={
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              }
+            >
+              <div>
+                {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
+                  <div className="flex items-center justify-center h-full min-h-[400px]">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-muted-foreground">Loading projects...</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      data-testid="button-prev-page"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Button>
-                    <span className="text-sm" data-testid="text-current-page">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      data-testid="button-next-page"
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                ) : viewMode === "dashboard" ? (
+                  <DashboardBuilder
+                    filters={{
+                      serviceFilter: dashboardServiceFilter,
+                      taskAssigneeFilter: dashboardTaskAssigneeFilter,
+                      serviceOwnerFilter: dashboardServiceOwnerFilter,
+                      userFilter: dashboardUserFilter,
+                      showArchived: dashboardShowArchived,
+                      dynamicDateFilter: dashboardDynamicDateFilter,
+                      customDateRange: dashboardCustomDateRange,
+                    }}
+                    widgets={dashboardWidgets}
+                    editMode={dashboardEditMode}
+                    onAddWidget={() => {
+                      setIsCreatingDashboard(true);
+                      setCurrentDashboard(null);
+                      setNewDashboardName("");
+                      setNewDashboardWidgets([]);
+                      setCreateDashboardModalOpen(true);
+                    }}
+                    onRemoveWidget={(widgetId) => {
+                      setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
+                    }}
+                    currentDashboard={currentDashboard}
+                  />
+                ) : viewMode === "kanban" ? (
+                  <KanbanBoard 
+                    projects={paginatedProjects} 
+                    user={user}
+                    onSwitchToList={() => setViewMode("list")}
+                  />
+                ) : (
+                  <>
+                    <TaskList 
+                      projects={paginatedProjects} 
+                      user={user} 
+                      serviceFilter={serviceFilter}
+                      onSwitchToKanban={() => setViewMode("kanban")}
+                    />
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                          Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            data-testid="button-prev-page"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm" data-testid="text-current-page">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            data-testid="button-next-page"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </PullToRefresh>
+          ) : (
+            // Desktop view - no pull-to-refresh
+            <>
+              {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading projects...</p>
                   </div>
                 </div>
+              ) : viewMode === "dashboard" ? (
+                <DashboardBuilder
+                  filters={{
+                    serviceFilter: dashboardServiceFilter,
+                    taskAssigneeFilter: dashboardTaskAssigneeFilter,
+                    serviceOwnerFilter: dashboardServiceOwnerFilter,
+                    userFilter: dashboardUserFilter,
+                    showArchived: dashboardShowArchived,
+                    dynamicDateFilter: dashboardDynamicDateFilter,
+                    customDateRange: dashboardCustomDateRange,
+                  }}
+                  widgets={dashboardWidgets}
+                  editMode={dashboardEditMode}
+                  onAddWidget={() => {
+                    setIsCreatingDashboard(true);
+                    setCurrentDashboard(null);
+                    setNewDashboardName("");
+                    setNewDashboardWidgets([]);
+                    setCreateDashboardModalOpen(true);
+                  }}
+                  onRemoveWidget={(widgetId) => {
+                    setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
+                  }}
+                  currentDashboard={currentDashboard}
+                />
+              ) : viewMode === "kanban" ? (
+                <KanbanBoard 
+                  projects={paginatedProjects} 
+                  user={user}
+                  onSwitchToList={() => setViewMode("list")}
+                />
+              ) : (
+                <>
+                  <TaskList 
+                    projects={paginatedProjects} 
+                    user={user} 
+                    serviceFilter={serviceFilter}
+                    onSwitchToKanban={() => setViewMode("kanban")}
+                  />
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                      <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                        Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          data-testid="button-prev-page"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Previous
+                        </Button>
+                        <span className="text-sm" data-testid="text-current-page">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          data-testid="button-next-page"
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

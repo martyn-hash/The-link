@@ -48,6 +48,7 @@ import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { SwipeableTaskCard } from "@/components/swipeable-task-card";
 import TopNavigation from "@/components/top-navigation";
 import { format } from "date-fns";
+import PullToRefresh from "react-simple-pull-to-refresh";
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -221,6 +222,16 @@ export default function InternalTasks() {
     },
     enabled: activeTab === "all",
   });
+
+  // Pull-to-refresh handler - invalidates all task-related queries including tab-specific ones
+  const handleRefresh = async () => {
+    if (!user) return;
+    
+    await queryClient.invalidateQueries({ queryKey: ['/api/internal-tasks/assigned'] });
+    await queryClient.invalidateQueries({ queryKey: ['/api/internal-tasks/created'] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/internal-tasks"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+  };
 
   const getCurrentTasks = () => {
     switch (activeTab) {
@@ -520,6 +531,25 @@ export default function InternalTasks() {
     </div>
   );
 
+  const TabContentWrapper = ({ children }: { children: React.ReactNode }) => {
+    if (isMobile) {
+      return (
+        <PullToRefresh
+          onRefresh={handleRefresh}
+          pullingContent=""
+          refreshingContent={
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          }
+        >
+          <div>{children}</div>
+        </PullToRefresh>
+      );
+    }
+    return <>{children}</>;
+  };
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <TopNavigation user={user} />
@@ -633,113 +663,118 @@ export default function InternalTasks() {
               )}
 
               <TabsContent value="assigned" className="mt-0">
-                {isLoading ? (
-                  <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
-                    Loading tasks...
-                  </div>
-                ) : tasks.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
-                    No tasks assigned to you
-                  </div>
-                ) : (
-                  <>
-                    {isMobile ? <TaskMobileList /> : <TaskTable />}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between mt-4 px-2">
-                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
-                          Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                <TabContentWrapper>
+                  {isLoading ? (
+                    <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
+                      Loading tasks...
+                    </div>
+                  ) : tasks.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
+                      No tasks assigned to you
+                    </div>
+                  ) : (
+                    <>
+                      {isMobile ? <TaskMobileList /> : <TaskTable />}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-4 px-2">
+                          <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                            Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              data-testid="button-prev-page"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm" data-testid="text-current-page">
+                              Page {currentPage} of {totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              data-testid="button-next-page"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                            disabled={currentPage === 1}
-                            data-testid="button-prev-page"
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                            Previous
-                          </Button>
-                          <span className="text-sm" data-testid="text-current-page">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage === totalPages}
-                            data-testid="button-next-page"
-                          >
-                            Next
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                      )}
+                    </>
+                  )}
+                </TabContentWrapper>
               </TabsContent>
 
               <TabsContent value="created" className="mt-0">
-                {isLoading ? (
-                  <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
-                    Loading tasks...
-                  </div>
-                ) : tasks.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
-                    No tasks created by you
-                  </div>
-                ) : (
-                  <>
-                    {isMobile ? <TaskMobileList /> : <TaskTable />}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between mt-4 px-2">
-                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
-                          Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                <TabContentWrapper>
+                  {isLoading ? (
+                    <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
+                      Loading tasks...
+                    </div>
+                  ) : tasks.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
+                      No tasks created by you
+                    </div>
+                  ) : (
+                    <>
+                      {isMobile ? <TaskMobileList /> : <TaskTable />}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-4 px-2">
+                          <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                            Showing {startIndex + 1}-{Math.min(endIndex, allTasksData.length)} of {allTasksData.length} tasks
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              data-testid="button-prev-page"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm" data-testid="text-current-page">
+                              Page {currentPage} of {totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              data-testid="button-next-page"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                            disabled={currentPage === 1}
-                            data-testid="button-prev-page"
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                            Previous
-                          </Button>
-                          <span className="text-sm" data-testid="text-current-page">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage === totalPages}
-                            data-testid="button-next-page"
-                          >
-                            Next
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                      )}
+                    </>
+                  )}
+                </TabContentWrapper>
               </TabsContent>
 
               <TabsContent value="all" className="mt-0">
-                {isLoading ? (
-                  <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
-                    Loading tasks...
-                  </div>
-                ) : tasks.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
-                    No tasks found
-                  </div>
-                ) : (
-                  <>
-                    {isMobile ? <TaskMobileList /> : <TaskTable />}
+                <TabContentWrapper>
+                  {isLoading ? (
+                    <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
+                      Loading tasks...
+                    </div>
+                  ) : tasks.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
+                      No tasks found
+                    </div>
+                  ) : (
+                    <>
+                      {isMobile ? <TaskMobileList /> : <TaskTable />}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-4 px-2">
                         <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -774,6 +809,7 @@ export default function InternalTasks() {
                     )}
                   </>
                 )}
+                </TabContentWrapper>
               </TabsContent>
             </Tabs>
           </CardContent>
