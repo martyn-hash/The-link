@@ -232,6 +232,48 @@ export default function Projects() {
     retry: false,
   });
 
+  // Fetch user project preferences (for default view)
+  const { data: userPreferences } = useQuery<any>({
+    queryKey: ["/api/user-project-preferences"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+  });
+
+  // Auto-load default view on mount
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
+  useEffect(() => {
+    // Only auto-load once, when preferences and views are loaded
+    if (hasAutoLoaded || !userPreferences || !savedViews || !dashboards) return;
+    
+    const { defaultViewType, defaultViewId } = userPreferences;
+    
+    if (defaultViewType && defaultViewId) {
+      // Find and load the default view based on type
+      if (defaultViewType === "list") {
+        const defaultView = savedViews.find((v: any) => v.id === defaultViewId && v.viewMode === "list");
+        if (defaultView) {
+          setViewMode("list");
+          handleLoadSavedView(defaultView);
+          setHasAutoLoaded(true);
+        }
+      } else if (defaultViewType === "kanban") {
+        const defaultView = savedViews.find((v: any) => v.id === defaultViewId && v.viewMode === "kanban");
+        if (defaultView) {
+          setViewMode("kanban");
+          handleLoadSavedView(defaultView);
+          setHasAutoLoaded(true);
+        }
+      } else if (defaultViewType === "dashboard") {
+        const defaultDashboard = dashboards.find((d: Dashboard) => d.id === defaultViewId);
+        if (defaultDashboard) {
+          setViewMode("dashboard");
+          handleLoadDashboard(defaultDashboard);
+          setHasAutoLoaded(true);
+        }
+      }
+    }
+  }, [userPreferences, savedViews, dashboards, hasAutoLoaded]);
+
   // Pull-to-refresh handler - invalidates all project-related queries
   const handleRefresh = async () => {
     if (!isAuthenticated || !user) return;
@@ -241,6 +283,7 @@ export default function Projects() {
     await queryClient.invalidateQueries({ queryKey: ["/api/services/with-active-clients"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
   };
 
   // Normalize dashboard service filter when allServices loads
