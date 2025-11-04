@@ -502,7 +502,7 @@ export default function ProjectDetail() {
                         {projectInternalTasks.map((task: any) => (
                           <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
                             <TableCell className="font-medium">
-                              <RouterLink href={`/internal-tasks?task=${task.id}`}>
+                              <RouterLink to={`/internal-tasks?task=${task.id}`}>
                                 <button className="hover:underline text-left" data-testid={`link-task-${task.id}`}>
                                   {task.title}
                                 </button>
@@ -540,7 +540,7 @@ export default function ProjectDetail() {
                               {format(new Date(task.createdAt), 'MMM d, yyyy')}
                             </TableCell>
                             <TableCell className="text-right">
-                              <RouterLink href={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                              <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
                                 <Button
                                   variant="ghost"
                                   size="sm"
