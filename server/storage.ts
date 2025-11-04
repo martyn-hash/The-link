@@ -11355,7 +11355,7 @@ export async function initializeDefaultNotificationTemplates(): Promise<void> {
         templateType: 'task_assigned',
         name: 'Task Assigned',
         titleTemplate: 'New Task Assigned',
-        bodyTemplate: '{assigneeName} assigned you a task',
+        bodyTemplate: '{creatorName} assigned you a task: {taskTitle}',
         iconUrl: '/pwa-icon-192.png',
         badgeUrl: null,
         isActive: true,

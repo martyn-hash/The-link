@@ -16,6 +16,8 @@ import {
   bulkUpdateTaskStatusSchema,
   insertTaskDocumentSchema,
 } from "@shared/schema";
+import { sendInternalTaskAssignmentEmail } from "../emailService";
+import { sendTemplateNotification } from "../notification-template-service";
 
 // Configure multer for task document uploads (all file types allowed)
 const taskDocumentUpload = multer({
@@ -250,6 +252,55 @@ export function registerInternalTaskRoutes(
       
       const created = await storage.createInternalTask(taskData);
       
+      // Send notifications if assignee is different from creator
+      if (created.assignedTo !== userId) {
+        try {
+          // Get assignee and creator details
+          const assignee = await storage.getUser(created.assignedTo);
+          const creator = await storage.getUser(userId);
+          
+          // Get task type name if available
+          let taskTypeName = null;
+          if (created.taskTypeId) {
+            const taskType = await storage.getTaskTypeById(created.taskTypeId);
+            taskTypeName = taskType?.name || null;
+          }
+          
+          if (assignee && creator) {
+            // Send email notification
+            await sendInternalTaskAssignmentEmail(
+              assignee.email,
+              assignee.name,
+              created.title,
+              created.description,
+              created.priority,
+              created.dueDate,
+              creator.name,
+              taskTypeName
+            );
+            
+            // Send push notification
+            await sendTemplateNotification(
+              'task_assigned',
+              [assignee.id],
+              {
+                taskTitle: created.title,
+                assigneeName: assignee.name,
+                creatorName: creator.name,
+                priority: created.priority,
+                dueDate: created.dueDate ? created.dueDate.toLocaleDateString('en-GB') : 'No due date'
+              },
+              '/internal-tasks'
+            );
+            
+            console.log(`Notifications sent for internal task assignment to ${assignee.email}`);
+          }
+        } catch (notificationError) {
+          console.error("Error sending notifications:", notificationError);
+          // Don't fail the request if notifications fail
+        }
+      }
+      
       res.json(created);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -291,7 +342,60 @@ export function registerInternalTaskRoutes(
     try {
       const userId = req.user?.effectiveUserId || req.user?.id;
       const taskData = updateInternalTaskSchema.parse(req.body);
+      
+      // Get original task to check if assignee changed
+      const originalTask = await storage.getInternalTaskById(req.params.id);
+      
       const updated = await storage.updateInternalTask(req.params.id, taskData);
+      
+      // Send notifications if assignee changed and is different from current user
+      if (taskData.assignedTo && originalTask && taskData.assignedTo !== originalTask.assignedTo && taskData.assignedTo !== userId) {
+        try {
+          // Get assignee and reassigner details
+          const assignee = await storage.getUser(taskData.assignedTo);
+          const reassigner = await storage.getUser(userId);
+          
+          // Get task type name if available
+          let taskTypeName = null;
+          if (updated.taskTypeId) {
+            const taskType = await storage.getTaskTypeById(updated.taskTypeId);
+            taskTypeName = taskType?.name || null;
+          }
+          
+          if (assignee && reassigner) {
+            // Send email notification
+            await sendInternalTaskAssignmentEmail(
+              assignee.email,
+              assignee.name,
+              updated.title,
+              updated.description,
+              updated.priority,
+              updated.dueDate,
+              reassigner.name,
+              taskTypeName
+            );
+            
+            // Send push notification
+            await sendTemplateNotification(
+              'task_assigned',
+              [assignee.id],
+              {
+                taskTitle: updated.title,
+                assigneeName: assignee.name,
+                creatorName: reassigner.name,
+                priority: updated.priority,
+                dueDate: updated.dueDate ? updated.dueDate.toLocaleDateString('en-GB') : 'No due date'
+              },
+              '/internal-tasks'
+            );
+            
+            console.log(`Notifications sent for internal task reassignment to ${assignee.email}`);
+          }
+        } catch (notificationError) {
+          console.error("Error sending reassignment notifications:", notificationError);
+          // Don't fail the request if notifications fail
+        }
+      }
       
       res.json(updated);
     } catch (error) {

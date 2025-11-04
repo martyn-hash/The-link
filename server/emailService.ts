@@ -698,3 +698,119 @@ The Link Team
   });
 }
 
+export async function sendInternalTaskAssignmentEmail(
+  assigneeEmail: string,
+  assigneeName: string,
+  taskTitle: string,
+  taskDescription: string | null,
+  priority: string,
+  dueDate: Date | null,
+  creatorName: string,
+  taskTypeName: string | null
+): Promise<boolean> {
+  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+  const subject = `New Internal Task Assigned: ${taskTitle} - The Link`;
+  
+  const priorityColors: Record<string, { bg: string; text: string }> = {
+    urgent: { bg: '#fef2f2', text: '#dc2626' },
+    high: { bg: '#fef3c7', text: '#f59e0b' },
+    medium: { bg: '#dbeafe', text: '#1e40af' },
+    low: { bg: '#f0fdf4', text: '#166534' }
+  };
+  
+  const priorityEmoji: Record<string, string> = {
+    urgent: '🔴',
+    high: '🟠',
+    medium: '🟡',
+    low: '🟢'
+  };
+  
+  const priorityColor = priorityColors[priority] || priorityColors.medium;
+  const emoji = priorityEmoji[priority] || '📋';
+  const formattedPriority = priority.charAt(0).toUpperCase() + priority.slice(1);
+  const formattedDueDate = dueDate ? new Date(dueDate).toLocaleDateString('en-GB', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  }) : 'No due date set';
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
+          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        </div>
+        <div style="padding: 40px 30px;">
+          <h2 style="color: #1e293b; margin-top: 0;">${emoji} New Internal Task Assigned</h2>
+          <p style="color: #475569; font-size: 16px;">Hello ${assigneeName},</p>
+          <p style="color: #475569; font-size: 16px;">You have been assigned a new internal task by ${creatorName}:</p>
+          
+          <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
+            <h3 style="margin-top: 0; color: #0A7BBF; font-size: 18px;">📋 Task Details</h3>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Title:</strong> ${taskTitle}</p>
+            ${taskDescription ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Description:</strong> ${taskDescription}</p>` : ''}
+            ${taskTypeName ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Type:</strong> ${taskTypeName}</p>` : ''}
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Priority:</strong> <span style="background-color: ${priorityColor.bg}; color: ${priorityColor.text}; padding: 4px 12px; border-radius: 6px; font-weight: 600;">${emoji} ${formattedPriority}</span></p>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Due Date:</strong> ${formattedDueDate}</p>
+            <p style="margin-bottom: 0; color: #374151;"><strong>Assigned By:</strong> ${creatorName}</p>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${baseUrl}/internal-tasks" 
+               style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
+              🚀 View Task in The Link
+            </a>
+          </div>
+          
+          <p style="color: #475569; font-size: 16px;">Please log into The Link system to view the complete task details and take the necessary action.</p>
+        </div>
+        <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
+          <p style="margin: 0 0 10px 0;">
+            <strong style="color: #0A7BBF;">The Link</strong> by Growth Accountants
+          </p>
+          <p style="margin: 0; font-size: 13px;">
+            Your workflow management partner
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+Hello ${assigneeName},
+
+You have been assigned a new internal task by ${creatorName}:
+
+TASK DETAILS:
+Title: ${taskTitle}
+${taskDescription ? `Description: ${taskDescription}` : ''}
+${taskTypeName ? `Type: ${taskTypeName}` : ''}
+Priority: ${formattedPriority}
+Due Date: ${formattedDueDate}
+Assigned By: ${creatorName}
+
+Please log into The Link system to view the complete task details and take the necessary action.
+
+View Task: ${baseUrl}/internal-tasks
+
+Best regards,
+The Link Team
+  `;
+
+  return await sendEmail({
+    to: assigneeEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
