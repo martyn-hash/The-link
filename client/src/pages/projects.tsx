@@ -216,10 +216,10 @@ export default function Projects() {
 
   // Fetch all services (for dropdown population)
   const { data: allServices = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/services/with-active-clients"],
+    queryKey: ["/api/services/active"],
     enabled: isAuthenticated && !!user,
     retry: false,
-    select: (data: any[]) => data.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
+    select: (data: any[]) => data.map((s: any) => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 
   // Fetch saved project views
@@ -246,8 +246,9 @@ export default function Projects() {
   // Auto-load default view on mount
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   useEffect(() => {
-    // Only auto-load once, when preferences and views are loaded
-    if (hasAutoLoaded || !userPreferences || !savedViews || !dashboards) return;
+    // Only auto-load once, when preferences, views, and services are loaded
+    // We need allServices to be loaded so that Select components can display the service names
+    if (hasAutoLoaded || !userPreferences || !savedViews || !dashboards || !allServices.length) return;
     
     const { defaultViewType, defaultViewId } = userPreferences;
     
@@ -273,7 +274,7 @@ export default function Projects() {
         }
       }
     }
-  }, [userPreferences, savedViews, dashboards, hasAutoLoaded]);
+  }, [userPreferences, savedViews, dashboards, hasAutoLoaded, allServices]);
 
   // Pull-to-refresh handler - invalidates all project-related queries
   const handleRefresh = async () => {
