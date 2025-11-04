@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   ClipboardList,
@@ -34,6 +45,7 @@ import {
 } from "lucide-react";
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { SwipeableTaskCard } from "@/components/swipeable-task-card";
 import TopNavigation from "@/components/top-navigation";
 import { format } from "date-fns";
 
@@ -148,6 +160,7 @@ export default function InternalTasks() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<"assigned" | "created" | "all">("assigned");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -157,6 +170,7 @@ export default function InternalTasks() {
   const [selectedAssignee, setSelectedAssignee] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
 
   // Fetch staff members for bulk reassign
   const { data: staff = [] } = useQuery<User[]>({
@@ -353,6 +367,106 @@ export default function InternalTasks() {
     }
   };
 
+  // Complete task mutation (mark as closed)
+  const completeTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      return await apiRequest("PATCH", `/api/internal-tasks/${taskId}`, {
+        status: "closed",
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Task completed",
+        description: "The task has been marked as closed.",
+      });
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/internal-tasks');
+        }
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to complete task",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete task mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      return await apiRequest("DELETE", `/api/internal-tasks/${taskId}`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Task deleted",
+        description: "The task has been deleted successfully.",
+      });
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/internal-tasks');
+        }
+      });
+      setDeleteTaskId(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete task",
+        variant: "destructive",
+      });
+      setDeleteTaskId(null);
+    },
+  });
+
+  // Archive task mutation
+  const archiveTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      return await apiRequest("POST", `/api/internal-tasks/${taskId}/archive`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Task archived",
+        description: "The task has been archived successfully.",
+      });
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/internal-tasks');
+        }
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to archive task",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCompleteTask = (taskId: string) => {
+    completeTaskMutation.mutate(taskId);
+  };
+
+  const handleArchiveTask = (taskId: string) => {
+    archiveTaskMutation.mutate(taskId);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setDeleteTaskId(taskId);
+  };
+
+  const confirmDeleteTask = () => {
+    if (deleteTaskId) {
+      deleteTaskMutation.mutate(deleteTaskId);
+    }
+  };
+
   const TaskTable = () => (
     <div className="border rounded-lg">
       <Table>
@@ -386,6 +500,23 @@ export default function InternalTasks() {
           ))}
         </TableBody>
       </Table>
+    </div>
+  );
+
+  const TaskMobileList = () => (
+    <div className="space-y-2" data-testid="task-mobile-list">
+      {tasks.map((task) => (
+        <SwipeableTaskCard
+          key={task.id}
+          task={task}
+          selected={selectedTasks.includes(task.id)}
+          onSelect={(checked) => handleSelectTask(task.id, checked)}
+          onView={() => handleViewTask(task.id)}
+          onComplete={() => handleCompleteTask(task.id)}
+          onArchive={() => handleArchiveTask(task.id)}
+          onDelete={() => handleDeleteTask(task.id)}
+        />
+      ))}
     </div>
   );
 
@@ -512,7 +643,7 @@ export default function InternalTasks() {
                   </div>
                 ) : (
                   <>
-                    <TaskTable />
+                    {isMobile ? <TaskMobileList /> : <TaskTable />}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-4 px-2">
                         <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -560,7 +691,7 @@ export default function InternalTasks() {
                   </div>
                 ) : (
                   <>
-                    <TaskTable />
+                    {isMobile ? <TaskMobileList /> : <TaskTable />}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-4 px-2">
                         <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -608,7 +739,7 @@ export default function InternalTasks() {
                   </div>
                 ) : (
                   <>
-                    <TaskTable />
+                    {isMobile ? <TaskMobileList /> : <TaskTable />}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-4 px-2">
                         <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -728,6 +859,28 @@ export default function InternalTasks() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Task Confirmation */}
+      <AlertDialog open={!!deleteTaskId} onOpenChange={(open) => !open && setDeleteTaskId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this task? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteTask}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteTaskMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

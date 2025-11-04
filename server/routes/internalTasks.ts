@@ -323,6 +323,27 @@ export function registerInternalTaskRoutes(
     }
   });
 
+  app.post("/api/internal-tasks/:id/archive", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      const archived = await storage.archiveInternalTask(req.params.id, userId);
+      res.json(archived);
+    } catch (error) {
+      console.error("Error archiving task:", error);
+      res.status(400).json({ message: "Failed to archive task" });
+    }
+  });
+
+  app.post("/api/internal-tasks/:id/unarchive", isAuthenticated, async (req, res) => {
+    try {
+      const unarchived = await storage.unarchiveInternalTask(req.params.id);
+      res.json(unarchived);
+    } catch (error) {
+      console.error("Error unarchiving task:", error);
+      res.status(400).json({ message: "Failed to unarchive task" });
+    }
+  });
+
   // Bulk operations
   app.post("/api/internal-tasks/bulk/reassign", isAuthenticated, async (req, res) => {
     try {

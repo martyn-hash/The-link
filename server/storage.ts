@@ -11084,6 +11084,40 @@ export class DatabaseStorage implements IStorage {
     await db.delete(internalTasks).where(eq(internalTasks.id, id));
   }
 
+  async archiveInternalTask(id: string, userId: string): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async unarchiveInternalTask(id: string): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
   async bulkReassignTasks(taskIds: string[], assignedTo: string): Promise<void> {
     if (taskIds.length === 0) return;
     await db
