@@ -280,6 +280,15 @@ export default function Projects() {
         to: filters.customDateRange?.to ? new Date(filters.customDateRange.to) : undefined,
       });
       
+      // Only switch to kanban mode if explicitly saved as kanban
+      // This preserves the current mode for legacy views and avoids forcing list mode
+      if (view.viewMode === "kanban") {
+        setViewMode("kanban");
+      } else if (view.viewMode === "list" && viewMode === "kanban") {
+        // Only switch from kanban back to list if the view was explicitly saved as list
+        setViewMode("list");
+      }
+      
       toast({
         title: "View Loaded",
         description: `Applied filters from "${view.name}"`,
@@ -822,9 +831,10 @@ export default function Projects() {
                           }}
                         >
                           <span
-                            className="flex-1 cursor-pointer"
+                            className="flex-1 cursor-pointer flex items-center gap-2"
                             onClick={() => handleLoadSavedView(view)}
                           >
+                            {view.viewMode === "kanban" && <Columns3 className="h-4 w-4 text-muted-foreground" data-testid="icon-kanban-view" />}
                             {view.name}
                           </span>
                           <Button
