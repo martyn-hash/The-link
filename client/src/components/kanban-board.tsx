@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
 import ChangeStatusModal from "./ChangeStatusModal";
@@ -59,6 +59,16 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
   
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
+
+  // Configure sensors with activation constraints to distinguish between clicks and drags
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // User must drag 8px before drag starts
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
 
   const navigateToProject = (projectId: string) => {
     setLocation(`/projects/${projectId}`);
@@ -234,6 +244,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
         </div>
       )}
       <DndContext
+        sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}

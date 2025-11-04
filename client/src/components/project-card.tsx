@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, AlertCircle, Clock } from "lucide-react";
+import { GripVertical, AlertCircle, Clock } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
 import { useAuth } from "@/hooks/useAuth";
@@ -263,6 +263,7 @@ export default function ProjectCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...listeners}
       className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
         isSortableDragging ? "opacity-50" : ""
       } ${isDragging ? "rotate-5 shadow-lg" : ""}`}
@@ -278,9 +279,9 @@ export default function ProjectCard({
             {project.priority === "urgent" && (
               <AlertCircle className="w-3 h-3 text-red-500" />
             )}
-            <MoreHorizontal 
-              {...listeners}
-              className="w-4 h-4 text-muted-foreground cursor-move hover:text-foreground transition-colors" 
+            <GripVertical 
+              className="w-4 h-4 text-muted-foreground opacity-40" 
+              title="Drag to move"
             />
           </div>
         </div>
