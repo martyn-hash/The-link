@@ -42,6 +42,8 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useIsMobile } from "@/hooks/use-mobile";
+import SwipeableProjectCard from "./swipeable-project-card";
 
 interface TaskListProps {
   projects: ProjectWithRelations[];
@@ -174,6 +176,7 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   const [sortBy, setSortBy] = useState<string>("timeInStage");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Fetch stage configurations for all unique project types
   const uniqueProjectTypeIds = useMemo(() => {
@@ -816,7 +819,29 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
               <p className="text-lg font-medium mb-2">No tasks found</p>
               <p>You don't have any assigned tasks at the moment.</p>
             </div>
+          ) : isMobile ? (
+            // Mobile view: Swipeable project cards
+            <div className="space-y-3">
+              {visibleProjects.map((project) => {
+                // Determine if user can complete this project
+                const canComplete = !project.completionStatus && (
+                  user.isAdmin ||
+                  project.currentAssigneeId === user.id ||
+                  project.clientManagerId === user.id ||
+                  project.bookkeeperId === user.id
+                );
+                
+                return (
+                  <SwipeableProjectCard
+                    key={project.id}
+                    project={project}
+                    canComplete={canComplete}
+                  />
+                );
+              })}
+            </div>
           ) : (
+            // Desktop view: Table
             <div className="overflow-x-auto">
               <DndContext
                 sensors={sensors}
