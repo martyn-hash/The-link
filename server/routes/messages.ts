@@ -156,12 +156,7 @@ export function registerMessageRoutes(
       const communicationData = bodyValidation.data;
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
 
-      // Enforce per-client authorization - user must have access to create communications for this client
-      const hasAccess = await userHasClientAccess(effectiveUserId, communicationData.clientId, req.user.isAdmin);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "Access denied. You don't have permission to create communications for this client." });
-      }
-
+      // All authenticated users can create communications (progress notes)
       // Force userId from authenticated context (prevent spoofing)
       const communication = await storage.createCommunication({
         ...communicationData,

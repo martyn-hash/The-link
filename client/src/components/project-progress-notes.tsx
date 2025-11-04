@@ -347,10 +347,12 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
                         {item.subject && (
                           <div className="font-medium">{item.subject}</div>
                         )}
-                        <div className="text-sm text-muted-foreground line-clamp-2">
-                          {item.content.substring(0, 100)}
-                          {item.content.length > 100 && '...'}
-                        </div>
+                        {item.content && (
+                          <div className="text-sm text-muted-foreground line-clamp-2">
+                            {item.content.substring(0, 100)}
+                            {item.content.length > 100 && '...'}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell data-testid={`cell-user-${item.id}`}>
