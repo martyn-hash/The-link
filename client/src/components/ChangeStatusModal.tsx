@@ -672,6 +672,22 @@ export default function ChangeStatusModal({
                         )}
                       </Label>
 
+                      {field.fieldType === "boolean" && (
+                        <div className="flex items-center space-x-3">
+                          <Checkbox
+                            id={`custom-field-${field.id}`}
+                            checked={customFieldResponses[field.id] || false}
+                            onCheckedChange={(checked) =>
+                              handleCustomFieldChange(field.id, checked)
+                            }
+                            data-testid={`checkbox-custom-field-${field.id}`}
+                          />
+                          <Label htmlFor={`custom-field-${field.id}`} className="font-normal">
+                            {customFieldResponses[field.id] ? "Yes" : "No"}
+                          </Label>
+                        </div>
+                      )}
+
                       {field.fieldType === "number" && (
                         <Input
                           id={`custom-field-${field.id}`}
