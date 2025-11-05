@@ -127,9 +127,16 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    console.log('[Kanban DnD] handleDragEnd called', { 
+      activeId: active.id, 
+      overId: over?.id,
+      overIdType: typeof over?.id 
+    });
+    
     setActiveId(null);
 
     if (!over || typeof over.id !== 'string') {
+      console.log('[Kanban DnD] No valid drop target', { over });
       setOveredColumn(null);
       return;
     }
@@ -139,11 +146,16 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     // Check if dropped over a column directly
     if (over.id.startsWith('column-')) {
       targetStatusName = over.id.replace('column-', '');
+      console.log('[Kanban DnD] Dropped over column', { targetStatusName });
     } else {
       // Dropped over a project card - find which column the target project is in
       const targetProject = projects.find(p => p.id === over.id);
       if (targetProject) {
         targetStatusName = targetProject.currentStatus;
+        console.log('[Kanban DnD] Dropped over project card', { 
+          targetProjectId: targetProject.id, 
+          targetStatusName 
+        });
       }
     }
 
@@ -152,12 +164,22 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       const draggedProjectId = active.id as string;
       const draggedProject = projects.find(p => p.id === draggedProjectId);
       
+      console.log('[Kanban DnD] Processing status change', {
+        draggedProjectId,
+        currentStatus: draggedProject?.currentStatus,
+        targetStatusName,
+        willShowModal: draggedProject && draggedProject.currentStatus !== targetStatusName
+      });
+      
       // Check if the project is being moved to a different status
       if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
         setSelectedProject(draggedProject);
         setTargetStatus(targetStatusName);
         setShowChangeStatusModal(true);
+        console.log('[Kanban DnD] Modal state updated');
       }
+    } else {
+      console.log('[Kanban DnD] No target status found');
     }
     
     // Reset overed column
