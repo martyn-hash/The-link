@@ -13,6 +13,7 @@ import { Client } from '@microsoft/microsoft-graph-client';
 import { getUserOutlookClient } from '../utils/userOutlookClient';
 import { storage } from '../storage';
 import { nanoid } from 'nanoid';
+import type { EmailMessage, EmailThread, ClientDomainAllowlist, InsertEmailMessage } from '@shared/schema';
 
 // Message fields to fetch from Graph API
 // Keep this lean to minimize data transfer and processing time
@@ -694,10 +695,8 @@ export class EmailIngestionService {
     try {
       console.log('[Client Association] Starting client association process');
 
-      // Get all threads without clientId
-      // For now, get all threads and filter - we can optimize later with a storage method
-      const allThreads = await storage.getAllEmailThreads();
-      const unmatchedThreads = allThreads.filter(thread => !thread.clientId);
+      // Get all threads without clientId using optimized query
+      const unmatchedThreads = await storage.getThreadsWithoutClient();
 
       console.log(`[Client Association] Found ${unmatchedThreads.length} unmatched threads`);
 
@@ -727,17 +726,35 @@ export class EmailIngestionService {
 
             stats.matched++;
           } else {
-            // No match - quarantine
-            await storage.createUnmatchedEmail({
-              threadId: thread.id,
-              subject: thread.subject,
-              participants: thread.participants,
-              firstMessageAt: thread.firstMessageAt,
-              isResolved: false,
-              resolvedClientId: null,
-              resolvedBy: null,
-              resolvedAt: null
-            });
+            // No match - quarantine all messages in this thread
+            const messages = await storage.getEmailMessagesByThreadId(thread.id);
+            for (const message of messages) {
+              // Check if message is already in quarantine to prevent duplicates
+              const existing = await storage.getUnmatchedEmailByMessageId(message.internetMessageId);
+              if (!existing) {
+                // Extract subject stem (remove Re:, Fwd: prefixes)
+                const subjectStem = message.subject?.replace(/^(Re:|Fwd?:)\s*/gi, '').trim() || null;
+                
+                // Determine mailbox owner (first mailbox that has this message)
+                const mailboxMappings = await storage.getMailboxMessageMapsByMessageId(message.internetMessageId);
+                const mailboxOwnerUserId = mailboxMappings[0]?.userId || null;
+                
+                await storage.createUnmatchedEmail({
+                  internetMessageId: message.internetMessageId,
+                  from: message.from,
+                  to: message.to || [],
+                  cc: message.cc || [],
+                  subjectStem,
+                  inReplyTo: message.inReplyTo,
+                  references: message.references || [],
+                  receivedDateTime: message.receivedDateTime,
+                  mailboxOwnerUserId,
+                  direction: message.direction,
+                  retryCount: 0,
+                  lastAttemptAt: null
+                });
+              }
+            }
 
             stats.quarantined++;
           }
@@ -763,6 +780,11 @@ export class EmailIngestionService {
     aliases: Map<string, string>, // email -> clientId
     domainAllowlist: ClientDomainAllowlist[]
   ): Promise<{ clientId: string | null; confidence: 'high' | 'medium' | 'low' }> {
+    // Skip if no participants
+    if (!thread.participants || thread.participants.length === 0) {
+      return { clientId: null, confidence: 'low' };
+    }
+
     // Layer 1: Exact email match (high confidence)
     for (const participant of thread.participants) {
       const clientId = aliases.get(participant.toLowerCase());
@@ -799,7 +821,7 @@ export class EmailIngestionService {
     
     // Build map: email -> clientId
     for (const alias of aliases) {
-      aliasMap.set(alias.email.toLowerCase(), alias.clientId);
+      aliasMap.set(alias.emailLowercase, alias.clientId);
     }
 
     return aliasMap;

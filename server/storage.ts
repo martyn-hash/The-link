@@ -745,6 +745,7 @@ export interface IStorage {
   getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined>;
   getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
   getAllEmailThreads(): Promise<EmailThread[]>;
+  getThreadsWithoutClient(): Promise<EmailThread[]>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
   getUnthreadedMessages(): Promise<EmailMessage[]>;
 
@@ -758,8 +759,10 @@ export interface IStorage {
   // Unmatched email operations
   createUnmatchedEmail(unmatched: InsertUnmatchedEmail): Promise<UnmatchedEmail>;
   getUnmatchedEmails(filters?: { resolvedOnly?: boolean }): Promise<UnmatchedEmail[]>;
-  updateUnmatchedEmail(id: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail>;
-  deleteUnmatchedEmail(id: string): Promise<void>;
+  getUnmatchedEmailByMessageId(internetMessageId: string): Promise<UnmatchedEmail | undefined>;
+  updateUnmatchedEmail(internetMessageId: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail>;
+  deleteUnmatchedEmail(internetMessageId: string): Promise<void>;
+  resolveUnmatchedEmail(internetMessageId: string, clientId: string, resolvedBy: string): Promise<void>;
 
   // Client domain allowlist operations
   createClientDomainAllowlist(domain: InsertClientDomainAllowlist): Promise<ClientDomainAllowlist>;
@@ -8840,6 +8843,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(emailThreads.lastMessageAt));
   }
 
+  async getThreadsWithoutClient(): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .where(isNull(emailThreads.clientId))
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
   async updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread> {
     const [updated] = await db
       .update(emailThreads)
@@ -8907,33 +8918,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnmatchedEmails(filters?: { resolvedOnly?: boolean }): Promise<UnmatchedEmail[]> {
-    let query = db.select().from(unmatchedEmails);
-
-    if (filters?.resolvedOnly !== undefined) {
-      query = query.where(
-        filters.resolvedOnly 
-          ? eq(unmatchedEmails.isResolved, true)
-          : eq(unmatchedEmails.isResolved, false)
-      ) as any;
-    }
-
-    return await query.orderBy(desc(unmatchedEmails.createdAt));
+    return await db
+      .select()
+      .from(unmatchedEmails)
+      .orderBy(desc(unmatchedEmails.receivedDateTime));
   }
 
-  async updateUnmatchedEmail(id: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail> {
+  async getUnmatchedEmailByMessageId(internetMessageId: string): Promise<UnmatchedEmail | undefined> {
+    const result = await db
+      .select()
+      .from(unmatchedEmails)
+      .where(eq(unmatchedEmails.internetMessageId, internetMessageId))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateUnmatchedEmail(internetMessageId: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail> {
     const [updated] = await db
       .update(unmatchedEmails)
-      .set({
-        ...updates,
-        updatedAt: new Date()
-      })
-      .where(eq(unmatchedEmails.id, id))
+      .set(updates)
+      .where(eq(unmatchedEmails.internetMessageId, internetMessageId))
       .returning();
     return updated;
   }
 
-  async deleteUnmatchedEmail(id: string): Promise<void> {
-    await db.delete(unmatchedEmails).where(eq(unmatchedEmails.id, id));
+  async deleteUnmatchedEmail(internetMessageId: string): Promise<void> {
+    await db.delete(unmatchedEmails).where(eq(unmatchedEmails.internetMessageId, internetMessageId));
+  }
+
+  async resolveUnmatchedEmail(internetMessageId: string, clientId: string, resolvedBy: string): Promise<void> {
+    // Remove from quarantine once resolved
+    await this.deleteUnmatchedEmail(internetMessageId);
   }
 
   // Client domain allowlist operations
