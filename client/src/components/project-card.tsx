@@ -366,10 +366,9 @@ export default function ProjectCard({
             {project.priority === "urgent" && (
               <AlertCircle className="w-3 h-3 text-red-500" />
             )}
-            <GripVertical 
-              className="w-4 h-4 text-muted-foreground opacity-40" 
-              title="Drag to move"
-            />
+            <div title="Drag to move">
+              <GripVertical className="w-4 h-4 text-muted-foreground opacity-40" />
+            </div>
           </div>
         </div>
         
