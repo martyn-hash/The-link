@@ -373,6 +373,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [callPhoneNumber, setCallPhoneNumber] = useState<string | undefined>();
   const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
   const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
+  const [commTypeFilter, setCommTypeFilter] = useState<'all' | 'phone_call' | 'sms' | 'email' | 'message_thread' | 'note' | 'email_thread'>('all');
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -678,6 +679,14 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
     new Date(b.loggedAt || b.createdAt).getTime() - new Date(a.loggedAt || a.createdAt).getTime()
   );
 
+  // Apply communication type filter
+  const filteredItems = allItems.filter(item => {
+    if (commTypeFilter === 'all') return true;
+    if (commTypeFilter === 'sms') return item.type === 'sms_sent' || item.type === 'sms_received';
+    if (commTypeFilter === 'email') return item.type === 'email_sent' || item.type === 'email_received';
+    return item.type === commTypeFilter;
+  });
+
   if (isLoading || isLoadingThreads || isLoadingEmailThreads) {
     return (
       <Card>
@@ -706,7 +715,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="space-y-4">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
@@ -759,6 +768,72 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             </Button>
           </div>
         </div>
+        
+        {/* Communication Type Filters */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={commTypeFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('all')}
+            data-testid="button-filter-all"
+          >
+            All ({allItems.length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'phone_call' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('phone_call')}
+            data-testid="button-filter-phone-call"
+          >
+            <PhoneCall className="h-3 w-3 mr-1" />
+            Calls ({allItems.filter(i => i.type === 'phone_call').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'sms' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('sms')}
+            data-testid="button-filter-sms"
+          >
+            <Send className="h-3 w-3 mr-1" />
+            SMS ({allItems.filter(i => i.type === 'sms_sent' || i.type === 'sms_received').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'email' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('email')}
+            data-testid="button-filter-email"
+          >
+            <Mail className="h-3 w-3 mr-1" />
+            Emails ({allItems.filter(i => i.type === 'email_sent' || i.type === 'email_received').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'message_thread' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('message_thread')}
+            data-testid="button-filter-message-thread"
+          >
+            <MessageSquare className="h-3 w-3 mr-1" />
+            Messages ({allItems.filter(i => i.type === 'message_thread').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'note' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('note')}
+            data-testid="button-filter-note"
+          >
+            <FileText className="h-3 w-3 mr-1" />
+            Notes ({allItems.filter(i => i.type === 'note').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'email_thread' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('email_thread')}
+            data-testid="button-filter-email-thread"
+          >
+            <Mail className="h-3 w-3 mr-1" />
+            Email Threads ({allItems.filter(i => i.type === 'email_thread').length})
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {!allItems || allItems.length === 0 ? (
@@ -780,7 +855,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
               </TableRow>
             </TableHeader>
             <TableBody>
-              {allItems.map((item: any) => (
+              {filteredItems.map((item: any) => (
                 <TableRow key={item.id} data-testid={`communication-row-${item.id}`}>
                   <TableCell data-testid={`cell-type-${item.id}`}>
                     <div className="flex items-center gap-2">
