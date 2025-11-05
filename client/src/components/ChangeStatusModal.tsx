@@ -665,12 +665,19 @@ export default function ChangeStatusModal({
                 <div className="space-y-4">
                   {customFields.map((field) => (
                     <div key={field.id} className="space-y-2">
-                      <Label htmlFor={`custom-field-${field.id}`}>
-                        {field.fieldName}
-                        {field.isRequired && (
-                          <span className="text-destructive ml-1">*</span>
+                      <div>
+                        <Label htmlFor={`custom-field-${field.id}`}>
+                          {field.fieldName}
+                          {field.isRequired && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </Label>
+                        {field.description && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {field.description}
+                          </p>
                         )}
-                      </Label>
+                      </div>
 
                       {field.fieldType === "boolean" && (
                         <div className="flex items-center space-x-3">
