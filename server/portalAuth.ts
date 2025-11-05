@@ -133,10 +133,10 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
     const { sendEmail } = await import('./emailService');
     
     // Generate magic link URL
-    const magicLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/portal/verify?token=${magicToken}`;
+    const baseUrl = 'https://flow.growth.accountants';
+    const magicLink = `${baseUrl}/portal/verify?token=${magicToken}`;
     
     // Send branded email
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
     const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
     
     await sendEmail({
@@ -311,7 +311,7 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
     const { sendEmail } = await import('./emailService');
     
     // Send branded email with verification code
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+    const baseUrl = 'https://flow.growth.accountants';
     const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
     
     await sendEmail({

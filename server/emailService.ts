@@ -63,8 +63,9 @@ export async function sendMagicLinkEmail(
   fourDigitCode: string,
   baseUrl: string
 ): Promise<boolean> {
-  const magicLinkUrl = `${baseUrl}/magic-link-verify?token=${magicLinkToken}`;
-  const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+  const productionUrl = 'https://flow.growth.accountants';
+  const magicLinkUrl = `${productionUrl}/magic-link-verify?token=${magicLinkToken}`;
+  const logoUrl = `${productionUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const subject = `Your Magic Link Login - The Link (Code: ${fourDigitCode})`;
   
   const html = `
@@ -75,9 +76,9 @@ export async function sendMagicLinkEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
         </div>
         <div style="padding: 40px 30px;">
           <h2 style="color: #1e293b; margin-top: 0;">Magic Link Login</h2>
@@ -173,7 +174,7 @@ export async function sendTaskAssignmentEmail(
   clientName: string,
   newStatus: string
 ): Promise<boolean> {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const subject = `New Task Assignment - ${clientName} - The Link`;
   
@@ -185,9 +186,9 @@ export async function sendTaskAssignmentEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
         </div>
         <div style="padding: 40px 30px;">
           <h2 style="color: #1e293b; margin-top: 0;">📋 New Task Assignment</h2>
@@ -439,7 +440,7 @@ export async function sendSchedulingSummaryEmail(
     errors?: any[];
   }
 ): Promise<boolean> {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const isFailure = summaryData.status === 'failure';
   const hasErrors = summaryData.errorsEncountered > 0;
@@ -459,9 +460,9 @@ export async function sendSchedulingSummaryEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
         </div>
         <div style="padding: 40px 30px;">
           <h2 style="color: ${statusColor}; margin-top: 0;">${statusIcon} Nightly Project Scheduling Summary</h2>
@@ -517,7 +518,7 @@ export async function sendSchedulingSummaryEmail(
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/admin" 
+            <a href="${baseUrl}/admin" 
                style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
               🚀 View Admin Dashboard
             </a>
@@ -583,7 +584,7 @@ export async function sendBulkProjectAssignmentSummaryEmail(
   recipientName: string,
   projectCount: number
 ): Promise<boolean> {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const subject = `${projectCount} new projects assigned to you - The Link`;
   
@@ -595,9 +596,9 @@ export async function sendBulkProjectAssignmentSummaryEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
         </div>
         <div style="padding: 40px 30px;">
           <h2 style="color: #1e293b; margin-top: 0;">📋 New Projects Assigned</h2>
@@ -619,7 +620,7 @@ export async function sendBulkProjectAssignmentSummaryEmail(
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/projects" 
+            <a href="${baseUrl}/projects" 
                style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
               🚀 View Your Projects
             </a>
@@ -647,7 +648,7 @@ Hello ${recipientName},
 
 You have ${projectCount} new projects awaiting your attention. Please log in to review and begin work.
 
-Visit: ${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/projects
+Visit: ${baseUrl}/projects
 
 You're receiving this summary notification because multiple projects were assigned to you at once. You can update your notification preferences in your account settings.
 
@@ -668,9 +669,8 @@ export async function sendWelcomeEmail(
   recipientName: string,
   loginUrl: string = 'https://flow.growth.accountants'
 ): Promise<boolean> {
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
-  const protocol = replitDomain.includes('localhost') ? 'http://' : 'https://';
-  const logoUrl = `${protocol}${replitDomain}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+  const baseUrl = 'https://flow.growth.accountants';
+  const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const subject = `Welcome to The Link - Your Account is Ready!`;
   
   const html = `
@@ -681,9 +681,9 @@ export async function sendWelcomeEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to The Link!</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 24px;">Welcome to The Link!</h1>
         </div>
         
         <div style="padding: 40px 30px;">
@@ -792,7 +792,7 @@ export async function sendInternalTaskAssignmentEmail(
   creatorName: string,
   taskTypeName: string | null
 ): Promise<boolean> {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const subject = `New Internal Task Assigned: ${taskTitle} - The Link`;
   
@@ -828,9 +828,9 @@ export async function sendInternalTaskAssignmentEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
         </div>
         <div style="padding: 40px 30px;">
           <h2 style="color: #1e293b; margin-top: 0;">${emoji} New Internal Task Assigned</h2>

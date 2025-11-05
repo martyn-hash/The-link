@@ -1478,7 +1478,7 @@ export async function registerAuthAndMiscRoutes(
         .where(eq(clientPortalUsers.id, portalUser.id));
 
       // Generate magic link URL
-      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/verify?token=${token}`;
+      const magicLink = `https://flow.growth.accountants/portal/verify?token=${token}`;
 
       res.json({ magicLink, portalUser });
     } catch (error) {
@@ -1510,7 +1510,7 @@ export async function registerAuthAndMiscRoutes(
       }
 
       // Generate portal install page URL (no authentication - just installation instructions)
-      const installUrl = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/install`;
+      const installUrl = `https://flow.growth.accountants/portal/install`;
 
       // Generate QR code as data URL
       const qrCodeDataUrl = await QRCode.toDataURL(installUrl, {
@@ -1576,7 +1576,7 @@ export async function registerAuthAndMiscRoutes(
         .where(eq(clientPortalUsers.id, portalUser.id));
 
       // Generate magic link URL
-      const magicLink = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/portal/verify?token=${token}`;
+      const magicLink = `https://flow.growth.accountants/portal/verify?token=${token}`;
 
       // Send invitation email
       if (!process.env.SENDGRID_API_KEY) {
@@ -1585,7 +1585,7 @@ export async function registerAuthAndMiscRoutes(
 
       sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-      const logoUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+      const logoUrl = `https://flow.growth.accountants/attached_assets/full_logo_transparent_600_1761924125378.png`;
 
       const msg = {
         to: email,
