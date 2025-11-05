@@ -787,12 +787,19 @@ export default function ChangeStatusModal({
                           <FormItem>
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
-                                <FormLabel className="text-base font-medium">
-                                  {field.fieldName}
-                                  {field.isRequired && (
-                                    <span className="text-destructive ml-1">*</span>
+                                <div className="flex-1">
+                                  <FormLabel className="text-base font-medium">
+                                    {field.fieldName}
+                                    {field.isRequired && (
+                                      <span className="text-destructive ml-1">*</span>
+                                    )}
+                                  </FormLabel>
+                                  {field.description && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {field.description}
+                                    </p>
                                   )}
-                                </FormLabel>
+                                </div>
                                 <Badge variant="outline" className="text-xs">
                                   {field.fieldType}
                                 </Badge>
