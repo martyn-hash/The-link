@@ -158,6 +158,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    console.log('[Kanban] handleDragEnd', { activeId: active.id, overId: over?.id });
     setActiveId(null);
 
     if (!over || typeof over.id !== 'string') {
@@ -170,11 +171,13 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     // Check if dropped over a column directly
     if (over.id.startsWith('column-')) {
       targetStatusName = over.id.replace('column-', '');
+      console.log('[Kanban] Dropped over column:', targetStatusName);
     } else {
       // Dropped over a project card - find which column the target project is in
       const targetProject = projects.find(p => p.id === over.id);
       if (targetProject) {
         targetStatusName = targetProject.currentStatus;
+        console.log('[Kanban] Dropped over project card, target status:', targetStatusName);
       }
     }
 
@@ -182,6 +185,13 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     if (targetStatusName) {
       const draggedProjectId = active.id as string;
       const draggedProject = projects.find(p => p.id === draggedProjectId);
+      console.log('[Kanban] Processing drag', {
+        draggedProjectId,
+        draggedProjectName: draggedProject?.clientName,
+        currentStatus: draggedProject?.currentStatus,
+        targetStatus: targetStatusName,
+        willShowModal: draggedProject && draggedProject.currentStatus !== targetStatusName
+      });
       
       // Check if the project is being moved to a different status
       if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
