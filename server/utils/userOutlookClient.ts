@@ -152,7 +152,9 @@ export async function sendEmailAsUser(userId: string, to: string, subject: strin
  * @param messageId - The Graph API message ID to reply to
  * @param content - The reply content (HTML or plain text)
  * @param isHtml - Whether the content is HTML (default: true)
- * @param comment - Optional comment to add to the reply
+ * @param subject - Optional custom subject line
+ * @param to - Optional custom To recipients
+ * @param cc - Optional custom CC recipients
  * @param attachments - Optional array of attachment metadata from object storage
  */
 export async function createReplyToMessage(
@@ -160,7 +162,9 @@ export async function createReplyToMessage(
   messageId: string,
   content: string,
   isHtml: boolean = true,
-  comment?: string,
+  subject?: string,
+  to?: string[],
+  cc?: string[],
   attachments?: Array<{ objectPath: string; fileName: string; contentType?: string; fileSize?: number }>
 ) {
   try {
@@ -190,15 +194,36 @@ export async function createReplyToMessage(
       throw new Error('Failed to create draft reply');
     }
 
-    // Step 2: Update draft body with HTML content
+    // Step 2: Update draft body with HTML content and custom recipients/subject
+    const patchData: any = {
+      body: {
+        contentType: 'HTML',
+        content: content
+      }
+    };
+    
+    // Add custom subject if provided
+    if (subject) {
+      patchData.subject = subject;
+    }
+    
+    // Add custom To recipients if provided
+    if (to && to.length > 0) {
+      patchData.toRecipients = to.map(email => ({
+        emailAddress: { address: email }
+      }));
+    }
+    
+    // Add custom CC recipients if provided
+    if (cc && cc.length > 0) {
+      patchData.ccRecipients = cc.map(email => ({
+        emailAddress: { address: email }
+      }));
+    }
+    
     await graphClient
       .api(`/me/messages/${draftReply.id}`)
-      .patch({
-        body: {
-          contentType: 'HTML',
-          content: content
-        }
-      });
+      .patch(patchData);
 
     // Step 3: Add attachments if provided
     if (attachments && attachments.length > 0) {
@@ -239,7 +264,9 @@ export async function createReplyToMessage(
  * @param messageId - The Graph API message ID to reply to
  * @param content - The reply content (HTML or plain text)
  * @param isHtml - Whether the content is HTML (default: true)
- * @param comment - Optional comment to add to the reply
+ * @param subject - Optional custom subject line
+ * @param to - Optional custom To recipients
+ * @param cc - Optional custom CC recipients
  * @param attachments - Optional array of attachment metadata from object storage
  */
 export async function createReplyAllToMessage(
@@ -247,7 +274,9 @@ export async function createReplyAllToMessage(
   messageId: string,
   content: string,
   isHtml: boolean = true,
-  comment?: string,
+  subject?: string,
+  to?: string[],
+  cc?: string[],
   attachments?: Array<{ objectPath: string; fileName: string; contentType?: string; fileSize?: number }>
 ) {
   try {
@@ -277,15 +306,36 @@ export async function createReplyAllToMessage(
       throw new Error('Failed to create draft reply-all');
     }
 
-    // Step 2: Update draft body with HTML content
+    // Step 2: Update draft body with HTML content and custom recipients/subject
+    const patchData: any = {
+      body: {
+        contentType: 'HTML',
+        content: content
+      }
+    };
+    
+    // Add custom subject if provided
+    if (subject) {
+      patchData.subject = subject;
+    }
+    
+    // Add custom To recipients if provided
+    if (to && to.length > 0) {
+      patchData.toRecipients = to.map(email => ({
+        emailAddress: { address: email }
+      }));
+    }
+    
+    // Add custom CC recipients if provided
+    if (cc && cc.length > 0) {
+      patchData.ccRecipients = cc.map(email => ({
+        emailAddress: { address: email }
+      }));
+    }
+    
     await graphClient
       .api(`/me/messages/${draftReply.id}`)
-      .patch({
-        body: {
-          contentType: 'HTML',
-          content: content
-        }
-      });
+      .patch(patchData);
 
     // Step 3: Add attachments if provided
     if (attachments && attachments.length > 0) {

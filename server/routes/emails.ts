@@ -76,11 +76,11 @@ export function registerEmailRoutes(
         return res.status(404).json({ message: "Message not found in your mailbox" });
       }
       
-      // Send reply via Microsoft Graph API with attachments
+      // Send reply via Microsoft Graph API with attachments and custom recipients/subject
       if (replyAll) {
-        await createReplyAllToMessage(userId, graphMessageId, body, true, undefined, attachments);
+        await createReplyAllToMessage(userId, graphMessageId, body, true, subject, to, cc, attachments);
       } else {
-        await createReplyToMessage(userId, graphMessageId, body, true, undefined, attachments);
+        await createReplyToMessage(userId, graphMessageId, body, true, subject, to, cc, attachments);
       }
       
       res.json({
