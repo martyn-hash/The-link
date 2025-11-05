@@ -52,6 +52,7 @@ interface EditingReason {
   description: string;
   showCountInProject: boolean;
   countLabel: string;
+  stageApprovalId?: string;
 }
 
 interface EditingStageApproval {
@@ -91,6 +92,7 @@ const DEFAULT_REASON: EditingReason = {
   description: "",
   showCountInProject: false,
   countLabel: "",
+  stageApprovalId: undefined,
 };
 
 const DEFAULT_STAGE_APPROVAL: EditingStageApproval = { name: "", description: "" };
@@ -1833,10 +1835,18 @@ export default function ProjectTypeDetail() {
                   {reasons.map((reason) => (
                     <Card key={reason.id} data-testid={`card-reason-${reason.id}`}>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <div>
-                          <CardTitle className="text-base" data-testid={`text-reason-name-${reason.id}`}>
-                            {reason.reason}
-                          </CardTitle>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-base" data-testid={`text-reason-name-${reason.id}`}>
+                              {reason.reason}
+                            </CardTitle>
+                            {reason.stageApprovalId && (
+                              <Badge variant="secondary" className="text-xs">
+                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                Has Approval
+                              </Badge>
+                            )}
+                          </div>
                           {reason.description && (
                             <p className="text-sm text-muted-foreground mt-1" data-testid={`text-reason-description-${reason.id}`}>
                               {reason.description}
@@ -1851,7 +1861,8 @@ export default function ProjectTypeDetail() {
                               ...reason,
                               description: reason.description || "",
                               showCountInProject: reason.showCountInProject || false,
-                              countLabel: reason.countLabel || ""
+                              countLabel: reason.countLabel || "",
+                              stageApprovalId: reason.stageApprovalId || undefined
                             })}
                             data-testid={`button-edit-reason-${reason.id}`}
                           >
@@ -1949,6 +1960,45 @@ export default function ProjectTypeDetail() {
                           />
                         </div>
                       )}
+
+                      {/* Stage Approval Selection */}
+                      <div className="space-y-2">
+                        <Label htmlFor="reason-stage-approval">Stage Approval (Optional)</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Assign a specific approval questionnaire to this reason. If set, this takes precedence over the stage's approval.
+                        </p>
+                        <Select
+                          value={editingReason?.stageApprovalId || "none"}
+                          onValueChange={(value) => setEditingReason(prev => ({ 
+                            ...prev!, 
+                            stageApprovalId: value === "none" ? undefined : value 
+                          }))}
+                        >
+                          <SelectTrigger data-testid="select-reason-stage-approval">
+                            <SelectValue placeholder="No approval" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No approval</SelectItem>
+                            {stageApprovalsLoading ? (
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : stageApprovals && stageApprovals.length > 0 ? (
+                              stageApprovals.map(approval => (
+                                <SelectItem key={approval.id} value={approval.id}>
+                                  {approval.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-approvals" disabled>No approvals configured</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {editingReason?.stageApprovalId && (
+                          <Badge variant="secondary" className="mt-2">
+                            <ShieldCheck className="w-3 h-3 mr-1" />
+                            This reason has its own approval (overrides stage-level approval)
+                          </Badge>
+                        )}
+                      </div>
 
                       {/* Custom Fields Section */}
                       <div className="space-y-2">

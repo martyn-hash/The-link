@@ -340,12 +340,15 @@ export function registerProjectRoutes(
       }
 
       // SECURITY: Stage approval validation before allowing status change
-      if (targetStage.stageApprovalId) {
-        // This stage requires approval - validate approval responses exist and are valid
+      // Check reason-level approval first, then fall back to stage-level approval
+      const effectiveApprovalId = changeReason.stageApprovalId || targetStage.stageApprovalId;
+      
+      if (effectiveApprovalId) {
+        // This stage/reason requires approval - validate approval responses exist and are valid
         const existingResponses = await storage.getStageApprovalResponsesByProjectId(updateData.projectId);
 
         // Get the stage approval fields to understand what's required
-        const approvalFields = await storage.getStageApprovalFieldsByApprovalId(targetStage.stageApprovalId);
+        const approvalFields = await storage.getStageApprovalFieldsByApprovalId(effectiveApprovalId);
 
         // Filter responses that belong to this specific stage approval by fieldId
         const fieldIds = new Set(approvalFields.map(f => f.id));
@@ -366,7 +369,7 @@ export function registerProjectRoutes(
 
           // Validate the approval responses
           const approvalValidation = await storage.validateStageApprovalResponses(
-            targetStage.stageApprovalId,
+            effectiveApprovalId,
             responsesForValidation
           );
 

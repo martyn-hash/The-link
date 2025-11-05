@@ -493,9 +493,11 @@ export const changeReasons = pgTable("change_reasons", {
   description: varchar("description"),
   showCountInProject: boolean("show_count_in_project").default(false),
   countLabel: varchar("count_label"),
+  stageApprovalId: varchar("stage_approval_id").references(() => stageApprovals.id, { onDelete: "set null" }), // Optional stage approval for this reason
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_change_reasons_project_type_id").on(table.projectTypeId),
+  index("idx_change_reasons_stage_approval_id").on(table.stageApprovalId),
   // Reason must be unique within a project type
   // unique("unique_reason_per_project_type").on(table.projectTypeId, table.reason), // Temporarily commented to unblock people table changes
 ]);
@@ -858,6 +860,10 @@ export const changeReasonsRelations = relations(changeReasons, ({ one, many }) =
     fields: [changeReasons.projectTypeId],
     references: [projectTypes.id],
   }),
+  stageApproval: one(stageApprovals, {
+    fields: [changeReasons.stageApprovalId],
+    references: [stageApprovals.id],
+  }),
   stageReasonMaps: many(stageReasonMaps),
   customFields: many(reasonCustomFields),
 }));
@@ -899,6 +905,7 @@ export const stageApprovalsRelations = relations(stageApprovals, ({ one, many })
   }),
   fields: many(stageApprovalFields),
   linkedStages: many(kanbanStages),
+  linkedReasons: many(changeReasons),
 }));
 
 export const stageApprovalFieldsRelations = relations(stageApprovalFields, ({ one, many }) => ({

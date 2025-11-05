@@ -189,19 +189,24 @@ export default function ChangeStatusModal({
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch stage approval fields for the target stage's approval
+  // Determine effective approval ID (reason-level takes precedence over stage-level)
+  const effectiveApprovalId = useMemo(() => {
+    return selectedReasonObj?.stageApprovalId || selectedStage?.stageApprovalId || null;
+  }, [selectedReasonObj, selectedStage]);
+
+  // Fetch stage approval fields for the effective approval (reason-level or stage-level)
   const { data: stageApprovalFields = [], isLoading: stageApprovalFieldsLoading } =
     useQuery<StageApprovalField[]>({
       queryKey: [`/api/config/stage-approval-fields`],
-      enabled: !!selectedStage?.stageApprovalId && isOpen,
+      enabled: !!effectiveApprovalId && isOpen,
       staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
-  // Get target stage approval and fields
+  // Get target stage approval and fields using effective approval ID
   const targetStageApproval = useMemo(() => {
-    if (!selectedStage?.stageApprovalId) return null;
-    return stageApprovals.find((a) => a.id === selectedStage.stageApprovalId) || null;
-  }, [selectedStage, stageApprovals]);
+    if (!effectiveApprovalId) return null;
+    return stageApprovals.find((a) => a.id === effectiveApprovalId) || null;
+  }, [effectiveApprovalId, stageApprovals]);
 
   const targetStageApprovalFields = useMemo(() => {
     if (!targetStageApproval) return [];
@@ -279,10 +284,10 @@ export default function ChangeStatusModal({
     defaultValues: {},
   });
 
-  // Determine if we should show approval form
+  // Determine if we should show approval form (using effective approval ID)
   useEffect(() => {
     const shouldShow =
-      !!selectedStage?.stageApprovalId &&
+      !!effectiveApprovalId &&
       !!newStatus &&
       !!changeReason &&
       !stageApprovalsLoading &&
@@ -292,7 +297,7 @@ export default function ChangeStatusModal({
 
     setShowApprovalForm(shouldShow);
   }, [
-    selectedStage,
+    effectiveApprovalId,
     newStatus,
     changeReason,
     stageApprovalsLoading,
