@@ -738,6 +738,15 @@ export interface IStorage {
   getMailboxMessageMapsByUserId(userId: string): Promise<MailboxMessageMap[]>;
   getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]>;
 
+  // Email thread operations
+  createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
+  getEmailThreadById(id: string): Promise<EmailThread | undefined>;
+  getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined>;
+  getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined>;
+  getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
+  updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
+  getUnthreadedMessages(): Promise<EmailMessage[]>;
+
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
   getDocumentFolderById(id: string): Promise<DocumentFolder | undefined>;
@@ -8758,6 +8767,70 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(mailboxMessageMap)
       .where(eq(mailboxMessageMap.messageId, messageId));
+  }
+
+  // Email thread operations
+  async createEmailThread(thread: InsertEmailThread): Promise<EmailThread> {
+    const [created] = await db
+      .insert(emailThreads)
+      .values(thread)
+      .returning();
+    return created;
+  }
+
+  async getEmailThreadById(id: string): Promise<EmailThread | undefined> {
+    const result = await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined> {
+    const result = await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.conversationId, conversationId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined> {
+    const result = await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.threadKey, threadKey))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.clientId, clientId))
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
+  async updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread> {
+    const [updated] = await db
+      .update(emailThreads)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(emailThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getUnthreadedMessages(): Promise<EmailMessage[]> {
+    return await db
+      .select()
+      .from(emailMessages)
+      .where(isNull(emailMessages.threadId))
+      .orderBy(emailMessages.sentAt);
   }
 
   // Document folder operations

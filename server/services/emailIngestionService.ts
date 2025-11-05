@@ -481,11 +481,201 @@ export class EmailIngestionService {
       const sentResult = await this.performDeltaSync(userId, 'SentItems');
       await this.ingestMessages(userId, sentResult.messages, 'SentItems');
 
+      // Run threading on unthreaded messages
+      await this.processThreading();
+
       console.log(`[Email Ingestion] Mailbox sync complete for user ${userId}`);
     } catch (error) {
       console.error('[Email Ingestion] Error syncing mailbox:', error);
       throw error;
     }
+  }
+
+  /**
+   * Process threading for unthreaded messages
+   * Multi-layered approach:
+   * 1. Group by conversationId
+   * 2. Build ancestry chains using inReplyTo/references
+   * 3. Compute threadKey hash for orphaned messages
+   */
+  async processThreading(): Promise<{ threaded: number; errors: number }> {
+    const stats = { threaded: 0, errors: 0 };
+
+    try {
+      console.log('[Email Threading] Starting threading process');
+
+      // Get all unthreaded messages
+      const unthreadedMessages = await storage.getUnthreadedMessages();
+      console.log(`[Email Threading] Found ${unthreadedMessages.length} unthreaded messages`);
+
+      // Layer 1: Group by conversationId
+      const conversationGroups = new Map<string, EmailMessage[]>();
+      const orphanedMessages: EmailMessage[] = [];
+
+      for (const message of unthreadedMessages) {
+        if (message.conversationId) {
+          if (!conversationGroups.has(message.conversationId)) {
+            conversationGroups.set(message.conversationId, []);
+          }
+          conversationGroups.get(message.conversationId)!.push(message);
+        } else {
+          orphanedMessages.push(message);
+        }
+      }
+
+      // Process conversationId groups
+      for (const [conversationId, messages] of conversationGroups) {
+        try {
+          await this.threadByConversationId(conversationId, messages);
+          stats.threaded += messages.length;
+        } catch (error) {
+          console.error(`[Email Threading] Error threading conversationId ${conversationId}:`, error);
+          stats.errors++;
+        }
+      }
+
+      // Layer 2 & 3: Process orphaned messages (no conversationId)
+      // Build ancestry chains and compute threadKey
+      for (const message of orphanedMessages) {
+        try {
+          await this.threadOrphanedMessage(message);
+          stats.threaded++;
+        } catch (error) {
+          console.error(`[Email Threading] Error threading orphaned message ${message.id}:`, error);
+          stats.errors++;
+        }
+      }
+
+      console.log(`[Email Threading] Threading complete:`, stats);
+      return stats;
+    } catch (error) {
+      console.error('[Email Threading] Error in threading process:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Thread messages by conversationId (Layer 1)
+   */
+  private async threadByConversationId(
+    conversationId: string,
+    messages: EmailMessage[]
+  ): Promise<void> {
+    // Check if thread already exists for this conversationId
+    let thread = await storage.getEmailThreadByConversationId(conversationId);
+
+    if (!thread) {
+      // Create new thread
+      const sortedMessages = messages.sort((a, b) => 
+        new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+      );
+      const firstMessage = sortedMessages[0];
+      const lastMessage = sortedMessages[sortedMessages.length - 1];
+
+      // Collect all participants
+      const allParticipants = new Set<string>();
+      messages.forEach(msg => {
+        if (msg.fromEmail) allParticipants.add(msg.fromEmail);
+        msg.toEmails.forEach(email => allParticipants.add(email));
+        msg.ccEmails.forEach(email => allParticipants.add(email));
+      });
+
+      thread = await storage.createEmailThread({
+        conversationId,
+        threadKey: null, // Not using threadKey for conversationId-based threads
+        subject: firstMessage.subject,
+        participants: Array.from(allParticipants),
+        messageCount: messages.length,
+        firstMessageAt: firstMessage.sentAt,
+        lastMessageAt: lastMessage.sentAt,
+        clientId: null, // Will be set in Phase 5
+        matchConfidence: null
+      });
+    } else {
+      // Update thread with latest message info
+      const sortedMessages = messages.sort((a, b) => 
+        new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+      );
+      const lastMessage = sortedMessages[sortedMessages.length - 1];
+
+      await storage.updateEmailThread(thread.id, {
+        messageCount: messages.length,
+        lastMessageAt: lastMessage.sentAt
+      });
+    }
+
+    // Link all messages to this thread
+    for (const message of messages) {
+      await storage.updateEmailMessage(message.id, { threadId: thread.id });
+    }
+  }
+
+  /**
+   * Thread orphaned message using ancestry or threadKey (Layer 2 & 3)
+   */
+  private async threadOrphanedMessage(message: EmailMessage): Promise<void> {
+    // Layer 2: Try to find thread by inReplyTo ancestry
+    if (message.inReplyTo) {
+      const parentMessage = await storage.getEmailMessageByInternetMessageId(message.inReplyTo);
+      if (parentMessage && parentMessage.threadId) {
+        // Link to parent's thread
+        await storage.updateEmailMessage(message.id, { threadId: parentMessage.threadId });
+        
+        // Update thread's last message time
+        const thread = await storage.getEmailThreadById(parentMessage.threadId);
+        if (thread && new Date(message.sentAt) > new Date(thread.lastMessageAt)) {
+          await storage.updateEmailThread(thread.id, {
+            lastMessageAt: message.sentAt,
+            messageCount: thread.messageCount + 1
+          });
+        }
+        return;
+      }
+    }
+
+    // Layer 3: Compute threadKey for orphaned message
+    const participants = [
+      message.fromEmail,
+      ...message.toEmails,
+      ...message.ccEmails
+    ].filter((email): email is string => email !== null);
+
+    const rootMessageId = message.references.length > 0 
+      ? message.references[0] 
+      : message.internetMessageId;
+
+    const threadKey = await this.computeThreadKey(
+      rootMessageId,
+      message.subject,
+      participants
+    );
+
+    // Check if thread with this threadKey exists
+    let thread = await storage.getEmailThreadByThreadKey(threadKey);
+
+    if (!thread) {
+      // Create new thread with threadKey
+      thread = await storage.createEmailThread({
+        conversationId: null,
+        threadKey,
+        subject: message.subject,
+        participants,
+        messageCount: 1,
+        firstMessageAt: message.sentAt,
+        lastMessageAt: message.sentAt,
+        clientId: null,
+        matchConfidence: null
+      });
+    } else {
+      // Update thread
+      await storage.updateEmailThread(thread.id, {
+        messageCount: thread.messageCount + 1,
+        lastMessageAt: message.sentAt
+      });
+    }
+
+    // Link message to thread
+    await storage.updateEmailMessage(message.id, { threadId: thread.id });
   }
 }
 
