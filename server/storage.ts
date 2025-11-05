@@ -744,8 +744,28 @@ export interface IStorage {
   getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined>;
   getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined>;
   getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
+  getAllEmailThreads(): Promise<EmailThread[]>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
   getUnthreadedMessages(): Promise<EmailMessage[]>;
+
+  // Client email alias operations
+  getAllClientEmailAliases(): Promise<ClientEmailAlias[]>;
+  createClientEmailAlias(alias: InsertClientEmailAlias): Promise<ClientEmailAlias>;
+  getClientEmailAliasesByClientId(clientId: string): Promise<ClientEmailAlias[]>;
+  getClientByEmailAlias(email: string): Promise<{ clientId: string } | undefined>;
+  deleteClientEmailAlias(id: string): Promise<void>;
+
+  // Unmatched email operations
+  createUnmatchedEmail(unmatched: InsertUnmatchedEmail): Promise<UnmatchedEmail>;
+  getUnmatchedEmails(filters?: { resolvedOnly?: boolean }): Promise<UnmatchedEmail[]>;
+  updateUnmatchedEmail(id: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail>;
+  deleteUnmatchedEmail(id: string): Promise<void>;
+
+  // Client domain allowlist operations
+  createClientDomainAllowlist(domain: InsertClientDomainAllowlist): Promise<ClientDomainAllowlist>;
+  getClientDomainAllowlist(): Promise<ClientDomainAllowlist[]>;
+  getClientByDomain(domain: string): Promise<{ clientId: string } | undefined>;
+  deleteClientDomainAllowlist(id: string): Promise<void>;
 
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
@@ -8813,6 +8833,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(emailThreads.lastMessageAt));
   }
 
+  async getAllEmailThreads(): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
   async updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread> {
     const [updated] = await db
       .update(emailThreads)
@@ -8831,6 +8858,111 @@ export class DatabaseStorage implements IStorage {
       .from(emailMessages)
       .where(isNull(emailMessages.threadId))
       .orderBy(emailMessages.sentAt);
+  }
+
+  // Client email alias operations
+  async getAllClientEmailAliases(): Promise<ClientEmailAlias[]> {
+    return await db
+      .select()
+      .from(clientEmailAliases)
+      .orderBy(clientEmailAliases.createdAt);
+  }
+
+  async createClientEmailAlias(alias: InsertClientEmailAlias): Promise<ClientEmailAlias> {
+    const [created] = await db
+      .insert(clientEmailAliases)
+      .values(alias)
+      .returning();
+    return created;
+  }
+
+  async getClientEmailAliasesByClientId(clientId: string): Promise<ClientEmailAlias[]> {
+    return await db
+      .select()
+      .from(clientEmailAliases)
+      .where(eq(clientEmailAliases.clientId, clientId))
+      .orderBy(clientEmailAliases.createdAt);
+  }
+
+  async getClientByEmailAlias(email: string): Promise<{ clientId: string } | undefined> {
+    const result = await db
+      .select({ clientId: clientEmailAliases.clientId })
+      .from(clientEmailAliases)
+      .where(eq(clientEmailAliases.email, email.toLowerCase()))
+      .limit(1);
+    return result[0];
+  }
+
+  async deleteClientEmailAlias(id: string): Promise<void> {
+    await db.delete(clientEmailAliases).where(eq(clientEmailAliases.id, id));
+  }
+
+  // Unmatched email operations
+  async createUnmatchedEmail(unmatched: InsertUnmatchedEmail): Promise<UnmatchedEmail> {
+    const [created] = await db
+      .insert(unmatchedEmails)
+      .values(unmatched)
+      .returning();
+    return created;
+  }
+
+  async getUnmatchedEmails(filters?: { resolvedOnly?: boolean }): Promise<UnmatchedEmail[]> {
+    let query = db.select().from(unmatchedEmails);
+
+    if (filters?.resolvedOnly !== undefined) {
+      query = query.where(
+        filters.resolvedOnly 
+          ? eq(unmatchedEmails.isResolved, true)
+          : eq(unmatchedEmails.isResolved, false)
+      ) as any;
+    }
+
+    return await query.orderBy(desc(unmatchedEmails.createdAt));
+  }
+
+  async updateUnmatchedEmail(id: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail> {
+    const [updated] = await db
+      .update(unmatchedEmails)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(unmatchedEmails.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUnmatchedEmail(id: string): Promise<void> {
+    await db.delete(unmatchedEmails).where(eq(unmatchedEmails.id, id));
+  }
+
+  // Client domain allowlist operations
+  async createClientDomainAllowlist(domain: InsertClientDomainAllowlist): Promise<ClientDomainAllowlist> {
+    const [created] = await db
+      .insert(clientDomainAllowlist)
+      .values(domain)
+      .returning();
+    return created;
+  }
+
+  async getClientDomainAllowlist(): Promise<ClientDomainAllowlist[]> {
+    return await db
+      .select()
+      .from(clientDomainAllowlist)
+      .orderBy(clientDomainAllowlist.domain);
+  }
+
+  async getClientByDomain(domain: string): Promise<{ clientId: string } | undefined> {
+    const result = await db
+      .select({ clientId: clientDomainAllowlist.clientId })
+      .from(clientDomainAllowlist)
+      .where(eq(clientDomainAllowlist.domain, domain.toLowerCase()))
+      .limit(1);
+    return result[0];
+  }
+
+  async deleteClientDomainAllowlist(id: string): Promise<void> {
+    await db.delete(clientDomainAllowlist).where(eq(clientDomainAllowlist.id, id));
   }
 
   // Document folder operations

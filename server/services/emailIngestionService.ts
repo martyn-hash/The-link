@@ -484,6 +484,9 @@ export class EmailIngestionService {
       // Run threading on unthreaded messages
       await this.processThreading();
 
+      // Run client association on unmatched threads
+      await this.processClientAssociation();
+
       console.log(`[Email Ingestion] Mailbox sync complete for user ${userId}`);
     } catch (error) {
       console.error('[Email Ingestion] Error syncing mailbox:', error);
@@ -676,6 +679,130 @@ export class EmailIngestionService {
 
     // Link message to thread
     await storage.updateEmailMessage(message.id, { threadId: thread.id });
+  }
+
+  /**
+   * Process client association for threads without clientId
+   * Multi-layered matching:
+   * 1. Exact email match against client_email_aliases (high confidence)
+   * 2. Domain match against client_domain_allowlist (medium confidence)
+   * 3. Unmatched → quarantine to unmatched_emails (low confidence)
+   */
+  async processClientAssociation(): Promise<{ matched: number; quarantined: number; errors: number }> {
+    const stats = { matched: 0, quarantined: 0, errors: 0 };
+
+    try {
+      console.log('[Client Association] Starting client association process');
+
+      // Get all threads without clientId
+      // For now, get all threads and filter - we can optimize later with a storage method
+      const allThreads = await storage.getAllEmailThreads();
+      const unmatchedThreads = allThreads.filter(thread => !thread.clientId);
+
+      console.log(`[Client Association] Found ${unmatchedThreads.length} unmatched threads`);
+
+      // Load all client email aliases and domain allowlist into memory for efficient matching
+      const allAliases = await this.getAllClientAliases();
+      const domainAllowlist = await storage.getClientDomainAllowlist();
+
+      for (const thread of unmatchedThreads) {
+        try {
+          const matchResult = await this.matchThreadToClient(thread, allAliases, domainAllowlist);
+
+          if (matchResult.clientId) {
+            // Match found - update thread and all its messages
+            await storage.updateEmailThread(thread.id, {
+              clientId: matchResult.clientId,
+              matchConfidence: matchResult.confidence
+            });
+
+            // Update all messages in this thread
+            const messages = await storage.getEmailMessagesByThreadId(thread.id);
+            for (const message of messages) {
+              await storage.updateEmailMessage(message.id, {
+                clientId: matchResult.clientId,
+                matchConfidence: matchResult.confidence
+              });
+            }
+
+            stats.matched++;
+          } else {
+            // No match - quarantine
+            await storage.createUnmatchedEmail({
+              threadId: thread.id,
+              subject: thread.subject,
+              participants: thread.participants,
+              firstMessageAt: thread.firstMessageAt,
+              isResolved: false,
+              resolvedClientId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            });
+
+            stats.quarantined++;
+          }
+        } catch (error) {
+          console.error(`[Client Association] Error matching thread ${thread.id}:`, error);
+          stats.errors++;
+        }
+      }
+
+      console.log(`[Client Association] Association complete:`, stats);
+      return stats;
+    } catch (error) {
+      console.error('[Client Association] Error in client association process:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Match a thread to a client using email aliases and domain allowlist
+   */
+  private async matchThreadToClient(
+    thread: EmailThread,
+    aliases: Map<string, string>, // email -> clientId
+    domainAllowlist: ClientDomainAllowlist[]
+  ): Promise<{ clientId: string | null; confidence: 'high' | 'medium' | 'low' }> {
+    // Layer 1: Exact email match (high confidence)
+    for (const participant of thread.participants) {
+      const clientId = aliases.get(participant.toLowerCase());
+      if (clientId) {
+        console.log(`[Client Association] Exact match: ${participant} → ${clientId}`);
+        return { clientId, confidence: 'high' };
+      }
+    }
+
+    // Layer 2: Domain match (medium confidence)
+    for (const participant of thread.participants) {
+      const domain = participant.split('@')[1];
+      if (domain) {
+        const domainMatch = domainAllowlist.find(d => d.domain === domain.toLowerCase());
+        if (domainMatch) {
+          console.log(`[Client Association] Domain match: ${domain} → ${domainMatch.clientId}`);
+          return { clientId: domainMatch.clientId, confidence: 'medium' };
+        }
+      }
+    }
+
+    // No match found
+    return { clientId: null, confidence: 'low' };
+  }
+
+  /**
+   * Load all client email aliases into memory for efficient matching
+   */
+  private async getAllClientAliases(): Promise<Map<string, string>> {
+    const aliasMap = new Map<string, string>();
+
+    // Get all client email aliases from storage
+    const aliases = await storage.getAllClientEmailAliases();
+    
+    // Build map: email -> clientId
+    for (const alias of aliases) {
+      aliasMap.set(alias.email.toLowerCase(), alias.clientId);
+    }
+
+    return aliasMap;
   }
 }
 
