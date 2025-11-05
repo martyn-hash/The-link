@@ -48,11 +48,11 @@ The `/internal-chat` page supports independent staff-to-staff message threads. I
 
 ### Email Threading & Deduplication System
 
-**Implementation Status: Phase 8 Complete (80%)** (Core backend + email sending + noise control + attachments ready)
+**Implementation Status: Phase 9 Complete (95%)** (Core backend + email sending + noise control + attachments + complete UI ready)
 
 The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. 
 
-**✅ Implemented Features (Phases 1-8):**
+**✅ Implemented Features (Phases 1-9):**
 
 -   **Database Schema**: 10 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `email_attachments`, `email_message_attachments`, `graph_webhook_subscriptions`, `graph_sync_state`
 -   **Deduplication**: Global unique key using `internetMessageId` to prevent duplicate entries when multiple staff are CC'd on the same email
@@ -67,11 +67,16 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Email Sending**: POST /api/emails/:messageId/reply endpoint with HTML/plain text support, user access validation, reply/reply-all functionality via Graph API (creates draft, updates body, sends), automatic Sent Items ingestion
 -   **Noise Control (Phase 8.1-8.2)**: Internal-only thread detection (isInternalOnly flag for @growth-accountants.com/@thelink.uk.com), email direction classification (inbound/outbound/internal/external), participant counting, marketing/list email detection (list-id headers, auto-reply indicators, large distribution >10 recipients)
 -   **Attachment Deduplication (Phase 8.3)**: SHA-256 content hashing for dedup, automatic download from Graph API, Google Cloud Storage upload with hash-based paths (`attachments/{contentHash}/{filename}`), idempotent message-attachment linking via `checkEmailMessageAttachmentExists()`, unique constraint on `(internetMessageId, attachmentId)` for database-level enforcement, skips inline attachments and oversized files (>25MB), fetches attachments explicitly during incremental delta syncs when metadata missing
+-   **Complete UI (Phase 9)**: 
+    - Client detail page email thread integration with communication type filters (All, Calls, SMS, Emails, Message Threads, Notes, Email Threads)
+    - `/messages` page Client Emails tab with My Emails/All Team Emails toggle, client filter dropdown, read/unread status filtering
+    - EmailThreadViewer modal component with message expansion/collapse, attachment display, participant chips
+    - Complete reply interface with Reply/Reply All buttons, ReactQuill rich text editor, attachment upload, proper two-step upload flow (files → metadata → apiRequest), state reset on dialog close, success/error feedback, cache invalidation
+    - XSS protection via DOMPurify for sanitized HTML rendering
 
-**📋 Planned Features (Phases 9-10):**
+**📋 Planned Features (Phase 10):**
 
--   **UI Implementation (Phase 9)**: Email timeline on client detail page, thread view, reply interface, quarantine review
--   **Monitoring & Testing (Phase 10)**: Webhook resilience, error handling, e2e tests, admin dashboard
+-   **Monitoring & Testing**: Webhook resilience, error handling, e2e tests, admin dashboard for quarantine review
 
 **Service Location:** `server/services/emailIngestionService.ts`
 
@@ -105,3 +110,12 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Build Pipeline**: Vite, esbuild, TypeScript, PostCSS.
 -   **Development Enhancements**: `@replit/vite-plugin-runtime-error-modal`, `@replit/vite-plugin-cartographer`, `tsx`.
 -   **Database Tools**: `drizzle-kit`, `drizzle-orm`.
+
+## Testing & Development
+
+### Browser Testing Authentication
+
+For browser-based e2e tests, use password authentication via the root page:
+-   **Email**: `admin@example.com`
+-   **Password**: `admin123`
+-   **Method**: Navigate to root page, select "Password" tab, enter credentials and login
