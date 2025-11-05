@@ -1151,8 +1151,8 @@ export function registerClientRoutes(
     }
   });
 
-  // PUT /api/client-services/:id - Update client service (admin only)
-  app.put("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // PUT /api/client-services/:id - Update client service (manager or admin)
+  app.put("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -1265,6 +1265,24 @@ export function registerClientRoutes(
 
               // For each active project, reassign tasks from old user to new user (or unassign if new user is null)
               for (const project of activeProjects) {
+                // Check if this role assignment change affects the project's current stage
+                // If the current stage uses this role, update currentAssigneeId
+                if (project.projectType?.id && project.currentStatus) {
+                  const stages = await storage.getKanbanStagesByProjectTypeId(project.projectType.id);
+                  const currentStage = stages.find(s => s.name === project.currentStatus);
+                  
+                  // If the current stage is assigned to the work role we just changed
+                  if (currentStage && currentStage.assignedWorkRoleId === currentAssignment.workRoleId) {
+                    console.log(`[Routes] Project ${project.id} current stage "${project.currentStatus}" uses changed role - updating currentAssigneeId`);
+                    
+                    // Update the project's currentAssigneeId to the new user
+                    await storage.updateProject(project.id, {
+                      currentAssigneeId: newUserId || null,
+                    });
+                    console.log(`[Routes] Updated project ${project.id} currentAssigneeId to ${newUserId || 'null'}`);
+                  }
+                }
+
                 // Get all internal tasks connected to this project assigned to the old user
                 if (authoritativeOldUserId) {
                   const tasks = await storage.getInternalTasksByAssignee(authoritativeOldUserId);
