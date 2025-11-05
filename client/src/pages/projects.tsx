@@ -282,12 +282,10 @@ export default function Projects() {
         to: filters.customDateRange?.to ? new Date(filters.customDateRange.to) : undefined,
       });
       
-      // Only switch to kanban mode if explicitly saved as kanban
-      // This preserves the current mode for legacy views and avoids forcing list mode
+      // Switch to the appropriate view mode based on the saved view
       if (view.viewMode === "kanban") {
         setViewMode("kanban");
-      } else if (view.viewMode === "list" && viewMode === "kanban") {
-        // Only switch from kanban back to list if the view was explicitly saved as list
+      } else if (view.viewMode === "list") {
         setViewMode("list");
       }
       
