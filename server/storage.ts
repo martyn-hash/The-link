@@ -234,6 +234,36 @@ import {
   type TaskDocument,
   type InsertTaskDocument,
   insertUserOauthAccountSchema,
+  emailMessages,
+  mailboxMessageMap,
+  emailThreads,
+  unmatchedEmails,
+  clientEmailAliases,
+  clientDomainAllowlist,
+  emailAttachments,
+  emailMessageAttachments,
+  graphWebhookSubscriptions,
+  graphSyncState,
+  type EmailMessage,
+  type InsertEmailMessage,
+  type MailboxMessageMap,
+  type InsertMailboxMessageMap,
+  type EmailThread,
+  type InsertEmailThread,
+  type UnmatchedEmail,
+  type InsertUnmatchedEmail,
+  type ClientEmailAlias,
+  type InsertClientEmailAlias,
+  type ClientDomainAllowlist,
+  type InsertClientDomainAllowlist,
+  type EmailAttachment,
+  type InsertEmailAttachment,
+  type EmailMessageAttachment,
+  type InsertEmailMessageAttachment,
+  type GraphWebhookSubscription,
+  type InsertGraphWebhookSubscription,
+  type GraphSyncState,
+  type InsertGraphSyncState,
 } from "@shared/schema";
 
 // Add the OAuth account types
@@ -771,6 +801,14 @@ export interface IStorage {
   getClientDomainAllowlist(): Promise<ClientDomainAllowlist[]>;
   getClientByDomain(domain: string): Promise<{ clientId: string } | undefined>;
   deleteClientDomainAllowlist(id: string): Promise<void>;
+
+  // Email attachment operations
+  createEmailAttachment(attachment: InsertEmailAttachment): Promise<EmailAttachment>;
+  getEmailAttachmentByHash(contentHash: string): Promise<EmailAttachment | undefined>;
+  getEmailAttachmentById(id: string): Promise<EmailAttachment | undefined>;
+  createEmailMessageAttachment(mapping: InsertEmailMessageAttachment): Promise<EmailMessageAttachment>;
+  getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]>;
+  checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean>;
 
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
@@ -9030,6 +9068,75 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClientDomainAllowlist(id: string): Promise<void> {
     await db.delete(clientDomainAllowlist).where(eq(clientDomainAllowlist.id, id));
+  }
+
+  // Email attachment operations
+  async createEmailAttachment(attachment: InsertEmailAttachment): Promise<EmailAttachment> {
+    const [created] = await db
+      .insert(emailAttachments)
+      .values(attachment)
+      .returning();
+    return created;
+  }
+
+  async getEmailAttachmentByHash(contentHash: string): Promise<EmailAttachment | undefined> {
+    const result = await db
+      .select()
+      .from(emailAttachments)
+      .where(eq(emailAttachments.contentHash, contentHash))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailAttachmentById(id: string): Promise<EmailAttachment | undefined> {
+    const result = await db
+      .select()
+      .from(emailAttachments)
+      .where(eq(emailAttachments.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createEmailMessageAttachment(mapping: InsertEmailMessageAttachment): Promise<EmailMessageAttachment> {
+    const [created] = await db
+      .insert(emailMessageAttachments)
+      .values(mapping)
+      .returning();
+    return created;
+  }
+
+  async getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]> {
+    const result = await db
+      .select({
+        id: emailAttachments.id,
+        contentHash: emailAttachments.contentHash,
+        fileName: emailAttachments.fileName,
+        fileSize: emailAttachments.fileSize,
+        contentType: emailAttachments.contentType,
+        objectPath: emailAttachments.objectPath,
+        createdAt: emailAttachments.createdAt,
+      })
+      .from(emailMessageAttachments)
+      .innerJoin(emailAttachments, eq(emailMessageAttachments.attachmentId, emailAttachments.id))
+      .where(eq(emailMessageAttachments.internetMessageId, internetMessageId))
+      .orderBy(emailMessageAttachments.attachmentIndex);
+    
+    return result;
+  }
+
+  async checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean> {
+    const result = await db
+      .select()
+      .from(emailMessageAttachments)
+      .where(
+        and(
+          eq(emailMessageAttachments.internetMessageId, internetMessageId),
+          eq(emailMessageAttachments.attachmentId, attachmentId)
+        )
+      )
+      .limit(1);
+    
+    return result.length > 0;
   }
 
   // Document folder operations

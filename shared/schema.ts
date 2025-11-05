@@ -2390,6 +2390,9 @@ export const emailMessageAttachments = pgTable("email_message_attachments", {
   attachmentIndex: integer("attachment_index"), // Order in original email
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
+  // Unique constraint: prevent duplicate links between same message and attachment
+  unique("unique_message_attachment").on(table.internetMessageId, table.attachmentId),
+  
   index("idx_email_message_attachments_message_id").on(table.internetMessageId),
   index("idx_email_message_attachments_attachment_id").on(table.attachmentId),
 ]);

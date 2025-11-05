@@ -290,6 +290,40 @@ export async function getUserOutlookProfile(userId: string) {
   }
 }
 
+/**
+ * Download email attachment content from Microsoft Graph API
+ * @param userId - The ID of the user who owns the mailbox
+ * @param messageId - The Graph API message ID containing the attachment
+ * @param attachmentId - The Graph API attachment ID to download
+ * @returns Buffer containing the attachment content
+ */
+export async function downloadEmailAttachment(
+  userId: string,
+  messageId: string,
+  attachmentId: string
+): Promise<Buffer> {
+  try {
+    const graphClient = await getUserOutlookClient(userId);
+    
+    // Download attachment content as binary
+    // The /$value endpoint returns the raw content
+    const attachmentContent = await graphClient
+      .api(`/me/messages/${messageId}/attachments/${attachmentId}/$value`)
+      .getStream();
+    
+    // Convert stream to buffer
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of attachmentContent) {
+      chunks.push(chunk);
+    }
+    
+    return Buffer.concat(chunks);
+  } catch (error) {
+    console.error(`Error downloading attachment ${attachmentId} from message ${messageId}:`, error);
+    throw error;
+  }
+}
+
 // OAuth configuration
 const CLIENT_ID = process.env.MICROSOFT_CLIENT_ID || 'demo-client-id';
 const CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET || 'demo-client-secret';

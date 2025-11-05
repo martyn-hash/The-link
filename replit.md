@@ -48,13 +48,13 @@ The `/internal-chat` page supports independent staff-to-staff message threads. I
 
 ### Email Threading & Deduplication System
 
-**Implementation Status: Phases 1-8.2 Complete (75%)** (Core backend + email sending + noise control ready)
+**Implementation Status: Phase 8 Complete (80%)** (Core backend + email sending + noise control + attachments ready)
 
 The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. 
 
-**✅ Implemented Features (Phases 1-8.2):**
+**✅ Implemented Features (Phases 1-8):**
 
--   **Database Schema**: 8 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `graph_webhook_subscriptions`, `graph_sync_state`
+-   **Database Schema**: 10 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `email_attachments`, `email_message_attachments`, `graph_webhook_subscriptions`, `graph_sync_state`
 -   **Deduplication**: Global unique key using `internetMessageId` to prevent duplicate entries when multiple staff are CC'd on the same email
 -   **Thread Grouping**: Three-layer approach - (1) `canonicalConversationId` grouping, (2) ancestry-based threading via `inReplyTo`/`References` headers, (3) computed `threadKey` hash for orphaned messages
 -   **Client Association**: Multi-layered matching - (1) exact email match against `client_email_aliases` (high confidence), (2) domain match against `client_domain_allowlist` (medium confidence), (3) quarantine for unmatched emails (low confidence)
@@ -66,10 +66,10 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Optimized Queries**: `getThreadsWithoutClient()` for scalable client association at scale
 -   **Email Sending**: POST /api/emails/:messageId/reply endpoint with HTML/plain text support, user access validation, reply/reply-all functionality via Graph API (creates draft, updates body, sends), automatic Sent Items ingestion
 -   **Noise Control (Phase 8.1-8.2)**: Internal-only thread detection (isInternalOnly flag for @growth-accountants.com/@thelink.uk.com), email direction classification (inbound/outbound/internal/external), participant counting, marketing/list email detection (list-id headers, auto-reply indicators, large distribution >10 recipients)
+-   **Attachment Deduplication (Phase 8.3)**: SHA-256 content hashing for dedup, automatic download from Graph API, Google Cloud Storage upload with hash-based paths, idempotent message-attachment linking, skips inline attachments and oversized files (>25MB), fetches attachments explicitly during incremental delta syncs
 
-**📋 Planned Features (Phases 8.3-10):**
+**📋 Planned Features (Phases 9-10):**
 
--   **Attachment Deduplication (Phase 8.3)**: Hash-based attachment dedup to prevent storing duplicates
 -   **UI Implementation (Phase 9)**: Email timeline on client detail page, thread view, reply interface, quarantine review
 -   **Monitoring & Testing (Phase 10)**: Webhook resilience, error handling, e2e tests, admin dashboard
 

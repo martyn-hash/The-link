@@ -14,6 +14,7 @@ import { getUserOutlookClient } from '../utils/userOutlookClient';
 import { storage } from '../storage';
 import { nanoid } from 'nanoid';
 import type { EmailMessage, EmailThread, ClientDomainAllowlist, InsertEmailMessage } from '@shared/schema';
+import { emailAttachmentService } from './emailAttachmentService';
 
 // Message fields to fetch from Graph API
 // Keep this lean to minimize data transfer and processing time
@@ -209,6 +210,7 @@ export class EmailIngestionService {
         response = await client
           .api(`/me/mailFolders('${folderType}')/messages/delta`)
           .select(MESSAGE_SELECT_FIELDS)
+          .expand('attachments($select=id,name,size,contentType,isInline)') // Fetch attachment metadata
           .top(50) // Fetch in batches of 50
           .get();
       }
@@ -553,6 +555,38 @@ export class EmailIngestionService {
             changeKey: graphMessage.changeKey || null,
             receivedAt: graphMessage.receivedDateTime ? new Date(graphMessage.receivedDateTime) : new Date()
           });
+        }
+
+        // Process attachments if the message has any (Phase 8.3)
+        if (graphMessage.hasAttachments) {
+          try {
+            // Check if attachments metadata is already included (initial sync)
+            let attachments = graphMessage.attachments;
+            
+            // If not included, fetch explicitly (happens during incremental delta syncs)
+            if (!attachments || attachments.length === 0) {
+              console.log(`[Email Ingestion] Fetching attachments for message ${graphMessage.id}`);
+              attachments = await this.fetchMessageAttachments(userId, graphMessage.id);
+            }
+
+            if (attachments && attachments.length > 0) {
+              await emailAttachmentService.processMessageAttachments(
+                userId,
+                graphMessage.id,
+                savedMessage.internetMessageId,
+                attachments.map((att: any) => ({
+                  id: att.id,
+                  name: att.name,
+                  size: att.size,
+                  contentType: att.contentType,
+                  isInline: att.isInline
+                }))
+              );
+            }
+          } catch (error) {
+            console.error('[Email Ingestion] Error processing attachments:', error);
+            // Don't fail the entire ingestion if attachment processing fails
+          }
         }
 
         stats.processed++;
