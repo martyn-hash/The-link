@@ -203,6 +203,28 @@ app.use((req, res, next) => {
     
     log('[CH Sync] Nightly scheduler initialized (runs daily at 2:00 AM UTC)');
     
+    // Setup nightly email resolver
+    // Runs every day at 3:00 AM UTC (after Companies House sync)
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        log('[Email Resolver] Starting nightly quarantine resolution...');
+        const { emailResolverService } = await import('./services/emailResolverService');
+        const stats = await emailResolverService.resolveQuarantinedEmails();
+        log(`[Email Resolver] Nightly resolution complete: ${stats.matched} matched, ${stats.stillUnmatched} still unmatched, ${stats.errors} errors`);
+        
+        // Also run cleanup of old quarantined emails (>90 days old with >5 retry attempts)
+        const cleanedCount = await emailResolverService.cleanupOldQuarantinedEmails(90);
+        log(`[Email Resolver] Cleaned up ${cleanedCount} old quarantined emails`);
+      } catch (error) {
+        console.error('[Email Resolver] Error in nightly resolution:', error);
+        log('[Email Resolver] Error in nightly resolution:', error instanceof Error ? error.message : String(error));
+      }
+    }, {
+      timezone: "UTC"
+    });
+    
+    log('[Email Resolver] Nightly scheduler initialized (runs daily at 3:00 AM UTC)');
+    
     // Setup project message reminder checks
     // Runs every 10 minutes to check for unread messages >10 minutes old
     cron.schedule('*/10 * * * *', async () => {
