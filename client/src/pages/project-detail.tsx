@@ -436,7 +436,12 @@ export default function ProjectDetail() {
             <div className="space-y-6">
               {/* Row 1: Full-width project info */}
               <div className="bg-card border border-border rounded-lg p-6">
-                <ProjectInfo project={project} user={user} />
+                <ProjectInfo 
+                  project={project} 
+                  user={user} 
+                  currentStage={currentStage}
+                  currentAssignee={currentAssignee}
+                />
               </div>
 
               {/* Row 2: Full-width chronology */}
