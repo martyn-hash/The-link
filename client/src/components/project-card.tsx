@@ -281,27 +281,16 @@ export default function ProjectCard({
     };
   }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime, project.dueDate]);
 
-  // Calculate time remaining until deadline
-  // Priority: 1) Project due date, 2) Stage max time
+  // Calculate time remaining until stage is due
+  // This shows: max instance time for current stage - time already spent in this stage
   const timeRemaining = useMemo(() => {
-    const now = new Date();
-    
-    // Priority 1: Check project due date first
-    if (project.dueDate) {
-      const dueDate = new Date(project.dueDate);
-      const msRemaining = dueDate.getTime() - now.getTime();
-      const hoursRemaining = msRemaining / (1000 * 60 * 60);
-      return hoursRemaining;
-    }
-    
-    // Priority 2: Fall back to stage max time if no due date
     if (!effectiveStageConfig?.maxInstanceTime || effectiveStageConfig.maxInstanceTime === 0) {
       return null;
     }
 
     const remaining = effectiveStageConfig.maxInstanceTime - currentBusinessHours;
     return remaining;
-  }, [project.dueDate, currentBusinessHours, effectiveStageConfig?.maxInstanceTime]);
+  }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime]);
 
   // Format time for display (without "business" keyword)
   const formatTimeUntilDue = (hours: number | null): string => {
