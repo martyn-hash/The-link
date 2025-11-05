@@ -48,11 +48,11 @@ The `/internal-chat` page supports independent staff-to-staff message threads. I
 
 ### Email Threading & Deduplication System
 
-**Implementation Status: Phases 1-6 Complete** (Core backend + nightly resolver ready)
+**Implementation Status: Phases 1-7 Complete** (Core backend + email sending ready)
 
 The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. 
 
-**✅ Implemented Features (Phases 1-6):**
+**✅ Implemented Features (Phases 1-7):**
 
 -   **Database Schema**: 8 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `graph_webhook_subscriptions`, `graph_sync_state`
 -   **Deduplication**: Global unique key using `internetMessageId` to prevent duplicate entries when multiple staff are CC'd on the same email
@@ -64,11 +64,11 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Quarantine System**: Message-level quarantine with duplicate prevention via `getUnmatchedEmailByMessageId` check
 -   **Nightly Resolver**: Scheduled job (3:00 AM UTC) that retroactively matches quarantined emails when new aliases/domains added, includes ancestry-based promotion (entire thread promoted when any message matches) and auto-cleanup of resolved/old entries (>90 days + >5 retries)
 -   **Optimized Queries**: `getThreadsWithoutClient()` for scalable client association at scale
+-   **Email Sending**: POST /api/emails/:messageId/reply endpoint with HTML/plain text support, user access validation, reply/reply-all functionality via Graph API (creates draft, updates body, sends), automatic Sent Items ingestion
 
-**📋 Planned Features (Phases 7-10):**
+**📋 Planned Features (Phases 8-10):**
 
--   **Email Sending**: Reply creation using Graph API with proper thread linking
--   **Noise Control**: Filter internal-only threads and marketing emails from client timelines
+-   **Noise Control**: Filter internal-only threads and marketing emails from client timelines, attachment deduplication
 -   **UI Implementation**: Email timeline on client detail page, thread view, reply interface, quarantine review
 -   **Monitoring**: Webhook resilience, error handling, e2e tests, admin dashboard
 
