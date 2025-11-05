@@ -302,6 +302,7 @@ function ApprovalFieldForm({
   editingField?: any;
 }) {
   const [fieldName, setFieldName] = useState(editingField?.fieldName || "");
+  const [description, setDescription] = useState(editingField?.description || "");
   const [fieldType, setFieldType] = useState<"boolean" | "number" | "long_text" | "multi_select">(editingField?.fieldType || "boolean");
   const [isRequired, setIsRequired] = useState(editingField?.isRequired || false);
   const [placeholder, setPlaceholder] = useState(editingField?.placeholder || "");
@@ -333,6 +334,7 @@ function ApprovalFieldForm({
     const fieldData = {
       stageApprovalId,
       fieldName: fieldName.trim(),
+      description: description.trim() || undefined,
       fieldType,
       isRequired,
       placeholder: placeholder.trim() || undefined,
@@ -408,6 +410,18 @@ function ApprovalFieldForm({
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="approval-field-description">Description (Optional)</Label>
+        <Textarea
+          id="approval-field-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Enter help text or description for this field"
+          data-testid="textarea-approval-field-description"
+          rows={2}
+        />
       </div>
 
       <div className="space-y-2">
