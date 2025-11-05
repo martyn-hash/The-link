@@ -131,6 +131,7 @@ function CustomFieldForm({
   const [fieldType, setFieldType] = useState<"boolean" | "number" | "short_text" | "long_text" | "multi_select">("short_text");
   const [isRequired, setIsRequired] = useState(false);
   const [placeholder, setPlaceholder] = useState("");
+  const [description, setDescription] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
 
   const handleSubmit = () => {
@@ -144,6 +145,7 @@ function CustomFieldForm({
       fieldType,
       isRequired,
       placeholder: placeholder.trim() || undefined,
+      description: description.trim() || undefined,
       options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
       order: existingFields.length
     };
@@ -211,6 +213,18 @@ function CustomFieldForm({
           onChange={(e) => setPlaceholder(e.target.value)}
           placeholder="Enter placeholder text"
           data-testid="input-custom-field-placeholder"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="field-description">Description (Optional)</Label>
+        <Textarea
+          id="field-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Enter help text or description for this field"
+          rows={2}
+          data-testid="textarea-custom-field-description"
         />
       </div>
 
