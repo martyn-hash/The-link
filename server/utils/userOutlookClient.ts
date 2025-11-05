@@ -146,6 +146,130 @@ export async function sendEmailAsUser(userId: string, to: string, subject: strin
   }
 }
 
+/**
+ * Create a reply to an email message using Microsoft Graph API
+ * @param userId - The ID of the user sending the reply
+ * @param messageId - The Graph API message ID to reply to
+ * @param content - The reply content (HTML or plain text)
+ * @param isHtml - Whether the content is HTML (default: true)
+ * @param comment - Optional comment to add to the reply
+ */
+export async function createReplyToMessage(
+  userId: string,
+  messageId: string,
+  content: string,
+  isHtml: boolean = true,
+  comment?: string
+) {
+  try {
+    const graphClient = await getUserOutlookClient(userId);
+    
+    if (!isHtml) {
+      // For plain text, we can use the simple /reply action
+      await graphClient
+        .api(`/me/messages/${messageId}/reply`)
+        .post({ comment: content });
+      return { success: true };
+    }
+
+    // For HTML content, we need to:
+    // 1. Create a draft reply
+    // 2. Update the draft's body to HTML
+    // 3. Send the draft
+
+    // Step 1: Create draft reply
+    const draftReply = await graphClient
+      .api(`/me/messages/${messageId}/createReply`)
+      .post({});
+
+    if (!draftReply || !draftReply.id) {
+      throw new Error('Failed to create draft reply');
+    }
+
+    // Step 2: Update draft body with HTML content
+    await graphClient
+      .api(`/me/messages/${draftReply.id}`)
+      .patch({
+        body: {
+          contentType: 'HTML',
+          content: content
+        }
+      });
+
+    // Step 3: Send the draft
+    await graphClient
+      .api(`/me/messages/${draftReply.id}/send`)
+      .post({});
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error creating reply via user Outlook:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a reply-all to an email message using Microsoft Graph API
+ * @param userId - The ID of the user sending the reply
+ * @param messageId - The Graph API message ID to reply to
+ * @param content - The reply content (HTML or plain text)
+ * @param isHtml - Whether the content is HTML (default: true)
+ * @param comment - Optional comment to add to the reply
+ */
+export async function createReplyAllToMessage(
+  userId: string,
+  messageId: string,
+  content: string,
+  isHtml: boolean = true,
+  comment?: string
+) {
+  try {
+    const graphClient = await getUserOutlookClient(userId);
+    
+    if (!isHtml) {
+      // For plain text, we can use the simple /replyAll action
+      await graphClient
+        .api(`/me/messages/${messageId}/replyAll`)
+        .post({ comment: content });
+      return { success: true };
+    }
+
+    // For HTML content, we need to:
+    // 1. Create a draft reply-all
+    // 2. Update the draft's body to HTML
+    // 3. Send the draft
+
+    // Step 1: Create draft reply-all
+    const draftReply = await graphClient
+      .api(`/me/messages/${messageId}/createReplyAll`)
+      .post({});
+
+    if (!draftReply || !draftReply.id) {
+      throw new Error('Failed to create draft reply-all');
+    }
+
+    // Step 2: Update draft body with HTML content
+    await graphClient
+      .api(`/me/messages/${draftReply.id}`)
+      .patch({
+        body: {
+          contentType: 'HTML',
+          content: content
+        }
+      });
+
+    // Step 3: Send the draft
+    await graphClient
+      .api(`/me/messages/${draftReply.id}/send`)
+      .post({});
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error creating reply-all via user Outlook:', error);
+    throw error;
+  }
+}
+
 // Helper function to get user's profile information from Microsoft Graph
 export async function getUserOutlookProfile(userId: string) {
   try {

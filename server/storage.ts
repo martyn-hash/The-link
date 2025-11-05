@@ -737,6 +737,8 @@ export interface IStorage {
   createMailboxMessageMap(mapping: InsertMailboxMessageMap): Promise<MailboxMessageMap>;
   getMailboxMessageMapsByUserId(userId: string): Promise<MailboxMessageMap[]>;
   getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]>;
+  userHasAccessToMessage(userId: string, messageId: string): Promise<boolean>;
+  getUserGraphMessageId(userId: string, messageId: string): Promise<string | undefined>;
 
   // Email thread operations
   createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
@@ -8781,15 +8783,65 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(mailboxMessageMap)
-      .where(eq(mailboxMessageMap.userId, userId))
-      .orderBy(mailboxMessageMap.receivedAt);
+      .where(eq(mailboxMessageMap.mailboxUserId, userId))
+      .orderBy(mailboxMessageMap.createdAt);
   }
 
   async getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]> {
+    // Get the message to find its internetMessageId
+    const message = await this.getEmailMessageById(messageId);
+    if (!message) {
+      return [];
+    }
+
     return await db
       .select()
       .from(mailboxMessageMap)
-      .where(eq(mailboxMessageMap.messageId, messageId));
+      .where(eq(mailboxMessageMap.internetMessageId, message.internetMessageId));
+  }
+
+  async userHasAccessToMessage(userId: string, messageId: string): Promise<boolean> {
+    // Get the message to find its internetMessageId
+    const message = await this.getEmailMessageById(messageId);
+    if (!message) {
+      return false;
+    }
+
+    // Check if user has this message in their mailbox
+    const result = await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(
+        and(
+          eq(mailboxMessageMap.mailboxUserId, userId),
+          eq(mailboxMessageMap.internetMessageId, message.internetMessageId)
+        )
+      )
+      .limit(1);
+
+    return result.length > 0;
+  }
+
+  async getUserGraphMessageId(userId: string, messageId: string): Promise<string | undefined> {
+    // Get the message to find its internetMessageId
+    const message = await this.getEmailMessageById(messageId);
+    if (!message) {
+      return undefined;
+    }
+
+    // Get the mailbox mapping for this user and message
+    const result = await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(
+        and(
+          eq(mailboxMessageMap.mailboxUserId, userId),
+          eq(mailboxMessageMap.internetMessageId, message.internetMessageId)
+        )
+      )
+      .limit(1);
+
+    return result[0]?.mailboxMessageId;
   }
 
   // Email thread operations

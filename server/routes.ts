@@ -23,6 +23,7 @@ import { registerMessageRoutes } from "./routes/messages";
 import { registerIntegrationRoutes } from "./routes/integrations";
 import { registerAuthAndMiscRoutes } from "./routes/auth";
 import { registerInternalTaskRoutes } from "./routes/internalTasks";
+import { registerEmailRoutes } from "./routes/emails";
 
 /**
  * Register all application routes
@@ -70,6 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerInternalTaskRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerMessageRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, verifyMessageAttachmentAccess, verifyThreadAccess);
   registerIntegrationRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
+  registerEmailRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;
