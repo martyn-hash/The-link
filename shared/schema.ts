@@ -411,6 +411,7 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   stageApprovalId: varchar("stage_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
   fieldName: varchar("field_name").notNull(),
+  description: text("description"), // Optional description/help text for the field
   fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
   isRequired: boolean("is_required").default(false),
   order: integer("order").notNull(),
