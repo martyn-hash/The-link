@@ -382,11 +382,18 @@ export default function ProjectDetail() {
           
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <RouterLink to={`/clients/${project.clientId}`}>
-                <h1 className="text-3xl font-bold text-foreground mb-2 hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
-                  {project.client?.name || 'Unknown Client'}
-                </h1>
-              </RouterLink>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <RouterLink to={`/clients/${project.clientId}`}>
+                  <h1 className="text-3xl font-bold text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                    {project.client?.name || 'Unknown Client'}
+                  </h1>
+                </RouterLink>
+                {project.projectType?.name && (
+                  <span className="text-xl sm:text-2xl font-semibold text-red-500" data-testid="text-project-type">
+                    {project.projectType.name}
+                  </span>
+                )}
+              </div>
             </div>
             
             <div className="flex gap-2">
@@ -448,7 +455,7 @@ export default function ProjectDetail() {
 
               {/* Row 2: Full-width chronology */}
               <div className="bg-card border border-border rounded-lg p-6">
-                <ProjectChronology project={project} currentAssignee={currentAssignee} />
+                <ProjectChronology project={project} />
               </div>
             </div>
           </TabsContent>

@@ -191,8 +191,24 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Column: Role Assignments */}
+        {/* Left Column: Due Date and Role Assignments */}
         <div>
+          {/* Due Date Section */}
+          {project.dueDate && (
+            <div className="mb-6">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground font-medium">Due Date:</span>
+                <span className="font-semibold text-red-500" data-testid="text-project-due-date">
+                  {new Date(project.dueDate).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+            </div>
+          )}
+          
           <h4 className="font-semibold text-foreground mb-4">Role Assignments</h4>
           <div className="space-y-3">
             {isLoadingServiceRoles ? (
