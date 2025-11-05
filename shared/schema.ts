@@ -72,7 +72,7 @@ export const nationalityEnum = pgEnum("nationality", [
 ]);
 
 // Custom field type enum
-export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text", "multi_select"]);
+export const customFieldTypeEnum = pgEnum("custom_field_type", ["boolean", "number", "short_text", "long_text", "multi_select"]);
 
 // Stage approval field type enum
 export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "long_text", "multi_select"]);

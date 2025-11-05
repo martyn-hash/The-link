@@ -128,7 +128,7 @@ function CustomFieldForm({
   existingFields: any[];
 }) {
   const [fieldName, setFieldName] = useState("");
-  const [fieldType, setFieldType] = useState<"number" | "short_text" | "long_text" | "multi_select">("short_text");
+  const [fieldType, setFieldType] = useState<"boolean" | "number" | "short_text" | "long_text" | "multi_select">("short_text");
   const [isRequired, setIsRequired] = useState(false);
   const [placeholder, setPlaceholder] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
@@ -193,6 +193,7 @@ function CustomFieldForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="boolean">Boolean (Yes/No)</SelectItem>
               <SelectItem value="short_text">Short Text</SelectItem>
               <SelectItem value="long_text">Long Text</SelectItem>
               <SelectItem value="number">Number</SelectItem>
