@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, rectIntersection } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
 import ChangeStatusModal from "./ChangeStatusModal";
@@ -43,7 +43,7 @@ const getColorStyle = (hexColor: string): { backgroundColor: string } => {
 // Droppable Column component for drag-and-drop zones
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
-  return <div ref={setNodeRef}>{children}</div>;
+  return <div ref={setNodeRef} className="flex-1 min-w-80 h-full">{children}</div>;
 }
 
 export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBoardProps) {
@@ -69,6 +69,25 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     }),
     useSensor(KeyboardSensor)
   );
+
+  // Custom collision detection that prioritizes column droppables over cards
+  const customCollisionDetection = (args: any) => {
+    // First check for column droppables using pointerWithin
+    const pointerCollisions = pointerWithin(args);
+    const columnCollisions = pointerCollisions.filter((collision: any) => {
+      return typeof collision.id === 'string' && collision.id.startsWith('column-');
+    });
+    
+    // If we found a column, return it
+    if (columnCollisions.length > 0) {
+      console.log('[Kanban DnD] Custom collision detected column:', columnCollisions[0].id);
+      return columnCollisions;
+    }
+    
+    // Otherwise fall back to pointer within for cards
+    console.log('[Kanban DnD] Custom collision falling back to cards');
+    return pointerCollisions;
+  };
 
   const navigateToProject = (projectId: string) => {
     setLocation(`/projects/${projectId}`);
@@ -284,7 +303,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       )}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={customCollisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -295,8 +314,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
             
             return (
               <DroppableColumn key={status} id={`column-${status}`}>
-                <div className="flex-1 min-w-80">
-                  <Card className="h-full">
+                <Card className="h-full">
                     <CardHeader className="sticky top-0 bg-card border-b border-border rounded-t-lg">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
@@ -345,7 +363,6 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
                       )}
                     </CardContent>
                   </Card>
-                </div>
               </DroppableColumn>
             );
           })}
