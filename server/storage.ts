@@ -715,6 +715,17 @@ export interface IStorage {
   createNotificationIcon(icon: InsertNotificationIcon): Promise<NotificationIcon>;
   deleteNotificationIcon(id: string): Promise<void>;
 
+  // Graph webhook subscription operations
+  createGraphWebhookSubscription(subscription: InsertGraphWebhookSubscription): Promise<GraphWebhookSubscription>;
+  getGraphWebhookSubscription(subscriptionId: string): Promise<GraphWebhookSubscription | undefined>;
+  updateGraphWebhookSubscription(subscriptionId: string, updates: Partial<InsertGraphWebhookSubscription>): Promise<void>;
+  getActiveGraphWebhookSubscriptions(): Promise<GraphWebhookSubscription[]>;
+  getExpiringGraphWebhookSubscriptions(hoursUntilExpiry: number): Promise<GraphWebhookSubscription[]>;
+
+  // Graph sync state operations
+  getGraphSyncState(userId: string, folderPath: string): Promise<GraphSyncState | undefined>;
+  upsertGraphSyncState(state: InsertGraphSyncState): Promise<GraphSyncState>;
+
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
   getDocumentFolderById(id: string): Promise<DocumentFolder | undefined>;
@@ -8546,6 +8557,92 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotificationIcon(id: string): Promise<void> {
     await db.delete(notificationIcons).where(eq(notificationIcons.id, id));
+  }
+
+  // Graph webhook subscription operations
+  async createGraphWebhookSubscription(subscription: InsertGraphWebhookSubscription): Promise<GraphWebhookSubscription> {
+    const [newSubscription] = await db
+      .insert(graphWebhookSubscriptions)
+      .values(subscription)
+      .returning();
+    return newSubscription;
+  }
+
+  async getGraphWebhookSubscription(subscriptionId: string): Promise<GraphWebhookSubscription | undefined> {
+    const result = await db
+      .select()
+      .from(graphWebhookSubscriptions)
+      .where(eq(graphWebhookSubscriptions.subscriptionId, subscriptionId))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateGraphWebhookSubscription(subscriptionId: string, updates: Partial<InsertGraphWebhookSubscription>): Promise<void> {
+    await db
+      .update(graphWebhookSubscriptions)
+      .set(updates)
+      .where(eq(graphWebhookSubscriptions.subscriptionId, subscriptionId));
+  }
+
+  async getActiveGraphWebhookSubscriptions(): Promise<GraphWebhookSubscription[]> {
+    return await db
+      .select()
+      .from(graphWebhookSubscriptions)
+      .where(eq(graphWebhookSubscriptions.isActive, true))
+      .orderBy(graphWebhookSubscriptions.expiresAt);
+  }
+
+  async getExpiringGraphWebhookSubscriptions(hoursUntilExpiry: number): Promise<GraphWebhookSubscription[]> {
+    const expiryThreshold = new Date();
+    expiryThreshold.setHours(expiryThreshold.getHours() + hoursUntilExpiry);
+    
+    return await db
+      .select()
+      .from(graphWebhookSubscriptions)
+      .where(
+        and(
+          eq(graphWebhookSubscriptions.isActive, true),
+          lt(graphWebhookSubscriptions.expiresAt, expiryThreshold)
+        )
+      )
+      .orderBy(graphWebhookSubscriptions.expiresAt);
+  }
+
+  // Graph sync state operations
+  async getGraphSyncState(userId: string, folderPath: string): Promise<GraphSyncState | undefined> {
+    const result = await db
+      .select()
+      .from(graphSyncState)
+      .where(
+        and(
+          eq(graphSyncState.userId, userId),
+          eq(graphSyncState.folderPath, folderPath)
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertGraphSyncState(state: InsertGraphSyncState): Promise<GraphSyncState> {
+    const existing = await this.getGraphSyncState(state.userId, state.folderPath);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(graphSyncState)
+        .set({
+          ...state,
+          updatedAt: new Date()
+        })
+        .where(eq(graphSyncState.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(graphSyncState)
+        .values(state)
+        .returning();
+      return created;
+    }
   }
 
   // Document folder operations
