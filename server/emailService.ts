@@ -246,9 +246,12 @@ export async function sendStageChangeNotificationEmail(
   clientName: string,
   stageName: string,
   fromStage?: string,
-  projectId?: string
+  projectId?: string,
+  stageConfig?: { maxInstanceTime?: number | null },
+  chronology?: Array<{ toStatus: string; timestamp: string }>,
+  projectCreatedAt?: string
 ): Promise<boolean> {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+  const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const formattedStageName = stageName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   const subject = `Project moved to ${formattedStageName} - Action required - The Link`;
@@ -256,6 +259,56 @@ export async function sendStageChangeNotificationEmail(
   const stageTransition = fromStage 
     ? `from "${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}" to "${formattedStageName}"`
     : `to "${formattedStageName}"`;
+  
+  // Calculate timing information if we have the necessary data
+  let assignedTimestamp: string | null = null;
+  let dueTimestamp: string | null = null;
+  let maxHoursAllowed: number | null = null;
+  
+  if (chronology && chronology.length > 0) {
+    // Import calculateBusinessHours for due date calculation
+    const { calculateBusinessHours } = await import('@shared/businessTime');
+    
+    // Sort chronology by timestamp DESC and find when project entered current stage
+    const sortedChronology = [...chronology].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const stageEntry = sortedChronology.find(entry => entry.toStatus === stageName);
+    
+    if (stageEntry) {
+      assignedTimestamp = stageEntry.timestamp;
+    } else if (projectCreatedAt) {
+      // If no chronology entry, project may have been created in this stage
+      assignedTimestamp = projectCreatedAt;
+    }
+    
+    // Calculate due date if we have max time and assignment timestamp
+    if (assignedTimestamp && stageConfig?.maxInstanceTime && stageConfig.maxInstanceTime > 0) {
+      maxHoursAllowed = stageConfig.maxInstanceTime;
+      
+      // Calculate due date by adding business hours to assignment time
+      // This is a simplified calculation - add the hours directly
+      const assignedDate = new Date(assignedTimestamp);
+      const dueDate = new Date(assignedDate);
+      
+      // For simplicity, add calendar hours (not business hours)
+      // A more sophisticated version would skip weekends
+      dueDate.setHours(dueDate.getHours() + maxHoursAllowed);
+      dueTimestamp = dueDate.toISOString();
+    }
+  }
+  
+  // Format dates for email display
+  const formatDateTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleString('en-GB', { 
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
+  };
   
   const html = `
     <!DOCTYPE html>
@@ -265,14 +318,38 @@ export async function sendStageChangeNotificationEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); padding: 40px 20px; text-align: center;">
-          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-          <h1 style="color: white; margin: 0; font-size: 24px;">The Link</h1>
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
         </div>
         <div style="padding: 40px 30px;">
           <h2 style="color: #1e293b; margin-top: 0;">🔄 Project Stage Changed</h2>
           <p style="color: #475569; font-size: 16px;">Hello ${recipientName},</p>
           <p style="color: #475569; font-size: 16px;">A project has been moved ${stageTransition} and requires your attention.</p>
+          
+          ${assignedTimestamp ? `
+          <div style="background-color: #fef3c7; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #fbbf24;">
+            <h3 style="margin-top: 0; color: #92400e; font-size: 18px;">⏱️ Timeline & Deadlines</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #374151; font-weight: 600; width: 50%;">Assigned to you:</td>
+                <td style="padding: 8px 0; color: #374151;">${formatDateTime(assignedTimestamp)}</td>
+              </tr>
+              ${maxHoursAllowed ? `
+              <tr>
+                <td style="padding: 8px 0; color: #374151; font-weight: 600;">Maximum time allowed:</td>
+                <td style="padding: 8px 0; color: #374151; font-weight: 700; font-size: 18px;">${maxHoursAllowed} business hours</td>
+              </tr>
+              ` : ''}
+              ${dueTimestamp ? `
+              <tr style="background-color: #fed7aa; border-top: 2px solid #f59e0b;">
+                <td style="padding: 12px 8px; color: #92400e; font-weight: 700; font-size: 16px;">MUST BE COMPLETED BY:</td>
+                <td style="padding: 12px 8px; color: #dc2626; font-weight: 700; font-size: 18px;">${formatDateTime(dueTimestamp)}</td>
+              </tr>
+              ` : ''}
+            </table>
+          </div>
+          ` : ''}
           
           <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
             <h3 style="margin-top: 0; color: #0A7BBF; font-size: 18px;">📋 Project Details</h3>
@@ -289,7 +366,7 @@ export async function sendStageChangeNotificationEmail(
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_BASE_URL || 'http://localhost:5000'}/projects${projectId ? `/${projectId}` : ''}" 
+            <a href="${baseUrl}/projects${projectId ? `/${projectId}` : ''}" 
                style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
               🚀 Review Project in The Link
             </a>
@@ -316,6 +393,13 @@ export async function sendStageChangeNotificationEmail(
 Hello ${recipientName},
 
 A project has been moved ${stageTransition} and requires your attention.
+
+${assignedTimestamp ? `
+⏱️ TIMELINE & DEADLINES:
+- Assigned to you: ${formatDateTime(assignedTimestamp)}
+${maxHoursAllowed ? `- Maximum time allowed: ${maxHoursAllowed} business hours` : ''}
+${dueTimestamp ? `- MUST BE COMPLETED BY: ${formatDateTime(dueTimestamp)}` : ''}
+` : ''}
 
 PROJECT DETAILS:
 Client: ${clientName}
