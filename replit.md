@@ -66,7 +66,7 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Optimized Queries**: `getThreadsWithoutClient()` for scalable client association at scale
 -   **Email Sending**: POST /api/emails/:messageId/reply endpoint with HTML/plain text support, user access validation, reply/reply-all functionality via Graph API (creates draft, updates body, sends), automatic Sent Items ingestion
 -   **Noise Control (Phase 8.1-8.2)**: Internal-only thread detection (isInternalOnly flag for @growth-accountants.com/@thelink.uk.com), email direction classification (inbound/outbound/internal/external), participant counting, marketing/list email detection (list-id headers, auto-reply indicators, large distribution >10 recipients)
--   **Attachment Deduplication (Phase 8.3)**: SHA-256 content hashing for dedup, automatic download from Graph API, Google Cloud Storage upload with hash-based paths, idempotent message-attachment linking, skips inline attachments and oversized files (>25MB), fetches attachments explicitly during incremental delta syncs
+-   **Attachment Deduplication (Phase 8.3)**: SHA-256 content hashing for dedup, automatic download from Graph API, Google Cloud Storage upload with hash-based paths (`attachments/{contentHash}/{filename}`), idempotent message-attachment linking via `checkEmailMessageAttachmentExists()`, unique constraint on `(internetMessageId, attachmentId)` for database-level enforcement, skips inline attachments and oversized files (>25MB), fetches attachments explicitly during incremental delta syncs when metadata missing
 
 **📋 Planned Features (Phases 9-10):**
 
@@ -80,6 +80,9 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 - Idempotent upsert preserves enrichment fields (`threadId`, `clientId`) across delta syncs
 - Normalized email addresses (lowercase) for consistent matching
 - Multi-layered threading handles broken/missing conversation IDs gracefully
+- Content-based attachment dedup using SHA-256 hash - same file content stored once, linked multiple times
+- Application-level dedup check (`checkEmailMessageAttachmentExists`) + database-level unique constraint for race condition safety
+- Delta sync doesn't expand attachments by default - must fetch explicitly when `hasAttachments=true` but metadata missing
 
 ## External Dependencies
 
