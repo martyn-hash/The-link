@@ -1,0 +1,74 @@
+Email Threading + Dedup Prompt for The Link
+
+Goal
+
+Ingest Outlook emails for all staff, log exactly one thread per real conversation on the client timeline, and never create duplicate messages when multiple staff are copied.
+
+Non-negotiables
+	•	Use Microsoft Graph for mail ingest.
+	•	Dedupe key (message level): internetMessageId (global unique).
+	•	Thread grouping: prefer conversationId from the first seen copy as canonicalConversationId. Keep the raw conversationId from each mailbox for reference.
+	•	Fallback thread key: if threading breaks, compute threadKey = hash(rootInternetMessageId + normalizedSubjectStem + participantsSet).
+
+What to build
+	1.	Ingest
+	•	Subscribe per mailbox to Inbox and Sent Items change notifications and support delta sync.
+	•	On change, fetch message with a lean $select including:
+id, internetMessageId, conversationId, subject, receivedDateTime, sentDateTime, from, toRecipients, ccRecipients, bccRecipients, inReplyTo, internetMessageHeaders
+Only pull headers when needed for ancestry; otherwise avoid the MIME download.
+	•	Normalize all email addresses to lowercase.
+	2.	Upsert logic
+	•	Upsert one row per unique internetMessageId. If it already exists, update mailbox mapping and exit.
+	•	Maintain a mailbox mapping table: (mailboxUserId, mailboxMessageId) -> internetMessageId.
+	3.	Threading
+	•	On first message for a conversation, set canonicalConversationId = conversationId.
+	•	When replying or forwarding breaks conversationId, attempt to attach using inReplyTo or References. If unresolved, attach using threadKey.
+	•	Order within thread by receivedDateTime. Use conversationIndex if you fetch it.
+	4.	Client association
+	•	Resolve client by matching any from/to/cc against known client emails.
+	•	If matched, attach to that client’s thread record.
+	•	If no match, write a lean quarantine record to unmatched_emails and do not show in the client UI.
+	5.	Soft-ignore pipeline for unmatched
+	•	Store minimal fields only: internetMessageId, from, to/cc, subjectStem, inReplyTo, references, receivedDateTime, mailboxOwnerUserId, direction.
+	•	Nightly resolver promotes to a client when:
+	•	Ancestry hits a known client message, or
+	•	A participant becomes a known client alias, or
+	•	Domain allowlist rule matches for that client.
+	•	Auto delete unmatched older than the retention window.
+	6.	Sending replies
+	•	Create replies using createReply or createReplyAll, then send. Do not construct headers manually.
+	•	Pick up the sent copy from Sent Items via delta and upsert by internetMessageId.
+	•	Link the sent copy back to the existing thread by inReplyTo or canonicalConversationId or threadKey.
+	7.	Data model (minimum)
+	•	messages
+	•	PK: internetMessageId
+	•	Columns: canonicalConversationId, conversationIdSeen, threadKey, from, to, cc, bcc, subject, subjectStem, receivedDateTime, sentDateTime, inReplyTo, references, direction, mailboxOwnerUserId, clientId
+	•	mailbox_message_map
+	•	PK: (mailboxUserId, mailboxMessageId)
+	•	FK: internetMessageId
+	•	threads
+	•	PK: canonicalConversationId or threadKey
+	•	Summary: first/last timestamps, latest preview, participants
+	•	unmatched_emails
+	•	PK: internetMessageId
+	•	Minimal fields only
+	•	client_email_aliases (clientId, emailLowercase)
+	•	client_domain_allowlist (clientId, domain)
+	8.	Noise control
+	•	Do not log internal-only threads to client timelines.
+	•	Ignore marketing blasts and list mail. Heuristics: list-id header present or recipient count very large.
+	•	Store attachments separately and dedupe by content hash. Only fetch attachment bytes on demand.
+
+Acceptance tests
+	•	If the same email hits three staff inboxes, messages contains exactly one row for that internetMessageId.
+	•	A staff reply is created through Graph and later appears in the same client thread without manual linking.
+	•	A forwarded message that changed conversationId still lands in the correct thread using ancestry or threadKey.
+	•	Unmatched emails never surface in client UI, but retro-link within 24 hours after adding a new client alias.
+
+Output
+	•	Deliver a working service with:
+	•	Graph subscriptions + delta sync
+	•	Idempotent upsert by internetMessageId
+	•	Thread grouping using canonicalConversationId with fallback threadKey
+	•	Quarantine and nightly resolver
+	•	Provide a short README with environment variables and how to provision Graph permissions.
