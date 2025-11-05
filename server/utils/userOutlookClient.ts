@@ -153,29 +153,33 @@ export async function sendEmailAsUser(userId: string, to: string, subject: strin
  * @param content - The reply content (HTML or plain text)
  * @param isHtml - Whether the content is HTML (default: true)
  * @param comment - Optional comment to add to the reply
+ * @param attachments - Optional array of attachment metadata from object storage
  */
 export async function createReplyToMessage(
   userId: string,
   messageId: string,
   content: string,
   isHtml: boolean = true,
-  comment?: string
+  comment?: string,
+  attachments?: Array<{ objectPath: string; fileName: string; contentType?: string; fileSize?: number }>
 ) {
   try {
     const graphClient = await getUserOutlookClient(userId);
+    const { ObjectStorageService } = await import('../services/objectStorageService');
     
-    if (!isHtml) {
-      // For plain text, we can use the simple /reply action
+    if (!isHtml && (!attachments || attachments.length === 0)) {
+      // For plain text without attachments, we can use the simple /reply action
       await graphClient
         .api(`/me/messages/${messageId}/reply`)
         .post({ comment: content });
       return { success: true };
     }
 
-    // For HTML content, we need to:
+    // For HTML content or attachments, we need to:
     // 1. Create a draft reply
     // 2. Update the draft's body to HTML
-    // 3. Send the draft
+    // 3. Add attachments if any
+    // 4. Send the draft
 
     // Step 1: Create draft reply
     const draftReply = await graphClient
@@ -196,7 +200,28 @@ export async function createReplyToMessage(
         }
       });
 
-    // Step 3: Send the draft
+    // Step 3: Add attachments if provided
+    if (attachments && attachments.length > 0) {
+      for (const attachment of attachments) {
+        // Download file from object storage
+        const fileBuffer = await ObjectStorageService.downloadFile(attachment.objectPath);
+        
+        // Convert buffer to base64
+        const base64Content = fileBuffer.toString('base64');
+        
+        // Add attachment to draft
+        await graphClient
+          .api(`/me/messages/${draftReply.id}/attachments`)
+          .post({
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            name: attachment.fileName,
+            contentType: attachment.contentType || 'application/octet-stream',
+            contentBytes: base64Content
+          });
+      }
+    }
+
+    // Step 4: Send the draft
     await graphClient
       .api(`/me/messages/${draftReply.id}/send`)
       .post({});
@@ -215,29 +240,33 @@ export async function createReplyToMessage(
  * @param content - The reply content (HTML or plain text)
  * @param isHtml - Whether the content is HTML (default: true)
  * @param comment - Optional comment to add to the reply
+ * @param attachments - Optional array of attachment metadata from object storage
  */
 export async function createReplyAllToMessage(
   userId: string,
   messageId: string,
   content: string,
   isHtml: boolean = true,
-  comment?: string
+  comment?: string,
+  attachments?: Array<{ objectPath: string; fileName: string; contentType?: string; fileSize?: number }>
 ) {
   try {
     const graphClient = await getUserOutlookClient(userId);
+    const { ObjectStorageService } = await import('../services/objectStorageService');
     
-    if (!isHtml) {
-      // For plain text, we can use the simple /replyAll action
+    if (!isHtml && (!attachments || attachments.length === 0)) {
+      // For plain text without attachments, we can use the simple /replyAll action
       await graphClient
         .api(`/me/messages/${messageId}/replyAll`)
         .post({ comment: content });
       return { success: true };
     }
 
-    // For HTML content, we need to:
+    // For HTML content or attachments, we need to:
     // 1. Create a draft reply-all
     // 2. Update the draft's body to HTML
-    // 3. Send the draft
+    // 3. Add attachments if any
+    // 4. Send the draft
 
     // Step 1: Create draft reply-all
     const draftReply = await graphClient
@@ -258,7 +287,28 @@ export async function createReplyAllToMessage(
         }
       });
 
-    // Step 3: Send the draft
+    // Step 3: Add attachments if provided
+    if (attachments && attachments.length > 0) {
+      for (const attachment of attachments) {
+        // Download file from object storage
+        const fileBuffer = await ObjectStorageService.downloadFile(attachment.objectPath);
+        
+        // Convert buffer to base64
+        const base64Content = fileBuffer.toString('base64');
+        
+        // Add attachment to draft
+        await graphClient
+          .api(`/me/messages/${draftReply.id}/attachments`)
+          .post({
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            name: attachment.fileName,
+            contentType: attachment.contentType || 'application/octet-stream',
+            contentBytes: base64Content
+          });
+      }
+    }
+
+    // Step 4: Send the draft
     await graphClient
       .api(`/me/messages/${draftReply.id}/send`)
       .post({});

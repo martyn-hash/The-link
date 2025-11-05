@@ -12,9 +12,17 @@ import { z } from "zod";
 
 // Validation schemas
 const replyToEmailSchema = z.object({
-  content: z.string().min(1, "Reply content is required"),
-  isHtml: z.boolean().optional().default(true),
-  isReplyAll: z.boolean().optional().default(false),
+  body: z.string().min(1, "Reply content is required"),
+  to: z.array(z.string().email()).optional(),
+  cc: z.array(z.string().email()).optional(),
+  subject: z.string().optional(),
+  replyAll: z.boolean().optional().default(false),
+  attachments: z.array(z.object({
+    objectPath: z.string(),
+    fileName: z.string(),
+    contentType: z.string().optional(),
+    fileSize: z.number().optional(),
+  })).optional(),
 });
 
 export function registerEmailRoutes(
@@ -27,9 +35,12 @@ export function registerEmailRoutes(
    * Send a reply to an email message
    * 
    * Body:
-   * - content: The reply content (HTML or plain text)
-   * - isHtml: Whether the content is HTML (default: true)
-   * - isReplyAll: Whether to reply to all recipients (default: false)
+   * - body: The reply content (HTML)
+   * - to: Array of recipient email addresses (optional, defaults from original message)
+   * - cc: Array of CC email addresses (optional)
+   * - subject: Email subject (optional, defaults to Re: original subject)
+   * - replyAll: Whether to reply to all recipients (default: false)
+   * - attachments: Array of attachment metadata from /api/upload/attachments
    */
   app.post('/api/emails/:messageId/reply', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -45,7 +56,7 @@ export function registerEmailRoutes(
         });
       }
       
-      const { content, isHtml, isReplyAll } = validation.data;
+      const { body, to, cc, subject, replyAll, attachments } = validation.data;
       
       // Get the email message from database
       const message = await storage.getEmailMessageById(messageId);
@@ -65,12 +76,11 @@ export function registerEmailRoutes(
         return res.status(404).json({ message: "Message not found in your mailbox" });
       }
       
-      // Send reply via Microsoft Graph API
-      // The Graph API /reply and /replyAll actions send immediately and return 202 Accepted
-      if (isReplyAll) {
-        await createReplyAllToMessage(userId, graphMessageId, content, isHtml);
+      // Send reply via Microsoft Graph API with attachments
+      if (replyAll) {
+        await createReplyAllToMessage(userId, graphMessageId, body, true, undefined, attachments);
       } else {
-        await createReplyToMessage(userId, graphMessageId, content, isHtml);
+        await createReplyToMessage(userId, graphMessageId, body, true, undefined, attachments);
       }
       
       res.json({

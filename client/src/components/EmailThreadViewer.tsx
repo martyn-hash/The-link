@@ -190,20 +190,18 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
       }
 
       // Step 2: Send the reply with attachment metadata using apiRequest
-      return await apiRequest(`/api/emails/${data.messageId}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({
+      return await apiRequest(
+        'POST',
+        `/api/emails/${data.messageId}/reply`,
+        {
           to: data.to,
           cc: data.cc,
           subject: data.subject,
           body: data.body,
           replyAll: replyType === 'reply-all',
           attachments: attachmentMetadata,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+        }
+      );
     },
     onSuccess: () => {
       toast({

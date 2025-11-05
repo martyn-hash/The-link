@@ -810,6 +810,7 @@ export interface IStorage {
   createEmailMessageAttachment(mapping: InsertEmailMessageAttachment): Promise<EmailMessageAttachment>;
   getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]>;
   checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean>;
+  getSignedUrl(objectPath: string): Promise<string>;
 
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
@@ -9212,6 +9213,26 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     
     return result.length > 0;
+  }
+
+  async getSignedUrl(objectPath: string): Promise<string> {
+    const { objectStorageClient } = await import('./objectStorage');
+    const bucketName = process.env.GCS_BUCKET_NAME;
+    
+    if (!bucketName) {
+      throw new Error('GCS_BUCKET_NAME environment variable not set');
+    }
+    
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectPath);
+    
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+    });
+    
+    return url;
   }
 
   // Document folder operations
