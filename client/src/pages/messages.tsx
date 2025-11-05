@@ -177,6 +177,7 @@ export default function Messages() {
   const [activeTab, setActiveTab] = useState('internal');
   const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
   const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
+  const [emailFilter, setEmailFilter] = useState<'my' | 'all'>('my');
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -219,9 +220,10 @@ export default function Messages() {
 
   // Fetch email threads (Client Emails)
   const { data: emailThreadsData, isLoading: emailThreadsLoading } = useQuery<{ threads: EmailThread[] }>({
-    queryKey: ['/api/emails/my-threads'],
+    queryKey: ['/api/emails/my-threads', { myEmailsOnly: emailFilter === 'my' }],
     queryFn: async () => {
-      const response = await fetch('/api/emails/my-threads', {
+      const myEmailsOnly = emailFilter === 'my';
+      const response = await fetch(`/api/emails/my-threads?myEmailsOnly=${myEmailsOnly}`, {
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch email threads');
@@ -741,22 +743,45 @@ export default function Messages() {
                     data-testid="input-search-threads"
                   />
                   <div className="flex gap-2">
-                    <Button
-                      variant={archiveFilter === 'open' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setArchiveFilter('open')}
-                      data-testid="button-filter-open"
-                    >
-                      Active
-                    </Button>
-                    <Button
-                      variant={archiveFilter === 'archived' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setArchiveFilter('archived')}
-                      data-testid="button-filter-archived"
-                    >
-                      Archived
-                    </Button>
+                    {activeTab === 'emails' ? (
+                      <>
+                        <Button
+                          variant={emailFilter === 'my' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEmailFilter('my')}
+                          data-testid="button-filter-my-emails"
+                        >
+                          My Emails
+                        </Button>
+                        <Button
+                          variant={emailFilter === 'all' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEmailFilter('all')}
+                          data-testid="button-filter-all-emails"
+                        >
+                          All Team Emails
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant={archiveFilter === 'open' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setArchiveFilter('open')}
+                          data-testid="button-filter-open"
+                        >
+                          Active
+                        </Button>
+                        <Button
+                          variant={archiveFilter === 'archived' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setArchiveFilter('archived')}
+                          data-testid="button-filter-archived"
+                        >
+                          Archived
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-0">
