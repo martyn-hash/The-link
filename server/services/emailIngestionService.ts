@@ -964,3 +964,11 @@ export class EmailIngestionService {
 
 // Export singleton instance
 export const emailIngestionService = new EmailIngestionService();
+
+/**
+ * Perform incremental delta sync for a user's mailbox
+ * This is a convenience wrapper for the syncUserMailbox method
+ */
+export async function performIncrementalDeltaSync(userId: string): Promise<void> {
+  return emailIngestionService.syncUserMailbox(userId);
+}
