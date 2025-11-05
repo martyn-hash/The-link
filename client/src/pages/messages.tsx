@@ -36,11 +36,13 @@ import {
   ExternalLink,
   Users,
   FolderKanban,
-  Plus
+  Plus,
+  Mail
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
+import { EmailThreadViewer } from '@/components/EmailThreadViewer';
 
 interface ProjectMessageThread {
   threadType: 'project';
@@ -141,6 +143,19 @@ interface ProjectMessage {
   };
 }
 
+interface EmailThread {
+  canonicalConversationId: string;
+  subject: string | null;
+  participants: string[];
+  messageCount: number;
+  hasUnread: boolean;
+  lastMessageAt: string;
+  firstMessageAt: string;
+  latestPreview: string | null;
+  clientId: string | null;
+  clientName: string | null;
+}
+
 export default function Messages() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -160,6 +175,8 @@ export default function Messages() {
   const [participantSearch, setParticipantSearch] = useState('');
   const [initialMessage, setInitialMessage] = useState('');
   const [activeTab, setActiveTab] = useState('internal');
+  const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
+  const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -200,6 +217,22 @@ export default function Messages() {
     refetchInterval: 30000,
   });
 
+  // Fetch email threads (Client Emails)
+  const { data: emailThreadsData, isLoading: emailThreadsLoading } = useQuery<{ threads: EmailThread[] }>({
+    queryKey: ['/api/emails/my-threads'],
+    queryFn: async () => {
+      const response = await fetch('/api/emails/my-threads', {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch email threads');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+  });
+
+  const emailThreads = emailThreadsData?.threads || [];
+
   // Separate threads by type
   const internalThreads: MessageThread[] = (staffThreads?.map(t => ({ ...t, threadType: 'staff' as const })) || [])
     .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
@@ -207,11 +240,12 @@ export default function Messages() {
   const clientThreads: MessageThread[] = (projectThreads?.map(t => ({ ...t, threadType: 'project' as const })) || [])
     .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
 
-  const threadsLoading = projectThreadsLoading || staffThreadsLoading;
+  const threadsLoading = projectThreadsLoading || staffThreadsLoading || emailThreadsLoading;
 
   // Calculate unread counts
   const internalUnreadCount = internalThreads.reduce((sum, thread) => sum + thread.unreadCount, 0);
   const clientUnreadCount = clientThreads.reduce((sum, thread) => sum + thread.unreadCount, 0);
+  const emailUnreadCount = emailThreads.filter(thread => thread.hasUnread).length;
 
   // Fetch all users for participant selection
   const { data: allUsers, isLoading: usersLoading } = useQuery<UserType[]>({
@@ -599,7 +633,7 @@ export default function Messages() {
   }
 
   // Get current threads based on active tab
-  const currentThreads = activeTab === 'internal' ? internalThreads : clientThreads;
+  const currentThreads = activeTab === 'internal' ? internalThreads : activeTab === 'client' ? clientThreads : [];
   
   // Filter threads based on search
   const filteredThreads = currentThreads.filter(thread => {
@@ -618,6 +652,19 @@ export default function Messages() {
       }
       
       return topicMatch || participantMatch || messageMatch;
+    }
+    return true;
+  });
+
+  // Filter email threads based on search
+  const filteredEmailThreads = emailThreads.filter(thread => {
+    if (threadSearchTerm.trim()) {
+      const searchLower = threadSearchTerm.toLowerCase();
+      const subjectMatch = thread.subject?.toLowerCase().includes(searchLower);
+      const participantMatch = thread.participants.some(p => p.toLowerCase().includes(searchLower));
+      const clientMatch = thread.clientName?.toLowerCase().includes(searchLower);
+      const previewMatch = thread.latestPreview?.toLowerCase().includes(searchLower);
+      return subjectMatch || participantMatch || clientMatch || previewMatch;
     }
     return true;
   });
@@ -642,7 +689,7 @@ export default function Messages() {
         <div className="max-w-7xl mx-auto h-full p-2 md:p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsList className="grid w-full max-w-2xl grid-cols-3">
                 <TabsTrigger value="internal" className="relative" data-testid="tab-internal-chat">
                   Internal Chat
                   {internalUnreadCount > 0 && (
@@ -656,6 +703,14 @@ export default function Messages() {
                   {clientUnreadCount > 0 && (
                     <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-client-unread">
                       {clientUnreadCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="emails" className="relative" data-testid="tab-client-emails">
+                  Client Emails
+                  {emailUnreadCount > 0 && (
+                    <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-email-unread">
+                      {emailUnreadCount}
                     </Badge>
                   )}
                 </TabsTrigger>
@@ -711,6 +766,61 @@ export default function Messages() {
                         <Skeleton key={i} className="h-14 w-full" />
                       ))}
                     </div>
+                  ) : activeTab === 'emails' ? (
+                    filteredEmailThreads && filteredEmailThreads.length > 0 ? (
+                      <div className="divide-y divide-border">
+                        {filteredEmailThreads.map((thread) => (
+                          <button
+                            key={thread.canonicalConversationId}
+                            onClick={() => {
+                              setSelectedEmailThreadId(thread.canonicalConversationId);
+                              setEmailThreadViewerOpen(true);
+                            }}
+                            className="w-full text-left p-2 hover:bg-muted/50 transition-colors"
+                            data-testid={`email-thread-item-${thread.canonicalConversationId}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {thread.clientName && (
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                    <span className="text-sm text-muted-foreground truncate">
+                                      {thread.clientName}
+                                    </span>
+                                  </div>
+                                )}
+                                <p className="font-semibold text-sm mt-0.5 truncate">
+                                  {thread.subject || 'No Subject'}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {thread.latestPreview || `${thread.messageCount} message${thread.messageCount !== 1 ? 's' : ''}`}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Mail className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                  <span className="text-xs text-muted-foreground truncate">
+                                    {thread.participants.slice(0, 2).join(', ')}
+                                    {thread.participants.length > 2 && ` +${thread.participants.length - 2} more`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+                                </span>
+                                {thread.hasUnread && (
+                                  <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.canonicalConversationId}`} />
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-muted-foreground">
+                        <Mail className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>No email threads found</p>
+                      </div>
+                    )
                   ) : filteredThreads && filteredThreads.length > 0 ? (
                     <div className="divide-y divide-border">
                       {filteredThreads.map((thread) => (
@@ -1274,6 +1384,20 @@ export default function Messages() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Email Thread Viewer Modal */}
+      {selectedEmailThreadId && (
+        <EmailThreadViewer
+          threadId={selectedEmailThreadId}
+          open={emailThreadViewerOpen}
+          onOpenChange={(open) => {
+            setEmailThreadViewerOpen(open);
+            if (!open) {
+              setSelectedEmailThreadId(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
