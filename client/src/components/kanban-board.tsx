@@ -197,8 +197,8 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
   // Callback when status is successfully updated
   const handleStatusUpdated = () => {
-    // Refetch projects to reflect the new status
-    queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    // Modal already handles query invalidation and optimistic updates
+    // Just close the modal and reset state
     setShowChangeStatusModal(false);
     setSelectedProject(null);
     setTargetStatus(null);
