@@ -42,6 +42,7 @@ import DocumentFolderView from "@/components/DocumentFolderView";
 import { CreateFolderDialog } from "@/components/CreateFolderDialog";
 import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { EmailThreadViewer } from "@/components/EmailThreadViewer";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -370,6 +371,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [isCallingPerson, setIsCallingPerson] = useState(false);
   const [callPersonId, setCallPersonId] = useState<string | undefined>();
   const [callPhoneNumber, setCallPhoneNumber] = useState<string | undefined>();
+  const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
+  const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -382,6 +385,23 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   // Fetch message threads for this client
   const { data: messageThreads, isLoading: isLoadingThreads } = useQuery<any[]>({
     queryKey: ['/api/internal/messages/threads/client', clientId],
+    enabled: !!clientId,
+  });
+
+  // Fetch email threads for this client
+  const { data: emailThreadsData, isLoading: isLoadingEmailThreads } = useQuery<{
+    threads: Array<{
+      canonicalConversationId: string;
+      subject: string | null;
+      participants: string[] | null;
+      firstMessageAt: string;
+      lastMessageAt: string;
+      messageCount: number;
+      latestPreview: string | null;
+      latestDirection: 'inbound' | 'outbound' | 'internal' | 'external' | null;
+    }>;
+  }>({
+    queryKey: ['/api/emails/client', clientId],
     enabled: !!clientId,
   });
 
@@ -579,6 +599,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return <Inbox className="h-4 w-4" />;
       case 'message_thread':
         return <MessageSquare className="h-4 w-4" />;
+      case 'email_thread':
+        return <Mail className="h-4 w-4" />;
       default:
         return <MessageSquare className="h-4 w-4" />;
     }
@@ -600,6 +622,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return 'Email Received';
       case 'message_thread':
         return 'Instant Message';
+      case 'email_thread':
+        return 'Email Thread';
       default:
         return 'Communication';
     }
@@ -621,22 +645,40 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
       case 'message_thread':
         return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
+      case 'email_thread':
+        return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
     }
   };
 
-  // Merge communications and message threads
-  const allItems = [...(communications || []), ...(messageThreads || []).map(thread => ({
-    ...thread,
-    type: 'message_thread',
-    loggedAt: thread.createdAt,
-    content: thread.lastMessage?.content || '',
-  }))].sort((a, b) => 
+  // Merge communications, message threads, and email threads
+  const emailThreads = emailThreadsData?.threads || [];
+  const allItems = [
+    ...(communications || []),
+    ...(messageThreads || []).map(thread => ({
+      ...thread,
+      type: 'message_thread',
+      loggedAt: thread.createdAt,
+      content: thread.lastMessage?.content || '',
+    })),
+    ...emailThreads.map(thread => ({
+      ...thread,
+      id: thread.canonicalConversationId,
+      type: 'email_thread',
+      loggedAt: thread.lastMessageAt,
+      createdAt: thread.firstMessageAt,
+      subject: thread.subject || 'No Subject',
+      content: thread.latestPreview || thread.subject || '',
+      user: null, // Email threads don't have a specific CRM user
+      createdBy: null,
+      projectId: null, // Email threads aren't directly linked to projects in this view
+    }))
+  ].sort((a, b) => 
     new Date(b.loggedAt || b.createdAt).getTime() - new Date(a.loggedAt || a.createdAt).getTime()
   );
 
-  if (isLoading || isLoadingThreads) {
+  if (isLoading || isLoadingThreads || isLoadingEmailThreads) {
     return (
       <Card>
         <CardHeader>
@@ -780,6 +822,18 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                             )}
                           </div>
                         </div>
+                      ) : item.type === 'email_thread' ? (
+                        <div>
+                          <div className="font-medium text-sm flex items-center gap-2">
+                            {item.subject || 'No Subject'}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {item.messageCount || 0} message{(item.messageCount || 0) !== 1 ? 's' : ''}
+                            {item.participants && item.participants.length > 0 && (
+                              <span className="ml-2">• {item.participants.length} participant{item.participants.length !== 1 ? 's' : ''}</span>
+                            )}
+                          </div>
+                        </div>
                       ) : (
                         <div className="text-sm truncate">
                           {item.subject && <div className="font-medium">{item.subject}</div>}
@@ -790,10 +844,19 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                   </TableCell>
                   <TableCell data-testid={`cell-user-${item.id}`}>
                     <div className="flex items-center gap-2">
-                      <UserIcon className="w-4 h-4 text-muted-foreground" />
+                      <UserIcon className="w-4 w-4 text-muted-foreground" />
                       <span className="text-sm" data-testid={`text-user-${item.id}`}>
-                        {item.user ? `${item.user.firstName} ${item.user.lastName}` : 
-                         item.createdBy ? `User ${item.createdBy}` : 'System'}
+                        {item.type === 'email_thread' ? (
+                          item.participants && item.participants.length > 0 
+                            ? `${item.participants.length} participant${item.participants.length !== 1 ? 's' : ''}`
+                            : 'Email'
+                        ) : item.user ? (
+                          `${item.user.firstName} ${item.user.lastName}`
+                        ) : item.createdBy ? (
+                          `User ${item.createdBy}`
+                        ) : (
+                          'System'
+                        )}
                       </span>
                     </div>
                   </TableCell>
@@ -811,6 +874,19 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                         size="sm"
                         onClick={() => setLocation(`/messages?thread=${item.id}`)}
                         data-testid={`button-view-thread-${item.id}`}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Thread
+                      </Button>
+                    ) : item.type === 'email_thread' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedEmailThreadId(item.id);
+                          setEmailThreadViewerOpen(true);
+                        }}
+                        data-testid={`button-view-email-thread-${item.id}`}
                       >
                         <Eye className="h-4 w-4 mr-2" />
                         View Thread
@@ -1354,6 +1430,13 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
           setCallPersonId(undefined);
           setCallPhoneNumber(undefined);
         }}
+      />
+
+      {/* Email Thread Viewer Modal */}
+      <EmailThreadViewer
+        threadId={selectedEmailThreadId}
+        open={emailThreadViewerOpen}
+        onOpenChange={setEmailThreadViewerOpen}
       />
     </Card>
   );
