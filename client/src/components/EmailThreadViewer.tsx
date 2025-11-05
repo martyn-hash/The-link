@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,17 +7,27 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
-import { AttachmentList, AttachmentPreview, type AttachmentData } from '@/components/attachments';
+import { Separator } from '@/components/ui/separator';
+import { AttachmentList, AttachmentPreview, FileUploadZone, type AttachmentData } from '@/components/attachments';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { 
   ChevronDown, 
   ChevronUp, 
   Mail, 
   Calendar,
   User,
-  Paperclip
+  Paperclip,
+  Reply,
+  ReplyAll,
+  Send,
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import DOMPurify from 'isomorphic-dompurify';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 interface EmailAttachment {
   id: string;
@@ -58,9 +68,27 @@ interface EmailThreadViewerProps {
 }
 
 export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadViewerProps) {
+  const { toast } = useToast();
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [previewAttachment, setPreviewAttachment] = useState<AttachmentData | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  
+  // Reply form state
+  const [isReplying, setIsReplying] = useState(false);
+  const [replyType, setReplyType] = useState<'reply' | 'reply-all'>('reply');
+  const [replyBody, setReplyBody] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+
+  // Reset reply state when dialog closes
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      setIsReplying(false);
+      setReplyBody('');
+      setReplyAttachments([]);
+      setExpandedMessages(new Set());
+    }
+    onOpenChange(newOpen);
+  };
 
   const { data: threadData, isLoading } = useQuery<{
     thread: EmailThread;
@@ -142,8 +170,114 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
     return sanitized.substring(0, maxLength) + '...';
   };
 
+  // Reply mutation
+  const replyMutation = useMutation({
+    mutationFn: async (data: { messageId: string; to: string[]; cc: string[]; subject: string; body: string; attachments: File[] }) => {
+      // Step 1: Upload attachments to get metadata
+      let attachmentMetadata: any[] = [];
+      if (data.attachments.length > 0) {
+        const formData = new FormData();
+        data.attachments.forEach(file => formData.append('files', file));
+
+        const uploadResponse = await fetch('/api/upload/attachments', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) throw new Error('Failed to upload attachments');
+        attachmentMetadata = await uploadResponse.json();
+      }
+
+      // Step 2: Send the reply with attachment metadata using apiRequest
+      return await apiRequest(`/api/emails/${data.messageId}/reply`, {
+        method: 'POST',
+        body: JSON.stringify({
+          to: data.to,
+          cc: data.cc,
+          subject: data.subject,
+          body: data.body,
+          replyAll: replyType === 'reply-all',
+          attachments: attachmentMetadata,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Reply sent',
+        description: 'Your email reply has been sent successfully.',
+      });
+      setIsReplying(false);
+      setReplyBody('');
+      setReplyAttachments([]);
+      
+      // Invalidate queries to refresh email threads
+      queryClient.invalidateQueries({ queryKey: ['/api/emails/thread', threadId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/emails/my-threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/emails/client'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to send reply',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleReply = (type: 'reply' | 'reply-all') => {
+    setReplyType(type);
+    setIsReplying(true);
+    setReplyBody('');
+    setReplyAttachments([]);
+  };
+
+  const handleSendReply = () => {
+    if (!threadData?.messages || threadData.messages.length === 0) return;
+    if (!replyBody.trim()) {
+      toast({
+        title: 'Email body required',
+        description: 'Please enter a message before sending.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Get the latest message to reply to
+    const latestMessage = threadData.messages[threadData.messages.length - 1];
+    
+    // Determine recipients based on reply type
+    const to = replyType === 'reply-all' 
+      ? [...(latestMessage.to || []), latestMessage.from].filter((email, index, self) => self.indexOf(email) === index)
+      : [latestMessage.from];
+    
+    const cc = replyType === 'reply-all' ? (latestMessage.cc || []) : [];
+    
+    const subject = latestMessage.subject?.startsWith('Re:') 
+      ? latestMessage.subject 
+      : `Re: ${latestMessage.subject || 'No Subject'}`;
+
+    replyMutation.mutate({
+      messageId: latestMessage.internetMessageId,
+      to,
+      cc,
+      subject,
+      body: replyBody,
+      attachments: replyAttachments,
+    });
+  };
+
+  const handleCancelReply = () => {
+    setIsReplying(false);
+    setReplyBody('');
+    setReplyAttachments([]);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] p-0" data-testid="dialog-email-thread">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2" data-testid="text-thread-subject">
@@ -309,6 +443,28 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
                   </Card>
                 );
               })}
+              
+              {/* Reply/Reply All Buttons */}
+              {!isReplying && (
+                <div className="flex gap-2 mt-6 pt-4 border-t">
+                  <Button
+                    variant="default"
+                    onClick={() => handleReply('reply')}
+                    data-testid="button-reply"
+                  >
+                    <Reply className="h-4 w-4 mr-2" />
+                    Reply
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleReply('reply-all')}
+                    data-testid="button-reply-all"
+                  >
+                    <ReplyAll className="h-4 w-4 mr-2" />
+                    Reply All
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -317,6 +473,123 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
             </div>
           )}
         </ScrollArea>
+
+        {/* Reply Compose Interface */}
+        {isReplying && threadData?.messages && threadData.messages.length > 0 && (
+          <>
+            <Separator />
+            <div className="px-6 py-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium flex items-center gap-2">
+                  {replyType === 'reply-all' ? (
+                    <>
+                      <ReplyAll className="h-4 w-4" />
+                      Reply All
+                    </>
+                  ) : (
+                    <>
+                      <Reply className="h-4 w-4" />
+                      Reply
+                    </>
+                  )}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelReply}
+                  data-testid="button-cancel-reply"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Recipients Display */}
+              {(() => {
+                const latestMessage = threadData.messages[threadData.messages.length - 1];
+                const to = replyType === 'reply-all' 
+                  ? [...(latestMessage.to || []), latestMessage.from].filter((email, index, self) => self.indexOf(email) === index)
+                  : [latestMessage.from];
+                const cc = replyType === 'reply-all' ? (latestMessage.cc || []) : [];
+                
+                return (
+                  <div className="space-y-1 text-sm">
+                    <div>
+                      <span className="font-medium">To:</span> {to.join(', ')}
+                    </div>
+                    {cc.length > 0 && (
+                      <div>
+                        <span className="font-medium">CC:</span> {cc.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Rich Text Editor */}
+              <div className="border rounded-md">
+                <ReactQuill
+                  value={replyBody}
+                  onChange={setReplyBody}
+                  placeholder="Type your reply..."
+                  className="h-48"
+                  data-testid="editor-reply-body"
+                />
+              </div>
+
+              {/* Attachment Upload */}
+              <div>
+                <FileUploadZone
+                  onFilesSelected={setReplyAttachments}
+                  maxFiles={5}
+                  maxSize={25 * 1024 * 1024} // 25MB
+                />
+                {replyAttachments.length > 0 && (
+                  <div className="mt-2">
+                    <AttachmentList
+                      attachments={replyAttachments.map(file => ({
+                        fileName: file.name,
+                        fileType: file.type,
+                        fileSize: file.size,
+                      }))}
+                      readonly={false}
+                      onRemove={(index) => {
+                        setReplyAttachments(prev => prev.filter((_, i) => i !== index));
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Send Button */}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCancelReply}
+                  data-testid="button-cancel-reply-bottom"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendReply}
+                  disabled={replyMutation.isPending || !replyBody.trim()}
+                  data-testid="button-send-reply"
+                >
+                  {replyMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Reply
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </DialogContent>
       
       {previewAttachment && (
