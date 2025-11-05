@@ -195,4 +195,49 @@ export function registerEmailRoutes(
       });
     }
   });
+  
+  /**
+   * GET /api/emails/attachments/:attachmentId
+   * Get a signed URL for an email attachment
+   */
+  app.get('/api/emails/attachments/:attachmentId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { attachmentId } = req.params;
+      const userId = req.user!.effectiveUserId;
+      
+      // Get the attachment
+      const attachment = await storage.getEmailAttachmentById(attachmentId);
+      if (!attachment) {
+        return res.status(404).json({ message: "Attachment not found" });
+      }
+      
+      // Get the message this attachment belongs to
+      const messageAttachment = await storage.getEmailMessageAttachmentByAttachmentId(attachmentId);
+      if (!messageAttachment || messageAttachment.length === 0) {
+        return res.status(404).json({ message: "Attachment not linked to any message" });
+      }
+      
+      // Verify user has access to at least one message with this attachment
+      const hasAccess = await storage.userHasAccessToMessage(userId, messageAttachment[0].internetMessageId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this attachment" });
+      }
+      
+      // Generate signed URL
+      const signedUrl = await storage.getSignedUrl(attachment.objectPath);
+      
+      res.json({
+        url: signedUrl,
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        fileSize: attachment.fileSize
+      });
+    } catch (error) {
+      console.error('Error getting email attachment:', error);
+      res.status(500).json({
+        message: "Failed to get attachment",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 }

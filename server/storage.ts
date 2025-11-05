@@ -9173,6 +9173,13 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async getEmailMessageAttachmentByAttachmentId(attachmentId: string): Promise<EmailMessageAttachment[]> {
+    return await db
+      .select()
+      .from(emailMessageAttachments)
+      .where(eq(emailMessageAttachments.attachmentId, attachmentId));
+  }
+
   async getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]> {
     const result = await db
       .select({
