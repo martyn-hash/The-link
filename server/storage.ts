@@ -776,6 +776,7 @@ export interface IStorage {
   getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined>;
   getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined>;
   getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
+  getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean): Promise<EmailThread[]>;
   getAllEmailThreads(): Promise<EmailThread[]>;
   getThreadsWithoutClient(): Promise<EmailThread[]>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
@@ -8783,7 +8784,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .select()
       .from(emailMessages)
-      .where(eq(emailMessages.id, id))
+      .where(eq(emailMessages.internetMessageId, id))
       .limit(1);
     return result[0];
   }
@@ -8838,13 +8839,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(mailboxMessageMap.internetMessageId, message.internetMessageId));
   }
 
-  async userHasAccessToMessage(userId: string, messageId: string): Promise<boolean> {
-    // Get the message to find its internetMessageId
-    const message = await this.getEmailMessageById(messageId);
-    if (!message) {
-      return false;
-    }
-
+  async userHasAccessToMessage(userId: string, internetMessageId: string): Promise<boolean> {
     // Check if user has this message in their mailbox
     const result = await db
       .select()
@@ -8852,7 +8847,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(mailboxMessageMap.mailboxUserId, userId),
-          eq(mailboxMessageMap.internetMessageId, message.internetMessageId)
+          eq(mailboxMessageMap.internetMessageId, internetMessageId)
         )
       )
       .limit(1);
@@ -8860,13 +8855,7 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getUserGraphMessageId(userId: string, messageId: string): Promise<string | undefined> {
-    // Get the message to find its internetMessageId
-    const message = await this.getEmailMessageById(messageId);
-    if (!message) {
-      return undefined;
-    }
-
+  async getUserGraphMessageId(userId: string, internetMessageId: string): Promise<string | undefined> {
     // Get the mailbox mapping for this user and message
     const result = await db
       .select()
@@ -8874,7 +8863,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(mailboxMessageMap.mailboxUserId, userId),
-          eq(mailboxMessageMap.internetMessageId, message.internetMessageId)
+          eq(mailboxMessageMap.internetMessageId, internetMessageId)
         )
       )
       .limit(1);
@@ -8895,7 +8884,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .select()
       .from(emailThreads)
-      .where(eq(emailThreads.id, id))
+      .where(eq(emailThreads.canonicalConversationId, id))
       .limit(1);
     return result[0];
   }
@@ -8926,6 +8915,85 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(emailThreads.lastMessageAt));
   }
 
+  async getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean): Promise<EmailThread[]> {
+    if (myEmailsOnly) {
+      // Get user's email address
+      const user = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      
+      if (!user || user.length === 0 || !user[0].email) {
+        return [];
+      }
+      
+      const userEmail = user[0].email.toLowerCase();
+      
+      // Single query: get threads where user is in from/to/cc fields
+      const results = await db
+        .selectDistinctOn([emailThreads.canonicalConversationId], {
+          canonicalConversationId: emailThreads.canonicalConversationId,
+          threadKey: emailThreads.threadKey,
+          subject: emailThreads.subject,
+          participants: emailThreads.participants,
+          clientId: emailThreads.clientId,
+          firstMessageAt: emailThreads.firstMessageAt,
+          lastMessageAt: emailThreads.lastMessageAt,
+          messageCount: emailThreads.messageCount,
+          latestPreview: emailThreads.latestPreview,
+          latestDirection: emailThreads.latestDirection,
+          createdAt: emailThreads.createdAt,
+          updatedAt: emailThreads.updatedAt,
+        })
+        .from(emailThreads)
+        .innerJoin(
+          emailMessages,
+          eq(emailMessages.canonicalConversationId, emailThreads.canonicalConversationId)
+        )
+        .where(
+          or(
+            eq(emailMessages.from, userEmail),
+            sql`${userEmail} = ANY(${emailMessages.to})`,
+            sql`${userEmail} = ANY(${emailMessages.cc})`
+          )
+        )
+        .orderBy(emailThreads.canonicalConversationId, desc(emailThreads.lastMessageAt));
+      
+      return results;
+    } else {
+      // Single query: get threads where user's mailbox has any message
+      const results = await db
+        .selectDistinctOn([emailThreads.canonicalConversationId], {
+          canonicalConversationId: emailThreads.canonicalConversationId,
+          threadKey: emailThreads.threadKey,
+          subject: emailThreads.subject,
+          participants: emailThreads.participants,
+          clientId: emailThreads.clientId,
+          firstMessageAt: emailThreads.firstMessageAt,
+          lastMessageAt: emailThreads.lastMessageAt,
+          messageCount: emailThreads.messageCount,
+          latestPreview: emailThreads.latestPreview,
+          latestDirection: emailThreads.latestDirection,
+          createdAt: emailThreads.createdAt,
+          updatedAt: emailThreads.updatedAt,
+        })
+        .from(emailThreads)
+        .innerJoin(
+          emailMessages,
+          eq(emailMessages.canonicalConversationId, emailThreads.canonicalConversationId)
+        )
+        .innerJoin(
+          mailboxMessageMap,
+          eq(mailboxMessageMap.internetMessageId, emailMessages.internetMessageId)
+        )
+        .where(eq(mailboxMessageMap.mailboxUserId, userId))
+        .orderBy(emailThreads.canonicalConversationId, desc(emailThreads.lastMessageAt));
+      
+      return results;
+    }
+  }
+
   async getAllEmailThreads(): Promise<EmailThread[]> {
     return await db
       .select()
@@ -8948,7 +9016,7 @@ export class DatabaseStorage implements IStorage {
         ...updates,
         updatedAt: new Date()
       })
-      .where(eq(emailThreads.id, id))
+      .where(eq(emailThreads.canonicalConversationId, id))
       .returning();
     return updated;
   }

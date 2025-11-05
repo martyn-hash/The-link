@@ -88,7 +88,7 @@ export function registerEmailRoutes(
   
   /**
    * GET /api/emails/thread/:threadId
-   * Get all messages in an email thread
+   * Get all messages in an email thread with attachments
    */
   app.get('/api/emails/thread/:threadId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -104,12 +104,18 @@ export function registerEmailRoutes(
       // Get all messages in the thread
       const messages = await storage.getEmailMessagesByThreadId(threadId);
       
-      // Filter to only messages the user has access to
+      // Filter to only messages the user has access to and add attachments
       const accessibleMessages = [];
       for (const message of messages) {
-        const hasAccess = await storage.userHasAccessToMessage(userId, message.id);
+        const hasAccess = await storage.userHasAccessToMessage(userId, message.internetMessageId);
         if (hasAccess) {
-          accessibleMessages.push(message);
+          // Get attachments for this message
+          const attachments = await storage.getAttachmentsByMessageId(message.internetMessageId);
+          
+          accessibleMessages.push({
+            ...message,
+            attachments
+          });
         }
       }
       
@@ -151,6 +157,40 @@ export function registerEmailRoutes(
       console.error('Error fetching client email threads:', error);
       res.status(500).json({
         message: "Failed to fetch client email threads",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
+  /**
+   * GET /api/emails/my-threads
+   * Get all email threads where current user is involved
+   * 
+   * Query params:
+   * - myEmailsOnly: boolean (default: false) - if true, only return threads where user is in to/cc/from, otherwise return all threads in user's mailbox
+   * - clientId: string (optional) - filter by specific client
+   */
+  app.get('/api/emails/my-threads', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const myEmailsOnly = req.query.myEmailsOnly === 'true';
+      const clientId = req.query.clientId as string | undefined;
+      
+      // Get threads where user is involved
+      let threads = await storage.getEmailThreadsByUserId(userId, myEmailsOnly);
+      
+      // Filter by client if specified
+      if (clientId) {
+        threads = threads.filter(thread => thread.clientId === clientId);
+      }
+      
+      res.json({
+        threads
+      });
+    } catch (error) {
+      console.error('Error fetching user email threads:', error);
+      res.status(500).json({
+        message: "Failed to fetch email threads",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
