@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   MessageCircle,
   Send,
@@ -178,6 +179,8 @@ export default function Messages() {
   const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
   const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
   const [emailFilter, setEmailFilter] = useState<'my' | 'all'>('my');
+  const [clientFilter, setClientFilter] = useState<string>('all');
+  const [readStatusFilter, setReadStatusFilter] = useState<'all' | 'read' | 'unread'>('all');
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -658,16 +661,42 @@ export default function Messages() {
     return true;
   });
 
-  // Filter email threads based on search
+  // Get unique clients from email threads for filter dropdown
+  const uniqueClients = Array.from(
+    new Map(
+      emailThreads
+        .filter(t => t.clientId && t.clientName)
+        .map(t => [t.clientId, { id: t.clientId, name: t.clientName }])
+    ).values()
+  ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  // Filter email threads based on search, client, and read status
   const filteredEmailThreads = emailThreads.filter(thread => {
+    // Search filter
     if (threadSearchTerm.trim()) {
       const searchLower = threadSearchTerm.toLowerCase();
       const subjectMatch = thread.subject?.toLowerCase().includes(searchLower);
       const participantMatch = thread.participants.some(p => p.toLowerCase().includes(searchLower));
       const clientMatch = thread.clientName?.toLowerCase().includes(searchLower);
       const previewMatch = thread.latestPreview?.toLowerCase().includes(searchLower);
-      return subjectMatch || participantMatch || clientMatch || previewMatch;
+      if (!(subjectMatch || participantMatch || clientMatch || previewMatch)) {
+        return false;
+      }
     }
+    
+    // Client filter
+    if (clientFilter !== 'all' && thread.clientId !== clientFilter) {
+      return false;
+    }
+    
+    // Read status filter
+    if (readStatusFilter === 'read' && thread.hasUnread) {
+      return false;
+    }
+    if (readStatusFilter === 'unread' && !thread.hasUnread) {
+      return false;
+    }
+    
     return true;
   });
 
@@ -742,9 +771,9 @@ export default function Messages() {
                     onChange={(e) => setThreadSearchTerm(e.target.value)}
                     data-testid="input-search-threads"
                   />
-                  <div className="flex gap-2">
-                    {activeTab === 'emails' ? (
-                      <>
+                  {activeTab === 'emails' ? (
+                    <>
+                      <div className="flex gap-2">
                         <Button
                           variant={emailFilter === 'my' ? 'default' : 'outline'}
                           size="sm"
@@ -761,28 +790,71 @@ export default function Messages() {
                         >
                           All Team Emails
                         </Button>
-                      </>
-                    ) : (
-                      <>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Select value={clientFilter} onValueChange={setClientFilter}>
+                          <SelectTrigger className="h-9 text-sm" data-testid="select-client-filter">
+                            <SelectValue placeholder="All Clients" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Clients</SelectItem>
+                            {uniqueClients.map(client => (
+                              <SelectItem key={client.id} value={client.id!}>
+                                {client.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="flex gap-2">
                         <Button
-                          variant={archiveFilter === 'open' ? 'default' : 'outline'}
+                          variant={readStatusFilter === 'all' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setArchiveFilter('open')}
-                          data-testid="button-filter-open"
+                          onClick={() => setReadStatusFilter('all')}
+                          data-testid="button-filter-all-status"
                         >
-                          Active
+                          All
                         </Button>
                         <Button
-                          variant={archiveFilter === 'archived' ? 'default' : 'outline'}
+                          variant={readStatusFilter === 'unread' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setArchiveFilter('archived')}
-                          data-testid="button-filter-archived"
+                          onClick={() => setReadStatusFilter('unread')}
+                          data-testid="button-filter-unread"
                         >
-                          Archived
+                          Unread
                         </Button>
-                      </>
-                    )}
-                  </div>
+                        <Button
+                          variant={readStatusFilter === 'read' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setReadStatusFilter('read')}
+                          data-testid="button-filter-read"
+                        >
+                          Read
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        variant={archiveFilter === 'open' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setArchiveFilter('open')}
+                        data-testid="button-filter-open"
+                      >
+                        Active
+                      </Button>
+                      <Button
+                        variant={archiveFilter === 'archived' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setArchiveFilter('archived')}
+                        data-testid="button-filter-archived"
+                      >
+                        Archived
+                      </Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-0">
                   {threadsLoading ? (
