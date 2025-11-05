@@ -374,16 +374,42 @@ export default function ChangeStatusModal({
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
     },
+    onMutate: async (data) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/projects"] });
+
+      // Snapshot the previous value
+      const previousProjects = queryClient.getQueryData(["/api/projects"]);
+
+      // Optimistically update the project status in cache
+      queryClient.setQueryData(["/api/projects"], (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        
+        return old.map((p: any) => 
+          p.id === project.id 
+            ? { ...p, currentStatus: data.newStatus }
+            : p
+        );
+      });
+
+      // Return context with previous data for rollback
+      return { previousProjects };
+    },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Project status updated successfully",
       });
+      // Refetch to ensure we have the latest server state
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       onStatusUpdated?.();
       onClose();
     },
-    onError: (error: any) => {
+    onError: (error: any, _variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousProjects) {
+        queryClient.setQueryData(["/api/projects"], context.previousProjects);
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to update project status",
