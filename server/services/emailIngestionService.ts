@@ -340,6 +340,91 @@ export class EmailIngestionService {
   }
 
   /**
+   * Check if an email address belongs to internal staff
+   * Internal domains: @growth-accountants.com, @thelink.uk.com
+   */
+  isInternalEmail(email: string): boolean {
+    if (!email) return false;
+    const normalized = email.toLowerCase();
+    return normalized.endsWith('@growth-accountants.com') || 
+           normalized.endsWith('@thelink.uk.com');
+  }
+
+  /**
+   * Detect if all participants in an email are internal staff
+   */
+  isInternalOnlyEmail(participants: string[]): boolean {
+    if (participants.length === 0) return false;
+    return participants.every(p => this.isInternalEmail(p));
+  }
+
+  /**
+   * Determine email direction based on sender and recipients
+   * - inbound: external sender to internal recipients
+   * - outbound: internal sender to external recipients  
+   * - internal: internal sender to internal recipients only
+   * - external: external sender to external recipients (shouldn't happen in our mailbox)
+   */
+  determineEmailDirection(fromEmail: string | null, allRecipients: string[]): 'inbound' | 'outbound' | 'internal' | 'external' {
+    const fromInternal = fromEmail ? this.isInternalEmail(fromEmail) : false;
+    const hasInternalRecipients = allRecipients.some(r => this.isInternalEmail(r));
+    const hasExternalRecipients = allRecipients.some(r => !this.isInternalEmail(r));
+
+    if (fromInternal) {
+      if (hasExternalRecipients) return 'outbound';
+      return 'internal';
+    } else {
+      if (hasInternalRecipients) return 'inbound';
+      return 'external';
+    }
+  }
+
+  /**
+   * Detect marketing/list emails based on headers and recipient count
+   * Returns true if email appears to be marketing/automated
+   */
+  isMarketingEmail(
+    headers?: Array<{ name: string; value: string }>,
+    participantCount?: number
+  ): boolean {
+    if (!headers) return false;
+
+    // Check for list-related headers
+    const headerNames = headers.map(h => h.name.toLowerCase());
+    const listHeaders = [
+      'list-id',
+      'list-unsubscribe',
+      'list-subscribe',
+      'list-post',
+      'list-help',
+      'list-owner',
+      'precedence'
+    ];
+
+    if (listHeaders.some(h => headerNames.includes(h))) {
+      return true;
+    }
+
+    // Check for auto-reply/out-of-office indicators
+    const autoReplyHeaders = headers.filter(h => 
+      h.name.toLowerCase() === 'x-auto-response-suppress' ||
+      h.name.toLowerCase() === 'auto-submitted' ||
+      h.name.toLowerCase() === 'x-autoreply'
+    );
+
+    if (autoReplyHeaders.length > 0) {
+      return true;
+    }
+
+    // Large recipient count suggests mass email (>10 recipients)
+    if (participantCount && participantCount > 10) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Compute fallback thread key
    * Format: hash(rootInternetMessageId + normalizedSubject + participantsSet)
    */
@@ -401,6 +486,17 @@ export class EmailIngestionService {
           ...bccEmails
         ].filter((email): email is string => email !== null);
 
+        // Get unique participant count
+        const uniqueParticipants = Array.from(new Set(allParticipants));
+        const participantCount = uniqueParticipants.length;
+
+        // Determine email direction and internal-only status
+        const direction = this.determineEmailDirection(fromEmail, [...toEmails, ...ccEmails, ...bccEmails]);
+        const isInternalOnly = this.isInternalOnlyEmail(allParticipants);
+        
+        // Detect marketing/list emails (Phase 8.2)
+        const isMarketingOrList = this.isMarketingEmail(graphMessage.internetMessageHeaders, participantCount);
+
         // Extract threading metadata
         const references = this.extractReferencesHeader(graphMessage.internetMessageHeaders);
         const inReplyTo = graphMessage.internetMessageHeaders?.find(
@@ -428,6 +524,10 @@ export class EmailIngestionService {
           hasAttachments: graphMessage.hasAttachments || false,
           inReplyTo,
           references,
+          // Noise control fields (Phase 8)
+          direction,
+          isInternalOnly,
+          participantCount,
           // Threading will be computed in Phase 4
           threadId: null,
           // Client association will be computed in Phase 5
