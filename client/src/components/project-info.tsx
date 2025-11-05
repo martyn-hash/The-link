@@ -101,23 +101,29 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
     }
   };
 
-  // Calculate status (On Track, Behind Schedule, Overdue)
+  // Calculate status (On Track, Behind Schedule, Late / Overdue)
+  // Priority: 1) Late/Overdue if past due date, 2) Behind Schedule if over stage time, 3) On Track
   const projectStatus = useMemo(() => {
-    if (!currentStage?.maxInstanceTime || currentStage.maxInstanceTime === 0) {
-      return { status: 'On Track', color: 'bg-green-600 text-white' };
+    const now = new Date();
+    
+    // Priority 1: Check if project is past its overall due date
+    if (project.dueDate) {
+      const dueDate = new Date(project.dueDate);
+      if (now > dueDate) {
+        return { status: 'Late / Overdue', color: 'bg-red-600 text-white' };
+      }
     }
-
-    const maxTime = currentStage.maxInstanceTime;
-    const threshold80 = maxTime * 0.8; // 80% threshold for "Behind Schedule"
-
-    if (currentBusinessHours >= maxTime) {
-      return { status: 'Overdue / Late', color: 'bg-red-600 text-white' };
-    } else if (currentBusinessHours >= threshold80) {
-      return { status: 'Behind Schedule', color: 'bg-amber-500 text-white' };
-    } else {
-      return { status: 'On Track', color: 'bg-green-600 text-white' };
+    
+    // Priority 2: Check if project has been in current stage longer than allowed
+    if (currentStage?.maxInstanceTime && currentStage.maxInstanceTime > 0) {
+      if (currentBusinessHours > currentStage.maxInstanceTime) {
+        return { status: 'Behind Schedule', color: 'bg-amber-500 text-white' };
+      }
     }
-  }, [currentBusinessHours, currentStage?.maxInstanceTime]);
+    
+    // Priority 3: On Track
+    return { status: 'On Track', color: 'bg-green-600 text-white' };
+  }, [currentBusinessHours, currentStage?.maxInstanceTime, project.dueDate]);
 
   // Calculate time remaining until deadline
   const timeRemaining = useMemo(() => {
@@ -245,7 +251,7 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
             <div className="flex justify-between">
               <span className="text-muted-foreground">Time in Current Stage:</span>
               <span 
-                className={`font-medium ${projectStatus.status === 'Overdue / Late' ? 'text-red-600 dark:text-red-400' : projectStatus.status === 'Behind Schedule' ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}
+                className={`font-medium ${projectStatus.status === 'Late / Overdue' ? 'text-red-600 dark:text-red-400' : projectStatus.status === 'Behind Schedule' ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}
                 data-testid="text-time-in-stage"
               >
                 {formatBusinessHours(currentBusinessHours)}

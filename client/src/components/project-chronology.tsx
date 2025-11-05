@@ -394,8 +394,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               <TableHead>Timestamp</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Detail</TableHead>
-              <TableHead>Assigned To</TableHead>
               <TableHead>Changed By</TableHead>
+              <TableHead>Assigned To</TableHead>
               <TableHead>Time in Stage</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -419,14 +419,14 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                 <TableCell data-testid={`cell-detail-${entry.id}`}>
                   <span className="text-sm">{entry.detail}</span>
                 </TableCell>
-                <TableCell data-testid={`cell-assigned-to-${entry.id}`}>
-                  <span className="text-sm text-muted-foreground">
-                    {entry.assignedTo || '—'}
-                  </span>
-                </TableCell>
                 <TableCell data-testid={`cell-changed-by-${entry.id}`}>
                   <span className="text-sm">
                     {entry.changedBy || '—'}
+                  </span>
+                </TableCell>
+                <TableCell data-testid={`cell-assigned-to-${entry.id}`}>
+                  <span className="text-sm text-muted-foreground">
+                    {entry.assignedTo || '—'}
                   </span>
                 </TableCell>
                 <TableCell data-testid={`cell-time-${entry.id}`}>

@@ -382,9 +382,11 @@ export default function ProjectDetail() {
           
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-client-name">
-                {project.client?.name || 'Unknown Client'}
-              </h1>
+              <RouterLink to={`/clients/${project.clientId}`}>
+                <h1 className="text-3xl font-bold text-foreground mb-2 hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                  {project.client?.name || 'Unknown Client'}
+                </h1>
+              </RouterLink>
             </div>
             
             <div className="flex gap-2">
