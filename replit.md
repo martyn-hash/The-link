@@ -48,11 +48,11 @@ The `/internal-chat` page supports independent staff-to-staff message threads. I
 
 ### Email Threading & Deduplication System
 
-**Implementation Status: Phases 1-5 Complete** (Core backend infrastructure ready)
+**Implementation Status: Phases 1-6 Complete** (Core backend + nightly resolver ready)
 
 The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. 
 
-**✅ Implemented Features (Phases 1-5):**
+**✅ Implemented Features (Phases 1-6):**
 
 -   **Database Schema**: 8 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `graph_webhook_subscriptions`, `graph_sync_state`
 -   **Deduplication**: Global unique key using `internetMessageId` to prevent duplicate entries when multiple staff are CC'd on the same email
@@ -61,11 +61,12 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Delta Sync**: Efficient incremental sync for Inbox and Sent Items folders per staff mailbox, with proper Graph API delta token handling
 -   **Mailbox Mapping**: Tracks which staff mailboxes contain copies of each message for proper attribution
 -   **Webhook Management**: Create, renew, and delete Graph webhook subscriptions with expiry tracking
--   **Quarantine System**: Unmatched emails stored with thread metadata for manual or automated resolution
+-   **Quarantine System**: Message-level quarantine with duplicate prevention via `getUnmatchedEmailByMessageId` check
+-   **Nightly Resolver**: Scheduled job (3:00 AM UTC) that retroactively matches quarantined emails when new aliases/domains added, includes ancestry-based promotion (entire thread promoted when any message matches) and auto-cleanup of resolved/old entries (>90 days + >5 retries)
+-   **Optimized Queries**: `getThreadsWithoutClient()` for scalable client association at scale
 
-**📋 Planned Features (Phases 6-10):**
+**📋 Planned Features (Phases 7-10):**
 
--   **Nightly Resolver**: Scheduled job to retroactively match quarantined emails when new client aliases are added
 -   **Email Sending**: Reply creation using Graph API with proper thread linking
 -   **Noise Control**: Filter internal-only threads and marketing emails from client timelines
 -   **UI Implementation**: Email timeline on client detail page, thread view, reply interface, quarantine review
