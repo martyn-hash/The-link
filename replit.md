@@ -46,6 +46,21 @@ The internal tasks system provides comprehensive staff task management. Features
 
 The `/internal-chat` page supports independent staff-to-staff message threads. It uses dedicated database tables and API routes for thread creation, messaging, and archiving. The frontend unifies both project and staff message threads, with a "New Thread" dialog for creating staff-specific conversations. Push notifications are integrated for new staff messages.
 
+### Email Threading & Deduplication System
+
+The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. Key features include:
+
+-   **Deduplication**: Uses `internetMessageId` as global unique key to prevent duplicate entries when multiple staff are CC'd on the same email
+-   **Thread Grouping**: Groups messages using `canonicalConversationId` with fallback to ancestry-based threading (`inReplyTo`, `References` headers) and computed `threadKey` hash
+-   **Client Matching**: Automatically associates emails with clients using email aliases and domain allowlists, with confidence scoring (high/medium/low)
+-   **Quarantine System**: Unmatched emails stored in quarantine with nightly resolver for retroactive matching when new client aliases are added
+-   **Delta Sync**: Efficient webhook subscriptions and delta sync for Inbox and Sent Items folders per staff mailbox
+-   **Mailbox Mapping**: Tracks which staff mailboxes contain copies of each message for proper attribution
+-   **Attachment Deduplication**: Content-hash based storage to avoid duplicate attachment files
+-   **Noise Control**: Filters internal-only threads and marketing emails from client timelines
+
+Database tables: `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `email_attachments`, `email_message_attachments`, `graph_webhook_subscriptions`, `graph_sync_state`.
+
 ## External Dependencies
 
 ### Third-Party Services

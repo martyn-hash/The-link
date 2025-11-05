@@ -2167,6 +2167,270 @@ export const documents = pgTable("documents", {
   index("idx_documents_source").on(table.source),
 ]);
 
+// ============================================================
+// EMAIL THREADING & DEDUPLICATION TABLES
+// ============================================================
+
+// Email direction enum
+export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outbound", "internal", "external"]);
+
+// Email client match confidence enum
+export const emailMatchConfidenceEnum = pgEnum("email_match_confidence", ["high", "medium", "low"]);
+
+// Email messages table - stores deduplicated emails with threading info
+export const emailMessages = pgTable("email_messages", {
+  // Primary deduplication key - global unique identifier from Microsoft Graph
+  internetMessageId: varchar("internet_message_id").primaryKey(), // Global unique ID from Graph
+  
+  // Thread grouping fields
+  canonicalConversationId: varchar("canonical_conversation_id").notNull().references(() => emailThreads.canonicalConversationId, { onDelete: "cascade" }), // First seen conversationId for this thread
+  conversationIdSeen: varchar("conversation_id_seen").notNull(), // Original conversationId from this copy
+  threadKey: varchar("thread_key"), // Fallback hash: hash(rootInternetMessageId + normalizedSubjectStem + participantsSet)
+  threadPosition: integer("thread_position"), // Ordinal position within thread
+  
+  // Email metadata
+  from: varchar("from").notNull(), // Normalized to lowercase
+  to: text("to").array(), // Array of normalized lowercase emails
+  cc: text("cc").array(), // Array of normalized lowercase emails
+  bcc: text("bcc").array(), // Array of normalized lowercase emails
+  subject: text("subject"),
+  subjectStem: text("subject_stem"), // Normalized subject without Re:/Fwd: for matching
+  body: text("body"), // Email body content
+  bodyPreview: text("body_preview"), // Short preview (first 150 chars)
+  
+  // Timestamps
+  receivedDateTime: timestamp("received_datetime").notNull(),
+  sentDateTime: timestamp("sent_datetime"),
+  
+  // Threading ancestry
+  inReplyTo: varchar("in_reply_to"), // internetMessageId of parent message
+  references: text("references").array(), // Array of ancestral internetMessageIds
+  
+  // Email direction and classification
+  direction: emailDirectionEnum("direction").notNull(),
+  isInternalOnly: boolean("is_internal_only").default(false), // Computed: all participants are staff
+  participantCount: integer("participant_count"), // Total unique participants (for noise detection)
+  hasAttachments: boolean("has_attachments").default(false), // Quick filter flag
+  
+  // Client association
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  clientMatchConfidence: emailMatchConfidenceEnum("client_match_confidence"), // How confident we are in the client match
+  
+  // Mailbox owner tracking
+  mailboxOwnerUserId: varchar("mailbox_owner_user_id").references(() => users.id, { onDelete: "set null" }), // Which staff mailbox this came from
+  
+  // Graph API metadata
+  graphMessageId: varchar("graph_message_id"), // The id from Graph (changes per mailbox)
+  conversationIndex: text("conversation_index"), // Graph's conversation index for ordering
+  internetMessageHeaders: jsonb("internet_message_headers"), // Store full headers if needed for debugging
+  
+  // Processing metadata
+  processedAt: timestamp("processed_at").defaultNow(),
+  errorCount: integer("error_count").default(0), // Retry tracking
+  lastError: text("last_error"), // Last processing error
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  // Threading indexes
+  index("idx_email_messages_canonical_conversation_id").on(table.canonicalConversationId),
+  index("idx_email_messages_thread_key").on(table.threadKey),
+  index("idx_email_messages_in_reply_to").on(table.inReplyTo),
+  
+  // Client association indexes
+  index("idx_email_messages_client_id").on(table.clientId),
+  index("idx_email_messages_client_id_received").on(table.clientId, table.receivedDateTime),
+  
+  // Participant search indexes
+  index("idx_email_messages_from").on(table.from),
+  
+  // Mailbox owner index
+  index("idx_email_messages_mailbox_owner").on(table.mailboxOwnerUserId),
+  
+  // Direction and classification indexes
+  index("idx_email_messages_direction").on(table.direction),
+  index("idx_email_messages_is_internal_only").on(table.isInternalOnly),
+  
+  // Date-based queries
+  index("idx_email_messages_received_datetime").on(table.receivedDateTime),
+]);
+
+// Mailbox message map - tracks which mailboxes have copies of each message
+export const mailboxMessageMap = pgTable("mailbox_message_map", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mailboxUserId: varchar("mailbox_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  mailboxMessageId: varchar("mailbox_message_id").notNull(), // The id from Graph API for this mailbox
+  internetMessageId: varchar("internet_message_id").notNull().references(() => emailMessages.internetMessageId, { onDelete: "cascade" }),
+  folderPath: varchar("folder_path"), // e.g., "Inbox", "Sent Items", "Archive/2024"
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one Graph message ID per mailbox
+  unique("unique_mailbox_graph_message").on(table.mailboxUserId, table.mailboxMessageId),
+  // Unique constraint: one global message per mailbox (prevent duplicate mapping)
+  unique("unique_mailbox_internet_message").on(table.mailboxUserId, table.internetMessageId),
+  
+  // Lookup indexes
+  index("idx_mailbox_message_map_internet_message_id").on(table.internetMessageId),
+  index("idx_mailbox_message_map_mailbox_user").on(table.mailboxUserId),
+]);
+
+// Email threads - summary information for each conversation thread
+// Note: canonicalConversationId is the primary key to ensure referential integrity
+export const emailThreads = pgTable("email_threads", {
+  canonicalConversationId: varchar("canonical_conversation_id").primaryKey(), // Canonical thread identifier
+  threadKey: varchar("thread_key").unique(), // Fallback computed hash if conversationId breaks
+  
+  // Thread summary
+  subject: text("subject"), // Subject of first message
+  participants: text("participants").array(), // All unique email addresses in thread
+  
+  // Client association
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  
+  // Timeline
+  firstMessageAt: timestamp("first_message_at").notNull(),
+  lastMessageAt: timestamp("last_message_at").notNull(),
+  messageCount: integer("message_count").default(1),
+  
+  // Latest preview for UI
+  latestPreview: text("latest_preview"), // Preview of most recent message
+  latestDirection: emailDirectionEnum("latest_direction"), // Direction of most recent message
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_email_threads_client_id").on(table.clientId),
+  index("idx_email_threads_last_message_at").on(table.lastMessageAt),
+  index("idx_email_threads_thread_key").on(table.threadKey),
+]);
+
+// Unmatched emails - quarantine for emails that don't match any client
+export const unmatchedEmails = pgTable("unmatched_emails", {
+  internetMessageId: varchar("internet_message_id").primaryKey().references(() => emailMessages.internetMessageId, { onDelete: "cascade" }),
+  
+  // Minimal fields for matching attempts
+  from: varchar("from").notNull(),
+  to: text("to").array(),
+  cc: text("cc").array(),
+  subjectStem: text("subject_stem"),
+  
+  // Ancestry for retroactive matching
+  inReplyTo: varchar("in_reply_to"),
+  references: text("references").array(),
+  
+  // Timestamps
+  receivedDateTime: timestamp("received_datetime").notNull(),
+  
+  // Processing
+  mailboxOwnerUserId: varchar("mailbox_owner_user_id").references(() => users.id, { onDelete: "set null" }),
+  direction: emailDirectionEnum("direction").notNull(),
+  retryCount: integer("retry_count").default(0),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_unmatched_emails_from").on(table.from),
+  index("idx_unmatched_emails_received_datetime").on(table.receivedDateTime),
+  index("idx_unmatched_emails_in_reply_to").on(table.inReplyTo),
+  index("idx_unmatched_emails_retry_count").on(table.retryCount),
+]);
+
+// Client email aliases - known email addresses for each client
+export const clientEmailAliases = pgTable("client_email_aliases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  emailLowercase: varchar("email_lowercase").notNull(), // Always stored in lowercase
+  isPrimary: boolean("is_primary").default(false), // Mark primary contact email
+  source: varchar("source").default('manual'), // 'manual', 'auto_discovered', 'companies_house'
+  verifiedAt: timestamp("verified_at"), // When this alias was verified (optional)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one email can only belong to one client
+  unique("unique_client_email").on(table.emailLowercase),
+  
+  index("idx_client_email_aliases_client_id").on(table.clientId),
+  index("idx_client_email_aliases_email").on(table.emailLowercase),
+]);
+
+// Client domain allowlist - auto-match emails from specific domains to clients
+export const clientDomainAllowlist = pgTable("client_domain_allowlist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  domain: varchar("domain").notNull(), // e.g., 'acmecorp.com' (always lowercase)
+  matchConfidence: emailMatchConfidenceEnum("match_confidence").default('medium'), // Domain matches are medium confidence
+  notes: text("notes"), // Why this domain is allowed
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one domain per client
+  unique("unique_client_domain").on(table.clientId, table.domain),
+  
+  index("idx_client_domain_allowlist_client_id").on(table.clientId),
+  index("idx_client_domain_allowlist_domain").on(table.domain),
+]);
+
+// Email attachments - deduplicated attachment storage
+export const emailAttachments = pgTable("email_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contentHash: varchar("content_hash").notNull().unique(), // SHA-256 hash for deduplication
+  fileName: varchar("file_name").notNull(),
+  fileSize: integer("file_size").notNull(), // in bytes
+  contentType: varchar("content_type").notNull(), // MIME type
+  objectPath: text("object_path").notNull(), // Path in object storage
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_attachments_content_hash").on(table.contentHash),
+]);
+
+// Email message attachments - junction table linking messages to attachments
+export const emailMessageAttachments = pgTable("email_message_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  internetMessageId: varchar("internet_message_id").notNull().references(() => emailMessages.internetMessageId, { onDelete: "cascade" }),
+  attachmentId: varchar("attachment_id").notNull().references(() => emailAttachments.id, { onDelete: "cascade" }),
+  attachmentIndex: integer("attachment_index"), // Order in original email
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_message_attachments_message_id").on(table.internetMessageId),
+  index("idx_email_message_attachments_attachment_id").on(table.attachmentId),
+]);
+
+// Graph webhook subscriptions - track active webhook subscriptions
+export const graphWebhookSubscriptions = pgTable("graph_webhook_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  subscriptionId: varchar("subscription_id").notNull().unique(), // ID from Microsoft Graph
+  resource: varchar("resource").notNull(), // e.g., "me/mailFolders('Inbox')/messages"
+  changeType: varchar("change_type").notNull(), // "created,updated"
+  expiresAt: timestamp("expires_at").notNull(),
+  clientState: varchar("client_state"), // For validation
+  isActive: boolean("is_active").default(true),
+  lastRenewedAt: timestamp("last_renewed_at"),
+  lastNotificationAt: timestamp("last_notification_at"), // Track webhook activity
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_graph_subscriptions_user_id").on(table.userId),
+  index("idx_graph_subscriptions_expires_at").on(table.expiresAt),
+  index("idx_graph_subscriptions_is_active").on(table.isActive),
+]);
+
+// Graph sync state - track delta sync tokens per mailbox
+export const graphSyncState = pgTable("graph_sync_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderPath: varchar("folder_path").notNull(), // "Inbox" or "SentItems"
+  deltaLink: text("delta_link"), // Full delta link from Graph API
+  lastSyncAt: timestamp("last_sync_at"),
+  lastMessageCount: integer("last_message_count").default(0), // Messages processed in last sync
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one sync state per user+folder
+  unique("unique_user_folder_sync").on(table.userId, table.folderPath),
+  
+  index("idx_graph_sync_state_user_id").on(table.userId),
+  index("idx_graph_sync_state_last_sync").on(table.lastSyncAt),
+]);
+
 // Zod schemas for communications
 export const insertCommunicationSchema = createInsertSchema(communications).omit({
   id: true,
@@ -2271,6 +2535,58 @@ export const insertDocumentFolderSchema = createInsertSchema(documentFolders).om
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   uploadedAt: true,
+});
+
+// Zod schemas for email threading
+export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
+  processedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMailboxMessageMapSchema = createInsertSchema(mailboxMessageMap).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailThreadSchema = createInsertSchema(emailThreads).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUnmatchedEmailSchema = createInsertSchema(unmatchedEmails).omit({
+  createdAt: true,
+});
+
+export const insertClientEmailAliasSchema = createInsertSchema(clientEmailAliases).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertClientDomainAllowlistSchema = createInsertSchema(clientDomainAllowlist).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailAttachmentSchema = createInsertSchema(emailAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailMessageAttachmentSchema = createInsertSchema(emailMessageAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGraphWebhookSubscriptionSchema = createInsertSchema(graphWebhookSubscriptions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGraphSyncStateSchema = createInsertSchema(graphSyncState).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Risk assessment enums
@@ -2870,6 +3186,28 @@ export type TaskDocument = typeof taskDocuments.$inferSelect;
 export type InsertTaskDocument = z.infer<typeof insertTaskDocumentSchema>;
 export type BulkReassignTasks = z.infer<typeof bulkReassignTasksSchema>;
 export type BulkUpdateTaskStatus = z.infer<typeof bulkUpdateTaskStatusSchema>;
+
+// Email threading type exports
+export type EmailMessage = typeof emailMessages.$inferSelect;
+export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;
+export type MailboxMessageMap = typeof mailboxMessageMap.$inferSelect;
+export type InsertMailboxMessageMap = z.infer<typeof insertMailboxMessageMapSchema>;
+export type EmailThread = typeof emailThreads.$inferSelect;
+export type InsertEmailThread = z.infer<typeof insertEmailThreadSchema>;
+export type UnmatchedEmail = typeof unmatchedEmails.$inferSelect;
+export type InsertUnmatchedEmail = z.infer<typeof insertUnmatchedEmailSchema>;
+export type ClientEmailAlias = typeof clientEmailAliases.$inferSelect;
+export type InsertClientEmailAlias = z.infer<typeof insertClientEmailAliasSchema>;
+export type ClientDomainAllowlist = typeof clientDomainAllowlist.$inferSelect;
+export type InsertClientDomainAllowlist = z.infer<typeof insertClientDomainAllowlistSchema>;
+export type EmailAttachment = typeof emailAttachments.$inferSelect;
+export type InsertEmailAttachment = z.infer<typeof insertEmailAttachmentSchema>;
+export type EmailMessageAttachment = typeof emailMessageAttachments.$inferSelect;
+export type InsertEmailMessageAttachment = z.infer<typeof insertEmailMessageAttachmentSchema>;
+export type GraphWebhookSubscription = typeof graphWebhookSubscriptions.$inferSelect;
+export type InsertGraphWebhookSubscription = z.infer<typeof insertGraphWebhookSubscriptionSchema>;
+export type GraphSyncState = typeof graphSyncState.$inferSelect;
+export type InsertGraphSyncState = z.infer<typeof insertGraphSyncStateSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
