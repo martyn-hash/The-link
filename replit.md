@@ -48,18 +48,36 @@ The `/internal-chat` page supports independent staff-to-staff message threads. I
 
 ### Email Threading & Deduplication System
 
-The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. Key features include:
+**Implementation Status: Phases 1-5 Complete** (Core backend infrastructure ready)
 
--   **Deduplication**: Uses `internetMessageId` as global unique key to prevent duplicate entries when multiple staff are CC'd on the same email
--   **Thread Grouping**: Groups messages using `canonicalConversationId` with fallback to ancestry-based threading (`inReplyTo`, `References` headers) and computed `threadKey` hash
--   **Client Matching**: Automatically associates emails with clients using email aliases and domain allowlists, with confidence scoring (high/medium/low)
--   **Quarantine System**: Unmatched emails stored in quarantine with nightly resolver for retroactive matching when new client aliases are added
--   **Delta Sync**: Efficient webhook subscriptions and delta sync for Inbox and Sent Items folders per staff mailbox
+The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. 
+
+**✅ Implemented Features (Phases 1-5):**
+
+-   **Database Schema**: 8 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `graph_webhook_subscriptions`, `graph_sync_state`
+-   **Deduplication**: Global unique key using `internetMessageId` to prevent duplicate entries when multiple staff are CC'd on the same email
+-   **Thread Grouping**: Three-layer approach - (1) `canonicalConversationId` grouping, (2) ancestry-based threading via `inReplyTo`/`References` headers, (3) computed `threadKey` hash for orphaned messages
+-   **Client Association**: Multi-layered matching - (1) exact email match against `client_email_aliases` (high confidence), (2) domain match against `client_domain_allowlist` (medium confidence), (3) quarantine for unmatched emails (low confidence)
+-   **Delta Sync**: Efficient incremental sync for Inbox and Sent Items folders per staff mailbox, with proper Graph API delta token handling
 -   **Mailbox Mapping**: Tracks which staff mailboxes contain copies of each message for proper attribution
--   **Attachment Deduplication**: Content-hash based storage to avoid duplicate attachment files
--   **Noise Control**: Filters internal-only threads and marketing emails from client timelines
+-   **Webhook Management**: Create, renew, and delete Graph webhook subscriptions with expiry tracking
+-   **Quarantine System**: Unmatched emails stored with thread metadata for manual or automated resolution
 
-Database tables: `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `email_attachments`, `email_message_attachments`, `graph_webhook_subscriptions`, `graph_sync_state`.
+**📋 Planned Features (Phases 6-10):**
+
+-   **Nightly Resolver**: Scheduled job to retroactively match quarantined emails when new client aliases are added
+-   **Email Sending**: Reply creation using Graph API with proper thread linking
+-   **Noise Control**: Filter internal-only threads and marketing emails from client timelines
+-   **UI Implementation**: Email timeline on client detail page, thread view, reply interface, quarantine review
+-   **Monitoring**: Webhook resilience, error handling, e2e tests, admin dashboard
+
+**Service Location:** `server/services/emailIngestionService.ts`
+
+**Key Design Decisions:**
+- `internetMessageId` chosen as global dedup key (not Graph `id` which is mailbox-specific)
+- Idempotent upsert preserves enrichment fields (`threadId`, `clientId`) across delta syncs
+- Normalized email addresses (lowercase) for consistent matching
+- Multi-layered threading handles broken/missing conversation IDs gracefully
 
 ## External Dependencies
 
