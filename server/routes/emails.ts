@@ -250,4 +250,55 @@ export function registerEmailRoutes(
       });
     }
   });
+
+  // Microsoft Graph webhook endpoint (no auth required for validation)
+  app.post('/api/webhooks/outlook', async (req: any, res: any) => {
+    try {
+      // Handle validation token during subscription creation
+      if (req.query?.validationToken) {
+        return res.status(200).send(req.query.validationToken);
+      }
+
+      // Handle webhook notifications
+      const notifications = req.body?.value;
+      if (!notifications || !Array.isArray(notifications)) {
+        return res.status(400).json({ message: "Invalid notification payload" });
+      }
+
+      // Process each notification asynchronously (don't block webhook response)
+      Promise.all(
+        notifications.map(async (notification: any) => {
+          try {
+            const { subscriptionId, resource, changeType } = notification;
+            
+            // Get the subscription from database to find which user's mailbox this is
+            const subscription = await storage.getGraphWebhookSubscription(subscriptionId);
+            if (!subscription || !subscription.isActive) {
+              console.warn(`Webhook notification for unknown/inactive subscription: ${subscriptionId}`);
+              return;
+            }
+
+            // Trigger incremental delta sync for this user's mailbox
+            const { performIncrementalDeltaSync } = await import('../services/emailIngestionService');
+            await performIncrementalDeltaSync(subscription.userId);
+            
+            console.log(`Processed webhook notification for user ${subscription.userId}, changeType: ${changeType}`);
+          } catch (error) {
+            console.error('Error processing webhook notification:', error);
+          }
+        })
+      ).catch(error => {
+        console.error('Error processing webhook notifications batch:', error);
+      });
+
+      // Always respond 202 Accepted immediately to Graph API
+      res.status(202).send();
+    } catch (error) {
+      console.error('Error in webhook endpoint:', error);
+      res.status(500).json({
+        message: "Webhook processing failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 }
