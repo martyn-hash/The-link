@@ -5556,6 +5556,43 @@ export class DatabaseStorage implements IStorage {
       try {
         const { sendProjectStageChangeNotification } = await import('./notification-template-service');
         
+        // Calculate due date for push notifications (same logic as email)
+        let formattedDueDate: string | undefined = undefined;
+        
+        if (chronologyForEmail && chronologyForEmail.length > 0) {
+          const { addBusinessHours } = await import('@shared/businessTime');
+          
+          // Find when project entered current stage
+          const sortedChronology = [...chronologyForEmail].sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          const stageEntry = sortedChronology.find(entry => entry.toStatus === newStageName);
+          
+          let assignedTimestamp: string | null = null;
+          if (stageEntry) {
+            assignedTimestamp = stageEntry.timestamp;
+          } else if (projectWithClient.createdAt) {
+            assignedTimestamp = projectWithClient.createdAt instanceof Date 
+              ? projectWithClient.createdAt.toISOString() 
+              : projectWithClient.createdAt;
+          }
+          
+          // Calculate due date if we have max time and assignment timestamp
+          if (assignedTimestamp && stageConfigForEmail.maxInstanceTime && stageConfigForEmail.maxInstanceTime > 0) {
+            const deadlineDate = addBusinessHours(assignedTimestamp, stageConfigForEmail.maxInstanceTime);
+            // Format date for push notification: "Fri, 15 Mar 2025, 14:30 GMT"
+            formattedDueDate = deadlineDate.toLocaleString('en-GB', { 
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZoneName: 'short'
+            });
+          }
+        }
+        
         for (const user of finalUsersToNotify) {
           try {
             await sendProjectStageChangeNotification(
@@ -5565,7 +5602,8 @@ export class DatabaseStorage implements IStorage {
               oldStageName || 'Unknown',
               newStageName,
               user.id,
-              `${user.firstName} ${user.lastName || ''}`.trim()
+              `${user.firstName} ${user.lastName || ''}`.trim(),
+              formattedDueDate
             );
           } catch (pushError) {
             console.error(`Failed to send push notification to user ${user.id}:`, pushError);

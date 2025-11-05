@@ -68,9 +68,10 @@ const TEMPLATE_INFO: Record<string, {
       clientName: "Acme Corp", 
       fromStage: "In Review", 
       toStage: "Client Approval", 
-      assigneeName: "Jane Doe" 
+      assigneeName: "Jane Doe",
+      dueDate: "Fri, 15 Mar 2025, 14:30 GMT"
     },
-    variables: ["projectName", "clientName", "fromStage", "toStage", "assigneeName"]
+    variables: ["projectName", "clientName", "fromStage", "toStage", "assigneeName", "dueDate"]
   },
   status_update: {
     label: "Status Update",

@@ -126,19 +126,27 @@ export async function sendProjectStageChangeNotification(
   fromStage: string,
   toStage: string,
   assigneeId: string,
-  assigneeName: string
+  assigneeName: string,
+  dueDate?: string
 ): Promise<void> {
   try {
+    const context: Record<string, string> = {
+      projectName,
+      clientName,
+      fromStage,
+      toStage,
+      assigneeName
+    };
+    
+    // Add dueDate if provided
+    if (dueDate) {
+      context.dueDate = dueDate;
+    }
+    
     await sendTemplateNotification(
       'project_stage_change',
       [assigneeId],
-      {
-        projectName,
-        clientName,
-        fromStage,
-        toStage,
-        assigneeName
-      },
+      context,
       `/projects/${projectId}`
     );
   } catch (error) {
