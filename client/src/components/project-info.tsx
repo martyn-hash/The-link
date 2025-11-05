@@ -198,7 +198,7 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
             <div className="mb-6">
               <div className="flex justify-between">
                 <span className="text-muted-foreground font-medium">Due Date:</span>
-                <span className="font-semibold text-red-500" data-testid="text-project-due-date">
+                <span className="font-semibold text-foreground" data-testid="text-project-due-date">
                   {new Date(project.dueDate).toLocaleDateString('en-GB', { 
                     day: '2-digit', 
                     month: 'short', 

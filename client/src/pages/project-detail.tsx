@@ -389,7 +389,7 @@ export default function ProjectDetail() {
                   </h1>
                 </RouterLink>
                 {project.projectType?.name && (
-                  <span className="text-xl sm:text-2xl font-semibold text-red-500" data-testid="text-project-type">
+                  <span className="text-xl sm:text-2xl font-semibold text-foreground" data-testid="text-project-type">
                     {project.projectType.name}
                   </span>
                 )}
