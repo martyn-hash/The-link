@@ -726,6 +726,18 @@ export interface IStorage {
   getGraphSyncState(userId: string, folderPath: string): Promise<GraphSyncState | undefined>;
   upsertGraphSyncState(state: InsertGraphSyncState): Promise<GraphSyncState>;
 
+  // Email message operations
+  upsertEmailMessage(message: InsertEmailMessage): Promise<EmailMessage>;
+  getEmailMessageByInternetMessageId(internetMessageId: string): Promise<EmailMessage | undefined>;
+  getEmailMessageById(id: string): Promise<EmailMessage | undefined>;
+  getEmailMessagesByThreadId(threadId: string): Promise<EmailMessage[]>;
+  updateEmailMessage(id: string, updates: Partial<InsertEmailMessage>): Promise<EmailMessage>;
+
+  // Mailbox message mapping operations
+  createMailboxMessageMap(mapping: InsertMailboxMessageMap): Promise<MailboxMessageMap>;
+  getMailboxMessageMapsByUserId(userId: string): Promise<MailboxMessageMap[]>;
+  getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]>;
+
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
   getDocumentFolderById(id: string): Promise<DocumentFolder | undefined>;
@@ -8643,6 +8655,109 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // Email message operations
+  async upsertEmailMessage(message: InsertEmailMessage): Promise<EmailMessage> {
+    // Check if message already exists by internetMessageId
+    const existing = await this.getEmailMessageByInternetMessageId(message.internetMessageId);
+    
+    if (existing) {
+      // Update existing message, but preserve enriched fields (threadId, clientId, matchConfidence)
+      // Only update basic message fields that might have changed (e.g., isRead, isDraft)
+      const updatePayload: Partial<InsertEmailMessage> = {};
+      
+      // Update fields that can change between syncs
+      if (message.isRead !== undefined) updatePayload.isRead = message.isRead;
+      if (message.isDraft !== undefined) updatePayload.isDraft = message.isDraft;
+      if (message.importance !== undefined) updatePayload.importance = message.importance;
+      if (message.hasAttachments !== undefined) updatePayload.hasAttachments = message.hasAttachments;
+      
+      // Preserve enriched fields that are set in later phases
+      // Only update if explicitly provided AND existing is null
+      if (message.threadId && !existing.threadId) updatePayload.threadId = message.threadId;
+      if (message.clientId && !existing.clientId) updatePayload.clientId = message.clientId;
+      if (message.matchConfidence && !existing.matchConfidence) updatePayload.matchConfidence = message.matchConfidence;
+      
+      const [updated] = await db
+        .update(emailMessages)
+        .set({
+          ...updatePayload,
+          updatedAt: new Date()
+        })
+        .where(eq(emailMessages.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new message
+      const [created] = await db
+        .insert(emailMessages)
+        .values(message)
+        .returning();
+      return created;
+    }
+  }
+
+  async getEmailMessageByInternetMessageId(internetMessageId: string): Promise<EmailMessage | undefined> {
+    const result = await db
+      .select()
+      .from(emailMessages)
+      .where(eq(emailMessages.internetMessageId, internetMessageId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailMessageById(id: string): Promise<EmailMessage | undefined> {
+    const result = await db
+      .select()
+      .from(emailMessages)
+      .where(eq(emailMessages.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailMessagesByThreadId(threadId: string): Promise<EmailMessage[]> {
+    return await db
+      .select()
+      .from(emailMessages)
+      .where(eq(emailMessages.threadId, threadId))
+      .orderBy(emailMessages.sentAt);
+  }
+
+  async updateEmailMessage(id: string, updates: Partial<InsertEmailMessage>): Promise<EmailMessage> {
+    const [updated] = await db
+      .update(emailMessages)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(emailMessages.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Mailbox message mapping operations
+  async createMailboxMessageMap(mapping: InsertMailboxMessageMap): Promise<MailboxMessageMap> {
+    const [created] = await db
+      .insert(mailboxMessageMap)
+      .values(mapping)
+      .returning();
+    return created;
+  }
+
+  async getMailboxMessageMapsByUserId(userId: string): Promise<MailboxMessageMap[]> {
+    return await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(eq(mailboxMessageMap.userId, userId))
+      .orderBy(mailboxMessageMap.receivedAt);
+  }
+
+  async getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]> {
+    return await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(eq(mailboxMessageMap.messageId, messageId));
   }
 
   // Document folder operations

@@ -359,6 +359,134 @@ export class EmailIngestionService {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
+
+  /**
+   * Ingest messages from delta sync
+   * Idempotently upserts messages and creates mailbox mappings
+   */
+  async ingestMessages(
+    userId: string,
+    messages: GraphMessage[],
+    folderType: 'Inbox' | 'SentItems'
+  ): Promise<{ processed: number; skipped: number; errors: number }> {
+    const stats = { processed: 0, skipped: 0, errors: 0 };
+
+    console.log(`[Email Ingestion] Ingesting ${messages.length} messages for user ${userId} from ${folderType}`);
+
+    for (const graphMessage of messages) {
+      try {
+        // Skip if no internetMessageId (required for deduplication)
+        if (!graphMessage.internetMessageId) {
+          console.warn('[Email Ingestion] Skipping message without internetMessageId:', graphMessage.id);
+          stats.skipped++;
+          continue;
+        }
+
+        // Extract sender email
+        const fromEmail = graphMessage.from?.emailAddress?.address 
+          ? this.normalizeEmail(graphMessage.from.emailAddress.address)
+          : null;
+
+        // Extract recipient emails
+        const toEmails = this.extractEmails(graphMessage.toRecipients);
+        const ccEmails = this.extractEmails(graphMessage.ccRecipients);
+        const bccEmails = this.extractEmails(graphMessage.bccRecipients);
+
+        // Combine all participants
+        const allParticipants = [
+          fromEmail,
+          ...toEmails,
+          ...ccEmails,
+          ...bccEmails
+        ].filter((email): email is string => email !== null);
+
+        // Extract threading metadata
+        const references = this.extractReferencesHeader(graphMessage.internetMessageHeaders);
+        const inReplyTo = graphMessage.internetMessageHeaders?.find(
+          h => h.name.toLowerCase() === 'in-reply-to'
+        )?.value.replace(/<|>/g, '');
+
+        // Prepare email message for upsert
+        const emailMessage: InsertEmailMessage = {
+          internetMessageId: graphMessage.internetMessageId,
+          conversationId: graphMessage.conversationId || null,
+          subject: graphMessage.subject || '(no subject)',
+          bodyPreview: graphMessage.bodyPreview || '',
+          body: graphMessage.body?.content || '',
+          bodyType: graphMessage.body?.contentType || 'text',
+          fromEmail,
+          fromName: graphMessage.from?.emailAddress?.name || null,
+          toEmails,
+          ccEmails,
+          bccEmails,
+          sentAt: graphMessage.sentDateTime ? new Date(graphMessage.sentDateTime) : new Date(),
+          receivedAt: graphMessage.receivedDateTime ? new Date(graphMessage.receivedDateTime) : new Date(),
+          importance: graphMessage.importance || 'normal',
+          isRead: graphMessage.isRead || false,
+          isDraft: graphMessage.isDraft || false,
+          hasAttachments: graphMessage.hasAttachments || false,
+          inReplyTo,
+          references,
+          // Threading will be computed in Phase 4
+          threadId: null,
+          // Client association will be computed in Phase 5
+          clientId: null,
+          matchConfidence: null
+        };
+
+        // Upsert message (idempotent by internetMessageId)
+        const savedMessage = await storage.upsertEmailMessage(emailMessage);
+
+        // Create mailbox mapping for this user
+        // Check if mapping already exists to avoid duplicates
+        const existingMaps = await storage.getMailboxMessageMapsByMessageId(savedMessage.id);
+        const hasMapping = existingMaps.some(map => map.userId === userId);
+
+        if (!hasMapping) {
+          await storage.createMailboxMessageMap({
+            userId,
+            messageId: savedMessage.id,
+            graphMessageId: graphMessage.id,
+            folderPath: folderType,
+            isDeleted: false,
+            changeKey: graphMessage.changeKey || null,
+            receivedAt: graphMessage.receivedDateTime ? new Date(graphMessage.receivedDateTime) : new Date()
+          });
+        }
+
+        stats.processed++;
+      } catch (error) {
+        console.error('[Email Ingestion] Error ingesting message:', error);
+        stats.errors++;
+      }
+    }
+
+    console.log(`[Email Ingestion] Ingestion complete for user ${userId}:`, stats);
+    return stats;
+  }
+
+  /**
+   * Perform full sync for a user's mailbox
+   * Runs delta sync and ingests messages
+   */
+  async syncUserMailbox(userId: string): Promise<void> {
+    try {
+      console.log(`[Email Ingestion] Starting mailbox sync for user ${userId}`);
+
+      // Sync Inbox
+      const inboxResult = await this.performDeltaSync(userId, 'Inbox');
+      await this.ingestMessages(userId, inboxResult.messages, 'Inbox');
+
+      // Sync Sent Items
+      const sentResult = await this.performDeltaSync(userId, 'SentItems');
+      await this.ingestMessages(userId, sentResult.messages, 'SentItems');
+
+      console.log(`[Email Ingestion] Mailbox sync complete for user ${userId}`);
+    } catch (error) {
+      console.error('[Email Ingestion] Error syncing mailbox:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance
