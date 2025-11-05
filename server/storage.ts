@@ -5449,11 +5449,14 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
-      // Get project with client information for email
+      // Get project with client information and chronology for email
       const projectWithClient = await db.query.projects.findFirst({
         where: eq(projects.id, projectId),
         with: {
           client: true,
+          chronology: {
+            orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+          },
         },
       });
 
@@ -5500,6 +5503,17 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
+      // Prepare chronology data for email (only need toStatus and timestamp)
+      const chronologyForEmail = (projectWithClient.chronology || []).map(entry => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
+      }));
+
+      // Prepare stage config for email
+      const stageConfigForEmail = {
+        maxInstanceTime: newStage.maxInstanceTime,
+      };
+
       // PERFORMANCE FIX: Send emails concurrently using Promise.allSettled for better error handling
       const emailPromises = usersToNotify.map(async (user) => {
         try {
@@ -5511,7 +5525,10 @@ export class DatabaseStorage implements IStorage {
             projectWithClient.client.name,
             newStageName,
             oldStageName,
-            projectId  // URL FIX: Pass projectId for deep linking
+            projectId,  // URL FIX: Pass projectId for deep linking
+            stageConfigForEmail,  // Pass stage configuration with timing info
+            chronologyForEmail,  // Pass chronology for assignment timestamp calculation
+            projectWithClient.createdAt instanceof Date ? projectWithClient.createdAt.toISOString() : projectWithClient.createdAt  // Pass project creation timestamp
           );
 
           if (emailSent) {
