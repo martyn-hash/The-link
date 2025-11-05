@@ -535,6 +535,7 @@ export const reasonCustomFields = pgTable("reason_custom_fields", {
   fieldType: customFieldTypeEnum("field_type").notNull(),
   isRequired: boolean("is_required").default(false),
   placeholder: varchar("placeholder"),
+  description: text("description"),
   options: text("options").array(), // For multi-select field options
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
