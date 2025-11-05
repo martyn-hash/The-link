@@ -72,21 +72,33 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
   // Custom collision detection that prioritizes column droppables over cards
   const customCollisionDetection = (args: any) => {
-    // First check for column droppables using pointerWithin
+    // First try pointerWithin for pointer/touch sensors
     const pointerCollisions = pointerWithin(args);
-    const columnCollisions = pointerCollisions.filter((collision: any) => {
+    
+    // If pointer strategy found results, prioritize column droppables
+    if (pointerCollisions.length > 0) {
+      const columnCollisions = pointerCollisions.filter((collision: any) => {
+        return typeof collision.id === 'string' && collision.id.startsWith('column-');
+      });
+      
+      // If we found a column, return it; otherwise return the pointer results
+      if (columnCollisions.length > 0) {
+        return columnCollisions;
+      }
+      return pointerCollisions;
+    }
+    
+    // Fall back to rectIntersection for keyboard sensors and when pointer yields no hits
+    const rectCollisions = rectIntersection(args);
+    const columnCollisions = rectCollisions.filter((collision: any) => {
       return typeof collision.id === 'string' && collision.id.startsWith('column-');
     });
     
-    // If we found a column, return it
+    // If we found a column, return it; otherwise return all rect collision results
     if (columnCollisions.length > 0) {
-      console.log('[Kanban DnD] Custom collision detected column:', columnCollisions[0].id);
       return columnCollisions;
     }
-    
-    // Otherwise fall back to pointer within for cards
-    console.log('[Kanban DnD] Custom collision falling back to cards');
-    return pointerCollisions;
+    return rectCollisions;
   };
 
   const navigateToProject = (projectId: string) => {
@@ -146,16 +158,9 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    console.log('[Kanban DnD] handleDragEnd called', { 
-      activeId: active.id, 
-      overId: over?.id,
-      overIdType: typeof over?.id 
-    });
-    
     setActiveId(null);
 
     if (!over || typeof over.id !== 'string') {
-      console.log('[Kanban DnD] No valid drop target', { over });
       setOveredColumn(null);
       return;
     }
@@ -165,16 +170,11 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     // Check if dropped over a column directly
     if (over.id.startsWith('column-')) {
       targetStatusName = over.id.replace('column-', '');
-      console.log('[Kanban DnD] Dropped over column', { targetStatusName });
     } else {
       // Dropped over a project card - find which column the target project is in
       const targetProject = projects.find(p => p.id === over.id);
       if (targetProject) {
         targetStatusName = targetProject.currentStatus;
-        console.log('[Kanban DnD] Dropped over project card', { 
-          targetProjectId: targetProject.id, 
-          targetStatusName 
-        });
       }
     }
 
@@ -183,22 +183,12 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       const draggedProjectId = active.id as string;
       const draggedProject = projects.find(p => p.id === draggedProjectId);
       
-      console.log('[Kanban DnD] Processing status change', {
-        draggedProjectId,
-        currentStatus: draggedProject?.currentStatus,
-        targetStatusName,
-        willShowModal: draggedProject && draggedProject.currentStatus !== targetStatusName
-      });
-      
       // Check if the project is being moved to a different status
       if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
         setSelectedProject(draggedProject);
         setTargetStatus(targetStatusName);
         setShowChangeStatusModal(true);
-        console.log('[Kanban DnD] Modal state updated');
       }
-    } else {
-      console.log('[Kanban DnD] No target status found');
     }
     
     // Reset overed column
