@@ -95,6 +95,7 @@ export default function Projects() {
   const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
   const [behindScheduleOnly, setBehindScheduleOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   // Reset to list view when no service is selected for kanban
   useEffect(() => {
@@ -836,9 +837,9 @@ export default function Projects() {
   });
 
   // Pagination for list view
-  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
   const paginatedProjects = useMemo(() => {
     // Only paginate in list view
     if (viewMode === "list") {
@@ -1090,9 +1091,28 @@ export default function Projects() {
                     />
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-between mt-4 px-4 pb-4">
-                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
-                          Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-3 mt-4 px-4 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                            Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                          </div>
+                          <Select
+                            value={itemsPerPage.toString()}
+                            onValueChange={(value) => {
+                              setItemsPerPage(Number(value));
+                              setCurrentPage(1);
+                            }}
+                          >
+                            <SelectTrigger className="w-[100px]" data-testid="select-items-per-page">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="15">15</SelectItem>
+                              <SelectItem value="25">25</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button
@@ -1176,9 +1196,28 @@ export default function Projects() {
                   />
                   {/* Pagination Controls */}
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 px-4 pb-4">
-                      <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
-                        Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-3 mt-4 px-4 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                          Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                        </div>
+                        <Select
+                          value={itemsPerPage.toString()}
+                          onValueChange={(value) => {
+                            setItemsPerPage(Number(value));
+                            setCurrentPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="w-[100px]" data-testid="select-items-per-page">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="15">15</SelectItem>
+                            <SelectItem value="25">25</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
