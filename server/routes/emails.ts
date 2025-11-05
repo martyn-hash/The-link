@@ -251,6 +251,95 @@ export function registerEmailRoutes(
     }
   });
 
+  // Admin: Manual mailbox sync
+  app.post('/api/admin/emails/sync-mailbox', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!req.user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+
+      // Verify the user exists and has Outlook access
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Trigger full delta sync for this user
+      const { performIncrementalDeltaSync } = await import('../services/emailIngestionService');
+      await performIncrementalDeltaSync(userId);
+
+      res.json({
+        message: `Successfully triggered mailbox sync for ${user.email}`,
+        userId
+      });
+    } catch (error) {
+      console.error('Error in manual mailbox sync:', error);
+      res.status(500).json({
+        message: "Mailbox sync failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Admin: Get quarantine emails
+  app.get('/api/admin/emails/quarantine', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!req.user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const unmatchedEmails = await storage.getUnmatchedEmails({ resolvedOnly: false });
+      
+      res.json(unmatchedEmails);
+    } catch (error) {
+      console.error('Error getting quarantine emails:', error);
+      res.status(500).json({
+        message: "Failed to get quarantine emails",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Admin: Subscribe to webhook for a user's mailbox
+  app.post('/api/admin/emails/webhook/subscribe', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!req.user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+
+      // Verify the user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Setup webhook subscription
+      const { setupOutlookWebhook } = await import('../utils/outlookClient');
+      const subscription = await setupOutlookWebhook(userId);
+
+      res.json({
+        message: `Successfully created webhook subscription for ${user.email}`,
+        subscription
+      });
+    } catch (error) {
+      console.error('Error creating webhook subscription:', error);
+      res.status(500).json({
+        message: "Failed to create webhook subscription",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Microsoft Graph webhook endpoint (no auth required for validation)
   app.post('/api/webhooks/outlook', async (req: any, res: any) => {
     try {
