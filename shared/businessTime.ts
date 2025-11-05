@@ -174,3 +174,59 @@ export function calculateTotalTimeInStage(
   
   return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 }
+
+/**
+ * Adds business hours to a start date, skipping weekends
+ * @param startDate - Starting date (Date object or ISO string)
+ * @param businessHoursToAdd - Number of business hours to add
+ * @returns The deadline date after adding business hours
+ */
+export function addBusinessHours(startDate: Date | string, businessHoursToAdd: number): Date {
+  const start = typeof startDate === 'string' ? new Date(startDate) : new Date(startDate);
+  
+  if (isNaN(start.getTime())) {
+    throw new Error('Invalid start date');
+  }
+  
+  if (businessHoursToAdd <= 0) {
+    return start;
+  }
+  
+  let remainingHours = businessHoursToAdd;
+  const current = new Date(start);
+  
+  // If starting on a weekend, move to next Monday
+  while (isWeekend(current)) {
+    current.setDate(current.getDate() + 1);
+    current.setHours(0, 0, 0, 0);
+  }
+  
+  // Process day by day
+  while (remainingHours > 0) {
+    const dayOfWeek = current.getDay();
+    
+    // Skip weekends
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
+      continue;
+    }
+    
+    // Calculate hours available in the current day
+    const hoursRemainingInDay = 24 - current.getHours() - (current.getMinutes() / 60) - (current.getSeconds() / 3600);
+    
+    if (remainingHours <= hoursRemainingInDay) {
+      // Can finish within this day
+      const millisToAdd = remainingHours * 60 * 60 * 1000;
+      current.setTime(current.getTime() + millisToAdd);
+      remainingHours = 0;
+    } else {
+      // Use up rest of this day and continue to next
+      remainingHours -= hoursRemainingInDay;
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
+    }
+  }
+  
+  return current;
+}

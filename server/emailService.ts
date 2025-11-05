@@ -267,8 +267,8 @@ export async function sendStageChangeNotificationEmail(
   let maxHoursAllowed: number | null = null;
   
   if (chronology && chronology.length > 0) {
-    // Import calculateBusinessHours for due date calculation
-    const { calculateBusinessHours } = await import('@shared/businessTime');
+    // Import business time functions for deadline calculation
+    const { addBusinessHours } = await import('@shared/businessTime');
     
     // Sort chronology by timestamp DESC and find when project entered current stage
     const sortedChronology = [...chronology].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -285,15 +285,9 @@ export async function sendStageChangeNotificationEmail(
     if (assignedTimestamp && stageConfig?.maxInstanceTime && stageConfig.maxInstanceTime > 0) {
       maxHoursAllowed = stageConfig.maxInstanceTime;
       
-      // Calculate due date by adding business hours to assignment time
-      // This is a simplified calculation - add the hours directly
-      const assignedDate = new Date(assignedTimestamp);
-      const dueDate = new Date(assignedDate);
-      
-      // For simplicity, add calendar hours (not business hours)
-      // A more sophisticated version would skip weekends
-      dueDate.setHours(dueDate.getHours() + maxHoursAllowed);
-      dueTimestamp = dueDate.toISOString();
+      // Calculate deadline by adding business hours (excluding weekends)
+      const deadlineDate = addBusinessHours(assignedTimestamp, maxHoursAllowed);
+      dueTimestamp = deadlineDate.toISOString();
     }
   }
   
@@ -333,19 +327,18 @@ export async function sendStageChangeNotificationEmail(
             <h3 style="margin-top: 0; color: #92400e; font-size: 18px;">⏱️ Timeline & Deadlines</h3>
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
-                <td style="padding: 8px 0; color: #374151; font-weight: 600; width: 50%;">Assigned to you:</td>
+                <td style="padding: 8px 0; color: #374151; font-weight: 600; width: 45%;">Assigned to you:</td>
                 <td style="padding: 8px 0; color: #374151;">${formatDateTime(assignedTimestamp)}</td>
               </tr>
-              ${maxHoursAllowed ? `
-              <tr>
-                <td style="padding: 8px 0; color: #374151; font-weight: 600;">Maximum time allowed:</td>
-                <td style="padding: 8px 0; color: #374151; font-weight: 700; font-size: 18px;">${maxHoursAllowed} business hours</td>
-              </tr>
-              ` : ''}
               ${dueTimestamp ? `
-              <tr style="background-color: #fed7aa; border-top: 2px solid #f59e0b;">
-                <td style="padding: 12px 8px; color: #92400e; font-weight: 700; font-size: 16px;">MUST BE COMPLETED BY:</td>
-                <td style="padding: 12px 8px; color: #dc2626; font-weight: 700; font-size: 18px;">${formatDateTime(dueTimestamp)}</td>
+              <tr style="background-color: #fed7aa;">
+                <td style="padding: 12px 0; color: #92400e; font-weight: 700; font-size: 16px; border-top: 2px solid #f59e0b;">Deadline:</td>
+                <td style="padding: 12px 0; color: #dc2626; font-weight: 700; font-size: 18px; border-top: 2px solid #f59e0b;">${formatDateTime(dueTimestamp)}</td>
+              </tr>
+              <tr style="background-color: #fed7aa;">
+                <td colspan="2" style="padding: 8px 0 12px 0; color: #92400e; font-size: 14px;">
+                  You have ${maxHoursAllowed} business hours to complete this work (weekends excluded)
+                </td>
               </tr>
               ` : ''}
             </table>
@@ -398,8 +391,9 @@ A project has been moved ${stageTransition} and requires your attention.
 ${assignedTimestamp ? `
 ⏱️ TIMELINE & DEADLINES:
 - Assigned to you: ${formatDateTime(assignedTimestamp)}
-${maxHoursAllowed ? `- Maximum time allowed: ${maxHoursAllowed} business hours` : ''}
-${dueTimestamp ? `- MUST BE COMPLETED BY: ${formatDateTime(dueTimestamp)}` : ''}
+${dueTimestamp ? `- DEADLINE: ${formatDateTime(dueTimestamp)}
+  You have ${maxHoursAllowed} business hours to complete this work (weekends excluded)
+` : ''}
 ` : ''}
 
 PROJECT DETAILS:
