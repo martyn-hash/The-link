@@ -390,8 +390,7 @@ export default function InternalTaskDetail() {
   const createConnectionMutation = useMutation({
     mutationFn: async ({ entityType, entityId }: { entityType: string; entityId: string }) => {
       return await apiRequest("POST", `/api/internal-tasks/${taskId}/connections`, {
-        entityType,
-        entityId,
+        connections: [{ entityType, entityId }],
       });
     },
     onSuccess: () => {
