@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, manages client relationships, and provides a seamless client portal for communication and document exchange. Key features include client, contact, service, project, and communication management, with a focus on automation, compliance, and a mobile-first user experience. It supports automated project generation, Companies House integration for UK company data, and a multi-tenant architecture with robust access controls.
+The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, manages client relationships, and provides a seamless client portal for communication and document exchange. Key capabilities include client, contact, service, project, and communication management, with a strong focus on automation, compliance, and a mobile-first user experience. The application supports automated project generation, integrates with Companies House for UK company data, and features a multi-tenant architecture with robust access controls.
 
 ## User Preferences
 
@@ -12,129 +12,66 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend
 
-The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state, and shadcn/ui with Tailwind CSS for design. It follows a mobile-first approach with responsive layouts and touch-optimized interactions.
+The frontend is built with React and TypeScript, leveraging Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for design. It adheres to a mobile-first philosophy, ensuring responsive layouts and touch-optimized interactions across all devices.
 
 ### Backend
 
-The backend is an Express.js server in TypeScript, providing a modular RESTful API. It includes middleware for authentication, authorization, and validation. Core logic handles service mapping, project creation, and scheduling, with UTC date normalization and audit trails. A nightly scheduler automates project creation.
+The backend is an Express.js server developed in TypeScript, providing a modular RESTful API. It incorporates middleware for authentication, authorization, and data validation. Core logic encompasses service mapping, project creation, and sophisticated scheduling with UTC date normalization and comprehensive audit trails. A nightly scheduler automates project generation.
 
 ### Data Storage
 
-PostgreSQL (Neon) is the primary database, accessed via Drizzle ORM. The schema uses UUIDs, soft deletes, JSONB fields, and indexing for entities like users, clients, projects, services, and tasks. Google Cloud Storage, managed through Replit App Storage, handles object storage with signed URLs for secure document access.
+PostgreSQL (Neon) serves as the primary database, managed through Drizzle ORM. The schema utilizes UUIDs, soft deletes, and JSONB fields, with indexing for critical entities such as users, clients, projects, services, and tasks. Google Cloud Storage, facilitated by Replit App Storage, handles object storage, employing signed URLs for secure document access.
 
 ### Authentication & Authorization
 
-Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. Client portal authentication uses passwordless email verification. Access controls ensure staff roles are respected and portal users are isolated to their clients.
+Staff authentication is managed via Replit Auth (OIDC) with session-based, role-based access control. The client portal uses passwordless email verification for authentication. Access controls are meticulously implemented to enforce staff roles and ensure client portal users are strictly isolated to their respective clients.
 
 ### Service Scheduling & Project Automation
 
-An automated nightly scheduler generates projects from active client and people services based on defined frequencies. It includes advanced date logic and integrates with the Companies House API for UK company data, managing syncs and API keys. Duplicate prevention and an admin dashboard for monitoring are included.
+An automated nightly scheduler generates projects from active client and people services based on predefined frequencies. This system includes advanced date logic and integrates with the Companies House API for UK company data, managing syncs and API keys. It also features duplicate prevention and an admin dashboard for monitoring.
 
 ### Client Service Role Assignment & Task Cascading
 
-The system manages role assignments for client services with automatic task synchronization. When role assignments change, active projects generated from that service are updated with corresponding role-based task assignments. Backend verification ensures security. The client service detail page displays related projects.
+The system efficiently manages role assignments for client services, with automatic task synchronization. Changes in role assignments trigger updates to active projects generated from that service, ensuring corresponding role-based task assignments are cascaded. Backend verification maintains system security.
 
 ### Push Notification Template Management
 
-A system for managing customizable push notification templates allows for seven types of notifications with multiple active templates per type. Notifications use dynamic variables for personalization and can include custom icons stored in Google Cloud Storage. An admin UI allows management and testing of templates.
+A robust system allows for the management of customizable push notification templates. It supports seven notification types, each capable of having multiple active templates. Notifications utilize dynamic variables for personalization and can include custom icons stored in Google Cloud Storage. An administrative UI enables template management and testing.
 
 ### Internal Tasks System
 
-The internal tasks system provides comprehensive staff task management. Features include a collapsible task creation form, document attachments integrated with Google Cloud Storage for secure file handling, and enhanced data loading for tasks including assignee and creator details. The task detail page has a responsive layout, and progress notes include user attribution. Client detail pages integrate relevant internal tasks.
+The internal tasks system provides comprehensive staff task management, featuring a collapsible creation form, document attachments integrated with Google Cloud Storage, and enhanced data loading for assignee and creator details. Task detail pages are responsive, and progress notes include user attribution.
 
 ### Standalone Staff-to-Staff Messaging
 
-The `/internal-chat` page supports independent staff-to-staff message threads. It uses dedicated database tables and API routes for thread creation, messaging, and archiving. The frontend unifies both project and staff message threads, with a "New Thread" dialog for creating staff-specific conversations. Push notifications are integrated for new staff messages.
+The `/internal-chat` page facilitates independent staff-to-staff message threads using dedicated database tables and API routes. The frontend unifies both project and staff message threads, with a "New Thread" dialog for creating staff-specific conversations. Push notifications are integrated for new staff messages.
 
-### Mobile UI Improvements - Client Detail Page
+### Mobile UI Improvements
 
-**Implementation Status: Complete** (November 2025)
-
-Comprehensive mobile optimizations for the client detail page across all tabs, converting desktop table layouts to mobile-friendly card layouts on viewports <768px.
-
-**✅ Implemented Features:**
-
--   **Responsive Hook**: `useIsMobile()` hook (`client/src/hooks/use-mobile.tsx`) with 768px breakpoint, initializes correctly on first render to prevent flash of desktop content
--   **Services Tab**: 
-    -   Active/Inactive client services tables → mobile cards with service name, frequency, status, dates
-    -   PortalStatusColumn buttons (Send Invite, Show QR Code) → full-width 44px touch targets
-    -   People Services accordion already mobile-friendly with grid-cols-1 layout
--   **Projects Tab**: ProjectsList component → mobile cards showing project name, status, dates, progress
--   **Documents Tab**: All three tables converted to mobile cards
-    -   Folder list → cards with folder name, creator, document count, full-width Delete button
-    -   Ungrouped documents → cards with file details and vertically stacked action buttons
-    -   Documents in folder → cards with file details and vertically stacked action buttons
--   **Tasks Tab**:
-    -   Internal Tasks table → cards showing title, type, priority, assignee, status, due date
-    -   Client Requests table → cards showing request name, category, assignee, status, progress
--   **Touch Target Compliance**: All action buttons in mobile cards use `className="w-full h-11"` (44px minimum height) for optimal touch usability
--   **No Horizontal Scroll**: All tabs fit within mobile viewport width (tested at 375x667) with no horizontal overflow
-
-**Design Pattern**: 
-- Conditional rendering: `isMobile ? <MobileCards /> : <DesktopTable />`
-- Consistent card structure using shadcn Card/CardContent components
-- Full-width buttons with icons and text labels for clarity
-- Vertical button stacking for multiple actions
-- Grid layouts (grid-cols-2) for data fields with clear labels
-
-**Files Modified:**
-- `client/src/pages/client-detail.tsx`: Services, Tasks tabs conversion
-- `client/src/components/DocumentFolderView.tsx`: All document tables conversion
-- `client/src/hooks/use-mobile.tsx`: Fixed initialization timing
+Extensive mobile optimizations have been implemented across the application, converting desktop table layouts to mobile-friendly card layouts on viewports smaller than 768px. This includes the client detail page, project detail page, companies page, projects page, and DocumentFolderView. Key improvements focus on touch target compliance (44px minimum height), prevention of horizontal scrolling, and responsive layouts using `flex-col md:flex-row` patterns.
 
 ### Email Threading & Deduplication System
 
-**Implementation Status: Phase 9 Complete (95%)** (Core backend + email sending + noise control + attachments + complete UI ready)
-
-The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. 
-
-**✅ Implemented Features (Phases 1-9):**
-
--   **Database Schema**: 10 tables including `email_messages`, `mailbox_message_map`, `email_threads`, `unmatched_emails`, `client_email_aliases`, `client_domain_allowlist`, `email_attachments`, `email_message_attachments`, `graph_webhook_subscriptions`, `graph_sync_state`
--   **Deduplication**: Global unique key using `internetMessageId` to prevent duplicate entries when multiple staff are CC'd on the same email
--   **Thread Grouping**: Three-layer approach - (1) `canonicalConversationId` grouping, (2) ancestry-based threading via `inReplyTo`/`References` headers, (3) computed `threadKey` hash for orphaned messages
--   **Client Association**: Multi-layered matching - (1) exact email match against `client_email_aliases` (high confidence), (2) domain match against `client_domain_allowlist` (medium confidence), (3) quarantine for unmatched emails (low confidence)
--   **Delta Sync**: Efficient incremental sync for Inbox and Sent Items folders per staff mailbox, with proper Graph API delta token handling
--   **Mailbox Mapping**: Tracks which staff mailboxes contain copies of each message for proper attribution
--   **Webhook Management**: Create, renew, and delete Graph webhook subscriptions with expiry tracking
--   **Quarantine System**: Message-level quarantine with duplicate prevention via `getUnmatchedEmailByMessageId` check
--   **Nightly Resolver**: Scheduled job (3:00 AM UTC) that retroactively matches quarantined emails when new aliases/domains added, includes ancestry-based promotion (entire thread promoted when any message matches) and auto-cleanup of resolved/old entries (>90 days + >5 retries)
--   **Optimized Queries**: `getThreadsWithoutClient()` for scalable client association at scale
--   **Email Sending**: POST /api/emails/:messageId/reply endpoint with HTML/plain text support, user access validation, reply/reply-all functionality via Graph API (creates draft, updates body, sends), automatic Sent Items ingestion
--   **Noise Control (Phase 8.1-8.2)**: Internal-only thread detection (isInternalOnly flag for @growth-accountants.com/@thelink.uk.com), email direction classification (inbound/outbound/internal/external), participant counting, marketing/list email detection (list-id headers, auto-reply indicators, large distribution >10 recipients)
--   **Attachment Deduplication (Phase 8.3)**: SHA-256 content hashing for dedup, automatic download from Graph API, Google Cloud Storage upload with hash-based paths (`attachments/{contentHash}/{filename}`), idempotent message-attachment linking via `checkEmailMessageAttachmentExists()`, unique constraint on `(internetMessageId, attachmentId)` for database-level enforcement, skips inline attachments and oversized files (>25MB), fetches attachments explicitly during incremental delta syncs when metadata missing
--   **Complete UI (Phase 9)**: 
-    - Client detail page email thread integration with communication type filters (All, Calls, SMS, Emails, Message Threads, Notes, Email Threads)
-    - `/messages` page Client Emails tab with My Emails/All Team Emails toggle, client filter dropdown, read/unread status filtering
-    - EmailThreadViewer modal component with message expansion/collapse, attachment display, participant chips
-    - Complete reply interface with Reply/Reply All buttons, ReactQuill rich text editor, attachment upload, proper two-step upload flow (files → metadata → apiRequest), state reset on dialog close, success/error feedback, cache invalidation
-    - XSS protection via DOMPurify for sanitized HTML rendering
-
-**📋 Planned Features (Phase 10):**
-
--   **Monitoring & Testing**: Webhook resilience, error handling, e2e tests, admin dashboard for quarantine review
-
-**Service Location:** `server/services/emailIngestionService.ts`
-
-**Key Design Decisions:**
-- `internetMessageId` chosen as global dedup key (not Graph `id` which is mailbox-specific)
-- Idempotent upsert preserves enrichment fields (`threadId`, `clientId`) across delta syncs
-- Normalized email addresses (lowercase) for consistent matching
-- Multi-layered threading handles broken/missing conversation IDs gracefully
-- Content-based attachment dedup using SHA-256 hash - same file content stored once, linked multiple times
-- Application-level dedup check (`checkEmailMessageAttachmentExists`) + database-level unique constraint for race condition safety
-- Delta sync doesn't expand attachments by default - must fetch explicitly when `hasAttachments=true` but metadata missing
+The email threading system integrates Microsoft Graph to ingest staff emails and automatically link them to client timelines. It features:
+-   **Deduplication**: Uses `internetMessageId` for global unique keying.
+-   **Thread Grouping**: Employs canonical IDs, ancestry (`inReplyTo`/`References`), and computed hash keys for robust threading.
+-   **Client Association**: Multi-layered matching via email aliases and domain allowlists, with a quarantine system for unmatched emails and a nightly resolver for retroactive matching.
+-   **Delta Sync**: Efficient incremental synchronization for mailboxes.
+-   **Email Sending**: Supports replying via Graph API with automatic Sent Items ingestion.
+-   **Noise Control**: Detects internal-only threads, classifies email direction, and identifies marketing/list emails.
+-   **Attachment Deduplication**: Uses SHA-256 content hashing for efficient storage in Google Cloud Storage, skipping inline and oversized attachments.
+-   **Complete UI**: Integrated email threads into the client detail page and a dedicated `/messages` page, featuring an EmailThreadViewer modal with rich text reply capabilities.
 
 ## External Dependencies
 
 ### Third-Party Services
 
--   **Companies House API**: UK company data.
--   **Microsoft Graph API**: Staff email integration.
--   **RingCentral**: VoIP phone system integration.
--   **SendGrid**: Transactional email delivery.
--   **VoodooSMS**: Planned client SMS communications.
--   **Replit Platform Services**: Object Storage (Google Cloud Storage backend), Auth (OIDC provider), deployment environment.
+-   **Companies House API**: For UK company data integration.
+-   **Microsoft Graph API**: For staff email integration and sending.
+-   **RingCentral**: For VoIP phone system integration.
+-   **SendGrid**: For transactional email delivery.
+-   **VoodooSMS**: Planned for client SMS communications.
+-   **Replit Platform Services**: Provides object storage (Google Cloud Storage backend), authentication (OIDC provider), and the deployment environment.
 
 ### Frontend Libraries
 
@@ -146,12 +83,3 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Build Pipeline**: Vite, esbuild, TypeScript, PostCSS.
 -   **Development Enhancements**: `@replit/vite-plugin-runtime-error-modal`, `@replit/vite-plugin-cartographer`, `tsx`.
 -   **Database Tools**: `drizzle-kit`, `drizzle-orm`.
-
-## Testing & Development
-
-### Browser Testing Authentication
-
-For browser-based e2e tests, use password authentication via the root page:
--   **Email**: `admin@example.com`
--   **Password**: `admin123`
--   **Method**: Navigate to root page, select "Password" tab, enter credentials and login
