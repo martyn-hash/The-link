@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth, isAuthenticated } from "./auth";
 import { verifyMessageAttachmentAccess, verifyThreadAccess } from "./middleware/attachmentAccess";
+import { storage } from "./storage";
 
 // Import route helpers (middleware and utilities)
 import {
@@ -54,6 +55,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
+    next();
+  });
+
+  // Activity tracking middleware - tracks page navigation for authenticated staff users
+  app.use(async (req: any, res, next) => {
+    try {
+      // Only track page navigation (GET requests that aren't API calls or static assets)
+      const isPageNavigation = req.method === 'GET' && 
+                                !req.path.startsWith('/api/') && 
+                                !req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|json|webp)$/);
+      
+      // Only track activity for authenticated staff users (use session.userId since req.user is populated later)
+      if (isPageNavigation && req.session?.userId) {
+        // Update session activity asynchronously (don't block the request)
+        storage.updateUserSessionActivity(req.session.userId).catch((err: Error) => {
+          console.error('Failed to update session activity:', err);
+        });
+      }
+    } catch (err) {
+      console.error('Error in activity tracking middleware:', err);
+    }
+    
     next();
   });
 
