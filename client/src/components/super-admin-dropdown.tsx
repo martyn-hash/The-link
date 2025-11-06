@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, ChevronDown, Bell } from "lucide-react";
+import { Users, ChevronDown, Bell, Activity } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface SuperAdminDropdownProps {
@@ -22,6 +22,11 @@ export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
   }
 
   const superAdminItems = [
+    {
+      label: "Activity Logs",
+      href: "/super-admin/activity-logs",
+      icon: Activity,
+    },
     {
       label: "Push Notifications",
       href: "/admin/push-templates",
