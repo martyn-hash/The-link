@@ -3516,6 +3516,11 @@ export class DatabaseStorage implements IStorage {
           },
           orderBy: desc(projectChronology.timestamp),
         },
+        stageApprovalResponses: {
+          with: {
+            field: true,
+          },
+        },
       },
     });
     
@@ -3533,8 +3538,10 @@ export class DatabaseStorage implements IStorage {
       chronology: result.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
+        changedBy: c.changedBy || undefined,
         fieldResponses: c.fieldResponses || [],
       })),
+      stageApprovalResponses: result.stageApprovalResponses || [],
     };
   }
 

@@ -106,11 +106,74 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     enabled: !!project.clientId,
   });
 
+  // Fetch stage approval fields for filtering stage approval responses
+  const { data: stageApprovalFields, isLoading: isLoadingApprovalFields } = useQuery<any[]>({
+    queryKey: ['/api/config/stage-approval-fields'],
+  });
+
+  const { data: changeReasons, isLoading: isLoadingReasons } = useQuery<any[]>({
+    queryKey: ['/api/config/reasons'],
+  });
+
+  const { data: stages, isLoading: isLoadingStages } = useQuery<any[]>({
+    queryKey: [`/api/config/project-types/${project.projectTypeId}/stages`],
+    enabled: !!project.projectTypeId,
+  });
+
   // Filter threads for this project
   const messageThreads = useMemo(() => {
     if (!allThreads) return [];
     return allThreads.filter((thread: any) => thread.projectId === project.id);
   }, [allThreads, project.id]);
+
+  // Get filtered stage approval responses for the selected stage change
+  const filteredStageApprovalResponses = useMemo(() => {
+    // Return null if data is still loading
+    if (isLoadingApprovalFields || isLoadingReasons || isLoadingStages) {
+      return null;
+    }
+
+    // Return empty array if no stage change is selected or required data is missing
+    if (!selectedStageChange || !project.stageApprovalResponses || !stageApprovalFields || !stages || !changeReasons) {
+      return [];
+    }
+
+    // Determine which stage approval was required for this stage change
+    let effectiveApprovalId: string | null = null;
+
+    // First check if the change reason has an associated approval
+    if (selectedStageChange.changeReason) {
+      const reason = changeReasons.find((r: any) => r.reason === selectedStageChange.changeReason);
+      if (reason?.stageApprovalId) {
+        effectiveApprovalId = reason.stageApprovalId;
+      }
+    }
+
+    // If no reason-level approval, check the stage itself
+    if (!effectiveApprovalId && selectedStageChange.toStatus) {
+      const stage = stages.find((s: any) => s.name === selectedStageChange.toStatus);
+      if (stage?.stageApprovalId) {
+        effectiveApprovalId = stage.stageApprovalId;
+      }
+    }
+
+    // If no approval was required, return empty array
+    if (!effectiveApprovalId) {
+      return [];
+    }
+
+    // Get the field IDs for this approval
+    const approvalFieldIds = new Set(
+      stageApprovalFields
+        .filter((f: any) => f.stageApprovalId === effectiveApprovalId)
+        .map((f: any) => f.id)
+    );
+
+    // Filter responses to only include those for this approval's fields
+    return project.stageApprovalResponses.filter((r: any) => 
+      approvalFieldIds.has(r.fieldId)
+    );
+  }, [selectedStageChange, project.stageApprovalResponses, stageApprovalFields, stages, changeReasons, isLoadingApprovalFields, isLoadingReasons, isLoadingStages]);
 
   // Build unified timeline
   const timeline = useMemo((): TimelineEntry[] => {
@@ -549,6 +612,95 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                   <span className="text-xs text-muted-foreground font-medium">Notes</span>
                   <div className="mt-2 p-3 bg-muted/30 rounded-lg">
                     <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-notes">{selectedStageChange.notes}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Change Reason Custom Field Responses */}
+              {selectedStageChange.fieldResponses && selectedStageChange.fieldResponses.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Change Reason Questions</h4>
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                    {selectedStageChange.fieldResponses.map((response: any, index: number) => (
+                      <div key={response.id || index} className="space-y-1" data-testid={`change-reason-response-${index}`}>
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {response.customField?.fieldName || 'Question'}
+                        </span>
+                        <div className="text-sm">
+                          {response.fieldType === 'boolean' && (
+                            <span>{response.valueBoolean ? 'Yes' : 'No'}</span>
+                          )}
+                          {response.fieldType === 'number' && (
+                            <span>{response.valueNumber}</span>
+                          )}
+                          {response.fieldType === 'short_text' && (
+                            <span>{response.valueShortText}</span>
+                          )}
+                          {response.fieldType === 'long_text' && (
+                            <p className="whitespace-pre-wrap">{response.valueLongText}</p>
+                          )}
+                          {response.fieldType === 'multi_select' && (
+                            <div className="flex flex-wrap gap-1">
+                              {(response.valueMultiSelect || []).map((option: string, optIdx: number) => (
+                                <Badge key={optIdx} variant="secondary" className="text-xs">
+                                  {option}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stage Approval Responses */}
+              {filteredStageApprovalResponses === null ? (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Stage Approval Questions</h4>
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Loading approval data...</p>
+                  </div>
+                </div>
+              ) : filteredStageApprovalResponses.length > 0 ? (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Stage Approval Questions</h4>
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                    {filteredStageApprovalResponses.map((response: any, index: number) => (
+                      <div key={response.id || index} className="space-y-1" data-testid={`stage-approval-response-${index}`}>
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {response.field?.fieldName || 'Question'}
+                        </span>
+                        <div className="text-sm">
+                          {response.field?.fieldType === 'boolean' && (
+                            <span>{response.valueBoolean ? 'Yes' : 'No'}</span>
+                          )}
+                          {response.field?.fieldType === 'number' && (
+                            <span>{response.valueNumber}</span>
+                          )}
+                          {response.field?.fieldType === 'long_text' && (
+                            <p className="whitespace-pre-wrap">{response.valueLongText}</p>
+                          )}
+                          {response.field?.fieldType === 'multi_select' && (
+                            <div className="flex flex-wrap gap-1">
+                              {(response.valueMultiSelect || []).map((option: string, optIdx: number) => (
+                                <Badge key={optIdx} variant="secondary" className="text-xs">
+                                  {option}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Stage Approval Questions</h4>
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <p className="text-sm text-muted-foreground" data-testid="text-no-approval-required">No stage approval required for this change</p>
                   </div>
                 </div>
               )}

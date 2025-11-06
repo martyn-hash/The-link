@@ -814,6 +814,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     relationName: "assignee",
   }),
   chronology: many(projectChronology),
+  stageApprovalResponses: many(stageApprovalResponses),
 }));
 
 export const projectChronologyRelations = relations(projectChronology, ({ one, many }) => ({
@@ -3235,6 +3236,9 @@ export type ProjectWithRelations = Project & {
     assignee?: User;
     changedBy?: User;
     fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
+  })[];
+  stageApprovalResponses?: (StageApprovalResponse & { 
+    field: StageApprovalField;
   })[];
   progressMetrics?: {
     reasonId: string;
