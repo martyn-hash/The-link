@@ -49,6 +49,9 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
   
+  // Debug logging
+  console.log('[ProjectChronology] isMobile:', isMobile, 'window.innerWidth:', typeof window !== 'undefined' ? window.innerWidth : 'undefined');
+  
   // Filter state - track which categories are selected
   const [filters, setFilters] = useState({
     stageChanges: true,
