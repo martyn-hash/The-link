@@ -620,9 +620,13 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               {selectedStageChange.fieldResponses && selectedStageChange.fieldResponses.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-foreground">Change Reason Questions</h4>
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 p-4 bg-muted/30 rounded-lg">
                     {selectedStageChange.fieldResponses.map((response: any, index: number) => (
-                      <div key={response.id || index} className="space-y-1" data-testid={`change-reason-response-${index}`}>
+                      <div 
+                        key={response.id || index} 
+                        className={`space-y-1 ${index % 2 === 0 ? 'md:pr-6 md:border-r md:border-border' : 'md:pl-6'}`}
+                        data-testid={`change-reason-response-${index}`}
+                      >
                         <span className="text-xs text-muted-foreground font-medium">
                           {response.customField?.fieldName || 'Question'}
                         </span>
@@ -666,9 +670,13 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               ) : filteredStageApprovalResponses.length > 0 ? (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-foreground">Stage Approval Questions</h4>
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 p-4 bg-muted/30 rounded-lg">
                     {filteredStageApprovalResponses.map((response: any, index: number) => (
-                      <div key={response.id || index} className="space-y-1" data-testid={`stage-approval-response-${index}`}>
+                      <div 
+                        key={response.id || index} 
+                        className={`space-y-1 ${index % 2 === 0 ? 'md:pr-6 md:border-r md:border-border' : 'md:pl-6'}`}
+                        data-testid={`stage-approval-response-${index}`}
+                      >
                         <span className="text-xs text-muted-foreground font-medium">
                           {response.field?.fieldName || 'Question'}
                         </span>
