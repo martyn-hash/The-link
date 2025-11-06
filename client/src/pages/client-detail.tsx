@@ -7694,28 +7694,118 @@ export default function ClientDetail() {
                             {activeClientServices.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm text-muted-foreground mb-3">Active Services</h4>
-                                <div className="border rounded-lg">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Service</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Next Start</TableHead>
-                                        <TableHead>Next Due</TableHead>
-                                        <TableHead>Service Owner</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {activeClientServices.map((clientService: EnhancedClientService) => (
-                                        <ClientServiceRow 
-                                          key={clientService.id}
-                                          clientService={clientService}
-                                        />
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
+                                
+                                {isMobile ? (
+                                  /* Mobile Card View */
+                                  <div className="space-y-3">
+                                    {activeClientServices.map((clientService: EnhancedClientService) => (
+                                      <Card key={clientService.id} data-testid={`service-card-${clientService.id}`}>
+                                        <CardContent className="p-4">
+                                          <div className="space-y-3">
+                                            {/* Service Name & Badges */}
+                                            <div>
+                                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className="font-medium" data-testid={`text-service-name-${clientService.id}`}>
+                                                  {clientService.service?.name || 'Service'}
+                                                </span>
+                                                {clientService.service?.isStaticService && (
+                                                  <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`badge-static-${clientService.id}`}>
+                                                    Static
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isPersonalService && (
+                                                  <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`badge-personal-${clientService.id}`}>
+                                                    Personal
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isCompaniesHouseConnected && (
+                                                  <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`badge-ch-${clientService.id}`}>
+                                                    CH
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {clientService.service?.description && (
+                                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                                  {clientService.service.description}
+                                                </p>
+                                              )}
+                                            </div>
+
+                                            {/* Service Details Grid */}
+                                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Frequency</span>
+                                                <p className="font-medium" data-testid={`text-frequency-${clientService.id}`}>
+                                                  {clientService.frequency || '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Service Owner</span>
+                                                <p className="font-medium" data-testid={`text-service-owner-${clientService.id}`}>
+                                                  {clientService.serviceOwner 
+                                                    ? `${clientService.serviceOwner.firstName} ${clientService.serviceOwner.lastName}`
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Start</span>
+                                                <p className="font-medium" data-testid={`text-next-start-${clientService.id}`}>
+                                                  {clientService.nextStartDate 
+                                                    ? formatDate(clientService.nextStartDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Due</span>
+                                                <p className="font-medium" data-testid={`text-next-due-${clientService.id}`}>
+                                                  {clientService.nextDueDate 
+                                                    ? formatDate(clientService.nextDueDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {/* View Button */}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="w-full mt-2"
+                                              onClick={() => setLocation(`/client-service/${clientService.id}`)}
+                                              data-testid={`button-view-service-${clientService.id}`}
+                                            >
+                                              <Eye className="h-4 w-4 mr-2" />
+                                              View Details
+                                            </Button>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  /* Desktop Table View */
+                                  <div className="border rounded-lg">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Service</TableHead>
+                                          <TableHead>Frequency</TableHead>
+                                          <TableHead>Next Start</TableHead>
+                                          <TableHead>Next Due</TableHead>
+                                          <TableHead>Service Owner</TableHead>
+                                          <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {activeClientServices.map((clientService: EnhancedClientService) => (
+                                          <ClientServiceRow 
+                                            key={clientService.id}
+                                            clientService={clientService}
+                                          />
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                )}
                               </div>
                             )}
                             
@@ -7723,28 +7813,118 @@ export default function ClientDetail() {
                             {inactiveClientServices.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm text-muted-foreground mb-3">Inactive Services</h4>
-                                <div className="border rounded-lg opacity-60">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Service</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Next Start</TableHead>
-                                        <TableHead>Next Due</TableHead>
-                                        <TableHead>Service Owner</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {inactiveClientServices.map((clientService: EnhancedClientService) => (
-                                        <ClientServiceRow 
-                                          key={clientService.id}
-                                          clientService={clientService}
-                                        />
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
+                                
+                                {isMobile ? (
+                                  /* Mobile Card View */
+                                  <div className="space-y-3 opacity-60">
+                                    {inactiveClientServices.map((clientService: EnhancedClientService) => (
+                                      <Card key={clientService.id} data-testid={`service-card-${clientService.id}`}>
+                                        <CardContent className="p-4">
+                                          <div className="space-y-3">
+                                            {/* Service Name & Badges */}
+                                            <div>
+                                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className="font-medium" data-testid={`text-service-name-${clientService.id}`}>
+                                                  {clientService.service?.name || 'Service'}
+                                                </span>
+                                                {clientService.service?.isStaticService && (
+                                                  <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`badge-static-${clientService.id}`}>
+                                                    Static
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isPersonalService && (
+                                                  <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`badge-personal-${clientService.id}`}>
+                                                    Personal
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isCompaniesHouseConnected && (
+                                                  <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`badge-ch-${clientService.id}`}>
+                                                    CH
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {clientService.service?.description && (
+                                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                                  {clientService.service.description}
+                                                </p>
+                                              )}
+                                            </div>
+
+                                            {/* Service Details Grid */}
+                                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Frequency</span>
+                                                <p className="font-medium" data-testid={`text-frequency-${clientService.id}`}>
+                                                  {clientService.frequency || '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Service Owner</span>
+                                                <p className="font-medium" data-testid={`text-service-owner-${clientService.id}`}>
+                                                  {clientService.serviceOwner 
+                                                    ? `${clientService.serviceOwner.firstName} ${clientService.serviceOwner.lastName}`
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Start</span>
+                                                <p className="font-medium" data-testid={`text-next-start-${clientService.id}`}>
+                                                  {clientService.nextStartDate 
+                                                    ? formatDate(clientService.nextStartDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Due</span>
+                                                <p className="font-medium" data-testid={`text-next-due-${clientService.id}`}>
+                                                  {clientService.nextDueDate 
+                                                    ? formatDate(clientService.nextDueDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {/* View Button */}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="w-full mt-2"
+                                              onClick={() => setLocation(`/client-service/${clientService.id}`)}
+                                              data-testid={`button-view-service-${clientService.id}`}
+                                            >
+                                              <Eye className="h-4 w-4 mr-2" />
+                                              View Details
+                                            </Button>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  /* Desktop Table View */
+                                  <div className="border rounded-lg opacity-60">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Service</TableHead>
+                                          <TableHead>Frequency</TableHead>
+                                          <TableHead>Next Start</TableHead>
+                                          <TableHead>Next Due</TableHead>
+                                          <TableHead>Service Owner</TableHead>
+                                          <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {inactiveClientServices.map((clientService: EnhancedClientService) => (
+                                          <ClientServiceRow 
+                                            key={clientService.id}
+                                            clientService={clientService}
+                                          />
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
