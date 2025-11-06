@@ -264,22 +264,20 @@ function PortalStatusColumn({
       <div className="flex flex-col gap-2">
         <Button
           variant="outline"
-          size="sm"
           onClick={() => sendInviteMutation.mutate()}
           disabled={sendInviteMutation.isPending}
           data-testid={`button-send-portal-invite-${personId}`}
-          className="w-full text-xs"
+          className="w-full h-11 text-xs"
         >
           {sendInviteMutation.isPending ? "Sending..." : "Send Invite"}
         </Button>
         
         <Button
           variant="outline"
-          size="sm"
           onClick={() => generateQRMutation.mutate()}
           disabled={generateQRMutation.isPending}
           data-testid={`button-generate-qr-${personId}`}
-          className="w-full text-xs"
+          className="w-full h-11 text-xs"
         >
           {generateQRMutation.isPending ? "Generating..." : "Show QR Code"}
         </Button>
@@ -6210,8 +6208,38 @@ function CompletedProjectRow({ project, clientId }: { project: ProjectWithRelati
 
 // Component to display a list of projects with table layout
 function ProjectsList({ projects, isLoading, clientId, isCompleted = false }: { projects?: ProjectWithRelations[]; isLoading: boolean; clientId?: string; isCompleted?: boolean }) {
+  const isMobile = useIsMobile();
+  const [, setLocation] = useLocation();
+
+  const getStatusColor = (status: string) => {
+    const colors = {
+      no_latest_action: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+      bookkeeping_work_required: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      in_review: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      needs_client_input: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    };
+    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  };
+
+  const formatStatus = (status: string) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
   if (isLoading) {
-    return (
+    return isMobile ? (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <Skeleton className="h-4 w-20 mb-3" />
+              <Skeleton className="h-4 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    ) : (
       <div className="border rounded-lg">
         <Table>
           <TableHeader>
@@ -6253,6 +6281,93 @@ function ProjectsList({ projects, isLoading, clientId, isCompleted = false }: { 
     );
   }
 
+  if (isMobile) {
+    /* Mobile Card View */
+    return (
+      <div className="space-y-3">
+        {projects.map((project) => {
+          const assigneeName = project.currentAssignee 
+            ? `${project.currentAssignee.firstName} ${project.currentAssignee.lastName}`
+            : '-';
+
+          const completionStatusDisplay = project.completionStatus 
+            ? (project.completionStatus === 'completed_successfully' ? 'Successful' : 'Unsuccessful')
+            : '-';
+
+          const completionStatusColor = project.completionStatus === 'completed_successfully'
+            ? 'text-green-600 dark:text-green-400'
+            : project.completionStatus === 'completed_unsuccessfully'
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-muted-foreground';
+
+          const navigateToProject = () => {
+            const url = clientId ? `/projects/${project.id}?from=client&clientId=${clientId}` : `/projects/${project.id}`;
+            setLocation(url);
+          };
+
+          return (
+            <Card key={project.id} data-testid={`card-project-${project.id}`}>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Project Name */}
+                  <div>
+                    <h4 className="font-medium text-base" data-testid={`text-name-${project.id}`}>
+                      {project.description}
+                    </h4>
+                  </div>
+
+                  {/* Status Badge & Completion */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge 
+                      className={`text-xs ${getStatusColor(project.currentStatus)}`} 
+                      data-testid={`badge-status-${project.id}`}
+                    >
+                      {formatStatus(project.currentStatus)}
+                    </Badge>
+                    {isCompleted && (
+                      <span className={`text-sm font-medium ${completionStatusColor}`} data-testid={`text-completion-${project.id}`}>
+                        {completionStatusDisplay}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Project Details Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                    <div>
+                      <span className="text-muted-foreground text-xs">Assignee</span>
+                      <p className="font-medium" data-testid={`text-assignee-${project.id}`}>
+                        {assigneeName}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-xs">Due Date</span>
+                      <p className="font-medium" data-testid={`text-duedate-${project.id}`}>
+                        {project.dueDate ? formatDate(project.dueDate) : '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* View Button */}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={navigateToProject}
+                    data-testid={`button-view-${project.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Project
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /* Desktop Table View */
   return (
     <div className="border rounded-lg">
       <Table>
@@ -8474,7 +8589,85 @@ export default function ClientDetail() {
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">No internal tasks for this client yet.</p>
                   </div>
+                ) : isMobile ? (
+                  /* Mobile Card View */
+                  <div className="space-y-3">
+                    {clientInternalTasks.map((task: any) => (
+                      <Card key={task.id} data-testid={`card-internal-task-${task.id}`}>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {/* Task Title & Type */}
+                            <div>
+                              <RouterLink href={`/internal-tasks?task=${task.id}`}>
+                                <a className="font-medium text-base hover:underline" data-testid={`link-task-${task.id}`}>
+                                  {task.title}
+                                </a>
+                              </RouterLink>
+                              {task.taskType?.name && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {task.taskType.name}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Priority & Status Badges */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge 
+                                variant={
+                                  task.priority === 'urgent' ? 'destructive' :
+                                  task.priority === 'high' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-priority-${task.id}`}
+                              >
+                                {task.priority}
+                              </Badge>
+                              <Badge 
+                                variant={
+                                  task.status === 'closed' ? 'outline' :
+                                  task.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${task.id}`}
+                              >
+                                {task.status === 'in_progress' ? 'In Progress' : task.status}
+                              </Badge>
+                            </div>
+
+                            {/* Task Details Grid */}
+                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                              <div>
+                                <span className="text-muted-foreground text-xs">Assigned To</span>
+                                <p className="font-medium">
+                                  {task.assignee?.firstName} {task.assignee?.lastName}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground text-xs">Due Date</span>
+                                <p className="font-medium">
+                                  {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* View Button */}
+                            <RouterLink href={`/internal-tasks/${task.id}?from=client&clientId=${id}`}>
+                              <Button
+                                variant="outline"
+                                className="w-full h-11 mt-2"
+                                data-testid={`button-view-task-${task.id}`}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </Button>
+                            </RouterLink>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
+                  /* Desktop Table View */
                   <div className="border rounded-lg">
                     <Table>
                       <TableHeader>
@@ -8578,7 +8771,96 @@ export default function ClientDetail() {
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">No client requests yet. Click "New Client Request" to create one.</p>
                   </div>
+                ) : isMobile ? (
+                  /* Mobile Card View */
+                  <div className="space-y-3">
+                    {taskInstances.map((instance: any) => (
+                      <Card key={instance.id} data-testid={`card-request-${instance.id}`}>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {/* Request Name & Category */}
+                            <div>
+                              <h4 className="font-medium text-base" data-testid={`text-name-${instance.id}`}>
+                                {instance.template?.name || instance.customRequest?.name || 'Untitled Request'}
+                              </h4>
+                              {instance.categoryName && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {instance.categoryName}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Status Badge */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge 
+                                variant={
+                                  instance.status === 'submitted' ? 'outline' : 
+                                  instance.status === 'approved' ? 'default' : 
+                                  instance.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${instance.id}`}
+                              >
+                                {instance.status === 'not_started' ? 'Not Started' :
+                                 instance.status === 'in_progress' ? 'In Progress' :
+                                 instance.status === 'submitted' ? 'Submitted' :
+                                 instance.status === 'approved' ? 'Approved' :
+                                 instance.status}
+                              </Badge>
+                            </div>
+
+                            {/* Progress Bar (if in progress) */}
+                            {instance.status === 'in_progress' && instance.progress && (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>Progress</span>
+                                  <span>
+                                    {instance.progress.completed}/{instance.progress.total} ({instance.progress.percentage}%)
+                                  </span>
+                                </div>
+                                <Progress value={instance.progress.percentage} className="h-2" />
+                              </div>
+                            )}
+
+                            {/* Request Details Grid */}
+                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                              <div>
+                                <span className="text-muted-foreground text-xs">Assigned To</span>
+                                <p className="font-medium" data-testid={`text-assignee-${instance.id}`}>
+                                  {instance.relatedPerson ? formatPersonName(instance.relatedPerson.fullName) : '-'}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground text-xs">Created</span>
+                                <p className="font-medium" data-testid={`text-created-${instance.id}`}>
+                                  {formatDate(instance.createdAt)}
+                                </p>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground text-xs">Due Date</span>
+                                <p className="font-medium">
+                                  {instance.dueDate ? formatDate(instance.dueDate) : '-'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* View Button */}
+                            <Button
+                              variant="default"
+                              className="w-full h-11 mt-2"
+                              onClick={() => setLocation(`/task-instances/${instance.id}`)}
+                              data-testid={`button-view-${instance.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Request
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
+                  /* Desktop Table View */
                   <div className="border rounded-lg">
                     <Table>
                       <TableHeader>
