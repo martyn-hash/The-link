@@ -7454,7 +7454,6 @@ export default function ClientDetail() {
             currentTab={activeTab}
             onTabChange={setActiveTab}
             enabled={isMobile}
-            className="hidden md:block"
           >
           <TabsContent value="overview" className="space-y-6 mt-6">
             {/* Company Details */}
