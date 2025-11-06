@@ -250,7 +250,10 @@ export async function sendStageChangeNotificationEmail(
   projectId?: string,
   stageConfig?: { maxInstanceTime?: number | null },
   chronology?: Array<{ toStatus: string; timestamp: string }>,
-  projectCreatedAt?: string
+  projectCreatedAt?: string,
+  changeReason?: string,
+  notes?: string,
+  fieldResponses?: Array<{ fieldName: string; fieldType: string; value: string | number | string[] }>
 ): Promise<boolean> {
   const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
@@ -305,6 +308,14 @@ export async function sendStageChangeNotificationEmail(
     });
   };
   
+  // Helper function to format field response values
+  const formatFieldValue = (fieldType: string, value: string | number | string[]): string => {
+    if (fieldType === 'multi_select' && Array.isArray(value)) {
+      return value.join(', ');
+    }
+    return String(value);
+  };
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -320,7 +331,13 @@ export async function sendStageChangeNotificationEmail(
         <div style="padding: 40px 30px;">
           <h2 style="color: #1e293b; margin-top: 0;">🔄 Project Stage Changed</h2>
           <p style="color: #475569; font-size: 16px;">Hello ${recipientName},</p>
-          <p style="color: #475569; font-size: 16px;">A project has been moved ${stageTransition} and requires your attention.</p>
+          
+          <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
+            <h3 style="margin-top: 0; color: #0A7BBF; font-size: 18px;">📋 Project Details</h3>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Client:</strong> ${clientName}</p>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Description:</strong> ${projectDescription}</p>
+            <p style="margin-bottom: 0; color: #374151;"><strong>Current Stage:</strong> <span style="background-color: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 6px; font-weight: 600;">${formattedStageName}</span></p>
+          </div>
           
           ${assignedTimestamp ? `
           <div style="background-color: #fef3c7; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #fbbf24;">
@@ -345,19 +362,24 @@ export async function sendStageChangeNotificationEmail(
           </div>
           ` : ''}
           
-          <div style="background-color: #f0f9ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
-            <h3 style="margin-top: 0; color: #0A7BBF; font-size: 18px;">📋 Project Details</h3>
-            <p style="margin-bottom: 12px; color: #374151;"><strong>Client:</strong> ${clientName}</p>
-            <p style="margin-bottom: 12px; color: #374151;"><strong>Description:</strong> ${projectDescription}</p>
-            <p style="margin-bottom: 0; color: #374151;"><strong>Current Stage:</strong> <span style="background-color: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 6px; font-weight: 600;">${formattedStageName}</span></p>
+          ${changeReason || notes || (fieldResponses && fieldResponses.length > 0) || fromStage ? `
+          <div style="background-color: #f8fafc; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e2e8f0;">
+            <h3 style="margin-top: 0; color: #475569; font-size: 18px;">📝 Details</h3>
+            ${fromStage ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Stage Change:</strong> ${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} → ${formattedStageName}</p>` : ''}
+            ${changeReason ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Change Reason:</strong> ${changeReason}</p>` : ''}
+            ${notes ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Notes:</strong> ${notes}</p>` : ''}
+            ${fieldResponses && fieldResponses.length > 0 ? `
+              <div style="margin-top: 15px;">
+                <p style="margin-bottom: 8px; color: #374151; font-weight: 600;">Additional Information:</p>
+                ${fieldResponses.map(fr => `
+                  <p style="margin-bottom: 8px; margin-left: 15px; color: #374151;">
+                    <strong>${fr.fieldName}:</strong> ${formatFieldValue(fr.fieldType, fr.value)}
+                  </p>
+                `).join('')}
+              </div>
+            ` : ''}
           </div>
-          
-          <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #76CA23;">
-            <h3 style="margin-top: 0; color: #166534; font-size: 16px;">✅ What's Next?</h3>
-            <p style="margin-bottom: 0; color: #374151; line-height: 1.6;">
-              This project has been assigned to your stage and is ready for your review and action. Please review the project details, complete any required tasks, and update the status as appropriate.
-            </p>
-          </div>
+          ` : ''}
           
           <div style="text-align: center; margin: 30px 0;">
             <a href="${baseUrl}/projects${projectId ? `/${projectId}` : ''}" 
@@ -386,7 +408,10 @@ export async function sendStageChangeNotificationEmail(
   const text = `
 Hello ${recipientName},
 
-A project has been moved ${stageTransition} and requires your attention.
+PROJECT DETAILS:
+Client: ${clientName}
+Description: ${projectDescription}
+Current Stage: ${formattedStageName}
 
 ${assignedTimestamp ? `
 ⏱️ TIMELINE & DEADLINES:
@@ -396,13 +421,16 @@ ${dueTimestamp ? `- DEADLINE: ${formatDateTime(dueTimestamp)}
 ` : ''}
 ` : ''}
 
-PROJECT DETAILS:
-Client: ${clientName}
-Description: ${projectDescription}
-Current Stage: ${formattedStageName}
-
-WHAT'S NEXT:
-This project has been assigned to your stage and is ready for your review and action. Please review the project details, complete any required tasks, and update the status as appropriate.
+${changeReason || notes || (fieldResponses && fieldResponses.length > 0) || fromStage ? `
+DETAILS:
+${fromStage ? `Stage Change: ${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} → ${formattedStageName}` : ''}
+${changeReason ? `Change Reason: ${changeReason}` : ''}
+${notes ? `Notes: ${notes}` : ''}
+${fieldResponses && fieldResponses.length > 0 ? `
+Additional Information:
+${fieldResponses.map(fr => `  - ${fr.fieldName}: ${formatFieldValue(fr.fieldType, fr.value)}`).join('\n')}
+` : ''}
+` : ''}
 
 Please log into The Link system to review the project and take the necessary action.
 

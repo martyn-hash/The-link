@@ -390,4 +390,57 @@ export function registerEmailRoutes(
       });
     }
   });
+
+  // Admin: Send test stage change notification email
+  app.post('/api/admin/emails/test-stage-change', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!req.user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { sendStageChangeNotificationEmail } = await import('../emailService');
+      
+      // Send a comprehensive test email with all possible fields
+      const emailSent = await sendStageChangeNotificationEmail(
+        'jamsplan1@gmail.com',
+        'Bob Bookkeeper',
+        'Weekly Payroll - CAVANAGH BUILDERS LTD',
+        'CAVANAGH BUILDERS LTD',
+        'Complete',
+        'Do_The_Work',
+        'test-project-123',
+        { maxInstanceTime: 1 }, // 1 business hour
+        [
+          { toStatus: 'Complete', timestamp: new Date().toISOString() },
+          { toStatus: 'Do_The_Work', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() }
+        ],
+        new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+        'Work completed successfully',
+        'All payroll calculations verified and submitted to HMRC',
+        [
+          { fieldName: 'Number of Employees Processed', fieldType: 'number', value: 15 },
+          { fieldName: 'Payment Method', fieldType: 'long_text', value: 'BACS Transfer' },
+          { fieldName: 'Issues Encountered', fieldType: 'multi_select', value: ['Late Timesheets', 'System Downtime'] }
+        ]
+      );
+
+      if (emailSent) {
+        res.json({
+          success: true,
+          message: 'Test email sent successfully to jamsplan1@gmail.com'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to send test email'
+        });
+      }
+    } catch (error) {
+      console.error('Error sending test email:', error);
+      res.status(500).json({
+        message: "Failed to send test email",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 }

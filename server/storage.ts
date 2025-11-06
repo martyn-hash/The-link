@@ -5560,6 +5560,13 @@ export class DatabaseStorage implements IStorage {
           client: true,
           chronology: {
             orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+            with: {
+              fieldResponses: {
+                with: {
+                  customField: true,
+                },
+              },
+            },
           },
         },
       });
@@ -5568,6 +5575,24 @@ export class DatabaseStorage implements IStorage {
         console.warn(`Project with client data not found for ${projectId}`);
         return;
       }
+      
+      // Get the most recent chronology entry (the current stage change)
+      const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
+        ? projectWithClient.chronology[0] 
+        : null;
+      
+      // Extract change reason, notes, and field responses from the most recent entry
+      const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
+      const notes = mostRecentChronologyEntry?.notes || undefined;
+      const fieldResponses = mostRecentChronologyEntry?.fieldResponses?.map((fr: any) => ({
+        fieldName: fr.customField.fieldName,
+        fieldType: fr.fieldType,
+        value: fr.fieldType === 'number' 
+          ? fr.valueNumber!
+          : fr.fieldType === 'multi_select' 
+            ? (fr.valueMultiSelect || [])
+            : (fr.valueLongText || '')
+      })) || undefined;
 
       // PERFORMANCE FIX: Batch-load notification preferences for all users at once
       const userIds = usersToNotify.map(user => user.id);
@@ -5632,7 +5657,10 @@ export class DatabaseStorage implements IStorage {
             projectId,  // URL FIX: Pass projectId for deep linking
             stageConfigForEmail,  // Pass stage configuration with timing info
             chronologyForEmail,  // Pass chronology for assignment timestamp calculation
-            projectWithClient.createdAt instanceof Date ? projectWithClient.createdAt.toISOString() : projectWithClient.createdAt  // Pass project creation timestamp
+            projectWithClient.createdAt instanceof Date ? projectWithClient.createdAt.toISOString() : projectWithClient.createdAt,  // Pass project creation timestamp
+            changeReason,  // Pass change reason from most recent chronology entry
+            notes,  // Pass notes from most recent chronology entry
+            fieldResponses  // Pass field responses from most recent chronology entry
           );
 
           if (emailSent) {
