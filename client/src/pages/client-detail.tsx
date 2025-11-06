@@ -43,6 +43,7 @@ import { CreateFolderDialog } from "@/components/CreateFolderDialog";
 import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { EmailThreadViewer } from "@/components/EmailThreadViewer";
+import { CommunicationCard } from "@/components/communication-card";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -359,6 +360,7 @@ function ProjectLink({ projectId }: { projectId: string }) {
 
 // Communications Timeline Component
 function CommunicationsTimeline({ clientId, user }: { clientId: string; user: any }) {
+  const isMobile = useIsMobile();
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -376,6 +378,9 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [commTypeFilter, setCommTypeFilter] = useState<'all' | 'phone_call' | 'sms' | 'email' | 'message_thread' | 'note' | 'email_thread'>('all');
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  
+  // Projects cache for card view
+  const [projectCache, setProjectCache] = useState<Record<string, any>>({});
 
   // Fetch communications for this client
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
@@ -716,66 +721,104 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   return (
     <Card>
       <CardHeader className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
-            Communications Timeline
+            <span className="hidden md:inline">Communications Timeline</span>
+            <span className="md:hidden">Comms</span>
           </CardTitle>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setIsCallingPerson(true)}
-              size="sm"
-              variant="outline"
-              data-testid="button-make-call"
-            >
-              <PhoneCall className="h-4 w-4 mr-2" />
-              Make Call
-            </Button>
-            <Button
-              onClick={() => setIsSendingSMS(true)}
-              size="sm"
-              variant="outline"
-              data-testid="button-send-sms"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send SMS
-            </Button>
-            <Button
-              onClick={() => setIsSendingEmail(true)}
-              size="sm"
-              variant="outline"
-              data-testid="button-send-email"
-            >
-              <Mail className="h-4 w-4 mr-2" />
-              Send Email
-            </Button>
-            <Button
-              onClick={() => setIsCreatingMessage(true)}
-              size="sm"
-              variant="default"
-              data-testid="button-instant-message"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Instant Message
-            </Button>
-            <Button
-              onClick={() => setIsAddingCommunication(true)}
-              size="sm"
-              data-testid="button-add-communication"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Communication
-            </Button>
-          </div>
+          
+          {/* Mobile: Single Dropdown Menu */}
+          {isMobile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" data-testid="button-mobile-actions-menu">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setIsCallingPerson(true)} data-testid="menu-make-call">
+                  <PhoneCall className="h-4 w-4 mr-2" />
+                  Make Call
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSendingSMS(true)} data-testid="menu-send-sms">
+                  <Send className="h-4 w-4 mr-2" />
+                  Send SMS
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSendingEmail(true)} data-testid="menu-send-email">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Email
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsCreatingMessage(true)} data-testid="menu-instant-message">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Instant Message
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsAddingCommunication(true)} data-testid="menu-add-communication">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Add Note
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            /* Desktop: All Buttons */
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setIsCallingPerson(true)}
+                size="sm"
+                variant="outline"
+                data-testid="button-make-call"
+              >
+                <PhoneCall className="h-4 w-4 mr-2" />
+                Make Call
+              </Button>
+              <Button
+                onClick={() => setIsSendingSMS(true)}
+                size="sm"
+                variant="outline"
+                data-testid="button-send-sms"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send SMS
+              </Button>
+              <Button
+                onClick={() => setIsSendingEmail(true)}
+                size="sm"
+                variant="outline"
+                data-testid="button-send-email"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Send Email
+              </Button>
+              <Button
+                onClick={() => setIsCreatingMessage(true)}
+                size="sm"
+                variant="default"
+                data-testid="button-instant-message"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Instant Message
+              </Button>
+              <Button
+                onClick={() => setIsAddingCommunication(true)}
+                size="sm"
+                data-testid="button-add-communication"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Communication
+              </Button>
+            </div>
+          )}
         </div>
         
         {/* Communication Type Filters */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <Button
             variant={commTypeFilter === 'all' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setCommTypeFilter('all')}
             data-testid="button-filter-all"
+            className="flex-shrink-0"
           >
             All ({allItems.length})
           </Button>
@@ -784,6 +827,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             size="sm"
             onClick={() => setCommTypeFilter('phone_call')}
             data-testid="button-filter-phone-call"
+            className="flex-shrink-0"
           >
             <PhoneCall className="h-3 w-3 mr-1" />
             Calls ({allItems.filter(i => i.type === 'phone_call').length})
@@ -793,6 +837,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             size="sm"
             onClick={() => setCommTypeFilter('sms')}
             data-testid="button-filter-sms"
+            className="flex-shrink-0"
           >
             <Send className="h-3 w-3 mr-1" />
             SMS ({allItems.filter(i => i.type === 'sms_sent' || i.type === 'sms_received').length})
@@ -802,6 +847,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             size="sm"
             onClick={() => setCommTypeFilter('email')}
             data-testid="button-filter-email"
+            className="flex-shrink-0"
           >
             <Mail className="h-3 w-3 mr-1" />
             Emails ({allItems.filter(i => i.type === 'email_sent' || i.type === 'email_received').length})
@@ -811,6 +857,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             size="sm"
             onClick={() => setCommTypeFilter('message_thread')}
             data-testid="button-filter-message-thread"
+            className="flex-shrink-0"
           >
             <MessageSquare className="h-3 w-3 mr-1" />
             Messages ({allItems.filter(i => i.type === 'message_thread').length})
@@ -820,6 +867,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             size="sm"
             onClick={() => setCommTypeFilter('note')}
             data-testid="button-filter-note"
+            className="flex-shrink-0"
           >
             <FileText className="h-3 w-3 mr-1" />
             Notes ({allItems.filter(i => i.type === 'note').length})
@@ -829,6 +877,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             size="sm"
             onClick={() => setCommTypeFilter('email_thread')}
             data-testid="button-filter-email-thread"
+            className="flex-shrink-0"
           >
             <Mail className="h-3 w-3 mr-1" />
             Email Threads ({allItems.filter(i => i.type === 'email_thread').length})
@@ -842,7 +891,51 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             <p>No communications recorded yet</p>
             <p className="text-sm">Add phone calls, notes, or messages to track client interactions</p>
           </div>
+        ) : isMobile ? (
+          /* Mobile Card View */
+          <div className="space-y-3">
+            {filteredItems.map((item: any) => {
+              const handleView = () => {
+                if (item.type === 'message_thread') {
+                  setLocation(`/messages?thread=${item.id}`);
+                } else if (item.type === 'email_thread') {
+                  setSelectedEmailThreadId(item.id);
+                  setEmailThreadViewerOpen(true);
+                } else {
+                  setSelectedCommunication(item);
+                  setIsViewingCommunication(true);
+                }
+              };
+
+              const handleProjectClick = item.projectId ? () => {
+                setLocation(`/projects/${item.projectId}`);
+              } : undefined;
+
+              return (
+                <CommunicationCard
+                  key={item.id}
+                  id={item.id}
+                  type={item.type}
+                  loggedAt={item.loggedAt}
+                  createdAt={item.createdAt}
+                  subject={item.subject}
+                  content={item.content}
+                  user={item.user}
+                  createdBy={item.createdBy}
+                  projectId={item.projectId}
+                  projectName={projectCache[item.projectId]?.description || projectCache[item.projectId]?.client?.name}
+                  messageCount={item.messageCount}
+                  unreadCount={item.unreadCount}
+                  attachmentCount={item.attachmentCount}
+                  participants={item.participants}
+                  onView={handleView}
+                  onProjectClick={handleProjectClick}
+                />
+              );
+            })}
+          </div>
         ) : (
+          /* Desktop Table View */
           <Table>
             <TableHeader>
               <TableRow>
@@ -6518,19 +6611,7 @@ export default function ClientDetail() {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const debugMetricsRef = useRef<any[]>([]);
 
-  // Scroll active client tab into view on mobile when activeTab changes
-  useEffect(() => {
-    if (!isMobile) return;
-    
-    // Use more specific selector for client tabs only
-    const clientTabsContainer = document.querySelector('[data-client-tabs="main"]');
-    if (clientTabsContainer) {
-      const activeTabButton = clientTabsContainer.querySelector(`[data-testid="tab-${activeTab}"]`);
-      if (activeTabButton) {
-        activeTabButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    }
-  }, [activeTab, isMobile]);
+  // Tab scrolling is now handled by SwipeableTabsWrapper component
 
   // DEBUG: Comprehensive tab interaction logging
   useLayoutEffect(() => {

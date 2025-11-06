@@ -1,5 +1,5 @@
 import { useSwipeable } from 'react-swipeable';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 
 interface SwipeableTabsProps {
   children: ReactNode;
@@ -7,6 +7,7 @@ interface SwipeableTabsProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   enabled?: boolean;
+  dataAttribute?: string;
 }
 
 export function SwipeableTabsWrapper({ 
@@ -14,9 +15,32 @@ export function SwipeableTabsWrapper({
   tabs, 
   currentTab, 
   onTabChange,
-  enabled = true 
+  enabled = true,
+  dataAttribute = 'main'
 }: SwipeableTabsProps) {
   const currentIndex = tabs.indexOf(currentTab);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll active tab button into view when tab changes
+  useEffect(() => {
+    if (!enabled) return;
+    
+    // Find the tabs container using the data attribute
+    const tabsContainer = document.querySelector(`[data-client-tabs="${dataAttribute}"]`);
+    if (tabsContainer) {
+      const activeTabButton = tabsContainer.querySelector(`[data-testid="tab-${currentTab}"]`);
+      if (activeTabButton) {
+        // Use requestAnimationFrame to ensure DOM has updated
+        requestAnimationFrame(() => {
+          activeTabButton.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest', 
+            inline: 'center' 
+          });
+        });
+      }
+    }
+  }, [currentTab, enabled, dataAttribute]);
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
@@ -41,7 +65,7 @@ export function SwipeableTabsWrapper({
   });
 
   return (
-    <div {...handlers} className="w-full h-full">
+    <div ref={containerRef} {...handlers} className="w-full h-full">
       {children}
     </div>
   );

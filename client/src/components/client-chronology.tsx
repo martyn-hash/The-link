@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Eye, Clock, User as UserIcon } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ClientChronologyProps {
   clientId: string;
@@ -58,6 +60,7 @@ const getEventBadgeVariant = (eventType: string): "default" | "secondary" | "des
 };
 
 export default function ClientChronology({ clientId }: ClientChronologyProps) {
+  const isMobile = useIsMobile();
   // State for live time updates
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [selectedEntry, setSelectedEntry] = useState<ClientChronologyEntry | null>(null);
@@ -115,73 +118,140 @@ export default function ClientChronology({ clientId }: ClientChronologyProps) {
 
   return (
     <div data-testid="client-chronology">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Event Type</TableHead>
-            <TableHead>Entity Type</TableHead>
-            <TableHead>Date/Time</TableHead>
-            <TableHead>Changed By</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      {isMobile ? (
+        /* Mobile Card View */
+        <div className="space-y-3">
           {sortedChronology.map((entry) => (
-            <TableRow key={entry.id} data-testid={`chronology-row-${entry.id}`}>
-              <TableCell data-testid={`cell-event-type-${entry.id}`}>
-                <Badge 
-                  variant={getEventBadgeVariant(entry.eventType)}
-                  data-testid={`badge-event-type-${entry.id}`}
-                >
-                  {formatEventType(entry.eventType)}
-                </Badge>
-              </TableCell>
-              <TableCell data-testid={`cell-entity-type-${entry.id}`}>
-                <Badge variant="outline" data-testid={`badge-entity-type-${entry.id}`}>
-                  {formatEntityType(entry.entityType)}
-                </Badge>
-              </TableCell>
-              <TableCell data-testid={`cell-timestamp-${entry.id}`}>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm" data-testid={`text-timestamp-${entry.id}`}>
-                    {entry.timestamp 
-                      ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })
-                      : 'Unknown time'
-                    }
-                  </span>
-                </div>
-              </TableCell>
-              <TableCell data-testid={`cell-user-${entry.id}`}>
-                {entry.user ? (
-                  <div className="flex items-center gap-2" data-testid={`user-attribution-${entry.id}`}>
-                    <UserIcon className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid={`text-user-${entry.id}`}>
-                      {entry.user.firstName} {entry.user.lastName}
+            <Card key={entry.id} data-testid={`chronology-card-${entry.id}`}>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Event & Entity Badges */}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge 
+                      variant={getEventBadgeVariant(entry.eventType)}
+                      data-testid={`badge-event-type-${entry.id}`}
+                    >
+                      {formatEventType(entry.eventType)}
+                    </Badge>
+                    <Badge variant="outline" data-testid={`badge-entity-type-${entry.id}`}>
+                      {formatEntityType(entry.entityType)}
+                    </Badge>
+                  </div>
+
+                  {/* Time */}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span data-testid={`text-timestamp-${entry.id}`}>
+                      {entry.timestamp 
+                        ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })
+                        : 'Unknown time'
+                      }
                     </span>
                   </div>
-                ) : (
-                  <span className="text-sm text-muted-foreground" data-testid={`text-no-user-${entry.id}`}>—</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedEntry(entry);
-                    setIsViewingEntry(true);
-                  }}
-                  data-testid={`button-view-chronology-${entry.id}`}
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  View
-                </Button>
-              </TableCell>
-            </TableRow>
+
+                  {/* User */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                    {entry.user ? (
+                      <div className="flex items-center gap-2 text-sm" data-testid={`user-attribution-${entry.id}`}>
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span data-testid={`text-user-${entry.id}`}>
+                          {entry.user.firstName} {entry.user.lastName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid={`text-no-user-${entry.id}`}>—</span>
+                    )}
+                  </div>
+
+                  {/* View Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setSelectedEntry(entry);
+                      setIsViewingEntry(true);
+                    }}
+                    data-testid={`button-view-chronology-${entry.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
-        </TableBody>
-      </Table>
+        </div>
+      ) : (
+        /* Desktop Table View */
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Event Type</TableHead>
+              <TableHead>Entity Type</TableHead>
+              <TableHead>Date/Time</TableHead>
+              <TableHead>Changed By</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedChronology.map((entry) => (
+              <TableRow key={entry.id} data-testid={`chronology-row-${entry.id}`}>
+                <TableCell data-testid={`cell-event-type-${entry.id}`}>
+                  <Badge 
+                    variant={getEventBadgeVariant(entry.eventType)}
+                    data-testid={`badge-event-type-${entry.id}`}
+                  >
+                    {formatEventType(entry.eventType)}
+                  </Badge>
+                </TableCell>
+                <TableCell data-testid={`cell-entity-type-${entry.id}`}>
+                  <Badge variant="outline" data-testid={`badge-entity-type-${entry.id}`}>
+                    {formatEntityType(entry.entityType)}
+                  </Badge>
+                </TableCell>
+                <TableCell data-testid={`cell-timestamp-${entry.id}`}>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid={`text-timestamp-${entry.id}`}>
+                      {entry.timestamp 
+                        ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })
+                        : 'Unknown time'
+                      }
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell data-testid={`cell-user-${entry.id}`}>
+                  {entry.user ? (
+                    <div className="flex items-center gap-2" data-testid={`user-attribution-${entry.id}`}>
+                      <UserIcon className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm" data-testid={`text-user-${entry.id}`}>
+                        {entry.user.firstName} {entry.user.lastName}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground" data-testid={`text-no-user-${entry.id}`}>—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedEntry(entry);
+                      setIsViewingEntry(true);
+                    }}
+                    data-testid={`button-view-chronology-${entry.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       {/* View Chronology Detail Modal */}
       <Dialog open={isViewingEntry} onOpenChange={setIsViewingEntry}>
