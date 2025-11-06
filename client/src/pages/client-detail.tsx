@@ -418,7 +418,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   });
 
   const addCommunicationMutation = useMutation({
-    mutationFn: (data: any) => apiRequest(`/api/communications`, 'POST', data),
+    mutationFn: (data: any) => apiRequest('POST', `/api/communications`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
       setIsAddingCommunication(false);
