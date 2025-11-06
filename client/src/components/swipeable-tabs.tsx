@@ -8,6 +8,7 @@ interface SwipeableTabsProps {
   onTabChange: (tab: string) => void;
   enabled?: boolean;
   dataAttribute?: string;
+  className?: string;
 }
 
 export function SwipeableTabsWrapper({ 
@@ -16,7 +17,8 @@ export function SwipeableTabsWrapper({
   currentTab, 
   onTabChange,
   enabled = true,
-  dataAttribute = 'main'
+  dataAttribute = 'main',
+  className = ''
 }: SwipeableTabsProps) {
   const currentIndex = tabs.indexOf(currentTab);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,7 +67,7 @@ export function SwipeableTabsWrapper({
   });
 
   return (
-    <div ref={containerRef} {...handlers} className="w-full h-full">
+    <div ref={containerRef} {...handlers} className={`w-full h-full ${className}`}>
       {children}
     </div>
   );

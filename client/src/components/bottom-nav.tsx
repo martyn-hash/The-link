@@ -117,19 +117,15 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
                 data-testid={item.testId}
               >
                 <div className="relative">
-                  <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
-                  {item.badge && item.badge > 0 && (
-                    <Badge 
-                      className={`absolute h-4 min-w-4 px-1 text-[10px] flex items-center justify-center ${
-                        item.label === 'Messages' 
-                          ? '-top-1 -right-1' 
-                          : '-top-2 -right-2'
-                      }`}
-                      variant="destructive"
-                      data-testid={`badge-${item.testId}`}
-                    >
-                      {item.badge > 99 ? '99+' : item.badge}
-                    </Badge>
+                  {/* Show numeric badge instead of icon for Messages when there are unread */}
+                  {item.label === 'Messages' && item.badge && item.badge > 0 ? (
+                    <div className="h-5 w-5 flex items-center justify-center">
+                      <span className={`text-sm font-bold ${active ? 'text-primary' : 'text-destructive'}`}>
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    </div>
+                  ) : (
+                    <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
                   )}
                 </div>
                 <span className="text-xs font-medium">{item.label}</span>

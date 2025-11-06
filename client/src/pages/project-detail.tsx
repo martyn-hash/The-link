@@ -497,6 +497,7 @@ export default function ProjectDetail() {
             onTabChange={setCurrentTab}
             enabled={isMobile}
             dataAttribute="project"
+            className="hidden md:block"
           >
             <TabsContent value="overview" className="mt-6">
             <div className="space-y-6">
