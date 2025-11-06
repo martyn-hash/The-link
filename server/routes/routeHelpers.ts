@@ -282,6 +282,20 @@ export const requireAdmin = async (req: any, res: any, next: any) => {
   }
 };
 
+// Helper function to check super admin role (must be real super admin, not impersonated)
+export const requireSuperAdmin = async (req: any, res: any, next: any) => {
+  try {
+    const originalUserId = req.user!.id;
+    const originalUser = await storage.getUser(originalUserId);
+    if (!originalUser || !originalUser.superAdmin) {
+      return res.status(403).json({ message: "Super Admin access required" });
+    }
+    next();
+  } catch (error) {
+    return res.status(500).json({ message: "Authorization error" });
+  }
+};
+
 // Helper function to check manager+ role (uses effective user for proper testing)
 export const requireManager = async (req: any, res: any, next: any) => {
   try {
