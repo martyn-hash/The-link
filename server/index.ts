@@ -278,5 +278,33 @@ app.use((req, res, next) => {
     });
     
     log('[Dashboard Cache] Hourly scheduler initialized (runs every hour 08:00-18:00 UK time)');
+    
+    // Setup activity logs cleanup
+    // Runs daily at 4:00 AM UTC (after project scheduling, CH sync, and email resolver)
+    cron.schedule('0 4 * * *', async () => {
+      try {
+        log('[Activity Cleanup] Starting cleanup job...');
+        
+        // Mark sessions without activity in 24+ hours as inactive
+        const inactiveSessions = await storage.markInactiveSessions();
+        log(`[Activity Cleanup] Marked ${inactiveSessions} stale sessions as inactive`);
+        
+        // Delete sessions older than 90 days
+        const deletedSessions = await storage.cleanupOldSessions(90);
+        log(`[Activity Cleanup] Deleted ${deletedSessions} sessions older than 90 days`);
+        
+        // Delete login attempts older than 90 days
+        const deletedAttempts = await storage.cleanupOldLoginAttempts(90);
+        log(`[Activity Cleanup] Deleted ${deletedAttempts} login attempts older than 90 days`);
+        
+        log('[Activity Cleanup] Cleanup completed successfully');
+      } catch (error) {
+        console.error('[Activity Cleanup] Fatal error in cleanup job:', error);
+      }
+    }, {
+      timezone: "UTC"
+    });
+    
+    log('[Activity Cleanup] Nightly scheduler initialized (runs daily at 4:00 AM UTC, 90-day retention)');
   });
 })();

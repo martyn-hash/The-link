@@ -352,6 +352,11 @@ export interface IStorage {
   createLoginAttempt(attempt: InsertLoginAttempt): Promise<LoginAttempt>;
   getLoginAttempts(options?: { email?: string; limit?: number }): Promise<LoginAttempt[]>;
   
+  // Activity cleanup methods
+  cleanupOldSessions(daysToKeep: number): Promise<number>;
+  cleanupOldLoginAttempts(daysToKeep: number): Promise<number>;
+  markInactiveSessions(): Promise<number>;
+  
   // Client operations
   createClient(client: InsertClient): Promise<Client>;
   getClientById(id: string): Promise<Client | undefined>;
@@ -1428,6 +1433,65 @@ export class DatabaseStorage implements IStorage {
     }
 
     return await query;
+  }
+
+  // Activity cleanup methods
+  async cleanupOldSessions(daysToKeep: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+    const result = await db
+      .delete(userSessions)
+      .where(lt(userSessions.loginTime, cutoffDate));
+
+    return result.rowCount || 0;
+  }
+
+  async cleanupOldLoginAttempts(daysToKeep: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+    const result = await db
+      .delete(loginAttempts)
+      .where(lt(loginAttempts.timestamp, cutoffDate));
+
+    return result.rowCount || 0;
+  }
+
+  async markInactiveSessions(): Promise<number> {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 24);
+
+    const sessionsToUpdate = await db
+      .select()
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.isActive, true),
+          isNull(userSessions.logoutTime),
+          lt(userSessions.lastActivity, cutoff)
+        )
+      );
+
+    if (sessionsToUpdate.length === 0) {
+      return 0;
+    }
+
+    for (const session of sessionsToUpdate) {
+      const sessionDuration = Math.floor(
+        (session.lastActivity.getTime() - session.loginTime.getTime()) / (1000 * 60)
+      );
+
+      await db
+        .update(userSessions)
+        .set({
+          isActive: false,
+          sessionDuration,
+        })
+        .where(eq(userSessions.id, session.id));
+    }
+
+    return sessionsToUpdate.length;
   }
 
   // Project views operations (saved filter configurations)
