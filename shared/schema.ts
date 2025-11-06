@@ -109,6 +109,45 @@ export const users = pgTable("users", {
   lastLoginAt: timestamp("last_login_at"), // Track when user last logged in for first-login detection
 });
 
+// User sessions table - tracks login sessions and activity
+export const userSessions = pgTable("user_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  loginTime: timestamp("login_time").notNull().defaultNow(),
+  lastActivity: timestamp("last_activity").notNull().defaultNow(),
+  logoutTime: timestamp("logout_time"), // Null if session is still active
+  ipAddress: varchar("ip_address"),
+  city: varchar("city"), // From IP geolocation
+  country: varchar("country"), // From IP geolocation
+  browser: varchar("browser"), // e.g., "Chrome 119"
+  device: varchar("device"), // e.g., "Desktop", "Mobile", "Tablet"
+  os: varchar("os"), // e.g., "Windows 10", "iOS 17.1"
+  platformType: varchar("platform_type"), // desktop, mobile, tablet
+  pushEnabled: boolean("push_enabled").default(false), // Push notification status at session start
+  sessionDuration: integer("session_duration"), // Duration in minutes, calculated on logout
+  isActive: boolean("is_active").default(true), // Whether session is currently active
+}, (table) => [
+  index("idx_user_sessions_user_id").on(table.userId),
+  index("idx_user_sessions_login_time").on(table.loginTime),
+  index("idx_user_sessions_is_active").on(table.isActive),
+]);
+
+// Login attempts table - tracks all login attempts for security monitoring
+export const loginAttempts = pgTable("login_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  ipAddress: varchar("ip_address"),
+  success: boolean("success").notNull(),
+  failureReason: varchar("failure_reason"), // e.g., "invalid_password", "user_not_found"
+  browser: varchar("browser"),
+  os: varchar("os"),
+}, (table) => [
+  index("idx_login_attempts_email").on(table.email),
+  index("idx_login_attempts_timestamp").on(table.timestamp),
+  index("idx_login_attempts_success").on(table.success),
+]);
+
 // User notification preferences table
 export const userNotificationPreferences = pgTable("user_notification_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -953,6 +992,17 @@ export const insertUserSchema = createInsertSchema(users).omit({
   lastLoginAt: true,
 });
 
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  loginTime: true,
+  lastActivity: true,
+});
+
+export const insertLoginAttemptSchema = createInsertSchema(loginAttempts).omit({
+  id: true,
+  timestamp: true,
+});
+
 export const insertMagicLinkTokenSchema = createInsertSchema(magicLinkTokens).omit({
   id: true,
   createdAt: true,
@@ -1544,6 +1594,10 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type LoginAttempt = typeof loginAttempts.$inferSelect;
+export type InsertLoginAttempt = z.infer<typeof insertLoginAttemptSchema>;
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Project = typeof projects.$inferSelect;

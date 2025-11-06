@@ -71,10 +71,16 @@ import {
   taskProgressNotes,
   taskTimeEntries,
   taskDocuments,
+  userSessions,
+  loginAttempts,
   type User,
   type UpsertUser,
   type InsertUser,
   type UpdateUser,
+  type UserSession,
+  type InsertUserSession,
+  type LoginAttempt,
+  type InsertLoginAttempt,
   type Client,
   type InsertClient,
   type Person,
@@ -335,6 +341,16 @@ export interface IStorage {
   // User activity tracking operations
   trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void>;
   getRecentlyViewedByUser(userId: string, limit?: number): Promise<{ entityType: string; entityId: string; viewedAt: Date; entityData?: any }[]>;
+  
+  // User session operations
+  createUserSession(session: InsertUserSession): Promise<UserSession>;
+  updateUserSessionActivity(userId: string): Promise<void>;
+  getUserSessions(userId?: string, options?: { limit?: number; onlyActive?: boolean }): Promise<(UserSession & { user: User })[]>;
+  markSessionAsLoggedOut(sessionId: string): Promise<void>;
+  
+  // Login attempt operations
+  createLoginAttempt(attempt: InsertLoginAttempt): Promise<LoginAttempt>;
+  getLoginAttempts(options?: { email?: string; limit?: number }): Promise<LoginAttempt[]>;
   
   // Client operations
   createClient(client: InsertClient): Promise<Client>;
@@ -1296,6 +1312,122 @@ export class DatabaseStorage implements IStorage {
       );
     
     return usersWithNotifications as User[];
+  }
+
+  // User session operations
+  async createUserSession(session: InsertUserSession): Promise<UserSession> {
+    const [newSession] = await db
+      .insert(userSessions)
+      .values(session)
+      .returning();
+    return newSession;
+  }
+
+  async updateUserSessionActivity(userId: string): Promise<void> {
+    await db
+      .update(userSessions)
+      .set({ lastActivity: new Date() })
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          eq(userSessions.isActive, true)
+        )
+      );
+  }
+
+  async getUserSessions(userId?: string, options?: { limit?: number; onlyActive?: boolean }): Promise<(UserSession & { user: User })[]> {
+    let query = db
+      .select({
+        id: userSessions.id,
+        userId: userSessions.userId,
+        loginTime: userSessions.loginTime,
+        lastActivity: userSessions.lastActivity,
+        logoutTime: userSessions.logoutTime,
+        ipAddress: userSessions.ipAddress,
+        city: userSessions.city,
+        country: userSessions.country,
+        browser: userSessions.browser,
+        device: userSessions.device,
+        os: userSessions.os,
+        platformType: userSessions.platformType,
+        pushEnabled: userSessions.pushEnabled,
+        sessionDuration: userSessions.sessionDuration,
+        isActive: userSessions.isActive,
+        user: users,
+      })
+      .from(userSessions)
+      .innerJoin(users, eq(userSessions.userId, users.id))
+      .orderBy(desc(userSessions.loginTime));
+
+    const conditions = [];
+    if (userId) {
+      conditions.push(eq(userSessions.userId, userId));
+    }
+    if (options?.onlyActive) {
+      conditions.push(eq(userSessions.isActive, true));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    const sessions = await query;
+    return sessions as (UserSession & { user: User })[];
+  }
+
+  async markSessionAsLoggedOut(sessionId: string): Promise<void> {
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.id, sessionId));
+
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    const now = new Date();
+    const sessionDuration = Math.floor(
+      (now.getTime() - session.loginTime.getTime()) / (1000 * 60)
+    );
+
+    await db
+      .update(userSessions)
+      .set({
+        logoutTime: now,
+        isActive: false,
+        sessionDuration,
+      })
+      .where(eq(userSessions.id, sessionId));
+  }
+
+  // Login attempt operations
+  async createLoginAttempt(attempt: InsertLoginAttempt): Promise<LoginAttempt> {
+    const [newAttempt] = await db
+      .insert(loginAttempts)
+      .values(attempt)
+      .returning();
+    return newAttempt;
+  }
+
+  async getLoginAttempts(options?: { email?: string; limit?: number }): Promise<LoginAttempt[]> {
+    let query = db
+      .select()
+      .from(loginAttempts)
+      .orderBy(desc(loginAttempts.timestamp));
+
+    if (options?.email) {
+      query = query.where(eq(loginAttempts.email, options.email)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    return await query;
   }
 
   // Project views operations (saved filter configurations)

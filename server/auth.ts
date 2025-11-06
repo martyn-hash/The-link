@@ -6,6 +6,7 @@ import type { Express, RequestHandler, Request, Response, NextFunction } from "e
 import { storage } from "./storage";
 import { sendMagicLinkEmail } from "./emailService";
 import type { User } from "@shared/schema";
+import { extractSessionMetadata } from "./utils/session-tracker";
 
 // Extend express-session to include our custom session properties
 declare module "express-session" {
@@ -84,18 +85,43 @@ export async function setupAuth(app: Express) {
   app.post("/api/login", async (req, res) => {
     try {
       const { email, password } = req.body;
+      const metadata = extractSessionMetadata(req);
 
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
       }
 
       const user = await authenticateUser(email, password);
+      
+      // Log login attempt (successful or failed)
+      await storage.createLoginAttempt({
+        email: email.trim().toLowerCase(),
+        ipAddress: metadata.ipAddress,
+        success: !!user,
+        failureReason: user ? null : "invalid_credentials",
+        browser: metadata.browser,
+        os: metadata.os,
+      });
+
       if (!user) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
       // Update last login timestamp
-      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
+
+      // Create session record
+      await storage.createUserSession({
+        userId: user.id,
+        ipAddress: metadata.ipAddress,
+        city: metadata.city,
+        country: metadata.country,
+        browser: metadata.browser,
+        device: metadata.device,
+        os: metadata.os,
+        platformType: metadata.platformType,
+        pushEnabled: user.pushNotificationsEnabled || false,
+      });
 
       // Set user session
       req.session.userId = user.id;
@@ -323,7 +349,7 @@ export async function setupAuth(app: Express) {
       }
 
       // Update last login timestamp
-      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
 
       // Mark token as used (atomic operation that will fail if already used)
       try {
