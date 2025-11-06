@@ -16,9 +16,9 @@ import type { UserSession, User, LoginAttempt } from "@shared/schema";
 
 export default function ActivityLogsPage() {
   const { toast } = useToast();
-  const [userId, setUserId] = useState<string>("");
+  const [userId, setUserId] = useState<string>("all-users");
   const [onlyActive, setOnlyActive] = useState<string>("all");
-  const [platform, setPlatform] = useState<string>("");
+  const [platform, setPlatform] = useState<string>("all-platforms");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [selectedTab, setSelectedTab] = useState<"sessions" | "attempts">("sessions");
@@ -30,8 +30,9 @@ export default function ActivityLogsPage() {
 
   // Fetch activity logs with filters
   const { data: sessions = [], isLoading: sessionsLoading, refetch: refetchSessions, error: sessionsError } = useQuery<UserSession[]>({
-    queryKey: ["/api/super-admin/activity-logs", { userId, onlyActive: onlyActive !== "all" ? onlyActive : undefined }],
+    queryKey: ["/api/super-admin/activity-logs", { userId: userId !== "all-users" ? userId : undefined, onlyActive: onlyActive !== "all" ? onlyActive : undefined }],
     enabled: selectedTab === "sessions",
+    placeholderData: (previousData) => previousData,
   });
 
   // Fetch login attempts
@@ -42,9 +43,9 @@ export default function ActivityLogsPage() {
 
   const handleExport = () => {
     const params = new URLSearchParams();
-    if (userId) params.set("userId", userId);
+    if (userId && userId !== "all-users") params.set("userId", userId);
     if (onlyActive !== "all") params.set("onlyActive", onlyActive);
-    if (platform) params.set("platform", platform);
+    if (platform && platform !== "all-platforms") params.set("platform", platform);
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
     
@@ -87,7 +88,7 @@ export default function ActivityLogsPage() {
   // Apply client-side filters for platform and date range
   const filteredSessions = sessions.filter((session: any) => {
     // Platform filter
-    if (platform && session.platformType?.toLowerCase() !== platform.toLowerCase()) {
+    if (platform && platform !== "all-platforms" && session.platformType?.toLowerCase() !== platform.toLowerCase()) {
       return false;
     }
     
@@ -162,7 +163,7 @@ export default function ActivityLogsPage() {
                   <SelectValue placeholder="All users" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All users</SelectItem>
+                  <SelectItem value="all-users">All users</SelectItem>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.firstName} {user.lastName} ({user.email})
@@ -197,7 +198,7 @@ export default function ActivityLogsPage() {
                   <SelectValue placeholder={selectedTab === "attempts" ? "N/A for attempts" : "All platforms"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All platforms</SelectItem>
+                  <SelectItem value="all-platforms">All platforms</SelectItem>
                   <SelectItem value="desktop">Desktop</SelectItem>
                   <SelectItem value="mobile">Mobile</SelectItem>
                   <SelectItem value="tablet">Tablet</SelectItem>
