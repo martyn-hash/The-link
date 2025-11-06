@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight } from "lucide-react";
 
 interface ProjectChronologyProps {
@@ -45,6 +47,7 @@ const formatChangeReason = (reason: string): string => {
 
 export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const [, setLocation] = useLocation();
+  const isMobile = useIsMobile();
   
   // Filter state - track which categories are selected
   const [filters, setFilters] = useState({
@@ -450,7 +453,77 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         <div className="text-center py-8 text-muted-foreground">
           <p className="text-sm">No timeline entries available</p>
         </div>
+      ) : isMobile ? (
+        /* Mobile Card View */
+        <div className="space-y-3">
+          {filteredTimeline.map((entry) => (
+            <Card key={entry.id} data-testid={`timeline-card-${entry.id}`}>
+              <CardContent className="p-4 space-y-3">
+                {/* Type Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1" data-testid={`card-type-${entry.id}`}>
+                    {getTypeIcon(entry.type)}
+                  </div>
+                  <span className="text-xs text-muted-foreground" data-testid={`card-timestamp-${entry.id}`}>
+                    {formatDistanceToNow(entry.timestamp, { addSuffix: true })}
+                  </span>
+                </div>
+
+                {/* Detail */}
+                <div className="space-y-1">
+                  <p className="text-sm font-medium" data-testid={`card-detail-${entry.id}`}>
+                    {entry.detail}
+                  </p>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="w-3 h-3" />
+                    <span>{format(entry.timestamp, 'MMM d, yyyy h:mm a')}</span>
+                  </div>
+                </div>
+
+                {/* Changed By and Assigned To */}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Changed By</span>
+                    <p className="font-medium mt-1" data-testid={`card-changed-by-${entry.id}`}>
+                      {entry.changedBy || '—'}
+                    </p>
+                  </div>
+                  {entry.assignedTo && (
+                    <div>
+                      <span className="text-muted-foreground">Assigned To</span>
+                      <p className="font-medium mt-1" data-testid={`card-assigned-to-${entry.id}`}>
+                        {entry.assignedTo}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Time in Stage */}
+                {entry.timeInStage && (
+                  <div className="flex items-center gap-2 p-2 bg-muted/30 rounded text-xs">
+                    <Clock className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Time in Stage:</span>
+                    <span className="font-medium" data-testid={`card-time-${entry.id}`}>{entry.timeInStage}</span>
+                  </div>
+                )}
+
+                {/* View Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handleView(entry)}
+                  data-testid={`button-view-${entry.id}`}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Details
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : (
+        /* Desktop Table View */
         <Table>
           <TableHeader>
             <TableRow>
