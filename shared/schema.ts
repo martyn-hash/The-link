@@ -99,6 +99,7 @@ export const users = pgTable("users", {
   emailSignature: text("email_signature"), // HTML email signature
   isAdmin: boolean("is_admin").default(false), // Simple admin flag
   canSeeAdminMenu: boolean("can_see_admin_menu").default(false), // Can see admin menu flag
+  superAdmin: boolean("super_admin").default(false), // Super admin flag for elevated privileges
   passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
   isFallbackUser: boolean("is_fallback_user").default(false), // Only one user can be the fallback user
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(true), // Push notifications enabled by default for staff

@@ -6,56 +6,31 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Settings2, ChevronDown, FileCheck, Tags, Calendar, ClipboardList, FolderTree } from "lucide-react";
+import { Users, ChevronDown, Bell } from "lucide-react";
 import type { User } from "@shared/schema";
 
-interface AdminDropdownProps {
+interface SuperAdminDropdownProps {
   user: User;
 }
 
-export default function AdminDropdown({ user }: AdminDropdownProps) {
+export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
   const [location] = useLocation();
 
-  // Only show to admin users
-  if (!user?.isAdmin) {
+  // Only show to super admin users
+  if (!user?.superAdmin) {
     return null;
   }
 
-  const adminItems = [
+  const superAdminItems = [
     {
-      label: "Project Scheduling",
-      href: "/admin",
-      icon: Calendar,
+      label: "Push Notifications",
+      href: "/admin/push-templates",
+      icon: Bell,
     },
     {
-      label: "Project Types",
-      href: "/project-types",
-      icon: Settings,
-    },
-    {
-      label: "Services",
-      href: "/services",
-      icon: Settings2,
-    },
-    {
-      label: "CH Changes",
-      href: "/ch-changes", 
-      icon: FileCheck,
-    },
-    {
-      label: "Tags",
-      href: "/tags",
-      icon: Tags,
-    },
-    {
-      label: "Task Categories",
-      href: "/admin/task-types",
-      icon: FolderTree,
-    },
-    {
-      label: "Task Templates",
-      href: "/task-templates",
-      icon: ClipboardList,
+      label: "User Management",
+      href: "/users",
+      icon: Users,
     },
   ];
 
@@ -72,14 +47,14 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
         <Button 
           variant="ghost" 
           className="flex items-center space-x-2"
-          data-testid="button-admin-dropdown"
+          data-testid="button-super-admin-dropdown"
         >
-          <span>Admin</span>
+          <span>Super Admin</span>
           <ChevronDown className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {adminItems.map((item) => (
+        {superAdminItems.map((item) => (
           <DropdownMenuItem key={item.href} asChild>
             <Link href={item.href} className="w-full">
               <div 

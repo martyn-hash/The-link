@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
 import AdminDropdown from "@/components/admin-dropdown";
+import SuperAdminDropdown from "@/components/super-admin-dropdown";
 import ImpersonationPanel from "@/components/impersonation-panel";
 import MobileMenu from "@/components/mobile-menu";
 import type { User } from "@shared/schema";
@@ -285,6 +286,9 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
 
               {/* Admin Dropdown */}
               {user && <AdminDropdown user={user} />}
+              
+              {/* Super Admin Dropdown */}
+              {user && <SuperAdminDropdown user={user} />}
             </div>
           )}
 
