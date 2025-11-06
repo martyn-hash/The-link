@@ -46,6 +46,42 @@ The internal tasks system provides comprehensive staff task management. Features
 
 The `/internal-chat` page supports independent staff-to-staff message threads. It uses dedicated database tables and API routes for thread creation, messaging, and archiving. The frontend unifies both project and staff message threads, with a "New Thread" dialog for creating staff-specific conversations. Push notifications are integrated for new staff messages.
 
+### Mobile UI Improvements - Client Detail Page
+
+**Implementation Status: Complete** (November 2025)
+
+Comprehensive mobile optimizations for the client detail page across all tabs, converting desktop table layouts to mobile-friendly card layouts on viewports <768px.
+
+**✅ Implemented Features:**
+
+-   **Responsive Hook**: `useIsMobile()` hook (`client/src/hooks/use-mobile.tsx`) with 768px breakpoint, initializes correctly on first render to prevent flash of desktop content
+-   **Services Tab**: 
+    -   Active/Inactive client services tables → mobile cards with service name, frequency, status, dates
+    -   PortalStatusColumn buttons (Send Invite, Show QR Code) → full-width 44px touch targets
+    -   People Services accordion already mobile-friendly with grid-cols-1 layout
+-   **Projects Tab**: ProjectsList component → mobile cards showing project name, status, dates, progress
+-   **Documents Tab**: All three tables converted to mobile cards
+    -   Folder list → cards with folder name, creator, document count, full-width Delete button
+    -   Ungrouped documents → cards with file details and vertically stacked action buttons
+    -   Documents in folder → cards with file details and vertically stacked action buttons
+-   **Tasks Tab**:
+    -   Internal Tasks table → cards showing title, type, priority, assignee, status, due date
+    -   Client Requests table → cards showing request name, category, assignee, status, progress
+-   **Touch Target Compliance**: All action buttons in mobile cards use `className="w-full h-11"` (44px minimum height) for optimal touch usability
+-   **No Horizontal Scroll**: All tabs fit within mobile viewport width (tested at 375x667) with no horizontal overflow
+
+**Design Pattern**: 
+- Conditional rendering: `isMobile ? <MobileCards /> : <DesktopTable />`
+- Consistent card structure using shadcn Card/CardContent components
+- Full-width buttons with icons and text labels for clarity
+- Vertical button stacking for multiple actions
+- Grid layouts (grid-cols-2) for data fields with clear labels
+
+**Files Modified:**
+- `client/src/pages/client-detail.tsx`: Services, Tasks tabs conversion
+- `client/src/components/DocumentFolderView.tsx`: All document tables conversion
+- `client/src/hooks/use-mobile.tsx`: Fixed initialization timing
+
 ### Email Threading & Deduplication System
 
 **Implementation Status: Phase 9 Complete (95%)** (Core backend + email sending + noise control + attachments + complete UI ready)
