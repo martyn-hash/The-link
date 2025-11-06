@@ -159,9 +159,10 @@ export function DocumentUploadDialog({ clientId, source = "direct upload", folde
       }
     }}>
       <DialogTrigger asChild>
-        <Button data-testid="button-open-upload-dialog">
-          <Upload className="w-4 h-4 mr-2" />
-          Upload Documents
+        <Button data-testid="button-open-upload-dialog" className="whitespace-nowrap">
+          <Upload className="w-4 h-4 md:mr-2" />
+          <span className="hidden md:inline">Upload Documents</span>
+          <span className="md:hidden ml-2">Upload</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">

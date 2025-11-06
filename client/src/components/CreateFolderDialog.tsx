@@ -52,9 +52,10 @@ export function CreateFolderDialog({ clientId }: CreateFolderDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" data-testid="button-create-folder">
-          <FolderPlus className="w-4 h-4 mr-2" />
-          Create New Folder
+        <Button variant="outline" data-testid="button-create-folder" className="whitespace-nowrap">
+          <FolderPlus className="w-4 h-4 md:mr-2" />
+          <span className="hidden md:inline">Create New Folder</span>
+          <span className="md:hidden ml-2">New Folder</span>
         </Button>
       </DialogTrigger>
       <DialogContent>

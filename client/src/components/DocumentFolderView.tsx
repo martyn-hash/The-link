@@ -137,7 +137,7 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
 
   // Breadcrumb navigation
   const renderBreadcrumb = () => (
-    <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
+    <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
       <Button
         variant="ghost"
         size="sm"
@@ -145,6 +145,7 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
           setCurrentFolderId(null);
           setCurrentFolderName("");
         }}
+        className="shrink-0"
         data-testid="breadcrumb-home"
       >
         <Home className="w-4 h-4 mr-1" />
@@ -152,8 +153,8 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
       </Button>
       {currentFolderName && (
         <>
-          <ChevronRight className="w-4 h-4" />
-          <span className="font-medium text-foreground" data-testid="breadcrumb-current">
+          <ChevronRight className="w-4 h-4 shrink-0" />
+          <span className="font-medium text-foreground break-words" data-testid="breadcrumb-current">
             {currentFolderName}
           </span>
         </>
@@ -195,9 +196,9 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           {renderBreadcrumb()}
-          {renderActions && <div className="flex gap-2">{renderActions(null)}</div>}
+          {renderActions && <div className="flex gap-2 w-full md:w-auto flex-wrap md:flex-nowrap">{renderActions(null)}</div>}
         </div>
         
         {/* Folders Table */}
@@ -217,7 +218,7 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
                             setCurrentFolderId(folder.id);
                             setCurrentFolderName(folder.name);
                           }}
-                          className="flex items-center gap-2 hover:underline w-full text-left"
+                          className="flex items-center gap-2 hover:underline w-full text-left min-h-[44px]"
                           data-testid={`button-open-folder-${folder.id}`}
                         >
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
@@ -549,9 +550,9 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         {renderBreadcrumb()}
-        {renderActions && <div className="flex gap-2">{renderActions(currentFolderId)}</div>}
+        {renderActions && <div className="flex gap-2 w-full md:w-auto flex-wrap md:flex-nowrap">{renderActions(currentFolderId)}</div>}
       </div>
       
       {!documents || documents.length === 0 ? (
