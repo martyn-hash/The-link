@@ -1303,6 +1303,51 @@ export function registerMessageRoutes(
     }
   });
 
+  // Generate upload URL for staff message attachments
+  app.post("/api/staff-messages/attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType, fileSize, threadId } = req.body;
+
+      if (!fileName || !fileType || !threadId) {
+        return res.status(400).json({ message: "fileName, fileType, and threadId are required" });
+      }
+
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Check if thread exists
+      const thread = await storage.getStaffMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+
+      // Verify user is a participant in this thread
+      const participants = await storage.getStaffMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+
+      // Server-side validation
+      const validation = validateFileUpload(fileName, fileType, fileSize || 0, MAX_FILE_SIZE);
+      if (!validation.isValid) {
+        return res.status(400).json({ message: validation.error });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+
+      res.json({
+        url: uploadURL,
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
   // Mark messages as read in a standalone staff thread
   app.put("/api/staff-messages/threads/:threadId/mark-read", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

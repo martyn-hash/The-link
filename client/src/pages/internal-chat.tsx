@@ -375,68 +375,103 @@ export default function InternalChat() {
     },
   });
 
+  const uploadFile = async (file: File): Promise<{
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    objectPath: string;
+  }> => {
+    try {
+      // Determine the upload URL endpoint based on thread type
+      const uploadUrlEndpoint = selectedThreadType === 'staff'
+        ? '/api/staff-messages/attachments/upload-url'
+        : '/api/internal/project-messages/attachments/upload-url';
+
+      // Step 1: Get presigned URL from backend
+      const urlResponse = await fetch(uploadUrlEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          threadId: selectedThreadId,
+        }),
+      });
+
+      if (!urlResponse.ok) {
+        const errorText = await urlResponse.text();
+        throw new Error(`Failed to get upload URL: ${urlResponse.status} - ${errorText}`);
+      }
+
+      const { url, objectPath } = await urlResponse.json();
+
+      // Step 2: Upload file directly to object storage
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+      }
+
+      // Return attachment metadata
+      return {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        objectPath,
+      };
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      throw error;
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) return;
 
     let attachments: any[] = [];
 
-    if (selectedFiles.length > 0) {
-      setUploadingFiles(true);
-      const formData = new FormData();
-      selectedFiles.forEach(file => formData.append('files', file));
-
-      try {
-        const response = await fetch('/api/upload/attachments', {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-
-        if (!response.ok) throw new Error('Failed to upload files');
-        attachments = await response.json();
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to upload files",
-          variant: "destructive",
-        });
+    try {
+      // Upload selected files
+      if (selectedFiles.length > 0) {
+        setUploadingFiles(true);
+        attachments = await Promise.all(selectedFiles.map(file => uploadFile(file)));
         setUploadingFiles(false);
-        return;
       }
+
+      // Upload recorded audio
+      if (recordedAudio) {
+        setUploadingFiles(true);
+        // Create a file-like object from the blob
+        const audioFile = Object.assign(recordedAudio, { name: 'voice-note.webm' }) as File;
+        const audioAttachment = await uploadFile(audioFile);
+        attachments.push(audioAttachment);
+        setUploadingFiles(false);
+      }
+
+      // Send message with attachments
+      sendMessageMutation.mutate({
+        content: newMessage,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload files",
+        variant: "destructive",
+      });
       setUploadingFiles(false);
     }
-
-    if (recordedAudio) {
-      setUploadingFiles(true);
-      const formData = new FormData();
-      formData.append('files', recordedAudio, 'voice-note.webm');
-
-      try {
-        const response = await fetch('/api/upload/attachments', {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-
-        if (!response.ok) throw new Error('Failed to upload voice note');
-        const uploadedFiles = await response.json();
-        attachments = [...attachments, ...uploadedFiles];
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to upload voice note",
-          variant: "destructive",
-        });
-        setUploadingFiles(false);
-        return;
-      }
-      setUploadingFiles(false);
-    }
-
-    sendMessageMutation.mutate({
-      content: newMessage,
-      attachments: attachments.length > 0 ? attachments : undefined,
-    });
   };
 
   const startRecording = async () => {
