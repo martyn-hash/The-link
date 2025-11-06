@@ -9,6 +9,7 @@ import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
 import { storage, initializeDefaultNotificationTemplates } from "./storage";
 import { seedTaskTypes } from "./seedData";
+import { runSchemaMigrations } from "./utils/schemaMigrations";
 import fs from "fs";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -123,6 +124,9 @@ app.use((req, res, next) => {
     reusePort: true,
   }, async () => {
     log(`serving on port ${port}`);
+    
+    // Run schema migrations first to ensure database is up to date
+    await runSchemaMigrations();
     
     // Seed initial task types
     await seedTaskTypes();

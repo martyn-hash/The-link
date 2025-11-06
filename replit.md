@@ -22,6 +22,10 @@ The backend is an Express.js server developed in TypeScript, providing a modular
 
 PostgreSQL (Neon) serves as the primary database, managed through Drizzle ORM. The schema utilizes UUIDs, soft deletes, and JSONB fields, with indexing for critical entities such as users, clients, projects, services, and tasks. Google Cloud Storage, facilitated by Replit App Storage, handles object storage, employing signed URLs for secure document access.
 
+### Automatic Schema Migrations
+
+An automatic schema migration system runs on server startup to ensure database schemas are synchronized between development and production environments. The system (`server/utils/schemaMigrations.ts`) checks for missing columns and automatically applies schema changes during deployment. This prevents production failures from schema drift when code changes include updated database schemas. Current migrations include validation for the `super_admin` column in the users table, with a framework in place for future schema updates. Migrations run before any other database operations, logging all changes for audit purposes.
+
 ### Authentication & Authorization
 
 Staff authentication is managed via Replit Auth (OIDC) with session-based, role-based access control. The client portal uses passwordless email verification for authentication. Access controls are meticulously implemented to enforce staff roles and ensure client portal users are strictly isolated to their respective clients.
