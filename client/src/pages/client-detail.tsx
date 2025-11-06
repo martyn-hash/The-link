@@ -7249,7 +7249,6 @@ export default function ClientDetail() {
         {/* Main Content */}
         <div className="container mx-auto p-4 md:p-6">
         <Tabs 
-          defaultValue="overview" 
           value={activeTab} 
           onValueChange={setActiveTab}
           className="flex flex-col"
@@ -9240,15 +9239,13 @@ export default function ClientDetail() {
       </Dialog>
 
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch
-          isOpen={mobileSearchOpen}
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

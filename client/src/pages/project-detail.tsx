@@ -22,6 +22,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import ProjectInfo from "@/components/project-info";
 import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
@@ -57,6 +59,7 @@ export default function ProjectDetail() {
   const [stageErrorMessage, setStageErrorMessage] = useState<{ currentStage: string; validStages: string[] } | null>(null);
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>("overview");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Track project view activity when component mounts
   useEffect(() => {
@@ -814,6 +817,15 @@ export default function ProjectDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

@@ -169,7 +169,7 @@ export default function ClientServiceDetail() {
             <Skeleton className="h-64" />
           </div>
         </div>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     );
   }
@@ -188,7 +188,7 @@ export default function ClientServiceDetail() {
             </Button>
           </div>
         </div>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     );
   }
@@ -571,14 +571,12 @@ export default function ClientServiceDetail() {
       </Dialog>
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch 
-          isOpen={mobileSearchOpen} 
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch 
+        isOpen={mobileSearchOpen} 
+        onOpenChange={setMobileSearchOpen}
+      />
 
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
     </div>
   );
 }

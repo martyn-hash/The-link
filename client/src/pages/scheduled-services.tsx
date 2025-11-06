@@ -489,15 +489,13 @@ export default function ScheduledServices() {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch
-          isOpen={mobileSearchOpen}
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

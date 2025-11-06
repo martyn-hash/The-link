@@ -3,9 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { type Client } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import ClientSearch from "@/components/client-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +22,10 @@ import { format } from "date-fns";
 export default function Clients() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Parse URL search parameter on mount and location changes
   useEffect(() => {
@@ -275,6 +280,15 @@ export default function Clients() {
         onOpenChange={setShowClientModal}
         client={selectedClient}
         onSuccess={handleClientSuccess}
+      />
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
       />
     </div>
   );

@@ -304,7 +304,7 @@ export default function PersonDetail() {
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-64 w-full" />
         </main>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     );
   }
@@ -323,7 +323,7 @@ export default function PersonDetail() {
             </CardContent>
           </Card>
         </main>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     );
   }
@@ -1167,14 +1167,12 @@ export default function PersonDetail() {
       </Dialog>
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch 
-          isOpen={mobileSearchOpen} 
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch 
+        isOpen={mobileSearchOpen} 
+        onOpenChange={setMobileSearchOpen}
+      />
 
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
     </div>
   );
 }

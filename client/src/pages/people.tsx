@@ -3,10 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Person, Client, ClientPerson, ClientPortalUser } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -214,8 +217,10 @@ function formatBirthDate(dateOfBirth: string | Date | null): string {
 export default function People() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -714,6 +719,15 @@ export default function People() {
           )}
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

@@ -122,7 +122,7 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
                     <Badge 
                       className={`absolute h-4 min-w-4 px-1 text-[10px] flex items-center justify-center ${
                         item.label === 'Messages' 
-                          ? 'top-0 right-0.5' 
+                          ? '-top-1 -right-1' 
                           : '-top-2 -right-2'
                       }`}
                       variant="destructive"

@@ -884,7 +884,8 @@ export default function Projects() {
               </h2>
             </div>
             
-            <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
+            {/* Desktop View - Full buttons */}
+            <div className="hidden md:flex items-center space-x-4 flex-shrink-0">
               {/* Unified View Mega Menu */}
               <ViewMegaMenu
                 currentViewMode={viewMode}
@@ -1019,6 +1020,54 @@ export default function Projects() {
                     <Badge 
                       variant="secondary" 
                       className="ml-1 md:ml-2 rounded-full px-1.5 md:px-2 text-xs"
+                      data-testid="badge-active-filters-count"
+                    >
+                      {activeFilterCount()}
+                    </Badge>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {/* Mobile View - Compact controls only */}
+            <div className="flex md:hidden items-center gap-2 flex-shrink-0">
+              {/* View Mode Toggle */}
+              {isManagerOrAdmin && (
+                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
+                  <Button
+                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    data-testid="button-view-list"
+                    className="h-11 px-2"
+                  >
+                    <List className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "dashboard" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("dashboard")}
+                    data-testid="button-view-dashboard"
+                    className="h-11 px-2"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+              
+              {/* Filters Button - Only visible in list view */}
+              {viewMode === "list" && (
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterPanelOpen(true)}
+                  className="relative h-11 px-3"
+                  data-testid="button-open-filters"
+                >
+                  <Filter className="w-4 h-4" />
+                  {activeFilterCount() > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="ml-1.5 rounded-full px-1.5 text-xs"
                       data-testid="badge-active-filters-count"
                     >
                       {activeFilterCount()}
@@ -1254,15 +1303,13 @@ export default function Projects() {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch
-          isOpen={mobileSearchOpen}
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
 
       {/* Filter Panel */}
       <FilterPanel

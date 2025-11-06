@@ -5,8 +5,11 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { type Client, type CompanyView } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import CompaniesTable from "@/components/companies-table";
 import CompanyFilterPanel from "@/components/company-filter-panel";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,11 +31,13 @@ export default function Companies() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   
   // State management
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [syncResults, setSyncResults] = useState<any>(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   
   // Filter state
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -389,6 +394,15 @@ export default function Companies() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }
