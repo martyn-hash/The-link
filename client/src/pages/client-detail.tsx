@@ -7434,6 +7434,22 @@ export default function ClientDetail() {
             </div>
           </div>
 
+          {/* Mobile Section Title - Shows current tab name */}
+          {isMobile && (
+            <div className="mt-4 mb-2">
+              <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
+                {activeTab === "overview" && "Overview"}
+                {activeTab === "services" && "Services"}
+                {activeTab === "projects" && "Projects"}
+                {activeTab === "communications" && "Communications"}
+                {activeTab === "chronology" && "History"}
+                {activeTab === "documents" && "Documents"}
+                {activeTab === "tasks" && "Tasks"}
+                {activeTab === "risk" && "Risk Assessment"}
+              </h2>
+            </div>
+          )}
+
           <SwipeableTabsWrapper
             tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"]}
             currentTab={activeTab}

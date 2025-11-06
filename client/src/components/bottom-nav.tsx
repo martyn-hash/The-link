@@ -120,7 +120,11 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
                   <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
                   {item.badge && item.badge > 0 && (
                     <Badge 
-                      className="absolute -top-2 -right-2 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center"
+                      className={`absolute h-4 min-w-4 px-1 text-[10px] flex items-center justify-center ${
+                        item.label === 'Messages' 
+                          ? 'top-0 right-0.5' 
+                          : '-top-2 -right-2'
+                      }`}
                       variant="destructive"
                       data-testid={`badge-${item.testId}`}
                     >

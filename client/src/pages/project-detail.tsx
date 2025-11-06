@@ -427,19 +427,73 @@ export default function ProjectDetail() {
         </div>
 
         {/* Tabs Layout */}
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-          <TabsList className="grid w-full max-w-4xl grid-cols-4">
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
-            <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
-            <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
-          </TabsList>
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
+          {/* Desktop Tabs */}
+          <div className="hidden md:block">
+            <TabsList className="grid w-full max-w-4xl grid-cols-4">
+              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+              <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
+              <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
+              <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Mobile Tabs - Carousel */}
+          <div className="md:hidden w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <TabsList className="inline-flex gap-2 h-auto">
+              <TabsTrigger 
+                value="overview" 
+                data-testid="tab-overview" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Overview
+              </TabsTrigger>
+              <TabsTrigger 
+                value="messages" 
+                data-testid="tab-messages" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Messages
+              </TabsTrigger>
+              <TabsTrigger 
+                value="tasks" 
+                data-testid="tab-tasks" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Internal Tasks
+              </TabsTrigger>
+              <TabsTrigger 
+                value="progress-notes" 
+                data-testid="tab-progress-notes" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Progress Notes
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Mobile Section Title */}
+          {isMobile && (
+            <div className="mt-4 mb-2">
+              <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
+                {currentTab === "overview" && "Overview"}
+                {currentTab === "messages" && "Messages"}
+                {currentTab === "tasks" && "Internal Tasks"}
+                {currentTab === "progress-notes" && "Progress Notes"}
+              </h2>
+            </div>
+          )}
 
           <SwipeableTabsWrapper
             tabs={["overview", "messages", "tasks", "progress-notes"]}
             currentTab={currentTab}
             onTabChange={setCurrentTab}
             enabled={isMobile}
+            dataAttribute="project"
           >
             <TabsContent value="overview" className="mt-6">
             <div className="space-y-6">
@@ -499,76 +553,149 @@ export default function ProjectDetail() {
                     <p className="text-muted-foreground">No internal tasks for this project yet.</p>
                   </div>
                 ) : (
-                  <div className="border rounded-lg">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Priority</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Assigned To</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {projectInternalTasks.map((task: any) => (
-                          <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
-                            <TableCell className="font-medium">
-                              <RouterLink to={`/internal-tasks?task=${task.id}`}>
-                                <button className="hover:underline text-left" data-testid={`link-task-${task.id}`}>
-                                  {task.title}
-                                </button>
-                              </RouterLink>
-                            </TableCell>
-                            <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={
-                                  task.priority === 'urgent' ? 'destructive' :
-                                  task.priority === 'high' ? 'default' :
-                                  'secondary'
-                                }
-                                data-testid={`badge-priority-${task.id}`}
-                              >
-                                {task.priority}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  task.status === 'closed' ? 'outline' :
-                                  task.status === 'in_progress' ? 'default' :
-                                  'secondary'
-                                }
-                                data-testid={`badge-status-${task.id}`}
-                              >
-                                {task.status === 'in_progress' ? 'In Progress' : task.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {format(new Date(task.createdAt), 'MMM d, yyyy')}
-                            </TableCell>
-                            <TableCell className="text-right">
+                  <>
+                    {/* Desktop Table */}
+                    <div className="hidden md:block border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Priority</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Assigned To</TableHead>
+                            <TableHead>Created</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {projectInternalTasks.map((task: any) => (
+                            <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
+                              <TableCell className="font-medium">
+                                <RouterLink to={`/internal-tasks?task=${task.id}`}>
+                                  <button className="hover:underline text-left" data-testid={`link-task-${task.id}`}>
+                                    {task.title}
+                                  </button>
+                                </RouterLink>
+                              </TableCell>
+                              <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={
+                                    task.priority === 'urgent' ? 'destructive' :
+                                    task.priority === 'high' ? 'default' :
+                                    'secondary'
+                                  }
+                                  data-testid={`badge-priority-${task.id}`}
+                                >
+                                  {task.priority}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    task.status === 'closed' ? 'outline' :
+                                    task.status === 'in_progress' ? 'default' :
+                                    'secondary'
+                                  }
+                                  data-testid={`badge-status-${task.id}`}
+                                >
+                                  {task.status === 'in_progress' ? 'In Progress' : task.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {format(new Date(task.createdAt), 'MMM d, yyyy')}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    data-testid={`button-view-task-${task.id}`}
+                                  >
+                                    View
+                                  </Button>
+                                </RouterLink>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-3">
+                      {projectInternalTasks.map((task: any) => (
+                        <Card key={task.id} data-testid={`card-internal-task-${task.id}`}>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div className="font-medium text-base">{task.title}</div>
+                              
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Type:</span>
+                                  <p className="font-medium">{task.taskType?.name || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Assigned To:</span>
+                                  <p className="font-medium">
+                                    {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Priority:</span>
+                                  <div className="mt-1">
+                                    <Badge 
+                                      variant={
+                                        task.priority === 'urgent' ? 'destructive' :
+                                        task.priority === 'high' ? 'default' :
+                                        'secondary'
+                                      }
+                                      data-testid={`badge-priority-${task.id}`}
+                                    >
+                                      {task.priority}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Status:</span>
+                                  <div className="mt-1">
+                                    <Badge
+                                      variant={
+                                        task.status === 'closed' ? 'outline' :
+                                        task.status === 'in_progress' ? 'default' :
+                                        'secondary'
+                                      }
+                                      data-testid={`badge-status-${task.id}`}
+                                    >
+                                      {task.status === 'in_progress' ? 'In Progress' : task.status}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div className="col-span-2">
+                                  <span className="text-muted-foreground">Created:</span>
+                                  <p className="font-medium">{format(new Date(task.createdAt), 'MMM d, yyyy')}</p>
+                                </div>
+                              </div>
+
                               <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
                                 <Button
-                                  variant="ghost"
-                                  size="sm"
+                                  variant="outline"
+                                  className="w-full h-11"
                                   data-testid={`button-view-task-${task.id}`}
                                 >
-                                  View
+                                  View Task
                                 </Button>
                               </RouterLink>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>

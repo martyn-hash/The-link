@@ -987,7 +987,7 @@ export default function Projects() {
                     size="sm"
                     onClick={() => setViewMode("list")}
                     data-testid="button-view-list"
-                    className="h-8 px-2 md:px-3"
+                    className="h-11 md:h-8 px-2 md:px-3"
                   >
                     <List className="w-4 h-4" />
                     <span className="hidden md:inline ml-2">List</span>
@@ -997,7 +997,7 @@ export default function Projects() {
                     size="sm"
                     onClick={() => setViewMode("dashboard")}
                     data-testid="button-view-dashboard"
-                    className="h-8 px-2 md:px-3"
+                    className="h-11 md:h-8 px-2 md:px-3"
                   >
                     <BarChart3 className="w-4 h-4" />
                     <span className="hidden md:inline ml-2">Dashboard</span>
@@ -1010,7 +1010,7 @@ export default function Projects() {
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
-                  className="relative h-8 px-2 md:px-4"
+                  className="relative h-11 md:h-8 px-2 md:px-4"
                   data-testid="button-open-filters"
                 >
                   <Filter className="w-4 h-4" />

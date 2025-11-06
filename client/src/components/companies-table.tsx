@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Table,
   TableBody,
@@ -232,6 +234,7 @@ export default function CompaniesTable({
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Fetch all services
   const { data: allServices = [] } = useQuery<Service[]>({
@@ -898,8 +901,8 @@ export default function CompaniesTable({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-x-auto">
+      {/* Desktop Table */}
+      <div className="hidden md:block border rounded-lg overflow-x-auto">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <Table>
             <TableHeader>
@@ -976,6 +979,90 @@ export default function CompaniesTable({
             </TableBody>
           </Table>
         </DndContext>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {sortedClients.length === 0 ? (
+          <div className="text-center py-12">
+            {searchQuery ? (
+              <>
+                <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                  No Results Found
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  No companies match your search query
+                </p>
+              </>
+            ) : (
+              <>
+                <Building className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                  No Companies Found
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  No clients with Companies House connections
+                </p>
+              </>
+            )}
+          </div>
+        ) : (
+          sortedClients.map((client) => (
+            <Card key={client.id} data-testid={`card-company-${client.id}`}>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Checkbox and Company Name */}
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={selectedClients.has(client.id)}
+                      onCheckedChange={(checked) => onSelectClient(client.id, !!checked)}
+                      data-testid={`checkbox-company-${client.id}`}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-base">{client.name}</h3>
+                    </div>
+                  </div>
+
+                  {/* Company Details */}
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Company Number:</span>
+                      <p className="font-medium">{client.companyNumber || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status:</span>
+                      <div className="mt-1">
+                        <Badge 
+                          variant={client.companyStatus === 'active' ? 'default' : 'secondary'}
+                          data-testid={`badge-status-${client.id}`}
+                        >
+                          {client.companyStatus || '-'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Type:</span>
+                      <p className="font-medium">{client.companyType || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <Link to={`/clients/${client.id}`}>
+                    <Button
+                      variant="outline"
+                      className="w-full h-11"
+                      data-testid={`button-view-company-${client.id}`}
+                    >
+                      View Details
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );
