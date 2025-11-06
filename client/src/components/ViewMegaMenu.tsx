@@ -11,13 +11,16 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ProjectView, Dashboard } from "@shared/schema";
+import { useIsMobile } from "@/hooks/use-mobile";
+import type { ProjectView } from "@shared/schema";
+import type { Dashboard } from "@/pages/projects";
 
 interface ViewMegaMenuProps {
   currentViewMode: "list" | "kanban" | "dashboard";
   onLoadListView: (view: ProjectView) => void;
   onLoadKanbanView: (view: ProjectView) => void;
   onLoadDashboard: (dashboard: Dashboard) => void;
+  isMobileIconOnly?: boolean;
 }
 
 export default function ViewMegaMenu({
@@ -25,9 +28,11 @@ export default function ViewMegaMenu({
   onLoadListView,
   onLoadKanbanView,
   onLoadDashboard,
+  isMobileIconOnly = false,
 }: ViewMegaMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // Fetch all saved views
   const { data: savedViews = [] } = useQuery<ProjectView[]>({
@@ -111,18 +116,18 @@ export default function ViewMegaMenu({
         <Button 
           variant="outline" 
           data-testid="button-view-mega-menu"
-          className="gap-2"
+          className={isMobileIconOnly ? "h-11 px-3" : "gap-2"}
         >
           <LayoutDashboard className="h-4 w-4" />
-          Saved Views
+          {!isMobileIconOnly && <span>Saved Views</span>}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-[700px] p-0"
-        onMouseLeave={() => setMenuOpen(false)}
+        className={isMobile ? "w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-0" : "w-[700px] p-0"}
+        onMouseLeave={() => !isMobile && setMenuOpen(false)}
       >
-        <div className="grid grid-cols-3 divide-x">
+        <div className={isMobile ? "flex flex-col divide-y" : "grid grid-cols-3 divide-x"}>
           {/* Lists Column */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -153,7 +158,7 @@ export default function ViewMegaMenu({
                         e.stopPropagation();
                         deleteViewMutation.mutate(view.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className={isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"}
                       data-testid={`button-delete-list-${view.id}`}
                     >
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
@@ -194,7 +199,7 @@ export default function ViewMegaMenu({
                         e.stopPropagation();
                         deleteViewMutation.mutate(view.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className={isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"}
                       data-testid={`button-delete-kanban-${view.id}`}
                     >
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
@@ -235,7 +240,7 @@ export default function ViewMegaMenu({
                         e.stopPropagation();
                         deleteDashboardMutation.mutate(dashboard.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className={isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"}
                       data-testid={`button-delete-dashboard-${dashboard.id}`}
                     >
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />

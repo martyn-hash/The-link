@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithRelations, type User } from "@shared/schema";
+import { type ProjectWithRelations, type User, type ProjectView } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
@@ -58,7 +58,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type ViewMode = "kanban" | "list" | "dashboard";
 
-interface Widget {
+export interface Widget {
   id: string;
   type: "bar" | "pie" | "number" | "line";
   title: string;
@@ -66,7 +66,7 @@ interface Widget {
   metric?: string;
 }
 
-interface Dashboard {
+export interface Dashboard {
   id: string;
   userId: string;
   name: string;
@@ -224,7 +224,7 @@ export default function Projects() {
   });
 
   // Fetch saved project views
-  const { data: savedViews = [] } = useQuery<any[]>({
+  const { data: savedViews = [] } = useQuery<ProjectView[]>({
     queryKey: ["/api/project-views"],
     enabled: isAuthenticated && !!user,
     retry: false,
@@ -268,7 +268,7 @@ export default function Projects() {
   }, [allServices, dashboardServiceFilter]);
 
   // Handler to load a saved view
-  const handleLoadSavedView = (view: any) => {
+  const handleLoadSavedView = (view: ProjectView) => {
     try {
       const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
       
@@ -414,6 +414,16 @@ export default function Projects() {
       toast({
         title: "Error",
         description: "Please enter a view name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Only save list/kanban views, dashboards use separate mutation
+    if (viewMode !== "list" && viewMode !== "kanban") {
+      toast({
+        title: "Error",
+        description: "Dashboard views must be saved using the dashboard creation dialog",
         variant: "destructive",
       });
       return;
@@ -1031,6 +1041,26 @@ export default function Projects() {
 
             {/* Mobile View - Compact controls only */}
             <div className="flex md:hidden items-center gap-2 flex-shrink-0">
+              {/* Saved Views Menu */}
+              <ViewMegaMenu
+                currentViewMode={viewMode}
+                onLoadListView={handleLoadSavedView}
+                onLoadKanbanView={handleLoadSavedView}
+                onLoadDashboard={handleLoadDashboard}
+                isMobileIconOnly={true}
+              />
+
+              {/* View All Projects Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleViewAllProjects}
+                data-testid="button-view-all-projects-mobile"
+                className="h-11 px-3"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+
               {/* View Mode Toggle */}
               {isManagerOrAdmin && (
                 <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
