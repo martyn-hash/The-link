@@ -164,6 +164,156 @@ interface EmailThread {
   clientName: string | null;
 }
 
+// Separate component to avoid hooks-in-loop issue
+interface ThreadListItemProps {
+  thread: MessageThread;
+  isActive: boolean;
+  isMobile: boolean;
+  isSwipedLeft: boolean;
+  isSwipedRight: boolean;
+  onSwipedLeft: () => void;
+  onSwipedRight: () => void;
+  onReplyAction: () => void;
+  onArchiveAction: () => void;
+  onClick: () => void;
+}
+
+function ThreadListItem({
+  thread,
+  isActive,
+  isMobile,
+  isSwipedLeft,
+  isSwipedRight,
+  onSwipedLeft,
+  onSwipedRight,
+  onReplyAction,
+  onArchiveAction,
+  onClick
+}: ThreadListItemProps) {
+  // Use ref for immediate updates (state is too slow)
+  const isSwipingRef = useRef(false);
+  const swipeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Always call hook (React rules of hooks)
+  const swipeHandlers = useSwipeable({
+    onSwiping: () => {
+      isSwipingRef.current = true;
+      if (swipeTimeoutRef.current) {
+        clearTimeout(swipeTimeoutRef.current);
+      }
+    },
+    onSwipedLeft: () => {
+      onSwipedLeft();
+      // Keep swiping flag true briefly to prevent click
+      swipeTimeoutRef.current = setTimeout(() => {
+        isSwipingRef.current = false;
+      }, 300);
+    },
+    onSwipedRight: () => {
+      onSwipedRight();
+      // Keep swiping flag true briefly to prevent click
+      swipeTimeoutRef.current = setTimeout(() => {
+        isSwipingRef.current = false;
+      }, 300);
+    },
+    preventScrollOnSwipe: true,
+    trackMouse: false,
+    delta: 50,
+  });
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Don't open thread if currently swiping or just swiped
+    if (isSwipingRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    onClick();
+  };
+
+  return (
+    <div
+      {...(isMobile ? swipeHandlers : {})}
+      className="relative overflow-hidden"
+      data-testid={`thread-container-${thread.id}`}
+    >
+      {/* Swipe action buttons */}
+      {isSwipedLeft && (
+        <div className="absolute inset-y-0 right-0 flex items-center bg-blue-500 px-4 z-10">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onReplyAction}
+            className="text-white hover:bg-blue-600"
+            data-testid={`button-swipe-reply-${thread.id}`}
+          >
+            <Reply className="w-5 h-5" />
+          </Button>
+        </div>
+      )}
+      {isSwipedRight && (
+        <div className="absolute inset-y-0 left-0 flex items-center bg-purple-500 px-4 z-10">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onArchiveAction}
+            className="text-white hover:bg-purple-600"
+            data-testid={`button-swipe-archive-${thread.id}`}
+          >
+            {thread.isArchived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
+          </Button>
+        </div>
+      )}
+
+      <button
+        onClick={handleClick}
+        className={`w-full text-left p-2 hover:bg-muted/50 transition-all ${
+          isActive ? 'bg-muted' : ''
+        } ${isSwipedLeft ? 'translate-x-[-80px]' : isSwipedRight ? 'translate-x-[80px]' : ''}`}
+        data-testid={`thread-item-${thread.id}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            {thread.threadType === 'project' ? (
+              <div className="flex items-center gap-2 mb-0.5">
+                <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground truncate">
+                  {thread.project.description}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-0.5">
+                <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground truncate">
+                  {thread.participants.map(p => 
+                    [p.firstName, p.lastName].filter(Boolean).join(' ') || p.email
+                  ).join(', ')}
+                </span>
+              </div>
+            )}
+            <p className="font-semibold text-sm mt-0.5 truncate">
+              {thread.topic}
+            </p>
+            {thread.lastMessage && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                {thread.lastMessage.content}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+            </span>
+            {thread.unreadCount > 0 && (
+              <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
 export default function Messages() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -1070,110 +1220,32 @@ export default function Messages() {
                     )
                   ) : filteredThreads && filteredThreads.length > 0 ? (
                     <div className="divide-y divide-border">
-                      {filteredThreads.map((thread) => {
-                        const swipeHandlers = isMobile ? useSwipeable({
-                          onSwipedLeft: () => handleSwipeLeft(thread.id),
-                          onSwipedRight: () => handleSwipeRight(thread.id),
-                          trackMouse: false,
-                          delta: 50,
-                        }) : {};
-                        
-                        const isSwipedLeft = swipedThreadId === thread.id && swipeDirection === 'left';
-                        const isSwipedRight = swipedThreadId === thread.id && swipeDirection === 'right';
-
-                        return (
-                          <div
-                            key={thread.id}
-                            {...swipeHandlers}
-                            className="relative overflow-hidden"
-                            data-testid={`thread-container-${thread.id}`}
-                          >
-                            {/* Swipe action buttons */}
-                            {isSwipedLeft && (
-                              <div className="absolute inset-y-0 right-0 flex items-center bg-blue-500 px-4 z-10">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleReplyAction(thread)}
-                                  className="text-white hover:bg-blue-600"
-                                  data-testid={`button-swipe-reply-${thread.id}`}
-                                >
-                                  <Reply className="w-5 h-5" />
-                                </Button>
-                              </div>
-                            )}
-                            {isSwipedRight && (
-                              <div className="absolute inset-y-0 left-0 flex items-center bg-purple-500 px-4 z-10">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleArchiveAction(thread)}
-                                  className="text-white hover:bg-purple-600"
-                                  data-testid={`button-swipe-archive-${thread.id}`}
-                                >
-                                  {thread.isArchived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
-                                </Button>
-                              </div>
-                            )}
-
-                            {/* Thread item */}
-                            <button
-                              onClick={() => {
-                                if (swipedThreadId === thread.id) {
-                                  setSwipedThreadId(null);
-                                  setSwipeDirection(null);
-                                } else {
-                                  setSelectedThreadId(thread.id);
-                                  setSelectedThreadType(thread.threadType);
-                                  if (isMobile) {
-                                    setShowMobileThreadView(true);
-                                  }
-                                }
-                              }}
-                              className={`w-full text-left p-2 hover:bg-muted/50 transition-all ${
-                                selectedThreadId === thread.id ? 'bg-muted' : ''
-                              } ${isSwipedLeft ? 'translate-x-[-80px]' : isSwipedRight ? 'translate-x-[80px]' : ''}`}
-                              data-testid={`thread-item-${thread.id}`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  {thread.threadType === 'project' ? (
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                      <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                                      <span className="text-sm text-muted-foreground truncate">
-                                        {thread.project.description}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                      <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                                      <span className="text-sm text-muted-foreground truncate">
-                                        {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
-                                      </span>
-                                    </div>
-                                  )}
-                                  <p className="font-semibold text-sm mt-0.5 truncate">
-                                    {thread.topic}
-                                  </p>
-                                  {thread.lastMessage && (
-                                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                      {thread.lastMessage.content}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
-                                  </span>
-                                  {thread.unreadCount > 0 && (
-                                    <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          </div>
-                        );
-                      })}
+                      {filteredThreads.map((thread) => (
+                        <ThreadListItem
+                          key={thread.id}
+                          thread={thread}
+                          isActive={selectedThreadId === thread.id}
+                          isMobile={isMobile}
+                          isSwipedLeft={swipedThreadId === thread.id && swipeDirection === 'left'}
+                          isSwipedRight={swipedThreadId === thread.id && swipeDirection === 'right'}
+                          onSwipedLeft={() => handleSwipeLeft(thread.id)}
+                          onSwipedRight={() => handleSwipeRight(thread.id)}
+                          onReplyAction={() => handleReplyAction(thread)}
+                          onArchiveAction={() => handleArchiveAction(thread)}
+                          onClick={() => {
+                            if (swipedThreadId === thread.id) {
+                              setSwipedThreadId(null);
+                              setSwipeDirection(null);
+                            } else {
+                              setSelectedThreadId(thread.id);
+                              setSelectedThreadType(thread.threadType);
+                              if (isMobile) {
+                                setShowMobileThreadView(true);
+                              }
+                            }
+                          }}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="p-8 text-center text-muted-foreground">
