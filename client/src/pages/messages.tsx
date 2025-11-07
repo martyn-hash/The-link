@@ -38,7 +38,8 @@ import {
   Users,
   FolderKanban,
   Plus,
-  Mail
+  Mail,
+  Check
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -596,19 +597,37 @@ export default function Messages() {
   };
 
   const handleCreateStaffThread = () => {
-    if (!newThreadTopic.trim() || selectedParticipants.length === 0) {
+    if (!newThreadTopic.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a topic and select at least one participant",
+        title: "Topic required",
+        description: "Please enter a topic for the thread",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedParticipants.length === 0) {
+      toast({
+        title: "Participants required",
+        description: "Please select at least one participant",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!initialMessage.trim()) {
+      toast({
+        title: "Message required",
+        description: "Please enter an initial message for the thread",
         variant: "destructive",
       });
       return;
     }
 
     createStaffThreadMutation.mutate({
-      topic: newThreadTopic,
+      topic: newThreadTopic.trim(),
       participantUserIds: selectedParticipants,
-      initialMessage: initialMessage.trim() ? { content: initialMessage } : undefined,
+      initialMessage: { content: initialMessage.trim() },
     });
   };
 
@@ -1411,11 +1430,11 @@ export default function Messages() {
           <DialogHeader>
             <DialogTitle>Create New Staff Thread</DialogTitle>
             <DialogDescription>
-              Start a new conversation with team members
+              Start a new conversation with team members and send your first message.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
               <Label htmlFor="topic">Topic</Label>
               <Input
                 id="topic"
@@ -1425,57 +1444,116 @@ export default function Messages() {
                 data-testid="input-thread-topic"
               />
             </div>
-            <div>
-              <Label htmlFor="participant-search">Add Participants</Label>
-              <Input
-                id="participant-search"
-                placeholder="Search users..."
-                value={participantSearch}
-                onChange={(e) => setParticipantSearch(e.target.value)}
-                data-testid="input-participant-search"
-              />
-              <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
-                {usersLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading users...</div>
-                ) : filteredParticipants && filteredParticipants.length > 0 ? (
-                  filteredParticipants.map((u) => (
-                    <label key={u.id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedParticipants.includes(u.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedParticipants([...selectedParticipants, u.id]);
-                          } else {
-                            setSelectedParticipants(selectedParticipants.filter(id => id !== u.id));
-                          }
-                        }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{getUserDisplayName(u)}</span>
-                    </label>
-                  ))
-                ) : (
-                  <div className="text-sm text-muted-foreground">No users found</div>
+            
+            <div className="space-y-2">
+              <Label>Participants</Label>
+              
+              {/* Search Input */}
+              <div className="relative">
+                <Input
+                  placeholder="Search and select staff members..."
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  data-testid="input-participant-search"
+                />
+                
+                {/* Search Results Dropdown */}
+                {participantSearch && (
+                  <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
+                    {usersLoading ? (
+                      <div className="text-sm text-muted-foreground p-4 text-center">Loading users...</div>
+                    ) : filteredParticipants && filteredParticipants.length > 0 ? (
+                      <div className="p-1">
+                        {filteredParticipants.map((u) => {
+                          const isSelected = selectedParticipants.includes(u.id);
+                          return (
+                            <div
+                              key={u.id}
+                              onClick={() => {
+                                if (!isSelected) {
+                                  setSelectedParticipants([...selectedParticipants, u.id]);
+                                }
+                                setParticipantSearch('');
+                              }}
+                              className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md cursor-pointer"
+                              data-testid={`button-add-participant-${u.id}`}
+                            >
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{getUserDisplayName(u)}</div>
+                                <div className="text-xs text-muted-foreground">{u.email}</div>
+                              </div>
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-primary" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground p-4 text-center">No users found</div>
+                    )}
+                  </div>
                 )}
               </div>
+
+              {/* Selected Participants */}
+              {selectedParticipants.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 bg-muted/50 rounded-md min-h-[40px]">
+                  {selectedParticipants.map((userId) => {
+                    const user = allUsers?.find(u => u.id === userId);
+                    return user ? (
+                      <Badge
+                        key={userId}
+                        variant="secondary"
+                        className="flex items-center gap-1"
+                        data-testid={`selected-participant-${userId}`}
+                      >
+                        <span>{getUserDisplayName(user)}</span>
+                        <button
+                          onClick={() => setSelectedParticipants(selectedParticipants.filter(id => id !== userId))}
+                          className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                          data-testid={`remove-participant-${userId}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ) : null;
+                  })}
+                </div>
+              )}
             </div>
-            <div>
-              <Label htmlFor="initial-message">Initial Message (Optional)</Label>
+
+            <div className="space-y-2">
+              <Label htmlFor="initial-message">Initial Message</Label>
               <Textarea
                 id="initial-message"
-                placeholder="Enter your first message..."
+                placeholder="Type your first message..."
                 value={initialMessage}
                 onChange={(e) => setInitialMessage(e.target.value)}
+                className="min-h-[100px]"
                 data-testid="input-initial-message"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewThreadDialog(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowNewThreadDialog(false);
+                setNewThreadTopic('');
+                setSelectedParticipants([]);
+                setInitialMessage('');
+                setParticipantSearch('');
+              }}
+              data-testid="button-cancel"
+            >
               Cancel
             </Button>
-            <Button onClick={handleCreateStaffThread} data-testid="button-create-thread">
+            <Button 
+              onClick={handleCreateStaffThread} 
+              disabled={!newThreadTopic.trim() || selectedParticipants.length === 0 || !initialMessage.trim()}
+              data-testid="button-create-thread"
+            >
               Create Thread
             </Button>
           </DialogFooter>

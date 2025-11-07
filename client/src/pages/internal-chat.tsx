@@ -1055,7 +1055,7 @@ export default function InternalChat() {
           <DialogHeader>
             <DialogTitle>Create New Staff Thread</DialogTitle>
             <DialogDescription>
-              Start a new conversation with team members
+              Start a new conversation with team members and send your first message.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1072,37 +1072,21 @@ export default function InternalChat() {
             
             <div className="space-y-2">
               <Label>Participants</Label>
-              <div className="border rounded-md p-2 min-h-[100px]">
-                {selectedParticipants.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedParticipants.map((userId) => {
-                      const user = allUsers?.find(u => u.id === userId);
-                      return user ? (
-                        <div key={userId} className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-md">
-                          <span className="text-sm">{getUserDisplayName(user)}</span>
-                          <button
-                            onClick={() => setSelectedParticipants(prev => prev.filter(id => id !== userId))}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground mb-2">No participants selected</p>
-                )}
+              
+              {/* Search Input */}
+              <div className="relative">
                 <Input
-                  placeholder="Search users..."
+                  placeholder="Search and select staff members..."
                   value={participantSearch}
                   onChange={(e) => setParticipantSearch(e.target.value)}
                   data-testid="input-search-participants"
                 />
+                
+                {/* Search Results Dropdown */}
                 {participantSearch && (
-                  <div className="mt-2 max-h-[150px] overflow-y-auto space-y-1 relative z-50">
+                  <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
                     {usersLoading ? (
-                      <div className="text-sm text-muted-foreground p-2">Loading users...</div>
+                      <div className="text-sm text-muted-foreground p-4 text-center">Loading users...</div>
                     ) : allUsers && allUsers.length > 0 ? (
                       <>
                         {allUsers
@@ -1111,45 +1095,77 @@ export default function InternalChat() {
                             (getUserDisplayName(u).toLowerCase().includes(participantSearch.toLowerCase()) ||
                              u.email.toLowerCase().includes(participantSearch.toLowerCase()))
                           )
-                          .map(u => (
-                            <button
-                              type="button"
-                              key={u.id}
-                              onClick={() => {
-                                setSelectedParticipants(prev => [...prev, u.id]);
-                                setParticipantSearch('');
-                              }}
-                              className="w-full text-left px-2 py-1.5 hover:bg-muted rounded-md text-sm bg-background border"
-                              data-testid={`button-add-participant-${u.id}`}
-                            >
-                              <div className="font-medium">{getUserDisplayName(u)}</div>
-                              <div className="text-xs text-muted-foreground">{u.email}</div>
-                            </button>
-                          ))}
-                        {allUsers.filter(u => 
-                          !selectedParticipants.includes(u.id) &&
-                          (getUserDisplayName(u).toLowerCase().includes(participantSearch.toLowerCase()) ||
-                           u.email.toLowerCase().includes(participantSearch.toLowerCase()))
-                        ).length === 0 && (
-                          <div className="text-sm text-muted-foreground p-2">No users found matching "{participantSearch}"</div>
+                          .length > 0 ? (
+                          <div className="p-1">
+                            {allUsers
+                              .filter(u => 
+                                !selectedParticipants.includes(u.id) &&
+                                (getUserDisplayName(u).toLowerCase().includes(participantSearch.toLowerCase()) ||
+                                 u.email.toLowerCase().includes(participantSearch.toLowerCase()))
+                              )
+                              .map(u => (
+                                <div
+                                  key={u.id}
+                                  onClick={() => {
+                                    setSelectedParticipants(prev => [...prev, u.id]);
+                                    setParticipantSearch('');
+                                  }}
+                                  className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md cursor-pointer"
+                                  data-testid={`button-add-participant-${u.id}`}
+                                >
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">{getUserDisplayName(u)}</div>
+                                    <div className="text-xs text-muted-foreground">{u.email}</div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground p-4 text-center">No users found matching "{participantSearch}"</div>
                         )}
                       </>
                     ) : (
-                      <div className="text-sm text-muted-foreground p-2">No users available</div>
+                      <div className="text-sm text-muted-foreground p-4 text-center">No users available</div>
                     )}
                   </div>
                 )}
               </div>
+
+              {/* Selected Participants */}
+              {selectedParticipants.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 bg-muted/50 rounded-md min-h-[40px]">
+                  {selectedParticipants.map((userId) => {
+                    const user = allUsers?.find(u => u.id === userId);
+                    return user ? (
+                      <Badge
+                        key={userId}
+                        variant="secondary"
+                        className="flex items-center gap-1"
+                        data-testid={`selected-participant-${userId}`}
+                      >
+                        <span>{getUserDisplayName(user)}</span>
+                        <button
+                          onClick={() => setSelectedParticipants(prev => prev.filter(id => id !== userId))}
+                          className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                          data-testid={`remove-participant-${userId}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ) : null;
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="initial-message">Initial Message (Optional)</Label>
+              <Label htmlFor="initial-message">Initial Message</Label>
               <Textarea
                 id="initial-message"
-                placeholder="Enter your first message..."
+                placeholder="Type your first message..."
                 value={initialMessage}
                 onChange={(e) => setInitialMessage(e.target.value)}
-                className="min-h-[80px]"
+                className="min-h-[100px]"
                 data-testid="input-initial-message"
               />
             </div>
@@ -1170,21 +1186,40 @@ export default function InternalChat() {
             </Button>
             <Button
               onClick={() => {
-                if (newThreadTopic && selectedParticipants.length > 0) {
-                  createStaffThreadMutation.mutate({
-                    topic: newThreadTopic,
-                    participantUserIds: selectedParticipants,
-                    initialMessage: initialMessage ? { content: initialMessage } : undefined,
-                  });
-                } else {
+                if (!newThreadTopic.trim()) {
                   toast({
-                    title: "Validation Error",
-                    description: "Please enter a topic and select at least one participant",
+                    title: "Topic required",
+                    description: "Please enter a topic for the thread",
                     variant: "destructive",
                   });
+                  return;
                 }
+                
+                if (selectedParticipants.length === 0) {
+                  toast({
+                    title: "Participants required",
+                    description: "Please select at least one participant",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                if (!initialMessage.trim()) {
+                  toast({
+                    title: "Message required",
+                    description: "Please enter an initial message for the thread",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                createStaffThreadMutation.mutate({
+                  topic: newThreadTopic.trim(),
+                  participantUserIds: selectedParticipants,
+                  initialMessage: { content: initialMessage.trim() },
+                });
               }}
-              disabled={createStaffThreadMutation.isPending || !newThreadTopic || selectedParticipants.length === 0}
+              disabled={createStaffThreadMutation.isPending || !newThreadTopic.trim() || selectedParticipants.length === 0 || !initialMessage.trim()}
               data-testid="button-create-thread"
             >
               {createStaffThreadMutation.isPending ? (

@@ -14,9 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, User as UserIcon } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { X, Check } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
 interface User {
@@ -50,6 +49,8 @@ export default function NewProjectThreadModal({
   const [topic, setTopic] = useState('');
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [initialMessage, setInitialMessage] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   // Fetch all users for participant selection
   const { data: allUsers } = useQuery<User[]>({
@@ -67,19 +68,19 @@ export default function NewProjectThreadModal({
 
   // Create thread mutation
   const createThreadMutation = useMutation({
-    mutationFn: async (data: { topic: string; participantUserIds: string[] }) => {
+    mutationFn: async (data: { topic: string; participantUserIds: string[]; initialMessage: string }) => {
       return await apiRequest('POST', '/api/internal/project-messages/threads', {
         projectId: project.id,
         topic: data.topic,
         participantUserIds: data.participantUserIds,
-        initialMessage: null,
+        initialMessage: data.initialMessage ? { content: data.initialMessage } : null,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', project.id] });
       toast({
         title: "Thread created",
-        description: "The conversation thread has been created successfully.",
+        description: "The conversation thread has been created with your message.",
       });
       handleClose();
     },
@@ -96,6 +97,8 @@ export default function NewProjectThreadModal({
     setTopic('');
     setSelectedParticipants([]);
     setSearchTerm('');
+    setInitialMessage('');
+    setShowSearchResults(false);
     onOpenChange(false);
   };
 
@@ -118,9 +121,19 @@ export default function NewProjectThreadModal({
       return;
     }
 
+    if (!initialMessage.trim()) {
+      toast({
+        title: "Message required",
+        description: "Please enter an initial message for the thread",
+        variant: "destructive",
+      });
+      return;
+    }
+
     createThreadMutation.mutate({
       topic: topic.trim(),
       participantUserIds: selectedParticipants,
+      initialMessage: initialMessage.trim(),
     });
   };
 
@@ -161,7 +174,7 @@ export default function NewProjectThreadModal({
         <DialogHeader>
           <DialogTitle>New Conversation Thread</DialogTitle>
           <DialogDescription>
-            Create a new conversation thread for this project. Select staff members to invite.
+            Create a new conversation thread for this project. Add staff members and send your first message.
           </DialogDescription>
         </DialogHeader>
 
@@ -182,9 +195,71 @@ export default function NewProjectThreadModal({
           <div className="space-y-2">
             <Label>Participants</Label>
             
+            {/* Search Input */}
+            <div className="relative">
+              <Input
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setShowSearchResults(e.target.value.length > 0);
+                }}
+                onFocus={() => setShowSearchResults(searchTerm.length > 0)}
+                placeholder="Search and select staff members..."
+                data-testid="input-search-participants"
+              />
+              
+              {/* Search Results Dropdown */}
+              {showSearchResults && searchTerm.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
+                  {sortedUsers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No staff members found
+                    </p>
+                  ) : (
+                    <div className="p-1">
+                      {sortedUsers.map(staffUser => {
+                        const isProjectStaff = projectStaffIds.has(staffUser.id);
+                        const isSelected = selectedParticipants.includes(staffUser.id);
+                        
+                        return (
+                          <div
+                            key={staffUser.id}
+                            className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md cursor-pointer"
+                            onClick={() => {
+                              toggleParticipant(staffUser.id);
+                              setSearchTerm('');
+                              setShowSearchResults(false);
+                            }}
+                            data-testid={`user-item-${staffUser.id}`}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">
+                                  {getUserDisplayName(staffUser)}
+                                </span>
+                                {isProjectStaff && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Project Staff
+                                  </Badge>
+                                )}
+                                {isSelected && (
+                                  <Check className="w-4 h-4 text-primary" />
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">{staffUser.email}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Selected Participants */}
             {selectedParticipants.length > 0 && (
-              <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-md">
+              <div className="flex flex-wrap gap-2 p-2 bg-muted/50 rounded-md min-h-[40px]">
                 {selectedParticipants.map(userId => {
                   const participant = allUsers?.find(u => u.id === userId);
                   if (!participant) return null;
@@ -209,63 +284,19 @@ export default function NewProjectThreadModal({
                 })}
               </div>
             )}
+          </div>
 
-            {/* Search Input */}
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search staff members..."
-              data-testid="input-search-participants"
+          {/* Initial Message */}
+          <div className="space-y-2">
+            <Label htmlFor="message">Initial Message</Label>
+            <Textarea
+              id="message"
+              value={initialMessage}
+              onChange={(e) => setInitialMessage(e.target.value)}
+              placeholder="Type your first message..."
+              className="min-h-[100px]"
+              data-testid="input-initial-message"
             />
-
-            {/* User List */}
-            <ScrollArea className="h-[300px] border rounded-md">
-              <div className="p-4 space-y-2">
-                {sortedUsers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No staff members found
-                  </p>
-                ) : (
-                  sortedUsers.map(staffUser => {
-                    const isProjectStaff = projectStaffIds.has(staffUser.id);
-                    const isSelected = selectedParticipants.includes(staffUser.id);
-                    
-                    return (
-                      <div
-                        key={staffUser.id}
-                        className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md"
-                        data-testid={`user-item-${staffUser.id}`}
-                      >
-                        <Checkbox
-                          id={`user-${staffUser.id}`}
-                          checked={isSelected}
-                          onCheckedChange={() => toggleParticipant(staffUser.id)}
-                          data-testid={`checkbox-participant-${staffUser.id}`}
-                        />
-                        <label
-                          htmlFor={`user-${staffUser.id}`}
-                          className="flex-1 cursor-pointer flex items-center gap-2"
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">
-                                {getUserDisplayName(staffUser)}
-                              </span>
-                              {isProjectStaff && (
-                                <Badge variant="outline" className="text-xs">
-                                  Project Staff
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground">{staffUser.email}</p>
-                          </div>
-                        </label>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
           </div>
         </div>
 
@@ -279,7 +310,7 @@ export default function NewProjectThreadModal({
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={createThreadMutation.isPending || !topic.trim() || selectedParticipants.length === 0}
+            disabled={createThreadMutation.isPending || !topic.trim() || selectedParticipants.length === 0 || !initialMessage.trim()}
             data-testid="button-create"
           >
             {createThreadMutation.isPending ? 'Creating...' : 'Create Thread'}
