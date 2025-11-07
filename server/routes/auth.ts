@@ -327,6 +327,25 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
+  // Get users for messaging - accessible to all authenticated users
+  app.get("/api/users/for-messaging", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const users = await storage.getAllUsers();
+      
+      // Strip password hash and sensitive fields from response
+      const sanitizedUsers = users.map(({ passwordHash, ...user }) => ({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      }));
+      res.json(sanitizedUsers);
+    } catch (error) {
+      console.error("Error fetching users for messaging:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   app.post("/api/users", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const { password, ...userData } = req.body;

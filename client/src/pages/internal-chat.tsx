@@ -221,9 +221,9 @@ export default function InternalChat() {
 
   // Fetch all users for participant selection
   const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/users/for-messaging'],
     queryFn: async () => {
-      const response = await fetch('/api/users', {
+      const response = await fetch('/api/users/for-messaging', {
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch users');

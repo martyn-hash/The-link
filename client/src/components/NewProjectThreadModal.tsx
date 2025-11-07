@@ -53,7 +53,7 @@ export default function NewProjectThreadModal({
 
   // Fetch all users for participant selection
   const { data: allUsers } = useQuery<User[]>({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/users/for-messaging'],
     enabled: open,
   });
 
