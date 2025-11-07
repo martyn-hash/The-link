@@ -26,6 +26,7 @@ interface TimelineEntry {
   assignedTo?: string;
   changedBy?: string;
   timeInStage?: string;
+  stageChangeStatus?: 'on_track' | 'behind_schedule' | 'late_overdue'; // For stage changes only
   rawData: any;
 }
 
@@ -123,6 +124,12 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     enabled: !!project.projectTypeId,
   });
 
+  // Create a map of stage name to stage config for easy lookup
+  const stageConfigMap = useMemo(() => {
+    if (!stages) return new Map();
+    return new Map(stages.map((stage: any) => [stage.name, stage]));
+  }, [stages]);
+
   // Filter threads for this project
   const messageThreads = useMemo(() => {
     if (!allThreads) return [];
@@ -189,6 +196,28 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           ? `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`
           : `Project created in ${formatStageName(entry.toStatus)}`;
         
+        // Calculate stage change status based on time in previous stage vs max allowed time
+        let stageChangeStatus: 'on_track' | 'behind_schedule' | 'late_overdue' | undefined;
+        
+        if (entry.fromStatus && entry.businessHoursInPreviousStage !== null && entry.businessHoursInPreviousStage !== undefined) {
+          const previousStageConfig = stageConfigMap.get(entry.fromStatus);
+          
+          if (previousStageConfig?.maxInstanceTime && previousStageConfig.maxInstanceTime > 0) {
+            // Convert business minutes to hours
+            const hoursInPreviousStage = entry.businessHoursInPreviousStage / 60;
+            
+            // Determine status based on time spent vs max allowed
+            if (hoursInPreviousStage > previousStageConfig.maxInstanceTime) {
+              stageChangeStatus = 'late_overdue';
+            } else if (hoursInPreviousStage >= previousStageConfig.maxInstanceTime * 0.8) {
+              // Behind schedule if >= 80% of max time
+              stageChangeStatus = 'behind_schedule';
+            } else {
+              stageChangeStatus = 'on_track';
+            }
+          }
+        }
+        
         entries.push({
           id: `stage-${entry.id}`,
           timestamp: new Date(entry.timestamp),
@@ -196,6 +225,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           detail,
           assignedTo: entry.assignee ? `${entry.assignee.firstName} ${entry.assignee.lastName}` : undefined,
           changedBy: entry.changedBy ? `${entry.changedBy.firstName} ${entry.changedBy.lastName}` : 'System',
+          stageChangeStatus,
           rawData: entry,
         });
       });
@@ -292,7 +322,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     }
     
     return sorted;
-  }, [project.chronology, tasks, communications, messageThreads]);
+  }, [project.chronology, tasks, communications, messageThreads, stageConfigMap]);
 
   // Filter timeline based on selected filters
   const filteredTimeline = useMemo(() => {
@@ -319,11 +349,20 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     });
   }, [timeline, filters]);
 
-  // Get icon for entry type
-  const getTypeIcon = (type: string) => {
+  // Get icon for entry type with color coding for stage changes
+  const getTypeIcon = (type: string, stageChangeStatus?: 'on_track' | 'behind_schedule' | 'late_overdue') => {
     switch (type) {
       case 'stage_change':
-        return <Badge variant="outline" className="gap-1"><FileText className="w-3 h-3" />Stage Change</Badge>;
+        // Apply color coding based on stage change status
+        let colorClass = 'bg-gray-100 dark:bg-gray-900/20'; // Default neutral
+        if (stageChangeStatus === 'on_track') {
+          colorClass = 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200';
+        } else if (stageChangeStatus === 'behind_schedule') {
+          colorClass = 'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200';
+        } else if (stageChangeStatus === 'late_overdue') {
+          colorClass = 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200';
+        }
+        return <Badge variant="outline" className={`gap-1 ${colorClass}`}><FileText className="w-3 h-3" />Stage Change</Badge>;
       case 'task_created':
         return <Badge variant="outline" className="gap-1"><CheckCircle className="w-3 h-3" />Task Created</Badge>;
       case 'task_completed':
@@ -462,7 +501,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                 {/* Type Badge */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1" data-testid={`card-type-${entry.id}`}>
-                    {getTypeIcon(entry.type)}
+                    {getTypeIcon(entry.type, entry.stageChangeStatus)}
                   </div>
                   <span className="text-xs text-muted-foreground" data-testid={`card-timestamp-${entry.id}`}>
                     {formatDistanceToNow(entry.timestamp, { addSuffix: true })}
@@ -550,7 +589,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                   </div>
                 </TableCell>
                 <TableCell data-testid={`cell-type-${entry.id}`}>
-                  {getTypeIcon(entry.type)}
+                  {getTypeIcon(entry.type, entry.stageChangeStatus)}
                 </TableCell>
                 <TableCell data-testid={`cell-detail-${entry.id}`}>
                   <span className="text-sm">{entry.detail}</span>
