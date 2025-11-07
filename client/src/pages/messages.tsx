@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import { useSwipeable } from 'react-swipeable';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isUnauthorizedError } from '@/lib/authUtils';
 import TopNavigation from '@/components/top-navigation';
 import BottomNav from '@/components/bottom-nav';
+import SuperSearch from '@/components/super-search';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   MessageCircle,
   Send,
@@ -39,7 +42,10 @@ import {
   FolderKanban,
   Plus,
   Mail,
-  Check
+  Check,
+  Reply,
+  Smile,
+  Filter
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -182,6 +188,18 @@ export default function Messages() {
   const [emailFilter, setEmailFilter] = useState<'my' | 'all'>('my');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [readStatusFilter, setReadStatusFilter] = useState<'all' | 'read' | 'unread'>('all');
+
+  // Mobile-specific state
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showMobileFilterMenu, setShowMobileFilterMenu] = useState(false);
+  const [swipedThreadId, setSwipedThreadId] = useState<string | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+
+  // Message interaction state
+  const [replyToMessage, setReplyToMessage] = useState<(ProjectMessage | StaffMessage) | null>(null);
+  const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -421,6 +439,14 @@ export default function Messages() {
     }
   }, [selectedThreadId, selectedThreadType, messages]);
 
+  // Reset swipe state when filter menu or search opens
+  useEffect(() => {
+    if (showMobileFilterMenu || mobileSearchOpen) {
+      setSwipedThreadId(null);
+      setSwipeDirection(null);
+    }
+  }, [showMobileFilterMenu, mobileSearchOpen]);
+
   // Helper functions
   const getUserDisplayName = (user: { firstName: string | null; lastName: string | null; email: string }) => {
     if (user.firstName && user.lastName) {
@@ -491,10 +517,22 @@ export default function Messages() {
         attachments = [...attachments, ...voiceAttachments];
       }
 
-      sendMessageMutation.mutate({
+      // Include reply-to metadata if set (requires backend support)
+      const payload: any = {
         content: newMessage || (recordedAudio ? '(Voice Note)' : '(Attachment)'),
         attachments: attachments.length > 0 ? attachments : undefined,
-      });
+      };
+
+      // Add reply-to reference if user is replying to a message
+      // Note: Backend API needs to support replyToMessageId field
+      if (replyToMessage) {
+        payload.replyToMessageId = replyToMessage.id;
+      }
+
+      sendMessageMutation.mutate(payload);
+      
+      // Clear reply-to after sending
+      clearReplyTo();
     } catch (error: any) {
       toast({
         title: "Upload failed",
@@ -594,6 +632,99 @@ export default function Messages() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Swipe handling for thread items
+  const handleSwipeLeft = (threadId: string) => {
+    setSwipedThreadId(threadId);
+    setSwipeDirection('left');
+  };
+
+  const handleSwipeRight = (threadId: string) => {
+    setSwipedThreadId(threadId);
+    setSwipeDirection('right');
+  };
+
+  const handleReplyAction = (thread: MessageThread) => {
+    setSelectedThreadId(thread.id);
+    setSelectedThreadType(thread.threadType);
+    setSwipedThreadId(null);
+    setSwipeDirection(null);
+    if (isMobile) {
+      setShowMobileThreadView(true);
+    }
+  };
+
+  const handleArchiveAction = (thread: MessageThread) => {
+    // Create thread-specific archive mutation based on thread's own type
+    const archiveUrl = thread.threadType === 'staff'
+      ? `/api/staff-messages/threads/${thread.id}/archive`
+      : `/api/internal/project-messages/threads/${thread.id}/archive`;
+    
+    const unarchiveUrl = thread.threadType === 'staff'
+      ? `/api/staff-messages/threads/${thread.id}/unarchive`
+      : `/api/internal/project-messages/threads/${thread.id}/unarchive`;
+
+    const url = thread.isArchived ? unarchiveUrl : archiveUrl;
+
+    apiRequest('PUT', url)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
+        toast({
+          title: "Success",
+          description: thread.isArchived ? "Thread restored" : "Thread archived",
+        });
+      })
+      .catch((error: Error) => {
+        toast({
+          title: "Error",
+          description: error.message || `Failed to ${thread.isArchived ? 'restore' : 'archive'} thread`,
+          variant: "destructive",
+        });
+      });
+
+    setSwipedThreadId(null);
+    setSwipeDirection(null);
+  };
+
+  // Long press handling for message reactions
+  const handleMessageTouchStart = (messageId: string) => {
+    longPressTimer.current = setTimeout(() => {
+      setLongPressedMessageId(messageId);
+      setShowReactionPicker(true);
+    }, 500); // 500ms long press
+  };
+
+  const handleMessageTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleReaction = (emoji: string) => {
+    // TODO: Backend API support needed for persisting reactions
+    // Would typically POST to /api/.../messages/{messageId}/reactions
+    // with { emoji, userId } and store in reactions table
+    
+    // For now, provide user feedback that the feature is recognized
+    toast({
+      title: "Reaction feature",
+      description: `You selected ${emoji} - Backend API support needed for persistence`,
+    });
+    
+    setShowReactionPicker(false);
+    setLongPressedMessageId(null);
+  };
+
+  // Reply to message handling
+  const handleReplyToMessage = (message: ProjectMessage | StaffMessage) => {
+    setReplyToMessage(message);
+  };
+
+  const clearReplyTo = () => {
+    setReplyToMessage(null);
   };
 
   const handleCreateStaffThread = () => {
@@ -939,58 +1070,110 @@ export default function Messages() {
                     )
                   ) : filteredThreads && filteredThreads.length > 0 ? (
                     <div className="divide-y divide-border">
-                      {filteredThreads.map((thread) => (
-                        <button
-                          key={thread.id}
-                          onClick={() => {
-                            setSelectedThreadId(thread.id);
-                            setSelectedThreadType(thread.threadType);
-                            if (isMobile) {
-                              setShowMobileThreadView(true);
-                            }
-                          }}
-                          className={`w-full text-left p-2 hover:bg-muted/50 transition-colors ${
-                            selectedThreadId === thread.id ? 'bg-muted' : ''
-                          }`}
-                          data-testid={`thread-item-${thread.id}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              {thread.threadType === 'project' ? (
-                                <div className="flex items-center gap-2 mb-0.5">
-                                  <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                                  <span className="text-sm text-muted-foreground truncate">
-                                    {thread.project.description}
-                                  </span>
+                      {filteredThreads.map((thread) => {
+                        const swipeHandlers = isMobile ? useSwipeable({
+                          onSwipedLeft: () => handleSwipeLeft(thread.id),
+                          onSwipedRight: () => handleSwipeRight(thread.id),
+                          trackMouse: false,
+                          delta: 50,
+                        }) : {};
+                        
+                        const isSwipedLeft = swipedThreadId === thread.id && swipeDirection === 'left';
+                        const isSwipedRight = swipedThreadId === thread.id && swipeDirection === 'right';
+
+                        return (
+                          <div
+                            key={thread.id}
+                            {...swipeHandlers}
+                            className="relative overflow-hidden"
+                            data-testid={`thread-container-${thread.id}`}
+                          >
+                            {/* Swipe action buttons */}
+                            {isSwipedLeft && (
+                              <div className="absolute inset-y-0 right-0 flex items-center bg-blue-500 px-4 z-10">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleReplyAction(thread)}
+                                  className="text-white hover:bg-blue-600"
+                                  data-testid={`button-swipe-reply-${thread.id}`}
+                                >
+                                  <Reply className="w-5 h-5" />
+                                </Button>
+                              </div>
+                            )}
+                            {isSwipedRight && (
+                              <div className="absolute inset-y-0 left-0 flex items-center bg-purple-500 px-4 z-10">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleArchiveAction(thread)}
+                                  className="text-white hover:bg-purple-600"
+                                  data-testid={`button-swipe-archive-${thread.id}`}
+                                >
+                                  {thread.isArchived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
+                                </Button>
+                              </div>
+                            )}
+
+                            {/* Thread item */}
+                            <button
+                              onClick={() => {
+                                if (swipedThreadId === thread.id) {
+                                  setSwipedThreadId(null);
+                                  setSwipeDirection(null);
+                                } else {
+                                  setSelectedThreadId(thread.id);
+                                  setSelectedThreadType(thread.threadType);
+                                  if (isMobile) {
+                                    setShowMobileThreadView(true);
+                                  }
+                                }
+                              }}
+                              className={`w-full text-left p-2 hover:bg-muted/50 transition-all ${
+                                selectedThreadId === thread.id ? 'bg-muted' : ''
+                              } ${isSwipedLeft ? 'translate-x-[-80px]' : isSwipedRight ? 'translate-x-[80px]' : ''}`}
+                              data-testid={`thread-item-${thread.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  {thread.threadType === 'project' ? (
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                      <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-sm text-muted-foreground truncate">
+                                        {thread.project.description}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                      <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-sm text-muted-foreground truncate">
+                                        {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <p className="font-semibold text-sm mt-0.5 truncate">
+                                    {thread.topic}
+                                  </p>
+                                  {thread.lastMessage && (
+                                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                      {thread.lastMessage.content}
+                                    </p>
+                                  )}
                                 </div>
-                              ) : (
-                                <div className="flex items-center gap-2 mb-0.5">
-                                  <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                                  <span className="text-sm text-muted-foreground truncate">
-                                    {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
                                   </span>
+                                  {thread.unreadCount > 0 && (
+                                    <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+                                  )}
                                 </div>
-                              )}
-                              <p className="font-semibold text-sm mt-0.5 truncate">
-                                {thread.topic}
-                              </p>
-                              {thread.lastMessage && (
-                                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  {thread.lastMessage.content}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
-                              </span>
-                              {thread.unreadCount > 0 && (
-                                <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
-                              )}
-                            </div>
+                              </div>
+                            </button>
                           </div>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="p-8 text-center text-muted-foreground">
@@ -1082,8 +1265,11 @@ export default function Messages() {
                             return (
                               <div
                                 key={message.id}
-                                className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                                className={`group flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                                 data-testid={`message-${message.id}`}
+                                onTouchStart={() => handleMessageTouchStart(message.id)}
+                                onTouchEnd={handleMessageTouchEnd}
+                                onMouseLeave={handleMessageTouchEnd}
                               >
                                 <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
                                   <div className="flex items-center gap-2 mb-1">
@@ -1103,22 +1289,37 @@ export default function Messages() {
                                       {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                                     </span>
                                   </div>
-                                  <div
-                                    className={`rounded-lg p-3 ${
-                                      isCurrentUser
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted'
-                                    }`}
-                                  >
-                                    <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
-                                    {message.attachments && message.attachments.length > 0 && (
-                                      <div className="mt-2">
-                                        <AttachmentList
-                                          attachments={message.attachments}
-                                          readonly={true}
-                                        />
-                                      </div>
-                                    )}
+                                  <div className="relative">
+                                    <div
+                                      className={`rounded-lg p-3 ${
+                                        isCurrentUser
+                                          ? 'bg-primary text-primary-foreground'
+                                          : 'bg-muted'
+                                      }`}
+                                    >
+                                      <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                      {message.attachments && message.attachments.length > 0 && (
+                                        <div className="mt-2">
+                                          <AttachmentList
+                                            attachments={message.attachments}
+                                            readonly={true}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Reply button - shows on hover/group-hover */}
+                                    <div className={`absolute ${isCurrentUser ? 'left-[-40px]' : 'right-[-40px]'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleReplyToMessage(message)}
+                                        className="h-8 w-8 p-0 rounded-full bg-muted shadow-sm hover:bg-accent"
+                                        data-testid={`button-reply-${message.id}`}
+                                      >
+                                        <Reply className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1135,6 +1336,29 @@ export default function Messages() {
                     </CardContent>
 
                     <div className="border-t p-4">
+                      {/* Reply-to indicator */}
+                      {replyToMessage && (
+                        <div className="mb-3 flex items-center gap-2 p-2 bg-muted rounded text-sm">
+                          <Reply className="w-4 h-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <div className="font-medium text-xs">
+                              Replying to {replyToMessage.user ? getUserDisplayName(replyToMessage.user) : 'Unknown'}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {replyToMessage.content.substring(0, 50)}...
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearReplyTo}
+                            data-testid="button-clear-reply"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+
                       {recordedAudio && audioUrl && (
                         <div className="mb-3 flex items-center gap-2 p-2 bg-muted rounded">
                           <FileAudio className="w-4 h-4" />
@@ -1257,7 +1481,69 @@ export default function Messages() {
         </div>
       </div>
       
-      <BottomNav user={user} onSearchClick={() => {}} />
+      {/* FAB for mobile - filter menu */}
+      {isMobile && (
+        <div className="fixed bottom-24 right-6 z-50">
+          <Popover open={showMobileFilterMenu} onOpenChange={setShowMobileFilterMenu}>
+            <PopoverTrigger asChild>
+              <Button
+                size="lg"
+                className="rounded-full shadow-lg h-14 w-14 p-0"
+                data-testid="button-mobile-filter-fab"
+              >
+                <Filter className="h-6 w-6" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-4" align="end" data-testid="popover-mobile-filter">
+              <div className="space-y-3">
+                <div className="font-semibold mb-2">Filter Messages</div>
+                
+                {/* View type selection */}
+                <div className="space-y-2">
+                  <Label className="text-sm">Message Type</Label>
+                  <Select value={activeTab} onValueChange={(value) => {
+                    setActiveTab(value);
+                    setShowMobileFilterMenu(false);
+                  }}>
+                    <SelectTrigger data-testid="select-message-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Internal Chat</SelectItem>
+                      <SelectItem value="client">Client Chat</SelectItem>
+                      <SelectItem value="emails">Client Emails</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Archive filter */}
+                {activeTab !== 'emails' && (
+                  <div className="space-y-2">
+                    <Label className="text-sm">Status</Label>
+                    <Select value={archiveFilter} onValueChange={(value: 'open' | 'archived') => setArchiveFilter(value)}>
+                      <SelectTrigger data-testid="select-archive-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Active</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
+
+      <BottomNav user={user} onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
 
       {/* Mobile Thread View Dialog */}
       {isMobile && selectedThreadId && selectedThread && (
@@ -1345,7 +1631,7 @@ export default function Messages() {
                         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                       </div>
                       {message.attachments && message.attachments.length > 0 && (
-                        <AttachmentList attachments={message.attachments} compact={true} />
+                        <AttachmentList attachments={message.attachments} readonly={true} />
                       )}
                     </div>
                   </div>
@@ -1572,6 +1858,34 @@ export default function Messages() {
             }
           }}
         />
+      )}
+
+      {/* Reaction Picker Modal - appears on long press */}
+      {showReactionPicker && longPressedMessageId && (
+        <Dialog open={showReactionPicker} onOpenChange={setShowReactionPicker}>
+          <DialogContent className="sm:max-w-[400px]" data-testid="dialog-reaction-picker">
+            <DialogHeader>
+              <DialogTitle>React to Message</DialogTitle>
+              <DialogDescription>
+                Choose an emoji reaction
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-5 gap-3 py-4">
+              {['👍', '❤️', '😂', '😮', '😢', '🙏', '👏', '🔥', '🎉', '✅'].map((emoji) => (
+                <Button
+                  key={emoji}
+                  variant="outline"
+                  size="lg"
+                  onClick={() => handleReaction(emoji)}
+                  className="text-3xl h-16 hover:scale-110 transition-transform"
+                  data-testid={`button-reaction-${emoji}`}
+                >
+                  {emoji}
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
