@@ -73,6 +73,10 @@ import {
   taskDocuments,
   userSessions,
   loginAttempts,
+  projectTypeNotifications,
+  clientRequestReminders,
+  scheduledNotifications,
+  notificationHistory,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -270,6 +274,17 @@ import {
   type InsertGraphWebhookSubscription,
   type GraphSyncState,
   type InsertGraphSyncState,
+  type ProjectTypeNotification,
+  type InsertProjectTypeNotification,
+  type UpdateProjectTypeNotification,
+  type ClientRequestReminder,
+  type InsertClientRequestReminder,
+  type UpdateClientRequestReminder,
+  type ScheduledNotification,
+  type InsertScheduledNotification,
+  type UpdateScheduledNotification,
+  type NotificationHistory,
+  type InsertNotificationHistory,
 } from "@shared/schema";
 
 // Add the OAuth account types
@@ -1092,6 +1107,29 @@ export interface IStorage {
   getActiveTaskTimeEntry(taskId: string, userId: string): Promise<TaskTimeEntry | undefined>;
   stopTaskTimeEntry(id: string, stopData: StopTaskTimeEntry): Promise<TaskTimeEntry>;
   deleteTaskTimeEntry(id: string): Promise<void>;
+  
+  // Notification System - Project Type Notification operations
+  getProjectTypeNotificationsByProjectTypeId(projectTypeId: string): Promise<ProjectTypeNotification[]>;
+  getProjectTypeNotificationById(id: string): Promise<ProjectTypeNotification | undefined>;
+  createProjectTypeNotification(notification: InsertProjectTypeNotification): Promise<ProjectTypeNotification>;
+  updateProjectTypeNotification(id: string, notification: UpdateProjectTypeNotification): Promise<ProjectTypeNotification>;
+  deleteProjectTypeNotification(id: string): Promise<void>;
+  
+  // Notification System - Client Request Reminder operations
+  getClientRequestRemindersByNotificationId(notificationId: string): Promise<ClientRequestReminder[]>;
+  getClientRequestReminderById(id: string): Promise<ClientRequestReminder | undefined>;
+  createClientRequestReminder(reminder: InsertClientRequestReminder): Promise<ClientRequestReminder>;
+  updateClientRequestReminder(id: string, reminder: UpdateClientRequestReminder): Promise<ClientRequestReminder>;
+  deleteClientRequestReminder(id: string): Promise<void>;
+  
+  // Notification System - Scheduled Notification operations
+  getAllScheduledNotifications(): Promise<ScheduledNotification[]>;
+  getScheduledNotificationById(id: string): Promise<ScheduledNotification | undefined>;
+  updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification>;
+  
+  // Notification System - Notification History operations
+  getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]>;
+  getNotificationHistoryByProjectId(projectId: string): Promise<NotificationHistory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -12421,6 +12459,136 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTaskDocument(id: string): Promise<void> {
     await db.delete(taskDocuments).where(eq(taskDocuments.id, id));
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Project Type Notification operations
+  // ============================================
+
+  async getProjectTypeNotificationsByProjectTypeId(projectTypeId: string): Promise<ProjectTypeNotification[]> {
+    return await db
+      .select()
+      .from(projectTypeNotifications)
+      .where(eq(projectTypeNotifications.projectTypeId, projectTypeId))
+      .orderBy(desc(projectTypeNotifications.createdAt));
+  }
+
+  async getProjectTypeNotificationById(id: string): Promise<ProjectTypeNotification | undefined> {
+    const [notification] = await db
+      .select()
+      .from(projectTypeNotifications)
+      .where(eq(projectTypeNotifications.id, id));
+    return notification;
+  }
+
+  async createProjectTypeNotification(notification: InsertProjectTypeNotification): Promise<ProjectTypeNotification> {
+    const [created] = await db
+      .insert(projectTypeNotifications)
+      .values(notification)
+      .returning();
+    return created;
+  }
+
+  async updateProjectTypeNotification(id: string, notification: UpdateProjectTypeNotification): Promise<ProjectTypeNotification> {
+    const [updated] = await db
+      .update(projectTypeNotifications)
+      .set(notification)
+      .where(eq(projectTypeNotifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectTypeNotification(id: string): Promise<void> {
+    await db.delete(projectTypeNotifications).where(eq(projectTypeNotifications.id, id));
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Client Request Reminder operations
+  // ============================================
+
+  async getClientRequestRemindersByNotificationId(notificationId: string): Promise<ClientRequestReminder[]> {
+    return await db
+      .select()
+      .from(clientRequestReminders)
+      .where(eq(clientRequestReminders.projectTypeNotificationId, notificationId))
+      .orderBy(desc(clientRequestReminders.createdAt));
+  }
+
+  async getClientRequestReminderById(id: string): Promise<ClientRequestReminder | undefined> {
+    const [reminder] = await db
+      .select()
+      .from(clientRequestReminders)
+      .where(eq(clientRequestReminders.id, id));
+    return reminder;
+  }
+
+  async createClientRequestReminder(reminder: InsertClientRequestReminder): Promise<ClientRequestReminder> {
+    const [created] = await db
+      .insert(clientRequestReminders)
+      .values(reminder)
+      .returning();
+    return created;
+  }
+
+  async updateClientRequestReminder(id: string, reminder: UpdateClientRequestReminder): Promise<ClientRequestReminder> {
+    const [updated] = await db
+      .update(clientRequestReminders)
+      .set(reminder)
+      .where(eq(clientRequestReminders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientRequestReminder(id: string): Promise<void> {
+    await db.delete(clientRequestReminders).where(eq(clientRequestReminders.id, id));
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Scheduled Notification operations
+  // ============================================
+
+  async getAllScheduledNotifications(): Promise<ScheduledNotification[]> {
+    return await db
+      .select()
+      .from(scheduledNotifications)
+      .orderBy(desc(scheduledNotifications.scheduledFor));
+  }
+
+  async getScheduledNotificationById(id: string): Promise<ScheduledNotification | undefined> {
+    const [notification] = await db
+      .select()
+      .from(scheduledNotifications)
+      .where(eq(scheduledNotifications.id, id));
+    return notification;
+  }
+
+  async updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification> {
+    const [updated] = await db
+      .update(scheduledNotifications)
+      .set(notification)
+      .where(eq(scheduledNotifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Notification History operations
+  // ============================================
+
+  async getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]> {
+    return await db
+      .select()
+      .from(notificationHistory)
+      .where(eq(notificationHistory.clientId, clientId))
+      .orderBy(desc(notificationHistory.createdAt));
+  }
+
+  async getNotificationHistoryByProjectId(projectId: string): Promise<NotificationHistory[]> {
+    return await db
+      .select()
+      .from(notificationHistory)
+      .where(eq(notificationHistory.projectId, projectId))
+      .orderBy(desc(notificationHistory.createdAt));
   }
 }
 
