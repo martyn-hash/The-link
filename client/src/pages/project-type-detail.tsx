@@ -1048,9 +1048,9 @@ function NotificationCard({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Badge variant="outline">{notification.notificationType.toUpperCase()}</Badge>
-            <Badge variant="secondary">{notification.category === 'project' ? 'Date-based' : 'Stage-based'}</Badge>
-            <span className="text-sm text-muted-foreground">{getNotificationSummary()}</span>
+            <Badge variant="outline" data-testid={`badge-notification-type-${notification.id}`}>{notification.notificationType.toUpperCase()}</Badge>
+            <Badge variant="secondary" data-testid={`badge-notification-category-${notification.id}`}>{notification.category === 'project' ? 'Date-based' : 'Stage-based'}</Badge>
+            <span className="text-sm text-muted-foreground" data-testid={`text-notification-summary-${notification.id}`}>{getNotificationSummary()}</span>
           </div>
           <div className="flex space-x-2">
             <Button
@@ -1066,15 +1066,15 @@ function NotificationCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <p className="text-sm font-medium">{getContent()}</p>
+          <p className="text-sm font-medium" data-testid={`text-notification-content-${notification.id}`}>{getContent()}</p>
           {notification.notificationType === 'email' && notification.emailBody && (
-            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{notification.emailBody}</p>
+            <p className="text-sm text-muted-foreground mt-2 line-clamp-2" data-testid={`text-notification-body-preview-${notification.id}`}>{notification.emailBody}</p>
           )}
         </div>
 
         {linkedTemplate && (
           <div className="bg-muted p-3 rounded-lg">
-            <p className="text-sm font-medium mb-2">
+            <p className="text-sm font-medium mb-2" data-testid={`text-linked-template-${notification.id}`}>
               Linked to template: {linkedTemplate.name}
             </p>
             

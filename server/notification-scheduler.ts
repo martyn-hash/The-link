@@ -391,8 +391,7 @@ export async function stopTaskInstanceReminders(
     .update(scheduledNotifications)
     .set({
       status: 'cancelled',
-      sentAt: new Date(),
-      failureReason: reason === 'client_submitted' 
+      cancelReason: reason === 'client_submitted' 
         ? 'Task submitted by client' 
         : 'Reminders cancelled by staff',
       cancelledBy: stoppedBy,
