@@ -350,7 +350,9 @@ export default function Messages() {
   const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showMessageContextMenu, setShowMessageContextMenu] = useState(false);
+  const [shouldFocusComposer, setShouldFocusComposer] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -598,6 +600,14 @@ export default function Messages() {
     }
   }, [showMobileFilterMenu, mobileSearchOpen]);
 
+  // Focus message input when replying (via swipe or context menu)
+  useEffect(() => {
+    if (shouldFocusComposer && messageInputRef.current) {
+      messageInputRef.current.focus();
+      setShouldFocusComposer(false); // Reset flag after focusing
+    }
+  }, [shouldFocusComposer]);
+
   // Helper functions
   const getUserDisplayName = (user: { firstName: string | null; lastName: string | null; email: string }) => {
     if (user.firstName && user.lastName) {
@@ -801,6 +811,7 @@ export default function Messages() {
     setSelectedThreadType(thread.threadType);
     setSwipedThreadId(null);
     setSwipeDirection(null);
+    setShouldFocusComposer(true); // Focus input when replying via swipe
     if (isMobile) {
       setShowMobileThreadView(true);
     }
@@ -840,18 +851,35 @@ export default function Messages() {
   };
 
   // Long press handling for message context menu (react/reply)
-  const handleMessageTouchStart = (messageId: string) => {
+  const handleMessageTouchStart = (event: React.TouchEvent, messageId: string) => {
     longPressTimer.current = setTimeout(() => {
       setLongPressedMessageId(messageId);
       setShowMessageContextMenu(true);
+      // Prevent context menu or text selection only after confirming long press
+      if (navigator.vibrate) {
+        navigator.vibrate(50); // Haptic feedback on long-press
+      }
     }, 500); // 500ms long press
   };
 
-  const handleMessageTouchEnd = () => {
+  const handleMessageTouchEnd = (event: React.TouchEvent) => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+  };
+
+  const handleMessageTouchMove = (event: React.TouchEvent) => {
+    // Cancel long press if user moves finger (scrolling)
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleMessageContextMenu = (event: React.MouseEvent) => {
+    // Prevent browser's default context menu
+    event.preventDefault();
   };
 
   const handleContextMenuReact = () => {
@@ -863,6 +891,7 @@ export default function Messages() {
     const message = messages?.find(m => m.id === longPressedMessageId);
     if (message) {
       handleReplyToMessage(message);
+      setShouldFocusComposer(true); // Focus input when replying
     }
     setShowMessageContextMenu(false);
     setLongPressedMessageId(null);
@@ -1358,9 +1387,10 @@ export default function Messages() {
                                 key={message.id}
                                 className={`group flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                                 data-testid={`message-${message.id}`}
-                                onTouchStart={() => handleMessageTouchStart(message.id)}
+                                onTouchStart={(e) => handleMessageTouchStart(e, message.id)}
                                 onTouchEnd={handleMessageTouchEnd}
-                                onMouseLeave={handleMessageTouchEnd}
+                                onTouchMove={handleMessageTouchMove}
+                                onContextMenu={handleMessageContextMenu}
                               >
                                 <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
                                   <div className="flex items-center gap-2 mb-1">
@@ -1382,7 +1412,7 @@ export default function Messages() {
                                   </div>
                                   <div className="relative">
                                     <div
-                                      className={`rounded-lg p-3 ${
+                                      className={`rounded-lg p-3 select-none touch-manipulation ${
                                         isCurrentUser
                                           ? 'bg-primary text-primary-foreground'
                                           : 'bg-muted'
@@ -1529,6 +1559,7 @@ export default function Messages() {
                         </Button>
 
                         <Textarea
+                          ref={messageInputRef}
                           placeholder="Type your message..."
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
@@ -1771,6 +1802,7 @@ export default function Messages() {
 
               <div className="flex gap-2">
                 <Textarea
+                  ref={messageInputRef}
                   placeholder="Type a message..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
