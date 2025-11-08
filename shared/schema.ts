@@ -2714,7 +2714,7 @@ export const riskAssessmentResponses = pgTable("risk_assessment_responses", {
   unique("unique_assessment_question").on(table.riskAssessmentId, table.questionKey),
 ]);
 
-// Task Templates - Question type enum
+// Client Request Templates - Question type enum
 export const questionTypeEnum = pgEnum("question_type", [
   "short_text",
   "long_text", 
@@ -2728,7 +2728,7 @@ export const questionTypeEnum = pgEnum("question_type", [
   "file_upload"
 ]);
 
-// Task Templates - Instance status enum
+// Client Request Templates - Instance status enum
 export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
   "not_started",
   "in_progress",
@@ -2737,8 +2737,8 @@ export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
   "cancelled"
 ]);
 
-// Task template categories table
-export const taskTemplateCategories = pgTable("task_template_categories", {
+// Client request template categories table
+export const clientRequestTemplateCategories = pgTable("task_template_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
@@ -2749,10 +2749,10 @@ export const taskTemplateCategories = pgTable("task_template_categories", {
   index("idx_task_template_categories_order").on(table.order),
 ]);
 
-// Task templates table
-export const taskTemplates = pgTable("task_templates", {
+// Client request templates table
+export const clientRequestTemplates = pgTable("task_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  categoryId: varchar("category_id").references(() => taskTemplateCategories.id, { onDelete: "set null" }),
+  categoryId: varchar("category_id").references(() => clientRequestTemplateCategories.id, { onDelete: "set null" }),
   name: varchar("name").notNull(),
   description: text("description"),
   status: varchar("status", { enum: ["draft", "active"] }).notNull().default("draft"),
@@ -2764,10 +2764,10 @@ export const taskTemplates = pgTable("task_templates", {
   index("idx_task_templates_status").on(table.status),
 ]);
 
-// Task template sections table
-export const taskTemplateSections = pgTable("task_template_sections", {
+// Client request template sections table
+export const clientRequestTemplateSections = pgTable("task_template_sections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  templateId: varchar("template_id").notNull().references(() => taskTemplates.id, { onDelete: "cascade" }),
+  templateId: varchar("template_id").notNull().references(() => clientRequestTemplates.id, { onDelete: "cascade" }),
   title: varchar("title").notNull(),
   description: text("description"),
   order: integer("order").notNull().default(0),
@@ -2778,10 +2778,10 @@ export const taskTemplateSections = pgTable("task_template_sections", {
   index("idx_task_template_sections_order").on(table.templateId, table.order),
 ]);
 
-// Task template questions table
-export const taskTemplateQuestions = pgTable("task_template_questions", {
+// Client request template questions table
+export const clientRequestTemplateQuestions = pgTable("task_template_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  sectionId: varchar("section_id").notNull().references(() => taskTemplateSections.id, { onDelete: "cascade" }),
+  sectionId: varchar("section_id").notNull().references(() => clientRequestTemplateSections.id, { onDelete: "cascade" }),
   questionType: questionTypeEnum("question_type").notNull(),
   label: text("label").notNull(),
   helpText: text("help_text"),
@@ -2797,10 +2797,10 @@ export const taskTemplateQuestions = pgTable("task_template_questions", {
   index("idx_task_template_questions_order").on(table.sectionId, table.order),
 ]);
 
-// Task instances table - created when template is applied to a client OR from custom request
+// Task instances table - created when client request template is applied to a client OR from custom request
 export const taskInstances = pgTable("task_instances", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  templateId: varchar("template_id").references(() => taskTemplates.id), // nullable - either templateId OR customRequestId must be set
+  templateId: varchar("template_id").references(() => clientRequestTemplates.id), // nullable - either templateId OR customRequestId must be set
   customRequestId: varchar("custom_request_id").references(() => clientCustomRequests.id, { onDelete: "cascade" }), // nullable - either templateId OR customRequestId must be set
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   personId: varchar("person_id").references(() => people.id, { onDelete: "cascade" }), // related person assigned to complete the task
@@ -2822,11 +2822,11 @@ export const taskInstances = pgTable("task_instances", {
   index("idx_task_instances_status").on(table.status),
 ]);
 
-// Task instance responses table - stores answers to questions (from either templates or custom requests)
+// Task instance responses table - stores answers to questions (from either client request templates or custom requests)
 export const taskInstanceResponses = pgTable("task_instance_responses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   taskInstanceId: varchar("task_instance_id").notNull().references(() => taskInstances.id, { onDelete: "cascade" }),
-  questionId: varchar("question_id").notNull(), // references either taskTemplateQuestions.id or clientCustomRequestQuestions.id
+  questionId: varchar("question_id").notNull(), // references either clientRequestTemplateQuestions.id or clientCustomRequestQuestions.id
   responseValue: text("response_value"), // text response or JSON for complex types
   fileUrls: text("file_urls").array(), // for file_upload questions - array of object paths
   createdAt: timestamp("created_at").defaultNow(),
@@ -3003,38 +3003,38 @@ export const insertRiskAssessmentResponseSchema = createInsertSchema(riskAssessm
   createdAt: true,
 });
 
-// Zod schemas for task templates
-export const insertTaskTemplateCategorySchema = createInsertSchema(taskTemplateCategories).omit({
+// Zod schemas for client request templates
+export const insertClientRequestTemplateCategorySchema = createInsertSchema(clientRequestTemplateCategories).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateCategorySchema = insertTaskTemplateCategorySchema.partial();
+export const updateClientRequestTemplateCategorySchema = insertClientRequestTemplateCategorySchema.partial();
 
-export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({
+export const insertClientRequestTemplateSchema = createInsertSchema(clientRequestTemplates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateSchema = insertTaskTemplateSchema.partial();
+export const updateClientRequestTemplateSchema = insertClientRequestTemplateSchema.partial();
 
-export const insertTaskTemplateSectionSchema = createInsertSchema(taskTemplateSections).omit({
+export const insertClientRequestTemplateSectionSchema = createInsertSchema(clientRequestTemplateSections).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateSectionSchema = insertTaskTemplateSectionSchema.partial();
+export const updateClientRequestTemplateSectionSchema = insertClientRequestTemplateSectionSchema.partial();
 
-export const insertTaskTemplateQuestionSchema = createInsertSchema(taskTemplateQuestions).omit({
+export const insertClientRequestTemplateQuestionSchema = createInsertSchema(clientRequestTemplateQuestions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateQuestionSchema = insertTaskTemplateQuestionSchema.partial();
+export const updateClientRequestTemplateQuestionSchema = insertClientRequestTemplateQuestionSchema.partial();
 
 const baseTaskInstanceSchema = createInsertSchema(taskInstances).omit({
   id: true,
@@ -3210,18 +3210,18 @@ export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
 export type UpdateRiskAssessment = z.infer<typeof updateRiskAssessmentSchema>;
 export type RiskAssessmentResponse = typeof riskAssessmentResponses.$inferSelect;
 export type InsertRiskAssessmentResponse = z.infer<typeof insertRiskAssessmentResponseSchema>;
-export type TaskTemplateCategory = typeof taskTemplateCategories.$inferSelect;
-export type InsertTaskTemplateCategory = z.infer<typeof insertTaskTemplateCategorySchema>;
-export type UpdateTaskTemplateCategory = z.infer<typeof updateTaskTemplateCategorySchema>;
-export type TaskTemplate = typeof taskTemplates.$inferSelect;
-export type InsertTaskTemplate = z.infer<typeof insertTaskTemplateSchema>;
-export type UpdateTaskTemplate = z.infer<typeof updateTaskTemplateSchema>;
-export type TaskTemplateSection = typeof taskTemplateSections.$inferSelect;
-export type InsertTaskTemplateSection = z.infer<typeof insertTaskTemplateSectionSchema>;
-export type UpdateTaskTemplateSection = z.infer<typeof updateTaskTemplateSectionSchema>;
-export type TaskTemplateQuestion = typeof taskTemplateQuestions.$inferSelect;
-export type InsertTaskTemplateQuestion = z.infer<typeof insertTaskTemplateQuestionSchema>;
-export type UpdateTaskTemplateQuestion = z.infer<typeof updateTaskTemplateQuestionSchema>;
+export type ClientRequestTemplateCategory = typeof clientRequestTemplateCategories.$inferSelect;
+export type InsertClientRequestTemplateCategory = z.infer<typeof insertClientRequestTemplateCategorySchema>;
+export type UpdateClientRequestTemplateCategory = z.infer<typeof updateClientRequestTemplateCategorySchema>;
+export type ClientRequestTemplate = typeof clientRequestTemplates.$inferSelect;
+export type InsertClientRequestTemplate = z.infer<typeof insertClientRequestTemplateSchema>;
+export type UpdateClientRequestTemplate = z.infer<typeof updateClientRequestTemplateSchema>;
+export type ClientRequestTemplateSection = typeof clientRequestTemplateSections.$inferSelect;
+export type InsertClientRequestTemplateSection = z.infer<typeof insertClientRequestTemplateSectionSchema>;
+export type UpdateClientRequestTemplateSection = z.infer<typeof updateClientRequestTemplateSectionSchema>;
+export type ClientRequestTemplateQuestion = typeof clientRequestTemplateQuestions.$inferSelect;
+export type InsertClientRequestTemplateQuestion = z.infer<typeof insertClientRequestTemplateQuestionSchema>;
+export type UpdateClientRequestTemplateQuestion = z.infer<typeof updateClientRequestTemplateQuestionSchema>;
 export type TaskInstance = typeof taskInstances.$inferSelect;
 export type InsertTaskInstance = z.infer<typeof insertTaskInstanceSchema>;
 export type UpdateTaskInstance = z.infer<typeof updateTaskInstanceSchema>;
