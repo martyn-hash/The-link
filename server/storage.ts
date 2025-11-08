@@ -341,6 +341,7 @@ export interface IStorage {
   // User activity tracking operations
   trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void>;
   getRecentlyViewedByUser(userId: string, limit?: number): Promise<{ entityType: string; entityId: string; viewedAt: Date; entityData?: any }[]>;
+  getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User })[]>;
   
   // User session operations
   createUserSession(session: InsertUserSession): Promise<UserSession>;
@@ -1426,6 +1427,53 @@ export class DatabaseStorage implements IStorage {
 
     if (options?.email) {
       query = query.where(eq(loginAttempts.email, options.email)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    return await query;
+  }
+
+  async getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User })[]> {
+    let query = db
+      .select({
+        id: userActivityTracking.id,
+        userId: userActivityTracking.userId,
+        entityType: userActivityTracking.entityType,
+        entityId: userActivityTracking.entityId,
+        viewedAt: userActivityTracking.viewedAt,
+        user: users,
+      })
+      .from(userActivityTracking)
+      .innerJoin(users, eq(userActivityTracking.userId, users.id))
+      .orderBy(desc(userActivityTracking.viewedAt));
+
+    const conditions = [];
+    
+    if (options?.userId) {
+      conditions.push(eq(userActivityTracking.userId, options.userId));
+    }
+    
+    if (options?.entityType) {
+      conditions.push(eq(userActivityTracking.entityType, options.entityType));
+    }
+    
+    if (options?.dateFrom) {
+      const fromDate = new Date(options.dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      conditions.push(gte(userActivityTracking.viewedAt, fromDate));
+    }
+    
+    if (options?.dateTo) {
+      const toDate = new Date(options.dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(userActivityTracking.viewedAt, toDate));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
     }
 
     if (options?.limit) {

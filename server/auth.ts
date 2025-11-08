@@ -300,6 +300,8 @@ export async function setupAuth(app: Express) {
   app.post("/api/magic-link/verify", async (req, res) => {
     try {
       const { token, code, email } = req.body;
+      const metadata = extractSessionMetadata(req);
+      const attemptEmail = email ? email.trim().toLowerCase() : '';
 
       // Rate limiting to prevent brute force attacks
       const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
@@ -327,24 +329,62 @@ export async function setupAuth(app: Express) {
         // Verify using token
         magicLinkToken = await storage.getMagicLinkTokenByToken(token);
         if (!magicLinkToken) {
+          // Log failed login attempt
+          if (attemptEmail) {
+            await storage.createLoginAttempt({
+              email: attemptEmail,
+              ipAddress: metadata.ipAddress,
+              success: false,
+              failureReason: "invalid_magic_link_token",
+              browser: metadata.browser,
+              os: metadata.os,
+            });
+          }
           return res.status(401).json({ message: "Invalid or expired magic link" });
         }
       } else if (code && email) {
         // Verify using code and email
         magicLinkToken = await storage.getMagicLinkTokenByCodeAndEmail(code, email.trim().toLowerCase());
         if (!magicLinkToken) {
+          // Log failed login attempt
+          await storage.createLoginAttempt({
+            email: attemptEmail,
+            ipAddress: metadata.ipAddress,
+            success: false,
+            failureReason: "invalid_magic_link_code",
+            browser: metadata.browser,
+            os: metadata.os,
+          });
           return res.status(401).json({ message: "Invalid or expired verification code" });
         }
       }
 
       // Ensure we have a valid magic link token
       if (!magicLinkToken) {
+        if (attemptEmail) {
+          await storage.createLoginAttempt({
+            email: attemptEmail,
+            ipAddress: metadata.ipAddress,
+            success: false,
+            failureReason: "missing_magic_link_token",
+            browser: metadata.browser,
+            os: metadata.os,
+          });
+        }
         return res.status(401).json({ message: "Invalid or expired magic link" });
       }
 
       // Get user from database
       const user = await storage.getUser(magicLinkToken.userId);
       if (!user) {
+        await storage.createLoginAttempt({
+          email: magicLinkToken.email,
+          ipAddress: metadata.ipAddress,
+          success: false,
+          failureReason: "user_not_found",
+          browser: metadata.browser,
+          os: metadata.os,
+        });
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -356,8 +396,39 @@ export async function setupAuth(app: Express) {
         await storage.markMagicLinkTokenAsUsed(magicLinkToken.id);
       } catch (error) {
         // Token was already used or doesn't exist
+        await storage.createLoginAttempt({
+          email: user.email || magicLinkToken.email,
+          ipAddress: metadata.ipAddress,
+          success: false,
+          failureReason: "magic_link_already_used",
+          browser: metadata.browser,
+          os: metadata.os,
+        });
         return res.status(401).json({ message: "Magic link has already been used or is invalid" });
       }
+
+      // Log successful login attempt
+      await storage.createLoginAttempt({
+        email: user.email || magicLinkToken.email,
+        ipAddress: metadata.ipAddress,
+        success: true,
+        failureReason: null,
+        browser: metadata.browser,
+        os: metadata.os,
+      });
+
+      // Create session record
+      await storage.createUserSession({
+        userId: user.id,
+        ipAddress: metadata.ipAddress,
+        city: metadata.city,
+        country: metadata.country,
+        browser: metadata.browser,
+        device: metadata.device,
+        os: metadata.os,
+        platformType: metadata.platformType,
+        pushEnabled: user.pushNotificationsEnabled || false,
+      });
 
       // Set user session (same as login route)
       req.session.userId = user.id;

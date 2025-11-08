@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import TopNavigation from "@/components/top-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { UserSession, User, LoginAttempt } from "@shared/schema";
 
 export default function ActivityLogsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [userId, setUserId] = useState<string>("all-users");
   const [onlyActive, setOnlyActive] = useState<string>("all");
@@ -130,8 +133,10 @@ export default function ActivityLogsPage() {
   });
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <>
+      <TopNavigation user={user} />
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
             <Activity className="w-8 h-8" />
@@ -430,6 +435,7 @@ export default function ActivityLogsPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   );
 }

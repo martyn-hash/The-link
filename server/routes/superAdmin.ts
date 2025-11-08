@@ -143,4 +143,88 @@ export function registerSuperAdminRoutes(
       }
     }
   );
+
+  // Get user activity tracking with filters
+  app.get(
+    "/api/super-admin/user-activity-tracking",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const {
+          userId,
+          entityType,
+          dateFrom,
+          dateTo,
+          limit = 100
+        } = req.query;
+
+        const activityRecords = await storage.getUserActivityTracking({
+          userId,
+          entityType,
+          dateFrom,
+          dateTo,
+          limit: parseInt(limit as string, 10)
+        });
+
+        res.json(activityRecords);
+      } catch (error) {
+        console.error("Error fetching user activity tracking:", error);
+        res.status(500).json({ message: "Failed to fetch user activity tracking" });
+      }
+    }
+  );
+
+  // Export user activity tracking as CSV
+  app.get(
+    "/api/super-admin/user-activity-tracking/export",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const {
+          userId,
+          entityType,
+          dateFrom,
+          dateTo
+        } = req.query;
+
+        const activityRecords = await storage.getUserActivityTracking({
+          userId,
+          entityType,
+          dateFrom,
+          dateTo
+        });
+
+        // Generate CSV
+        const csvRows = [
+          // Header row
+          'User Email,User Name,Entity Type,Entity ID,Viewed At'
+        ];
+
+        for (const record of activityRecords) {
+          const row = [
+            record.user.email || '',
+            `${record.user.firstName || ''} ${record.user.lastName || ''}`.trim(),
+            record.entityType || '',
+            record.entityId || '',
+            record.viewedAt ? new Date(record.viewedAt).toISOString() : ''
+          ].map(field => `"${field.replace(/"/g, '""')}"`); // Escape quotes
+          
+          csvRows.push(row.join(','));
+        }
+
+        const csv = csvRows.join('\n');
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="user-activity-tracking-${Date.now()}.csv"`);
+        res.send(csv);
+      } catch (error) {
+        console.error("Error exporting user activity tracking:", error);
+        res.status(500).json({ message: "Failed to export user activity tracking" });
+      }
+    }
+  );
 }
