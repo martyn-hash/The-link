@@ -2738,7 +2738,7 @@ export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
 ]);
 
 // Client request template categories table
-export const clientRequestTemplateCategories = pgTable("task_template_categories", {
+export const clientRequestTemplateCategories = pgTable("client_request_template_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
@@ -2750,7 +2750,7 @@ export const clientRequestTemplateCategories = pgTable("task_template_categories
 ]);
 
 // Client request templates table
-export const clientRequestTemplates = pgTable("task_templates", {
+export const clientRequestTemplates = pgTable("client_request_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   categoryId: varchar("category_id").references(() => clientRequestTemplateCategories.id, { onDelete: "set null" }),
   name: varchar("name").notNull(),
@@ -2765,7 +2765,7 @@ export const clientRequestTemplates = pgTable("task_templates", {
 ]);
 
 // Client request template sections table
-export const clientRequestTemplateSections = pgTable("task_template_sections", {
+export const clientRequestTemplateSections = pgTable("client_request_template_sections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").notNull().references(() => clientRequestTemplates.id, { onDelete: "cascade" }),
   title: varchar("title").notNull(),
@@ -2779,7 +2779,7 @@ export const clientRequestTemplateSections = pgTable("task_template_sections", {
 ]);
 
 // Client request template questions table
-export const clientRequestTemplateQuestions = pgTable("task_template_questions", {
+export const clientRequestTemplateQuestions = pgTable("client_request_template_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sectionId: varchar("section_id").notNull().references(() => clientRequestTemplateSections.id, { onDelete: "cascade" }),
   questionType: questionTypeEnum("question_type").notNull(),

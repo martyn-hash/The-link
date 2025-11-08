@@ -25,7 +25,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import type { TaskTemplate, TaskTemplateSection, TaskTemplateCategory, InsertTaskTemplateSection, TaskTemplateQuestion, InsertTaskTemplateQuestion } from "@shared/schema";
+import type { ClientRequestTemplate, ClientRequestTemplateSection, ClientRequestTemplateCategory, InsertClientRequestTemplateSection, ClientRequestTemplateQuestion, InsertClientRequestTemplateQuestion } from "@shared/schema";
 
 const templateSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name too long"),
@@ -42,7 +42,7 @@ const sectionSchema = z.object({
 type TemplateForm = z.infer<typeof templateSchema>;
 type SectionForm = z.infer<typeof sectionSchema>;
 
-interface SortableSection extends TaskTemplateSection {
+interface SortableSection extends ClientRequestTemplateSection {
   id: string;
 }
 
@@ -109,7 +109,7 @@ function SortableQuestionItem({
   onEdit,
   onDelete,
 }: {
-  question: TaskTemplateQuestion;
+  question: ClientRequestTemplateQuestion;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -227,7 +227,7 @@ function SortableSectionCard({
     data: { sectionId: section.id },
   });
 
-  const { data: questionsData } = useQuery<TaskTemplateQuestion[]>({
+  const { data: questionsData } = useQuery<ClientRequestTemplateQuestion[]>({
     queryKey: ["/api/task-template-sections", section.id, "questions"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
@@ -347,7 +347,7 @@ function SectionModal({
   onSuccess,
 }: {
   templateId: string;
-  section?: TaskTemplateSection;
+  section?: ClientRequestTemplateSection;
   onSuccess: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -472,7 +472,7 @@ function DeleteSectionDialog({
   section,
   onSuccess,
 }: { 
-  section: TaskTemplateSection;
+  section: ClientRequestTemplateSection;
   onSuccess: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -543,8 +543,8 @@ export default function TaskTemplateEditPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [sections, setSections] = useState<SortableSection[]>([]);
-  const [editingSection, setEditingSection] = useState<TaskTemplateSection | null>(null);
-  const [deletingSection, setDeletingSection] = useState<TaskTemplateSection | null>(null);
+  const [editingSection, setEditingSection] = useState<ClientRequestTemplateSection | null>(null);
+  const [deletingSection, setDeletingSection] = useState<ClientRequestTemplateSection | null>(null);
   const [editTemplateDialogOpen, setEditTemplateDialogOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ type: string; label: string } | null>(null);
   const [creatingQuestion, setCreatingQuestion] = useState<{ sectionId: string; questionType: string } | null>(null);
@@ -553,18 +553,18 @@ export default function TaskTemplateEditPage() {
   const [createQuestionOptions, setCreateQuestionOptions] = useState<string[]>([]);
   const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
 
-  const { data: template, isLoading: templateLoading } = useQuery<TaskTemplate>({
+  const { data: template, isLoading: templateLoading } = useQuery<ClientRequestTemplate>({
     queryKey: ["/api/client-request-templates", id],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!id,
   });
 
-  const { data: categories } = useQuery<TaskTemplateCategory[]>({
+  const { data: categories } = useQuery<ClientRequestTemplateCategory[]>({
     queryKey: ["/api/client-request-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  const { data: sectionsData, isLoading: sectionsLoading } = useQuery<TaskTemplateSection[]>({
+  const { data: sectionsData, isLoading: sectionsLoading } = useQuery<ClientRequestTemplateSection[]>({
     queryKey: ["/api/client-request-templates", id, "sections"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!id,
@@ -782,7 +782,7 @@ export default function TaskTemplateEditPage() {
 
   const handleReorderQuestions = (sectionId: string, oldIndex: number, newIndex: number, onError?: () => void) => {
     // Get the questions for this section from the query cache
-    const questionsData = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
+    const questionsData = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
     if (!questionsData) return;
 
     const reordered = arrayMove(questionsData, oldIndex, newIndex);
@@ -852,7 +852,7 @@ export default function TaskTemplateEditPage() {
       // Make sure they're in the same section
       if (activeQuestion.sectionId === overQuestion.sectionId) {
         const sectionId = activeQuestion.sectionId;
-        const questionsData = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
+        const questionsData = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
         if (questionsData) {
           const oldIndex = questionsData.findIndex((q) => q.id === active.id);
           const newIndex = questionsData.findIndex((q) => q.id === over.id);
@@ -937,7 +937,7 @@ export default function TaskTemplateEditPage() {
   let editQuestion: any = null;
   if (editQuestionId) {
     for (const section of sections) {
-      const sectionQuestions = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
+      const sectionQuestions = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
       if (sectionQuestions) {
         const question = sectionQuestions.find((q: any) => q.id === editQuestionId);
         if (question) {
@@ -1093,7 +1093,7 @@ export default function TaskTemplateEditPage() {
                                   setCreatingQuestion({ sectionId, questionType });
                                 } else {
                                   // Editing existing question
-                                  const sectionQuestions = queryClient.getQueryData<TaskTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
+                                  const sectionQuestions = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
                                   const question = sectionQuestions?.find((q: any) => q.id === questionId);
                                   if (question) {
                                     setEditQuestionId(questionId);

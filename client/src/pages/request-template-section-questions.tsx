@@ -17,7 +17,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import type { TaskTemplateQuestion, TaskTemplateSection, TaskTemplate } from "@shared/schema";
+import type { ClientRequestTemplateQuestion, ClientRequestTemplateSection, ClientRequestTemplate } from "@shared/schema";
 
 const QUESTION_TYPES = [
   { value: "short_text", label: "Short Text", description: "Single line text input" },
@@ -32,7 +32,7 @@ const QUESTION_TYPES = [
   { value: "file_upload", label: "File Upload", description: "File upload field" },
 ] as const;
 
-interface SortableQuestion extends TaskTemplateQuestion {
+interface SortableQuestion extends ClientRequestTemplateQuestion {
   id: string;
 }
 
@@ -125,35 +125,35 @@ export default function TaskTemplateSectionQuestionsPage() {
   const { toast } = useToast();
   const [questions, setQuestions] = useState<SortableQuestion[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<TaskTemplateQuestion | null>(null);
-  const [deletingQuestion, setDeletingQuestion] = useState<TaskTemplateQuestion | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<ClientRequestTemplateQuestion | null>(null);
+  const [deletingQuestion, setDeletingQuestion] = useState<ClientRequestTemplateQuestion | null>(null);
 
   // Form state for question builder
   const [formData, setFormData] = useState({
     label: "",
     helpText: "",
-    questionType: "short_text" as TaskTemplateQuestion["questionType"],
+    questionType: "short_text" as ClientRequestTemplateQuestion["questionType"],
     isRequired: false,
     options: [] as string[],
     validationRules: {} as Record<string, any>,
   });
 
-  const { data: template } = useQuery<TaskTemplate>({
+  const { data: template } = useQuery<ClientRequestTemplate>({
     queryKey: ["/api/client-request-templates", templateId],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!templateId,
   });
 
-  const { data: section } = useQuery<TaskTemplateSection>({
+  const { data: section } = useQuery<ClientRequestTemplateSection>({
     queryKey: ["/api/task-template-sections", sectionId],
     queryFn: async () => {
       const sections = await fetch(`/api/client-request-templates/${templateId}/sections`).then(r => r.json());
-      return sections.find((s: TaskTemplateSection) => s.id === sectionId);
+      return sections.find((s: ClientRequestTemplateSection) => s.id === sectionId);
     },
     enabled: !!templateId && !!sectionId,
   });
 
-  const { data: questionsData, isLoading: questionsLoading } = useQuery<TaskTemplateQuestion[]>({
+  const { data: questionsData, isLoading: questionsLoading } = useQuery<ClientRequestTemplateQuestion[]>({
     queryKey: ["/api/task-template-sections", sectionId, "questions"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!sectionId,
@@ -222,7 +222,7 @@ export default function TaskTemplateSectionQuestionsPage() {
     setShowAddDialog(true);
   };
 
-  const openEditDialog = (question: TaskTemplateQuestion) => {
+  const openEditDialog = (question: ClientRequestTemplateQuestion) => {
     setFormData({
       label: question.label,
       helpText: question.helpText || "",
@@ -448,7 +448,7 @@ export default function TaskTemplateSectionQuestionsPage() {
                     onValueChange={(value) => {
                       setFormData({ 
                         ...formData, 
-                        questionType: value as TaskTemplateQuestion["questionType"],
+                        questionType: value as ClientRequestTemplateQuestion["questionType"],
                         options: [],
                         validationRules: {}
                       });

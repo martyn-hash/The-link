@@ -18,10 +18,10 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import type { TaskTemplate, TaskTemplateCategory } from "@shared/schema";
+import type { ClientRequestTemplate, ClientRequestTemplateCategory } from "@shared/schema";
 
-interface TemplateWithDetails extends TaskTemplate {
-  category?: TaskTemplateCategory;
+interface TemplateWithDetails extends ClientRequestTemplate {
+  category?: ClientRequestTemplateCategory;
   questionCount: number;
 }
 
@@ -222,12 +222,12 @@ export default function TaskTemplatesPage() {
   const [, navigate] = useLocation();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  const { data: templates, isLoading: templatesLoading } = useQuery<TaskTemplate[]>({
+  const { data: templates, isLoading: templatesLoading } = useQuery<ClientRequestTemplate[]>({
     queryKey: ["/api/client-request-templates"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  const { data: categories } = useQuery<TaskTemplateCategory[]>({
+  const { data: categories } = useQuery<ClientRequestTemplateCategory[]>({
     queryKey: ["/api/client-request-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });

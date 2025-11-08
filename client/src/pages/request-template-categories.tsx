@@ -14,7 +14,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import type { TaskTemplateCategory, InsertTaskTemplateCategory } from "@shared/schema";
+import type { ClientRequestTemplateCategory, InsertClientRequestTemplateCategory } from "@shared/schema";
 
 const categorySchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
@@ -27,7 +27,7 @@ function CategoryModal({
   category,
   onSuccess 
 }: { 
-  category?: TaskTemplateCategory;
+  category?: ClientRequestTemplateCategory;
   onSuccess: () => void; 
 }) {
   const [open, setOpen] = useState(false);
@@ -152,7 +152,7 @@ function DeleteCategoryDialog({
   category,
   onSuccess 
 }: { 
-  category: TaskTemplateCategory;
+  category: ClientRequestTemplateCategory;
   onSuccess: () => void; 
 }) {
   const [open, setOpen] = useState(false);
@@ -220,7 +220,7 @@ function DeleteCategoryDialog({
 export default function TaskTemplateCategoriesPage() {
   const { user } = useAuth();
 
-  const { data: categories, isLoading } = useQuery<TaskTemplateCategory[]>({
+  const { data: categories, isLoading } = useQuery<ClientRequestTemplateCategory[]>({
     queryKey: ["/api/client-request-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
