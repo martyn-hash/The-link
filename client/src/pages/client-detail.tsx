@@ -6881,13 +6881,13 @@ export default function ClientDetail() {
 
   // Fetch task template categories
   const { data: taskCategories } = useQuery<any[]>({
-    queryKey: ['/api/task-template-categories'],
+    queryKey: ['/api/client-request-template-categories'],
     enabled: isNewRequestDialogOpen,
   });
 
   // Fetch task templates for selected category
-  const { data: taskTemplates } = useQuery<any[]>({
-    queryKey: ['/api/task-templates', { categoryId: selectedCategoryId }],
+  const { data: clientRequestTemplates } = useQuery<any[]>({
+    queryKey: ['/api/client-request-templates', { categoryId: selectedCategoryId }],
     enabled: isNewRequestDialogOpen && !!selectedCategoryId,
   });
 
@@ -9106,7 +9106,7 @@ export default function ClientDetail() {
                         <SelectValue placeholder="Select a template" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(taskTemplates || []).map((template) => (
+                        {(clientRequestTemplates || []).map((template) => (
                           <SelectItem key={template.id} value={template.id}>
                             {template.name}
                           </SelectItem>

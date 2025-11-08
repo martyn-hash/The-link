@@ -41,14 +41,14 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("DELETE", `/api/task-templates/${template.id}`);
+      return apiRequest("DELETE", `/api/client-request-templates/${template.id}`);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Template deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
       setDeleteDialogOpen(false);
     },
     onError: (error) => {
@@ -63,14 +63,14 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
   const toggleStatusMutation = useMutation({
     mutationFn: async () => {
       const newStatus = template.status === "active" ? "draft" : "active";
-      return apiRequest("PATCH", `/api/task-templates/${template.id}`, { status: newStatus });
+      return apiRequest("PATCH", `/api/client-request-templates/${template.id}`, { status: newStatus });
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: `Template ${template.status === "active" ? "deactivated" : "activated"} successfully`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
     },
     onError: (error) => {
       toast({
@@ -83,7 +83,7 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
 
   const duplicateMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/task-templates", {
+      return apiRequest("POST", "/api/client-request-templates", {
         name: `${template.name} (Copy)`,
         description: template.description,
         categoryId: template.categoryId,
@@ -95,7 +95,7 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
         title: "Success",
         description: "Template duplicated successfully. You can now edit the copy.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
     },
     onError: (error) => {
       toast({
@@ -223,12 +223,12 @@ export default function TaskTemplatesPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const { data: templates, isLoading: templatesLoading } = useQuery<TaskTemplate[]>({
-    queryKey: ["/api/task-templates"],
+    queryKey: ["/api/client-request-templates"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
   const { data: categories } = useQuery<TaskTemplateCategory[]>({
-    queryKey: ["/api/task-template-categories"],
+    queryKey: ["/api/client-request-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
@@ -245,14 +245,14 @@ export default function TaskTemplatesPage() {
   // Get question counts for all templates
   const templateIds = templates?.map(t => t.id) || [];
   const questionCountQueries = useQuery({
-    queryKey: ["/api/task-templates", "questions", templateIds],
+    queryKey: ["/api/client-request-templates", "questions", templateIds],
     queryFn: async () => {
       if (templateIds.length === 0) return {};
       const counts: Record<string, number> = {};
       await Promise.all(
         templateIds.map(async (id) => {
           try {
-            const response = await fetch(`/api/task-templates/${id}/questions`);
+            const response = await fetch(`/api/client-request-templates/${id}/questions`);
             if (response.ok) {
               const questions = await response.json();
               counts[id] = questions.length;
@@ -271,7 +271,7 @@ export default function TaskTemplatesPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: TemplateFormData) => {
-      return apiRequest("POST", "/api/task-templates", {
+      return apiRequest("POST", "/api/client-request-templates", {
         name: data.name,
         description: data.description || "",
         categoryId: data.categoryId || undefined,
@@ -283,7 +283,7 @@ export default function TaskTemplatesPage() {
         title: "Success",
         description: "Template created successfully",
       });
-      await queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
       setShowCreateDialog(false);
       form.reset();
       navigate(`/task-templates/${data.id}/edit`);
@@ -340,9 +340,9 @@ export default function TaskTemplatesPage() {
       <div className="container mx-auto py-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold" data-testid="text-page-title">Task Templates</h1>
+            <h1 className="text-3xl font-bold" data-testid="text-page-title">Client Request Templates</h1>
             <p className="text-muted-foreground mt-1">
-              Create and manage reusable task templates for your clients
+              Create and manage reusable client request templates for your clients
             </p>
           </div>
           <div className="flex space-x-2">

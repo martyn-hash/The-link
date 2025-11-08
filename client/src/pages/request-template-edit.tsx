@@ -367,14 +367,14 @@ function SectionModal({
       if (isEditing) {
         return apiRequest("PATCH", `/api/task-template-sections/${section.id}`, data);
       }
-      return apiRequest("POST", `/api/task-templates/${templateId}/sections`, data);
+      return apiRequest("POST", `/api/client-request-templates/${templateId}/sections`, data);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: `Section ${isEditing ? 'updated' : 'created'} successfully`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", templateId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", templateId, "sections"] });
       onSuccess();
       setOpen(false);
       form.reset();
@@ -487,7 +487,7 @@ function DeleteSectionDialog({
         title: "Success",
         description: "Section deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", section.templateId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", section.templateId, "sections"] });
       onSuccess();
       setOpen(false);
     },
@@ -554,18 +554,18 @@ export default function TaskTemplateEditPage() {
   const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
 
   const { data: template, isLoading: templateLoading } = useQuery<TaskTemplate>({
-    queryKey: ["/api/task-templates", id],
+    queryKey: ["/api/client-request-templates", id],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!id,
   });
 
   const { data: categories } = useQuery<TaskTemplateCategory[]>({
-    queryKey: ["/api/task-template-categories"],
+    queryKey: ["/api/client-request-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
   const { data: sectionsData, isLoading: sectionsLoading } = useQuery<TaskTemplateSection[]>({
-    queryKey: ["/api/task-templates", id, "sections"],
+    queryKey: ["/api/client-request-templates", id, "sections"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!id,
   });
@@ -601,15 +601,15 @@ export default function TaskTemplateEditPage() {
 
   const updateTemplateMutation = useMutation({
     mutationFn: async (data: TemplateForm) => {
-      return apiRequest("PATCH", `/api/task-templates/${id}`, data);
+      return apiRequest("PATCH", `/api/client-request-templates/${id}`, data);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Template updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
       setEditTemplateDialogOpen(false);
     },
     onError: (error) => {
@@ -632,20 +632,20 @@ export default function TaskTemplateEditPage() {
         variant: "destructive",
       });
       // Reload sections on error
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "sections"] });
     },
   });
 
   const createSectionMutation = useMutation({
     mutationFn: async (sectionData: { title: string; description?: string; sortOrder: number }) => {
-      return apiRequest("POST", `/api/task-templates/${id}/sections`, sectionData);
+      return apiRequest("POST", `/api/client-request-templates/${id}/sections`, sectionData);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Section created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "sections"] });
     },
     onError: (error) => {
       toast({
@@ -1148,7 +1148,7 @@ export default function TaskTemplateEditPage() {
                         title: "Success",
                         description: "Section updated successfully",
                       });
-                      queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+                      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "sections"] });
                       setEditingSection(null);
                     })
                     .catch((error) => {
@@ -1236,7 +1236,7 @@ export default function TaskTemplateEditPage() {
                           title: "Success",
                           description: "Section deleted successfully",
                         });
-                        queryClient.invalidateQueries({ queryKey: ["/api/task-templates", id, "sections"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "sections"] });
                         setDeletingSection(null);
                       })
                       .catch((error) => {

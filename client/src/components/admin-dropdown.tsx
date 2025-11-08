@@ -53,8 +53,8 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       icon: FolderTree,
     },
     {
-      label: "Task Templates",
-      href: "/task-templates",
+      label: "Client Request Templates",
+      href: "/request-templates",
       icon: ClipboardList,
     },
   ];

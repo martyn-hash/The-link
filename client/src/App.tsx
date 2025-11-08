@@ -31,10 +31,10 @@ import ScheduledServices from "@/pages/scheduled-services";
 import ChChanges from "@/pages/ch-changes";
 import Companies from "@/pages/companies";
 import Tags from "@/pages/tags";
-import TaskTemplateCategories from "@/pages/task-template-categories";
-import TaskTemplates from "@/pages/task-templates";
-import TaskTemplateEdit from "@/pages/task-template-edit";
-import TaskTemplateSectionQuestions from "@/pages/task-template-section-questions";
+import RequestTemplateCategories from "@/pages/request-template-categories";
+import RequestTemplates from "@/pages/request-templates";
+import RequestTemplateEdit from "@/pages/request-template-edit";
+import RequestTemplateSectionQuestions from "@/pages/request-template-section-questions";
 import CustomRequestEdit from "@/pages/custom-request-edit";
 import TaskSubmissions from "@/pages/task-submissions";
 import TaskSubmissionDetail from "@/pages/task-submission-detail";
@@ -137,10 +137,10 @@ function Router() {
       <Route path="/ch-changes" component={ChChanges} />
       <Route path="/companies" component={Companies} />
       <Route path="/tags" component={Tags} />
-      <Route path="/task-template-categories" component={TaskTemplateCategories} />
-      <Route path="/task-templates/:templateId/sections/:sectionId/questions" component={TaskTemplateSectionQuestions} />
-      <Route path="/task-templates/:id/edit" component={TaskTemplateEdit} />
-      <Route path="/task-templates" component={TaskTemplates} />
+      <Route path="/request-template-categories" component={RequestTemplateCategories} />
+      <Route path="/request-templates/:templateId/sections/:sectionId/questions" component={RequestTemplateSectionQuestions} />
+      <Route path="/request-templates/:id/edit" component={RequestTemplateEdit} />
+      <Route path="/request-templates" component={RequestTemplates} />
       <Route path="/custom-requests/:id/edit" component={CustomRequestEdit} />
       <Route path="/task-submissions/:id" component={TaskSubmissionDetail} />
       <Route path="/task-submissions" component={TaskSubmissions} />

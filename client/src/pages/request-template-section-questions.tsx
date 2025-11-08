@@ -139,7 +139,7 @@ export default function TaskTemplateSectionQuestionsPage() {
   });
 
   const { data: template } = useQuery<TaskTemplate>({
-    queryKey: ["/api/task-templates", templateId],
+    queryKey: ["/api/client-request-templates", templateId],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!templateId,
   });
@@ -147,7 +147,7 @@ export default function TaskTemplateSectionQuestionsPage() {
   const { data: section } = useQuery<TaskTemplateSection>({
     queryKey: ["/api/task-template-sections", sectionId],
     queryFn: async () => {
-      const sections = await fetch(`/api/task-templates/${templateId}/sections`).then(r => r.json());
+      const sections = await fetch(`/api/client-request-templates/${templateId}/sections`).then(r => r.json());
       return sections.find((s: TaskTemplateSection) => s.id === sectionId);
     },
     enabled: !!templateId && !!sectionId,

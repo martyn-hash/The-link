@@ -45,16 +45,16 @@ function CategoryModal({
   const saveMutation = useMutation({
     mutationFn: async (data: CategoryForm) => {
       if (isEditing) {
-        return apiRequest("PATCH", `/api/task-template-categories/${category.id}`, data);
+        return apiRequest("PATCH", `/api/client-request-template-categories/${category.id}`, data);
       }
-      return apiRequest("POST", "/api/task-template-categories", data);
+      return apiRequest("POST", "/api/client-request-template-categories", data);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: `Category ${isEditing ? 'updated' : 'created'} successfully`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-categories"] });
       onSuccess();
       setOpen(false);
       form.reset();
@@ -160,14 +160,14 @@ function DeleteCategoryDialog({
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("DELETE", `/api/task-template-categories/${category.id}`);
+      return apiRequest("DELETE", `/api/client-request-template-categories/${category.id}`);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Category deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-categories"] });
       onSuccess();
       setOpen(false);
     },
@@ -221,7 +221,7 @@ export default function TaskTemplateCategoriesPage() {
   const { user } = useAuth();
 
   const { data: categories, isLoading } = useQuery<TaskTemplateCategory[]>({
-    queryKey: ["/api/task-template-categories"],
+    queryKey: ["/api/client-request-template-categories"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
@@ -243,9 +243,9 @@ export default function TaskTemplateCategoriesPage() {
       <div className="container mx-auto py-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold" data-testid="text-page-title">Task Template Categories</h1>
+            <h1 className="text-3xl font-bold" data-testid="text-page-title">Client Request Template Categories</h1>
             <p className="text-muted-foreground mt-1">
-              Organize your task templates into categories for better management
+              Organize your client request templates into categories for better management
             </p>
           </div>
           <CategoryModal onSuccess={() => {}} />
@@ -265,7 +265,7 @@ export default function TaskTemplateCategoriesPage() {
                 <FolderOpen className="w-16 h-16 text-muted-foreground mb-4" />
                 <p className="text-muted-foreground mb-2">No categories yet</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Create your first category to start organizing task templates
+                  Create your first category to start organizing client request templates
                 </p>
               </div>
             ) : (
