@@ -11,14 +11,14 @@ import {
   requireManager,
 } from "./routeHelpers";
 import {
-  insertTaskTemplateCategorySchema,
-  updateTaskTemplateCategorySchema,
-  insertTaskTemplateSchema,
-  updateTaskTemplateSchema,
-  insertTaskTemplateSectionSchema,
-  updateTaskTemplateSectionSchema,
-  insertTaskTemplateQuestionSchema,
-  updateTaskTemplateQuestionSchema,
+  insertClientRequestTemplateCategorySchema,
+  updateClientRequestTemplateCategorySchema,
+  insertClientRequestTemplateSchema,
+  updateClientRequestTemplateSchema,
+  insertClientRequestTemplateSectionSchema,
+  updateClientRequestTemplateSectionSchema,
+  insertClientRequestTemplateQuestionSchema,
+  updateClientRequestTemplateQuestionSchema,
   insertTaskInstanceSchema,
   updateTaskInstanceStatusSchema,
   insertClientCustomRequestSectionSchema,
@@ -38,24 +38,24 @@ export function registerTaskRoutes(
   requireManager: any
 ) {
   // ==================================================
-  // TASK TEMPLATE CATEGORY ROUTES
+  // CLIENT REQUEST TEMPLATE CATEGORY ROUTES
   // ==================================================
 
-  // GET /api/task-template-categories - Get all categories (isAuthenticated)
-  app.get("/api/task-template-categories", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-template-categories - Get all categories (isAuthenticated)
+  app.get("/api/client-request-template-categories", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const categories = await storage.getAllTaskTemplateCategories();
+      const categories = await storage.getAllClientRequestTemplateCategories();
       res.json(categories);
     } catch (error) {
-      console.error("Error fetching task template categories:", error);
-      res.status(500).json({ message: "Failed to fetch task template categories" });
+      console.error("Error fetching client request template categories:", error);
+      res.status(500).json({ message: "Failed to fetch client request template categories" });
     }
   });
 
-  // POST /api/task-template-categories - Create category (requireAdmin)
-  app.post("/api/task-template-categories", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // POST /api/client-request-template-categories - Create category (requireAdmin)
+  app.post("/api/client-request-template-categories", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      const validationResult = insertTaskTemplateCategorySchema.safeParse(req.body);
+      const validationResult = insertClientRequestTemplateCategorySchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({
           message: "Invalid category data",
@@ -63,16 +63,16 @@ export function registerTaskRoutes(
         });
       }
 
-      const category = await storage.createTaskTemplateCategory(validationResult.data);
+      const category = await storage.createClientRequestTemplateCategory(validationResult.data);
       res.status(201).json(category);
     } catch (error) {
-      console.error("Error creating task template category:", error);
-      res.status(500).json({ message: "Failed to create task template category" });
+      console.error("Error creating client request template category:", error);
+      res.status(500).json({ message: "Failed to create client request template category" });
     }
   });
 
-  // PATCH /api/task-template-categories/:id - Update category (requireAdmin)
-  app.patch("/api/task-template-categories/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // PATCH /api/client-request-template-categories/:id - Update category (requireAdmin)
+  app.patch("/api/client-request-template-categories/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -84,7 +84,7 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      const validationResult = updateTaskTemplateCategorySchema.safeParse(req.body);
+      const validationResult = updateClientRequestTemplateCategorySchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({
           message: "Invalid category data",
@@ -92,20 +92,20 @@ export function registerTaskRoutes(
         });
       }
 
-      const category = await storage.updateTaskTemplateCategory(id, validationResult.data);
+      const category = await storage.updateClientRequestTemplateCategory(id, validationResult.data);
       if (!category) {
-        return res.status(404).json({ message: "Task template category not found" });
+        return res.status(404).json({ message: "Client request template category not found" });
       }
 
       res.json(category);
     } catch (error) {
-      console.error("Error updating task template category:", error);
-      res.status(500).json({ message: "Failed to update task template category" });
+      console.error("Error updating client request template category:", error);
+      res.status(500).json({ message: "Failed to update client request template category" });
     }
   });
 
-  // DELETE /api/task-template-categories/:id - Delete category (requireAdmin)
-  app.delete("/api/task-template-categories/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // DELETE /api/client-request-template-categories/:id - Delete category (requireAdmin)
+  app.delete("/api/client-request-template-categories/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -117,38 +117,38 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      await storage.deleteTaskTemplateCategory(id);
-      res.json({ message: "Task template category deleted successfully" });
+      await storage.deleteClientRequestTemplateCategory(id);
+      res.json({ message: "Client request template category deleted successfully" });
     } catch (error) {
-      console.error("Error deleting task template category:", error);
-      res.status(500).json({ message: "Failed to delete task template category" });
+      console.error("Error deleting client request template category:", error);
+      res.status(500).json({ message: "Failed to delete client request template category" });
     }
   });
 
   // ==================================================
-  // TASK TEMPLATE ROUTES
+  // CLIENT REQUEST TEMPLATE ROUTES
   // ==================================================
 
-  // GET /api/task-templates/active - Get only active templates (must be before /:id route)
-  app.get("/api/task-templates/active", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-templates/active - Get only active templates (must be before /:id route)
+  app.get("/api/client-request-templates/active", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      const templates = await storage.getActiveTaskTemplates();
+      const templates = await storage.getActiveClientRequestTemplates();
       res.json(templates);
     } catch (error) {
-      console.error("Error fetching active task templates:", error);
-      res.status(500).json({ message: "Failed to fetch active task templates" });
+      console.error("Error fetching active client request templates:", error);
+      res.status(500).json({ message: "Failed to fetch active client request templates" });
     }
   });
 
-  // GET /api/task-templates - Get all templates (defaults to all, use ?activeOnly=true for active only, ?categoryId=uuid for category filter)
-  app.get("/api/task-templates", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-templates - Get all templates (defaults to all, use ?activeOnly=true for active only, ?categoryId=uuid for category filter)
+  app.get("/api/client-request-templates", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const activeOnly = req.query.activeOnly === 'true';
       const categoryId = req.query.categoryId as string | undefined;
 
       let templates = activeOnly
-        ? await storage.getActiveTaskTemplates()
-        : await storage.getAllTaskTemplates(true);
+        ? await storage.getActiveClientRequestTemplates()
+        : await storage.getAllClientRequestTemplates(true);
 
       // Filter by category if provided
       if (categoryId) {
@@ -157,13 +157,13 @@ export function registerTaskRoutes(
 
       res.json(templates);
     } catch (error) {
-      console.error("Error fetching task templates:", error);
-      res.status(500).json({ message: "Failed to fetch task templates" });
+      console.error("Error fetching client request templates:", error);
+      res.status(500).json({ message: "Failed to fetch client request templates" });
     }
   });
 
-  // GET /api/task-templates/:id - Get specific template by ID
-  app.get("/api/task-templates/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-templates/:id - Get specific template by ID
+  app.get("/api/client-request-templates/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -175,22 +175,22 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      const template = await storage.getTaskTemplateById(id);
+      const template = await storage.getClientRequestTemplateById(id);
       if (!template) {
-        return res.status(404).json({ message: "Task template not found" });
+        return res.status(404).json({ message: "Client request template not found" });
       }
 
       res.json(template);
     } catch (error) {
-      console.error("Error fetching task template:", error);
-      res.status(500).json({ message: "Failed to fetch task template" });
+      console.error("Error fetching client request template:", error);
+      res.status(500).json({ message: "Failed to fetch client request template" });
     }
   });
 
-  // POST /api/task-templates - Create template (requireAdmin)
-  app.post("/api/task-templates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // POST /api/client-request-templates - Create template (requireAdmin)
+  app.post("/api/client-request-templates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      const validationResult = insertTaskTemplateSchema.safeParse(req.body);
+      const validationResult = insertClientRequestTemplateSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({
           message: "Invalid template data",
@@ -198,16 +198,16 @@ export function registerTaskRoutes(
         });
       }
 
-      const template = await storage.createTaskTemplate(validationResult.data);
+      const template = await storage.createClientRequestTemplate(validationResult.data);
       res.status(201).json(template);
     } catch (error) {
-      console.error("Error creating task template:", error);
-      res.status(500).json({ message: "Failed to create task template" });
+      console.error("Error creating client request template:", error);
+      res.status(500).json({ message: "Failed to create client request template" });
     }
   });
 
-  // PATCH /api/task-templates/:id - Update template (requireAdmin)
-  app.patch("/api/task-templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // PATCH /api/client-request-templates/:id - Update template (requireAdmin)
+  app.patch("/api/client-request-templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -219,7 +219,7 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      const validationResult = updateTaskTemplateSchema.safeParse(req.body);
+      const validationResult = updateClientRequestTemplateSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({
           message: "Invalid template data",
@@ -227,20 +227,20 @@ export function registerTaskRoutes(
         });
       }
 
-      const template = await storage.updateTaskTemplate(id, validationResult.data);
+      const template = await storage.updateClientRequestTemplate(id, validationResult.data);
       if (!template) {
-        return res.status(404).json({ message: "Task template not found" });
+        return res.status(404).json({ message: "Client request template not found" });
       }
 
       res.json(template);
     } catch (error) {
-      console.error("Error updating task template:", error);
-      res.status(500).json({ message: "Failed to update task template" });
+      console.error("Error updating client request template:", error);
+      res.status(500).json({ message: "Failed to update client request template" });
     }
   });
 
-  // DELETE /api/task-templates/:id - Delete template (requireAdmin)
-  app.delete("/api/task-templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // DELETE /api/client-request-templates/:id - Delete template (requireAdmin)
+  app.delete("/api/client-request-templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -252,20 +252,20 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      await storage.deleteTaskTemplate(id);
-      res.json({ message: "Task template deleted successfully" });
+      await storage.deleteClientRequestTemplate(id);
+      res.json({ message: "Client request template deleted successfully" });
     } catch (error) {
-      console.error("Error deleting task template:", error);
-      res.status(500).json({ message: "Failed to delete task template" });
+      console.error("Error deleting client request template:", error);
+      res.status(500).json({ message: "Failed to delete client request template" });
     }
   });
 
   // ==================================================
-  // TASK TEMPLATE SECTION ROUTES
+  // CLIENT REQUEST TEMPLATE SECTION ROUTES
   // ==================================================
 
-  // GET /api/task-templates/:templateId/sections - Get sections for a template
-  app.get("/api/task-templates/:templateId/sections", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-templates/:templateId/sections - Get sections for a template
+  app.get("/api/client-request-templates/:templateId/sections", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, { id: req.params.templateId });
       if (!paramValidation.success) {
@@ -277,16 +277,16 @@ export function registerTaskRoutes(
 
       const { templateId } = req.params;
 
-      const sections = await storage.getTaskTemplateSectionsByTemplateId(templateId);
+      const sections = await storage.getClientRequestTemplateSectionsByTemplateId(templateId);
       res.json(sections);
     } catch (error) {
-      console.error("Error fetching task template sections:", error);
-      res.status(500).json({ message: "Failed to fetch task template sections" });
+      console.error("Error fetching client request template sections:", error);
+      res.status(500).json({ message: "Failed to fetch client request template sections" });
     }
   });
 
-  // POST /api/task-templates/:templateId/sections - Create section (requireAdmin)
-  app.post("/api/task-templates/:templateId/sections", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // POST /api/client-request-templates/:templateId/sections - Create section (requireAdmin)
+  app.post("/api/client-request-templates/:templateId/sections", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, { id: req.params.templateId });
       if (!paramValidation.success) {
@@ -298,7 +298,7 @@ export function registerTaskRoutes(
 
       const { templateId } = req.params;
 
-      const validationResult = insertTaskTemplateSectionSchema.safeParse({
+      const validationResult = insertClientRequestTemplateSectionSchema.safeParse({
         ...req.body,
         templateId
       });
@@ -309,11 +309,11 @@ export function registerTaskRoutes(
         });
       }
 
-      const section = await storage.createTaskTemplateSection(validationResult.data);
+      const section = await storage.createClientRequestTemplateSection(validationResult.data);
       res.status(201).json(section);
     } catch (error) {
-      console.error("Error creating task template section:", error);
-      res.status(500).json({ message: "Failed to create task template section" });
+      console.error("Error creating client request template section:", error);
+      res.status(500).json({ message: "Failed to create client request template section" });
     }
   });
 
@@ -330,7 +330,7 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      const validationResult = updateTaskTemplateSectionSchema.safeParse(req.body);
+      const validationResult = updateClientRequestTemplateSectionSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({
           message: "Invalid section data",
@@ -338,15 +338,15 @@ export function registerTaskRoutes(
         });
       }
 
-      const section = await storage.updateTaskTemplateSection(id, validationResult.data);
+      const section = await storage.updateClientRequestTemplateSection(id, validationResult.data);
       if (!section) {
-        return res.status(404).json({ message: "Task template section not found" });
+        return res.status(404).json({ message: "Client request template section not found" });
       }
 
       res.json(section);
     } catch (error) {
-      console.error("Error updating task template section:", error);
-      res.status(500).json({ message: "Failed to update task template section" });
+      console.error("Error updating client request template section:", error);
+      res.status(500).json({ message: "Failed to update client request template section" });
     }
   });
 
@@ -363,11 +363,11 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      await storage.deleteTaskTemplateSection(id);
-      res.json({ message: "Task template section deleted successfully" });
+      await storage.deleteClientRequestTemplateSection(id);
+      res.json({ message: "Client request template section deleted successfully" });
     } catch (error) {
-      console.error("Error deleting task template section:", error);
-      res.status(500).json({ message: "Failed to delete task template section" });
+      console.error("Error deleting client request template section:", error);
+      res.status(500).json({ message: "Failed to delete client request template section" });
     }
   });
 
@@ -393,17 +393,17 @@ export function registerTaskRoutes(
       await storage.updateSectionOrders(updates);
       res.json({ message: "Sections reordered successfully" });
     } catch (error) {
-      console.error("Error reordering task template sections:", error);
-      res.status(500).json({ message: "Failed to reorder task template sections" });
+      console.error("Error reordering client request template sections:", error);
+      res.status(500).json({ message: "Failed to reorder client request template sections" });
     }
   });
 
   // ==================================================
-  // TASK TEMPLATE QUESTION ROUTES
+  // CLIENT REQUEST TEMPLATE QUESTION ROUTES
   // ==================================================
 
-  // GET /api/task-templates/:templateId/questions - Get all questions for a template
-  app.get("/api/task-templates/:templateId/questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-templates/:templateId/questions - Get all questions for a template
+  app.get("/api/client-request-templates/:templateId/questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, { id: req.params.templateId });
       if (!paramValidation.success) {
@@ -415,11 +415,11 @@ export function registerTaskRoutes(
 
       const { templateId } = req.params;
 
-      const questions = await storage.getAllTaskTemplateQuestionsByTemplateId(templateId);
+      const questions = await storage.getAllClientRequestTemplateQuestionsByTemplateId(templateId);
       res.json(questions);
     } catch (error) {
-      console.error("Error fetching task template questions:", error);
-      res.status(500).json({ message: "Failed to fetch task template questions" });
+      console.error("Error fetching client request template questions:", error);
+      res.status(500).json({ message: "Failed to fetch client request template questions" });
     }
   });
 
@@ -436,7 +436,7 @@ export function registerTaskRoutes(
 
       const { sectionId } = req.params;
 
-      const questions = await storage.getTaskTemplateQuestionsBySectionId(sectionId);
+      const questions = await storage.getClientRequestTemplateQuestionsBySectionId(sectionId);
       res.json(questions);
     } catch (error) {
       console.error("Error fetching section questions:", error);
@@ -457,7 +457,7 @@ export function registerTaskRoutes(
 
       const { sectionId } = req.params;
 
-      const validationResult = insertTaskTemplateQuestionSchema.safeParse({
+      const validationResult = insertClientRequestTemplateQuestionSchema.safeParse({
         ...req.body,
         sectionId
       });
@@ -468,11 +468,11 @@ export function registerTaskRoutes(
         });
       }
 
-      const question = await storage.createTaskTemplateQuestion(validationResult.data);
+      const question = await storage.createClientRequestTemplateQuestion(validationResult.data);
       res.status(201).json(question);
     } catch (error) {
-      console.error("Error creating task template question:", error);
-      res.status(500).json({ message: "Failed to create task template question" });
+      console.error("Error creating client request template question:", error);
+      res.status(500).json({ message: "Failed to create client request template question" });
     }
   });
 
@@ -489,7 +489,7 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      const validationResult = updateTaskTemplateQuestionSchema.safeParse(req.body);
+      const validationResult = updateClientRequestTemplateQuestionSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({
           message: "Invalid question data",
@@ -497,15 +497,15 @@ export function registerTaskRoutes(
         });
       }
 
-      const question = await storage.updateTaskTemplateQuestion(id, validationResult.data);
+      const question = await storage.updateClientRequestTemplateQuestion(id, validationResult.data);
       if (!question) {
-        return res.status(404).json({ message: "Task template question not found" });
+        return res.status(404).json({ message: "Client request template question not found" });
       }
 
       res.json(question);
     } catch (error) {
-      console.error("Error updating task template question:", error);
-      res.status(500).json({ message: "Failed to update task template question" });
+      console.error("Error updating client request template question:", error);
+      res.status(500).json({ message: "Failed to update client request template question" });
     }
   });
 
@@ -522,11 +522,11 @@ export function registerTaskRoutes(
 
       const { id } = req.params;
 
-      await storage.deleteTaskTemplateQuestion(id);
-      res.json({ message: "Task template question deleted successfully" });
+      await storage.deleteClientRequestTemplateQuestion(id);
+      res.json({ message: "Client request template question deleted successfully" });
     } catch (error) {
-      console.error("Error deleting task template question:", error);
-      res.status(500).json({ message: "Failed to delete task template question" });
+      console.error("Error deleting client request template question:", error);
+      res.status(500).json({ message: "Failed to delete client request template question" });
     }
   });
 
@@ -552,8 +552,8 @@ export function registerTaskRoutes(
       await storage.updateQuestionOrders(updates);
       res.json({ message: "Questions reordered successfully" });
     } catch (error) {
-      console.error("Error reordering task template questions:", error);
-      res.status(500).json({ message: "Failed to reorder task template questions" });
+      console.error("Error reordering client request template questions:", error);
+      res.status(500).json({ message: "Failed to reorder client request template questions" });
     }
   });
 
@@ -876,7 +876,7 @@ export function registerTaskRoutes(
             instance.clientId ? storage.getClientById(instance.clientId) : null,
             instance.personId ? storage.getPersonById(instance.personId) : null,
             instance.assignedBy ? storage.getUser(instance.assignedBy) : null,
-            instance.templateId ? storage.getTaskTemplateById(instance.templateId) : null,
+            instance.templateId ? storage.getClientRequestTemplateById(instance.templateId) : null,
             instance.customRequestId ? storage.getClientCustomRequestById(instance.customRequestId) : null,
           ]);
 
@@ -999,9 +999,9 @@ export function registerTaskRoutes(
 
       // Verify template or custom request exists
       if (templateId) {
-        const template = await storage.getTaskTemplateById(templateId);
+        const template = await storage.getClientRequestTemplateById(templateId);
         if (!template) {
-          return res.status(404).json({ message: "Task template not found" });
+          return res.status(404).json({ message: "Client request template not found" });
         }
       } else if (customRequestId) {
         const customRequest = await storage.getClientCustomRequestById(customRequestId);
@@ -1079,7 +1079,7 @@ export function registerTaskRoutes(
             // Get task description from template or custom request
             let taskDescription = "New task assigned";
             if (templateId) {
-              const template = await storage.getTaskTemplateById(templateId);
+              const template = await storage.getClientRequestTemplateById(templateId);
               if (template) {
                 taskDescription = template.name;
               }
@@ -1183,7 +1183,7 @@ export function registerTaskRoutes(
         instances.map(async (instance) => {
           const [person, template, customRequest] = await Promise.all([
             instance.personId ? storage.getPersonById(instance.personId) : null,
-            instance.templateId ? storage.getTaskTemplateById(instance.templateId) : null,
+            instance.templateId ? storage.getClientRequestTemplateById(instance.templateId) : null,
             instance.customRequestId ? storage.getClientCustomRequestById(instance.customRequestId) : null,
           ]);
 
