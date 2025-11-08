@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, UserActivityTracking } from "@shared/schema";
 
-type ActivityRecord = UserActivityTracking & { user: User };
+type ActivityRecord = UserActivityTracking & { user: User; entityName: string | null };
 
 export default function UserActivityTrackingPage() {
   const { user } = useAuth();
@@ -194,7 +194,7 @@ export default function UserActivityTrackingPage() {
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Entity Type</TableHead>
-                    <TableHead>Entity ID</TableHead>
+                    <TableHead>Entity Name</TableHead>
                     <TableHead>Viewed At</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -216,8 +216,8 @@ export default function UserActivityTrackingPage() {
                           {record.entityType}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {record.entityId}
+                      <TableCell>
+                        {record.entityName || <span className="text-muted-foreground italic">Unknown</span>}
                       </TableCell>
                       <TableCell>
                         {record.viewedAt 

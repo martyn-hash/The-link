@@ -341,7 +341,7 @@ export interface IStorage {
   // User activity tracking operations
   trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void>;
   getRecentlyViewedByUser(userId: string, limit?: number): Promise<{ entityType: string; entityId: string; viewedAt: Date; entityData?: any }[]>;
-  getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User })[]>;
+  getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User; entityName: string | null })[]>;
   
   // User session operations
   createUserSession(session: InsertUserSession): Promise<UserSession>;
@@ -1436,7 +1436,7 @@ export class DatabaseStorage implements IStorage {
     return await query;
   }
 
-  async getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User })[]> {
+  async getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User; entityName: string | null })[]> {
     let query = db
       .select({
         id: userActivityTracking.id,
@@ -1445,12 +1445,35 @@ export class DatabaseStorage implements IStorage {
         entityId: userActivityTracking.entityId,
         viewedAt: userActivityTracking.viewedAt,
         user: users,
+        clientName: clients.name,
+        personName: sql<string>`${people.firstName} || ' ' || ${people.lastName}`,
+        projectDescription: projects.description,
+        communicationSubject: communications.subject,
       })
       .from(userActivityTracking)
       .innerJoin(users, eq(userActivityTracking.userId, users.id))
+      .leftJoin(clients, and(
+        sql`entity_type = 'client'`,
+        eq(userActivityTracking.entityId, clients.id)
+      ))
+      .leftJoin(people, and(
+        sql`entity_type = 'person'`,
+        eq(userActivityTracking.entityId, people.id)
+      ))
+      .leftJoin(projects, and(
+        sql`entity_type = 'project'`,
+        eq(userActivityTracking.entityId, projects.id)
+      ))
+      .leftJoin(communications, and(
+        sql`entity_type = 'communication'`,
+        eq(userActivityTracking.entityId, communications.id)
+      ))
       .orderBy(desc(userActivityTracking.viewedAt));
 
     const conditions = [];
+    
+    // Always filter to only valid enum values to prevent enum parsing errors
+    conditions.push(sql`entity_type IN ('client', 'project', 'person', 'communication')`);
     
     if (options?.userId) {
       conditions.push(eq(userActivityTracking.userId, options.userId));
@@ -1480,7 +1503,18 @@ export class DatabaseStorage implements IStorage {
       query = query.limit(options.limit) as any;
     }
 
-    return await query;
+    const results = await query;
+    
+    // Map results to include entityName based on entity type
+    return results.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      viewedAt: row.viewedAt,
+      user: row.user,
+      entityName: row.clientName || row.personName || row.projectDescription || row.communicationSubject || null,
+    }));
   }
 
   // Activity cleanup methods
@@ -2194,6 +2228,13 @@ export class DatabaseStorage implements IStorage {
   // User activity tracking operations
   async trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void> {
     try {
+      // Only track entity types that are in the enum
+      const validEntityTypes = ['client', 'project', 'person', 'communication'];
+      if (!validEntityTypes.includes(entityType)) {
+        // Silently skip invalid entity types - they may be legacy or not yet supported
+        return;
+      }
+
       // Insert or update activity tracking (upsert to handle duplicate views)
       await db
         .insert(userActivityTracking)
