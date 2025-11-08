@@ -314,141 +314,6 @@ function ThreadListItem({
   );
 }
 
-// Message Item component with swipe gestures
-interface MessageItemProps {
-  message: ProjectMessage | StaffMessage;
-  isCurrentUser: boolean;
-  isMobile: boolean;
-  isSwipedLeft: boolean;
-  isSwipedRight: boolean;
-  onSwipedLeft: () => void;
-  onSwipedRight: () => void;
-  onReplyAction: () => void;
-  onReactionAction: () => void;
-  getUserDisplayName: (user: any) => string;
-  getUserInitials: (user: any) => string;
-}
-
-function MessageItem({
-  message,
-  isCurrentUser,
-  isMobile,
-  isSwipedLeft,
-  isSwipedRight,
-  onSwipedLeft,
-  onSwipedRight,
-  onReplyAction,
-  onReactionAction,
-  getUserDisplayName,
-  getUserInitials,
-}: MessageItemProps) {
-  const isSwipingRef = useRef(false);
-  const swipeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const swipeHandlers = useSwipeable({
-    onSwiping: () => {
-      isSwipingRef.current = true;
-      if (swipeTimeoutRef.current) {
-        clearTimeout(swipeTimeoutRef.current);
-      }
-    },
-    onSwipedLeft: () => {
-      onSwipedLeft();
-      swipeTimeoutRef.current = setTimeout(() => {
-        isSwipingRef.current = false;
-      }, 300);
-    },
-    onSwipedRight: () => {
-      onSwipedRight();
-      swipeTimeoutRef.current = setTimeout(() => {
-        isSwipingRef.current = false;
-      }, 300);
-    },
-    preventScrollOnSwipe: true,
-    trackMouse: false,
-    delta: 50,
-  });
-
-  return (
-    <div
-      {...(isMobile ? swipeHandlers : {})}
-      className={`relative overflow-hidden group flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-      data-testid={`message-${message.id}`}
-    >
-      {/* Swipe action buttons */}
-      {isSwipedLeft && (
-        <div className="absolute inset-y-0 right-0 flex items-center bg-blue-500 px-4 z-10">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onReplyAction}
-            className="text-white hover:bg-blue-600"
-            data-testid={`button-swipe-reply-message-${message.id}`}
-          >
-            <Reply className="w-5 h-5" />
-          </Button>
-        </div>
-      )}
-      {isSwipedRight && (
-        <div className="absolute inset-y-0 left-0 flex items-center bg-purple-500 px-4 z-10">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onReactionAction}
-            className="text-white hover:bg-purple-600"
-            data-testid={`button-swipe-reaction-message-${message.id}`}
-          >
-            <Smile className="w-5 h-5" />
-          </Button>
-        </div>
-      )}
-
-      <div
-        className={`transition-transform ${
-          isSwipedLeft ? 'translate-x-[-80px]' : isSwipedRight ? 'translate-x-[80px]' : ''
-        } max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          {!isCurrentUser && message.user && (
-            <>
-              <Avatar className="w-6 h-6">
-                <AvatarFallback className="text-xs">
-                  {getUserInitials(message.user)}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-xs text-muted-foreground">
-                {getUserDisplayName(message.user)}
-              </span>
-            </>
-          )}
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-          </span>
-        </div>
-        <div className="relative">
-          <div
-            className={`rounded-lg p-3 select-none touch-manipulation ${
-              isCurrentUser
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted'
-            }`}
-          >
-            <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
-            {message.attachments && message.attachments.length > 0 && (
-              <div className="mt-2">
-                <AttachmentList
-                  attachments={message.attachments}
-                  readonly={true}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Messages() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -482,11 +347,11 @@ export default function Messages() {
 
   // Message interaction state
   const [replyToMessage, setReplyToMessage] = useState<(ProjectMessage | StaffMessage) | null>(null);
+  const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showMessageContextMenu, setShowMessageContextMenu] = useState(false);
   const [shouldFocusComposer, setShouldFocusComposer] = useState(false);
-  const [swipedMessageId, setSwipedMessageId] = useState<string | null>(null);
-  const [messageSwipeDirection, setMessageSwipeDirection] = useState<'left' | 'right' | null>(null);
-  const [selectedMessageForReaction, setSelectedMessageForReaction] = useState<string | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Voice recording state
@@ -985,34 +850,56 @@ export default function Messages() {
     setSwipeDirection(null);
   };
 
-  // Message swipe handling
-  const handleMessageSwipeLeft = (messageId: string) => {
-    setSwipedMessageId(messageId);
-    setMessageSwipeDirection('left');
+  // Long press handling for message context menu (react/reply)
+  const handleMessageTouchStart = (event: React.TouchEvent, messageId: string) => {
+    longPressTimer.current = setTimeout(() => {
+      setLongPressedMessageId(messageId);
+      setShowMessageContextMenu(true);
+      // Prevent context menu or text selection only after confirming long press
+      if (navigator.vibrate) {
+        navigator.vibrate(50); // Haptic feedback on long-press
+      }
+    }, 500); // 500ms long press
   };
 
-  const handleMessageSwipeRight = (messageId: string) => {
-    setSwipedMessageId(messageId);
-    setMessageSwipeDirection('right');
+  const handleMessageTouchEnd = (event: React.TouchEvent) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   };
 
-  const handleMessageReplyAction = (message: ProjectMessage | StaffMessage) => {
-    handleReplyToMessage(message);
-    setShouldFocusComposer(true);
-    setSwipedMessageId(null);
-    setMessageSwipeDirection(null);
+  const handleMessageTouchMove = (event: React.TouchEvent) => {
+    // Cancel long press if user moves finger (scrolling)
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   };
 
-  const handleMessageReactionAction = (messageId: string) => {
-    setSelectedMessageForReaction(messageId);
+  const handleMessageContextMenu = (event: React.MouseEvent) => {
+    // Prevent browser's default context menu
+    event.preventDefault();
+  };
+
+  const handleContextMenuReact = () => {
+    setShowMessageContextMenu(false);
     setShowReactionPicker(true);
-    setSwipedMessageId(null);
-    setMessageSwipeDirection(null);
+  };
+
+  const handleContextMenuReply = () => {
+    const message = messages?.find(m => m.id === longPressedMessageId);
+    if (message) {
+      handleReplyToMessage(message);
+      setShouldFocusComposer(true); // Focus input when replying
+    }
+    setShowMessageContextMenu(false);
+    setLongPressedMessageId(null);
   };
 
   const handleReaction = (emoji: string) => {
     // TODO: Backend API support needed for persisting reactions
-    // Would typically POST to /api/.../messages/{selectedMessageForReaction}/reactions
+    // Would typically POST to /api/.../messages/{messageId}/reactions
     // with { emoji, userId } and store in reactions table
     
     // For now, provide user feedback that the feature is recognized
@@ -1022,7 +909,7 @@ export default function Messages() {
     });
     
     setShowReactionPicker(false);
-    setSelectedMessageForReaction(null);
+    setLongPressedMessageId(null);
   };
 
   // Reply to message handling
@@ -1496,20 +1383,67 @@ export default function Messages() {
                           {messages.map((message) => {
                             const isCurrentUser = message.userId === user?.id;
                             return (
-                              <MessageItem
+                              <div
                                 key={message.id}
-                                message={message}
-                                isCurrentUser={isCurrentUser}
-                                isMobile={isMobile}
-                                isSwipedLeft={swipedMessageId === message.id && messageSwipeDirection === 'left'}
-                                isSwipedRight={swipedMessageId === message.id && messageSwipeDirection === 'right'}
-                                onSwipedLeft={() => handleMessageSwipeLeft(message.id)}
-                                onSwipedRight={() => handleMessageSwipeRight(message.id)}
-                                onReplyAction={() => handleMessageReplyAction(message)}
-                                onReactionAction={() => handleMessageReactionAction(message.id)}
-                                getUserDisplayName={getUserDisplayName}
-                                getUserInitials={getUserInitials}
-                              />
+                                className={`group flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                                data-testid={`message-${message.id}`}
+                                onTouchStart={(e) => handleMessageTouchStart(e, message.id)}
+                                onTouchEnd={handleMessageTouchEnd}
+                                onTouchMove={handleMessageTouchMove}
+                                onContextMenu={handleMessageContextMenu}
+                              >
+                                <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    {!isCurrentUser && message.user && (
+                                      <>
+                                        <Avatar className="w-6 h-6">
+                                          <AvatarFallback className="text-xs">
+                                            {getUserInitials(message.user)}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <span className="text-xs text-muted-foreground">
+                                          {getUserDisplayName(message.user)}
+                                        </span>
+                                      </>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                                    </span>
+                                  </div>
+                                  <div className="relative">
+                                    <div
+                                      className={`rounded-lg p-3 select-none touch-manipulation ${
+                                        isCurrentUser
+                                          ? 'bg-primary text-primary-foreground'
+                                          : 'bg-muted'
+                                      }`}
+                                    >
+                                      <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                      {message.attachments && message.attachments.length > 0 && (
+                                        <div className="mt-2">
+                                          <AttachmentList
+                                            attachments={message.attachments}
+                                            readonly={true}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Reply button - shows on hover/group-hover */}
+                                    <div className={`absolute ${isCurrentUser ? 'left-[-40px]' : 'right-[-40px]'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleReplyToMessage(message)}
+                                        className="h-8 w-8 p-0 rounded-full bg-muted shadow-sm hover:bg-accent"
+                                        data-testid={`button-reply-${message.id}`}
+                                      >
+                                        <Reply className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             );
                           })}
                           <div ref={messagesEndRef} />
@@ -2049,8 +1983,42 @@ export default function Messages() {
         />
       )}
 
-      {/* Reaction Picker Modal - appears after swiping right on message */}
-      {showReactionPicker && selectedMessageForReaction && (
+      {/* Message Context Menu - appears on long press */}
+      {showMessageContextMenu && longPressedMessageId && (
+        <Dialog open={showMessageContextMenu} onOpenChange={setShowMessageContextMenu}>
+          <DialogContent className="sm:max-w-[300px]" data-testid="dialog-message-context-menu">
+            <DialogHeader>
+              <DialogTitle>Message Options</DialogTitle>
+              <DialogDescription>
+                Choose an action for this message
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 py-4">
+              <Button
+                variant="outline"
+                onClick={handleContextMenuReply}
+                className="justify-start"
+                data-testid="button-context-reply"
+              >
+                <Reply className="w-4 h-4 mr-2" />
+                Reply to Message
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleContextMenuReact}
+                className="justify-start"
+                data-testid="button-context-react"
+              >
+                <Smile className="w-4 h-4 mr-2" />
+                Add Reaction
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Reaction Picker Modal - appears after selecting "Add Reaction" */}
+      {showReactionPicker && longPressedMessageId && (
         <Dialog open={showReactionPicker} onOpenChange={setShowReactionPicker}>
           <DialogContent className="sm:max-w-[400px]" data-testid="dialog-reaction-picker">
             <DialogHeader>
