@@ -1034,12 +1034,41 @@ export default function Messages() {
       <div className="flex-1 overflow-hidden">
         <div className="max-w-7xl mx-auto h-full p-2 md:p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            {!isMobile && activeTab === 'internal' && (
-              <div className="flex items-center justify-end mb-4">
-                <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Thread
-                </Button>
+            {!isMobile && (
+              <div className="flex items-center justify-between mb-4">
+                <TabsList className="grid w-full max-w-2xl grid-cols-3">
+                  <TabsTrigger value="internal" className="relative" data-testid="tab-internal-chat">
+                    Internal Chat
+                    {internalUnreadCount > 0 && (
+                      <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-internal-unread">
+                        {internalUnreadCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="client" className="relative" data-testid="tab-client-chat">
+                    Client Chat
+                    {clientUnreadCount > 0 && (
+                      <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-client-unread">
+                        {clientUnreadCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="emails" className="relative" data-testid="tab-client-emails">
+                    Client Emails
+                    {emailUnreadCount > 0 && (
+                      <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-email-unread">
+                        {emailUnreadCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+
+                {activeTab === 'internal' && (
+                  <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Thread
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1049,17 +1078,19 @@ export default function Messages() {
                 <CardHeader className="space-y-3 pb-3">
                   <Input
                     placeholder={
-                      activeTab === 'emails'
-                        ? 'Search Client Emails...'
-                        : activeTab === 'client'
-                        ? 'Search Client Messages...'
-                        : 'Search Internal Messages...'
+                      isMobile
+                        ? activeTab === 'emails'
+                          ? 'Search Client Emails...'
+                          : activeTab === 'client'
+                          ? 'Search Client Messages...'
+                          : 'Search Internal Messages...'
+                        : 'Search threads...'
                     }
                     value={threadSearchTerm}
                     onChange={(e) => setThreadSearchTerm(e.target.value)}
                     data-testid="input-search-threads"
                   />
-                  {activeTab === 'emails' && (
+                  {activeTab === 'emails' ? (
                     <>
                       <div className="flex gap-2">
                         <Button
@@ -1123,7 +1154,26 @@ export default function Messages() {
                         </Button>
                       </div>
                     </>
-                  )}
+                  ) : !isMobile ? (
+                    <div className="flex gap-2">
+                      <Button
+                        variant={archiveFilter === 'open' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setArchiveFilter('open')}
+                        data-testid="button-filter-open"
+                      >
+                        Active
+                      </Button>
+                      <Button
+                        variant={archiveFilter === 'archived' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setArchiveFilter('archived')}
+                        data-testid="button-filter-archived"
+                      >
+                        Archived
+                      </Button>
+                    </div>
+                  ) : null}
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-0">
                   {threadsLoading ? (
