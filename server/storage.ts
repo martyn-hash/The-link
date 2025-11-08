@@ -56,10 +56,10 @@ import {
   staffMessageThreads,
   staffMessages,
   staffMessageParticipants,
-  taskTemplateCategories,
-  taskTemplates,
-  taskTemplateSections,
-  taskTemplateQuestions,
+  clientRequestTemplateCategories,
+  clientRequestTemplates,
+  clientRequestTemplateSections,
+  clientRequestTemplateQuestions,
   clientCustomRequests,
   clientCustomRequestSections,
   clientCustomRequestQuestions,
@@ -197,18 +197,18 @@ import {
   type InsertStaffMessage,
   type StaffMessageParticipant,
   type InsertStaffMessageParticipant,
-  type TaskTemplateCategory,
-  type InsertTaskTemplateCategory,
-  type UpdateTaskTemplateCategory,
-  type TaskTemplate,
-  type InsertTaskTemplate,
-  type UpdateTaskTemplate,
-  type TaskTemplateSection,
-  type InsertTaskTemplateSection,
-  type UpdateTaskTemplateSection,
-  type TaskTemplateQuestion,
-  type InsertTaskTemplateQuestion,
-  type UpdateTaskTemplateQuestion,
+  type ClientRequestTemplateCategory,
+  type InsertClientRequestTemplateCategory,
+  type UpdateClientRequestTemplateCategory,
+  type ClientRequestTemplate,
+  type InsertClientRequestTemplate,
+  type UpdateClientRequestTemplate,
+  type ClientRequestTemplateSection,
+  type InsertClientRequestTemplateSection,
+  type UpdateClientRequestTemplateSection,
+  type ClientRequestTemplateQuestion,
+  type InsertClientRequestTemplateQuestion,
+  type UpdateClientRequestTemplateQuestion,
   type ClientCustomRequest,
   type InsertClientCustomRequest,
   type UpdateClientCustomRequest,
@@ -975,37 +975,37 @@ export interface IStorage {
   deleteClientPortalSession(id: string): Promise<void>;
   cleanupExpiredSessions(): Promise<void>;
   
-  // Task Template Category operations
-  createTaskTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory>;
-  getTaskTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined>;
-  getAllTaskTemplateCategories(): Promise<TaskTemplateCategory[]>;
-  updateTaskTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory>;
-  deleteTaskTemplateCategory(id: string): Promise<void>;
+  // Client Request Template Category operations
+  createClientRequestTemplateCategory(category: InsertClientRequestTemplateCategory): Promise<ClientRequestTemplateCategory>;
+  getClientRequestTemplateCategoryById(id: string): Promise<ClientRequestTemplateCategory | undefined>;
+  getAllClientRequestTemplateCategories(): Promise<ClientRequestTemplateCategory[]>;
+  updateClientRequestTemplateCategory(id: string, category: UpdateClientRequestTemplateCategory): Promise<ClientRequestTemplateCategory>;
+  deleteClientRequestTemplateCategory(id: string): Promise<void>;
   
-  // Task Template operations
-  createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate>;
-  getTaskTemplateById(id: string): Promise<TaskTemplate | undefined>;
-  getAllTaskTemplates(includeInactive?: boolean): Promise<TaskTemplate[]>;
-  getTaskTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]>;
-  getActiveTaskTemplates(): Promise<TaskTemplate[]>;
-  updateTaskTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate>;
-  deleteTaskTemplate(id: string): Promise<void>;
+  // Client Request Template operations
+  createClientRequestTemplate(template: InsertClientRequestTemplate): Promise<ClientRequestTemplate>;
+  getClientRequestTemplateById(id: string): Promise<ClientRequestTemplate | undefined>;
+  getAllClientRequestTemplates(includeInactive?: boolean): Promise<ClientRequestTemplate[]>;
+  getClientRequestTemplatesByCategory(categoryId: string): Promise<ClientRequestTemplate[]>;
+  getActiveClientRequestTemplates(): Promise<ClientRequestTemplate[]>;
+  updateClientRequestTemplate(id: string, template: UpdateClientRequestTemplate): Promise<ClientRequestTemplate>;
+  deleteClientRequestTemplate(id: string): Promise<void>;
   
-  // Task Template Section operations
-  createTaskTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection>;
-  getTaskTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined>;
-  getTaskTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]>;
-  updateTaskTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection>;
-  deleteTaskTemplateSection(id: string): Promise<void>;
+  // Client Request Template Section operations
+  createClientRequestTemplateSection(section: InsertClientRequestTemplateSection): Promise<ClientRequestTemplateSection>;
+  getClientRequestTemplateSectionById(id: string): Promise<ClientRequestTemplateSection | undefined>;
+  getClientRequestTemplateSectionsByTemplateId(templateId: string): Promise<ClientRequestTemplateSection[]>;
+  updateClientRequestTemplateSection(id: string, section: UpdateClientRequestTemplateSection): Promise<ClientRequestTemplateSection>;
+  deleteClientRequestTemplateSection(id: string): Promise<void>;
   updateSectionOrders(updates: { id: string; order: number }[]): Promise<void>;
   
-  // Task Template Question operations
-  createTaskTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
-  getTaskTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined>;
-  getTaskTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]>;
-  getAllTaskTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]>;
-  updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
-  deleteTaskTemplateQuestion(id: string): Promise<void>;
+  // Client Request Template Question operations
+  createClientRequestTemplateQuestion(question: InsertClientRequestTemplateQuestion): Promise<ClientRequestTemplateQuestion>;
+  getClientRequestTemplateQuestionById(id: string): Promise<ClientRequestTemplateQuestion | undefined>;
+  getClientRequestTemplateQuestionsBySectionId(sectionId: string): Promise<ClientRequestTemplateQuestion[]>;
+  getAllClientRequestTemplateQuestionsByTemplateId(templateId: string): Promise<ClientRequestTemplateQuestion[]>;
+  updateClientRequestTemplateQuestion(id: string, question: UpdateClientRequestTemplateQuestion): Promise<ClientRequestTemplateQuestion>;
+  deleteClientRequestTemplateQuestion(id: string): Promise<void>;
   updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void>;
   
   // Client Custom Request operations
@@ -1035,12 +1035,12 @@ export interface IStorage {
   // Task Instance operations
   createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
   getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
-  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
-  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
-  getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
-  getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
-  getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
-  getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
+  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: ClientRequestTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
+  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: ClientRequestTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
+  getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string): Promise<(TaskInstance & { template?: ClientRequestTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
+  getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: ClientRequestTemplate; client: Client })[]>;
+  getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: ClientRequestTemplate; client: Client; person?: Person })[]>;
+  getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: ClientRequestTemplate; client: Client; person?: Person })[]>;
   updateTaskInstance(id: string, instance: UpdateTaskInstance): Promise<TaskInstance>;
   deleteTaskInstance(id: string): Promise<void>;
   getTaskInstanceWithFullData(id: string): Promise<any>;
@@ -1048,7 +1048,7 @@ export interface IStorage {
   // Task Instance Response operations
   saveTaskInstanceResponse(response: InsertTaskInstanceResponse): Promise<TaskInstanceResponse>;
   getTaskInstanceResponseById(id: string): Promise<TaskInstanceResponse | undefined>;
-  getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string): Promise<(TaskInstanceResponse & { question: TaskTemplateQuestion })[]>;
+  getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string): Promise<(TaskInstanceResponse & { question: ClientRequestTemplateQuestion })[]>;
   updateTaskInstanceResponse(id: string, response: Partial<InsertTaskInstanceResponse>): Promise<TaskInstanceResponse>;
   deleteTaskInstanceResponse(id: string): Promise<void>;
   bulkSaveTaskInstanceResponses(taskInstanceId: string, responses: InsertTaskInstanceResponse[]): Promise<void>;
@@ -10845,227 +10845,227 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Task Template Category operations
-  async createTaskTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory> {
+  async createClientRequestTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory> {
     const [created] = await db
-      .insert(taskTemplateCategories)
+      .insert(clientRequestTemplateCategories)
       .values(category)
       .returning();
     return created;
   }
 
-  async getTaskTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined> {
+  async getClientRequestTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined> {
     const [category] = await db
       .select()
-      .from(taskTemplateCategories)
-      .where(eq(taskTemplateCategories.id, id));
+      .from(clientRequestTemplateCategories)
+      .where(eq(clientRequestTemplateCategories.id, id));
     return category;
   }
 
-  async getAllTaskTemplateCategories(): Promise<TaskTemplateCategory[]> {
+  async getAllClientRequestTemplateCategories(): Promise<TaskTemplateCategory[]> {
     return await db
       .select()
-      .from(taskTemplateCategories)
-      .orderBy(taskTemplateCategories.order);
+      .from(clientRequestTemplateCategories)
+      .orderBy(clientRequestTemplateCategories.order);
   }
 
-  async updateTaskTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory> {
+  async updateClientRequestTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory> {
     const [updated] = await db
-      .update(taskTemplateCategories)
+      .update(clientRequestTemplateCategories)
       .set({ ...category, updatedAt: new Date() })
-      .where(eq(taskTemplateCategories.id, id))
+      .where(eq(clientRequestTemplateCategories.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplateCategory(id: string): Promise<void> {
+  async deleteClientRequestTemplateCategory(id: string): Promise<void> {
     await db
-      .delete(taskTemplateCategories)
-      .where(eq(taskTemplateCategories.id, id));
+      .delete(clientRequestTemplateCategories)
+      .where(eq(clientRequestTemplateCategories.id, id));
   }
 
   // Task Template operations
-  async createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate> {
+  async createClientRequestTemplate(template: InsertTaskTemplate): Promise<TaskTemplate> {
     const [created] = await db
-      .insert(taskTemplates)
+      .insert(clientRequestTemplates)
       .values(template)
       .returning();
     return created;
   }
 
-  async getTaskTemplateById(id: string): Promise<TaskTemplate | undefined> {
+  async getClientRequestTemplateById(id: string): Promise<TaskTemplate | undefined> {
     const [template] = await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.id, id));
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.id, id));
     return template;
   }
 
-  async getAllTaskTemplates(includeInactive: boolean = false): Promise<TaskTemplate[]> {
+  async getAllClientRequestTemplates(includeInactive: boolean = false): Promise<TaskTemplate[]> {
     if (includeInactive) {
       return await db
         .select()
-        .from(taskTemplates)
-        .orderBy(taskTemplates.createdAt);
+        .from(clientRequestTemplates)
+        .orderBy(clientRequestTemplates.createdAt);
     }
     
     return await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.status, "active"))
-      .orderBy(taskTemplates.createdAt);
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.status, "active"))
+      .orderBy(clientRequestTemplates.createdAt);
   }
 
-  async getTaskTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]> {
+  async getClientRequestTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]> {
     return await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.categoryId, categoryId))
-      .orderBy(taskTemplates.createdAt);
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.categoryId, categoryId))
+      .orderBy(clientRequestTemplates.createdAt);
   }
 
-  async getActiveTaskTemplates(): Promise<TaskTemplate[]> {
+  async getActiveClientRequestTemplates(): Promise<TaskTemplate[]> {
     return await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.status, "active"))
-      .orderBy(taskTemplates.createdAt);
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.status, "active"))
+      .orderBy(clientRequestTemplates.createdAt);
   }
 
-  async updateTaskTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate> {
+  async updateClientRequestTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate> {
     const [updated] = await db
-      .update(taskTemplates)
+      .update(clientRequestTemplates)
       .set({ ...template, updatedAt: new Date() })
-      .where(eq(taskTemplates.id, id))
+      .where(eq(clientRequestTemplates.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplate(id: string): Promise<void> {
+  async deleteClientRequestTemplate(id: string): Promise<void> {
     await db
-      .delete(taskTemplates)
-      .where(eq(taskTemplates.id, id));
+      .delete(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.id, id));
   }
 
   // Task Template Section operations
-  async createTaskTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection> {
+  async createClientRequestTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection> {
     const [created] = await db
-      .insert(taskTemplateSections)
+      .insert(clientRequestTemplateSections)
       .values(section)
       .returning();
     return created;
   }
 
-  async getTaskTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined> {
+  async getClientRequestTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined> {
     const [section] = await db
       .select()
-      .from(taskTemplateSections)
-      .where(eq(taskTemplateSections.id, id));
+      .from(clientRequestTemplateSections)
+      .where(eq(clientRequestTemplateSections.id, id));
     return section;
   }
 
-  async getTaskTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]> {
+  async getClientRequestTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]> {
     return await db
       .select()
-      .from(taskTemplateSections)
-      .where(eq(taskTemplateSections.templateId, templateId))
-      .orderBy(taskTemplateSections.order);
+      .from(clientRequestTemplateSections)
+      .where(eq(clientRequestTemplateSections.templateId, templateId))
+      .orderBy(clientRequestTemplateSections.order);
   }
 
-  async updateTaskTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection> {
+  async updateClientRequestTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection> {
     const [updated] = await db
-      .update(taskTemplateSections)
+      .update(clientRequestTemplateSections)
       .set({ ...section, updatedAt: new Date() })
-      .where(eq(taskTemplateSections.id, id))
+      .where(eq(clientRequestTemplateSections.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplateSection(id: string): Promise<void> {
+  async deleteClientRequestTemplateSection(id: string): Promise<void> {
     await db
-      .delete(taskTemplateSections)
-      .where(eq(taskTemplateSections.id, id));
+      .delete(clientRequestTemplateSections)
+      .where(eq(clientRequestTemplateSections.id, id));
   }
 
   async updateSectionOrders(updates: { id: string; order: number }[]): Promise<void> {
     await db.transaction(async (tx) => {
       for (const update of updates) {
         await tx
-          .update(taskTemplateSections)
+          .update(clientRequestTemplateSections)
           .set({ order: update.order, updatedAt: new Date() })
-          .where(eq(taskTemplateSections.id, update.id));
+          .where(eq(clientRequestTemplateSections.id, update.id));
       }
     });
   }
 
   // Task Template Question operations
-  async createTaskTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
+  async createClientRequestTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
     const [created] = await db
-      .insert(taskTemplateQuestions)
+      .insert(clientRequestTemplateQuestions)
       .values(question)
       .returning();
     return created;
   }
 
-  async getTaskTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined> {
+  async getClientRequestTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined> {
     const [question] = await db
       .select()
-      .from(taskTemplateQuestions)
-      .where(eq(taskTemplateQuestions.id, id));
+      .from(clientRequestTemplateQuestions)
+      .where(eq(clientRequestTemplateQuestions.id, id));
     return question;
   }
 
-  async getTaskTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]> {
+  async getClientRequestTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]> {
     return await db
       .select()
-      .from(taskTemplateQuestions)
-      .where(eq(taskTemplateQuestions.sectionId, sectionId))
-      .orderBy(taskTemplateQuestions.order);
+      .from(clientRequestTemplateQuestions)
+      .where(eq(clientRequestTemplateQuestions.sectionId, sectionId))
+      .orderBy(clientRequestTemplateQuestions.order);
   }
 
-  async getAllTaskTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]> {
+  async getAllClientRequestTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]> {
     return await db
       .select({
-        id: taskTemplateQuestions.id,
-        sectionId: taskTemplateQuestions.sectionId,
-        questionType: taskTemplateQuestions.questionType,
-        label: taskTemplateQuestions.label,
-        helpText: taskTemplateQuestions.helpText,
-        isRequired: taskTemplateQuestions.isRequired,
-        order: taskTemplateQuestions.order,
-        validationRules: taskTemplateQuestions.validationRules,
-        options: taskTemplateQuestions.options,
-        conditionalLogic: taskTemplateQuestions.conditionalLogic,
-        createdAt: taskTemplateQuestions.createdAt,
-        updatedAt: taskTemplateQuestions.updatedAt,
+        id: clientRequestTemplateQuestions.id,
+        sectionId: clientRequestTemplateQuestions.sectionId,
+        questionType: clientRequestTemplateQuestions.questionType,
+        label: clientRequestTemplateQuestions.label,
+        helpText: clientRequestTemplateQuestions.helpText,
+        isRequired: clientRequestTemplateQuestions.isRequired,
+        order: clientRequestTemplateQuestions.order,
+        validationRules: clientRequestTemplateQuestions.validationRules,
+        options: clientRequestTemplateQuestions.options,
+        conditionalLogic: clientRequestTemplateQuestions.conditionalLogic,
+        createdAt: clientRequestTemplateQuestions.createdAt,
+        updatedAt: clientRequestTemplateQuestions.updatedAt,
       })
-      .from(taskTemplateQuestions)
-      .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
-      .where(eq(taskTemplateSections.templateId, templateId))
-      .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+      .from(clientRequestTemplateQuestions)
+      .innerJoin(clientRequestTemplateSections, eq(clientRequestTemplateQuestions.sectionId, clientRequestTemplateSections.id))
+      .where(eq(clientRequestTemplateSections.templateId, templateId))
+      .orderBy(clientRequestTemplateSections.order, clientRequestTemplateQuestions.order);
   }
 
-  async updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
+  async updateClientRequestTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
     const [updated] = await db
-      .update(taskTemplateQuestions)
+      .update(clientRequestTemplateQuestions)
       .set({ ...question, updatedAt: new Date() })
-      .where(eq(taskTemplateQuestions.id, id))
+      .where(eq(clientRequestTemplateQuestions.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplateQuestion(id: string): Promise<void> {
+  async deleteClientRequestTemplateQuestion(id: string): Promise<void> {
     await db
-      .delete(taskTemplateQuestions)
-      .where(eq(taskTemplateQuestions.id, id));
+      .delete(clientRequestTemplateQuestions)
+      .where(eq(clientRequestTemplateQuestions.id, id));
   }
 
   async updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void> {
     await db.transaction(async (tx) => {
       for (const update of updates) {
         await tx
-          .update(taskTemplateQuestions)
+          .update(clientRequestTemplateQuestions)
           .set({ order: update.order, updatedAt: new Date() })
-          .where(eq(taskTemplateQuestions.id, update.id));
+          .where(eq(clientRequestTemplateQuestions.id, update.id));
       }
     });
   }
@@ -11265,13 +11265,13 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         person: people,
         portalUser: clientPortalUsers,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .leftJoin(clientPortalUsers, eq(taskInstances.clientPortalUserId, clientPortalUsers.id))
@@ -11316,11 +11316,11 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         client: clients,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(eq(taskInstances.clientPortalUserId, clientPortalUserId))
       .orderBy(desc(taskInstances.createdAt));
@@ -11361,12 +11361,12 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(eq(taskInstances.personId, personId))
@@ -11410,12 +11410,12 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(and(
@@ -11461,12 +11461,12 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .where(eq(taskInstances.status, status as any))
@@ -11519,13 +11519,13 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
@@ -11586,13 +11586,13 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
@@ -11610,20 +11610,20 @@ export class DatabaseStorage implements IStorage {
       // Get all sections for the template
       sections = await db
         .select()
-        .from(taskTemplateSections)
-        .where(eq(taskTemplateSections.templateId, instanceData.templateId))
-        .orderBy(taskTemplateSections.order);
+        .from(clientRequestTemplateSections)
+        .where(eq(clientRequestTemplateSections.templateId, instanceData.templateId))
+        .orderBy(clientRequestTemplateSections.order);
 
       // Get all questions for the template
       allQuestions = await db
         .select({
-          question: taskTemplateQuestions,
-          section: taskTemplateSections,
+          question: clientRequestTemplateQuestions,
+          section: clientRequestTemplateSections,
         })
-        .from(taskTemplateQuestions)
-        .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
-        .where(eq(taskTemplateSections.templateId, instanceData.templateId))
-        .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+        .from(clientRequestTemplateQuestions)
+        .innerJoin(clientRequestTemplateSections, eq(clientRequestTemplateQuestions.sectionId, clientRequestTemplateSections.id))
+        .where(eq(clientRequestTemplateSections.templateId, instanceData.templateId))
+        .orderBy(clientRequestTemplateSections.order, clientRequestTemplateQuestions.order);
     }
     // If this is a custom request-based instance
     else if (instanceData.customRequestId) {
@@ -11735,11 +11735,11 @@ export class DatabaseStorage implements IStorage {
         fileUrls: taskInstanceResponses.fileUrls,
         createdAt: taskInstanceResponses.createdAt,
         updatedAt: taskInstanceResponses.updatedAt,
-        templateQuestion: taskTemplateQuestions,
+        templateQuestion: clientRequestTemplateQuestions,
         customQuestion: clientCustomRequestQuestions,
       })
       .from(taskInstanceResponses)
-      .leftJoin(taskTemplateQuestions, eq(taskInstanceResponses.questionId, taskTemplateQuestions.id))
+      .leftJoin(clientRequestTemplateQuestions, eq(taskInstanceResponses.questionId, clientRequestTemplateQuestions.id))
       .leftJoin(clientCustomRequestQuestions, eq(taskInstanceResponses.questionId, clientCustomRequestQuestions.id))
       .where(eq(taskInstanceResponses.taskInstanceId, taskInstanceId));
 
