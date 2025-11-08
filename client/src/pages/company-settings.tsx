@@ -130,7 +130,7 @@ export default function CompanySettingsPage() {
               <Button
                 onClick={handleSave}
                 disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
-                data-testid="button-save"
+                data-testid="button-save-company-settings"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}

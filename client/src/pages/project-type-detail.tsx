@@ -721,12 +721,12 @@ function ProjectNotificationForm({
         {(notificationType === 'email' || notificationType === 'push') && (
           <div className="space-y-2">
             <Label>Link to Client Request Template (Optional)</Label>
-            <Select value={clientRequestTemplateId} onValueChange={setClientRequestTemplateId}>
+            <Select value={clientRequestTemplateId || 'none'} onValueChange={(value) => setClientRequestTemplateId(value === 'none' ? '' : value)}>
               <SelectTrigger data-testid="select-client-request-template">
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
                   <SelectItem key={template.id} value={template.id}>
                     {template.name}
@@ -797,7 +797,7 @@ function ProjectNotificationForm({
           <Button variant="outline" onClick={onCancel} data-testid="button-cancel-notification">
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-notification">
+          <Button onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-date-notification">
             Create Notification
           </Button>
         </div>
@@ -910,12 +910,12 @@ function StageNotificationForm({
         {(notificationType === 'email' || notificationType === 'push') && (
           <div className="space-y-2">
             <Label>Link to Client Request Template (Optional)</Label>
-            <Select value={clientRequestTemplateId} onValueChange={setClientRequestTemplateId}>
+            <Select value={clientRequestTemplateId || 'none'} onValueChange={(value) => setClientRequestTemplateId(value === 'none' ? '' : value)}>
               <SelectTrigger data-testid="select-stage-client-request-template">
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
                   <SelectItem key={template.id} value={template.id}>
                     {template.name}
