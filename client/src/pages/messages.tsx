@@ -349,6 +349,7 @@ export default function Messages() {
   const [replyToMessage, setReplyToMessage] = useState<(ProjectMessage | StaffMessage) | null>(null);
   const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showMessageContextMenu, setShowMessageContextMenu] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Voice recording state
@@ -838,11 +839,11 @@ export default function Messages() {
     setSwipeDirection(null);
   };
 
-  // Long press handling for message reactions
+  // Long press handling for message context menu (react/reply)
   const handleMessageTouchStart = (messageId: string) => {
     longPressTimer.current = setTimeout(() => {
       setLongPressedMessageId(messageId);
-      setShowReactionPicker(true);
+      setShowMessageContextMenu(true);
     }, 500); // 500ms long press
   };
 
@@ -851,6 +852,20 @@ export default function Messages() {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+  };
+
+  const handleContextMenuReact = () => {
+    setShowMessageContextMenu(false);
+    setShowReactionPicker(true);
+  };
+
+  const handleContextMenuReply = () => {
+    const message = messages?.find(m => m.id === longPressedMessageId);
+    if (message) {
+      handleReplyToMessage(message);
+    }
+    setShowMessageContextMenu(false);
+    setLongPressedMessageId(null);
   };
 
   const handleReaction = (emoji: string) => {
@@ -1019,59 +1034,32 @@ export default function Messages() {
       <div className="flex-1 overflow-hidden">
         <div className="max-w-7xl mx-auto h-full p-2 md:p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <TabsList className="grid w-full max-w-2xl grid-cols-3">
-                <TabsTrigger value="internal" className="relative" data-testid="tab-internal-chat">
-                  Internal Chat
-                  {internalUnreadCount > 0 && (
-                    <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-internal-unread">
-                      {internalUnreadCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="client" className="relative" data-testid="tab-client-chat">
-                  Client Chat
-                  {clientUnreadCount > 0 && (
-                    <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-client-unread">
-                      {clientUnreadCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="emails" className="relative" data-testid="tab-client-emails">
-                  Client Emails
-                  {emailUnreadCount > 0 && (
-                    <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-email-unread">
-                      {emailUnreadCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
-
-              {activeTab === 'internal' && (
-                isMobile ? (
-                  <Button onClick={() => setShowNewThreadDialog(true)} size="sm" data-testid="button-new-thread">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                ) : (
-                  <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Thread
-                  </Button>
-                )
-              )}
-            </div>
+            {!isMobile && activeTab === 'internal' && (
+              <div className="flex items-center justify-end mb-4">
+                <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Thread
+                </Button>
+              </div>
+            )}
 
             <div className="flex-1 flex gap-4 overflow-hidden">
               {/* Thread List */}
               <Card className="w-full md:w-80 flex flex-col">
                 <CardHeader className="space-y-3 pb-3">
                   <Input
-                    placeholder="Search threads..."
+                    placeholder={
+                      activeTab === 'emails'
+                        ? 'Search Client Emails...'
+                        : activeTab === 'client'
+                        ? 'Search Client Messages...'
+                        : 'Search Internal Messages...'
+                    }
                     value={threadSearchTerm}
                     onChange={(e) => setThreadSearchTerm(e.target.value)}
                     data-testid="input-search-threads"
                   />
-                  {activeTab === 'emails' ? (
+                  {activeTab === 'emails' && (
                     <>
                       <div className="flex gap-2">
                         <Button
@@ -1135,25 +1123,6 @@ export default function Messages() {
                         </Button>
                       </div>
                     </>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button
-                        variant={archiveFilter === 'open' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setArchiveFilter('open')}
-                        data-testid="button-filter-open"
-                      >
-                        Active
-                      </Button>
-                      <Button
-                        variant={archiveFilter === 'archived' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setArchiveFilter('archived')}
-                        data-testid="button-filter-archived"
-                      >
-                        Archived
-                      </Button>
-                    </div>
                   )}
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-0">
@@ -1932,7 +1901,41 @@ export default function Messages() {
         />
       )}
 
-      {/* Reaction Picker Modal - appears on long press */}
+      {/* Message Context Menu - appears on long press */}
+      {showMessageContextMenu && longPressedMessageId && (
+        <Dialog open={showMessageContextMenu} onOpenChange={setShowMessageContextMenu}>
+          <DialogContent className="sm:max-w-[300px]" data-testid="dialog-message-context-menu">
+            <DialogHeader>
+              <DialogTitle>Message Options</DialogTitle>
+              <DialogDescription>
+                Choose an action for this message
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 py-4">
+              <Button
+                variant="outline"
+                onClick={handleContextMenuReply}
+                className="justify-start"
+                data-testid="button-context-reply"
+              >
+                <Reply className="w-4 h-4 mr-2" />
+                Reply to Message
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleContextMenuReact}
+                className="justify-start"
+                data-testid="button-context-react"
+              >
+                <Smile className="w-4 h-4 mr-2" />
+                Add Reaction
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Reaction Picker Modal - appears after selecting "Add Reaction" */}
       {showReactionPicker && longPressedMessageId && (
         <Dialog open={showReactionPicker} onOpenChange={setShowReactionPicker}>
           <DialogContent className="sm:max-w-[400px]" data-testid="dialog-reaction-picker">
