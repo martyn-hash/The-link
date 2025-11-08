@@ -285,6 +285,9 @@ import {
   type UpdateScheduledNotification,
   type NotificationHistory,
   type InsertNotificationHistory,
+  companySettings,
+  type CompanySettings,
+  type UpdateCompanySettings,
 } from "@shared/schema";
 
 // Add the OAuth account types
@@ -1130,6 +1133,10 @@ export interface IStorage {
   // Notification System - Notification History operations
   getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]>;
   getNotificationHistoryByProjectId(projectId: string): Promise<NotificationHistory[]>;
+  
+  // Company Settings operations
+  getCompanySettings(): Promise<CompanySettings | undefined>;
+  updateCompanySettings(settings: UpdateCompanySettings): Promise<CompanySettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -12589,6 +12596,45 @@ export class DatabaseStorage implements IStorage {
       .from(notificationHistory)
       .where(eq(notificationHistory.projectId, projectId))
       .orderBy(desc(notificationHistory.createdAt));
+  }
+  
+  // Company Settings operations
+  async getCompanySettings(): Promise<CompanySettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(companySettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateCompanySettings(settings: UpdateCompanySettings): Promise<CompanySettings> {
+    const { nanoid } = await import('nanoid');
+    
+    // Get existing settings
+    const existing = await this.getCompanySettings();
+    
+    if (existing) {
+      // Update existing settings
+      const [updated] = await db
+        .update(companySettings)
+        .set({
+          ...settings,
+          updatedAt: new Date(),
+        })
+        .where(eq(companySettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new settings with default values
+      const [created] = await db
+        .insert(companySettings)
+        .values({
+          id: nanoid(),
+          emailSenderName: settings.emailSenderName || "The Link Team",
+        })
+        .returning();
+      return created;
+    }
   }
 }
 

@@ -13,7 +13,14 @@ import type {
   StageApprovalField,
   WorkRole,
   Service,
-  User
+  User,
+  ProjectTypeNotification,
+  InsertProjectTypeNotification,
+  UpdateProjectTypeNotification,
+  ClientRequestReminder,
+  InsertClientRequestReminder,
+  UpdateClientRequestReminder,
+  ClientRequestTemplate
 } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
@@ -29,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 interface EditingStage {
@@ -112,6 +119,27 @@ const STAGE_COLORS = [
   "#6b7280", "#ef4444", "#f97316", "#eab308", 
   "#22c55e", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"
 ];
+
+// Character limit helper component
+function CharacterCounter({ current, max, className = "" }: { current: number; max: number; className?: string }) {
+  const isOverLimit = current > max;
+  const percentage = (current / max) * 100;
+  
+  let colorClass = "text-muted-foreground";
+  if (isOverLimit) {
+    colorClass = "text-red-600 font-semibold";
+  } else if (percentage > 80) {
+    colorClass = "text-yellow-600 font-semibold";
+  } else if (percentage > 50) {
+    colorClass = "text-blue-600";
+  }
+  
+  return (
+    <span className={`text-xs ${colorClass} ${className}`} data-testid="character-counter">
+      {current}/{max}
+    </span>
+  );
+}
 
 // Custom field form component
 function CustomFieldForm({ 
@@ -577,6 +605,631 @@ function ApprovalFieldForm({
   );
 }
 
+// Project Notification Form Component
+function ProjectNotificationForm({ 
+  onCancel, 
+  createMutation,
+  clientRequestTemplates
+}: {
+  onCancel: () => void;
+  createMutation: any;
+  clientRequestTemplates: ClientRequestTemplate[];
+}) {
+  const [notificationType, setNotificationType] = useState<"email" | "sms" | "push">("email");
+  const [dateReference, setDateReference] = useState<"start_date" | "due_date">("due_date");
+  const [offsetType, setOffsetType] = useState<"before" | "on" | "after">("before");
+  const [offsetDays, setOffsetDays] = useState(7);
+  const [emailTitle, setEmailTitle] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [smsContent, setSmsContent] = useState("");
+  const [pushContent, setPushContent] = useState("");
+  const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
+
+  const handleSubmit = () => {
+    const data: any = {
+      category: 'project',
+      notificationType,
+      dateReference,
+      offsetType,
+      offsetDays,
+      clientRequestTemplateId: clientRequestTemplateId || null,
+    };
+
+    if (notificationType === 'email') {
+      data.emailTitle = emailTitle;
+      data.emailBody = emailBody;
+    } else if (notificationType === 'sms') {
+      data.smsContent = smsContent;
+    } else if (notificationType === 'push') {
+      data.pushContent = pushContent;
+    }
+
+    createMutation.mutate(data);
+  };
+
+  const canSubmit = () => {
+    if (notificationType === 'email') return emailTitle && emailBody;
+    if (notificationType === 'sms') return smsContent && smsContent.length <= 160;
+    if (notificationType === 'push') return pushContent && pushContent.length <= 200;
+    return false;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Add Project Notification</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Notification Type</Label>
+            <Select value={notificationType} onValueChange={(v: any) => setNotificationType(v)}>
+              <SelectTrigger data-testid="select-notification-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="push">Push Notification</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Date Reference</Label>
+            <Select value={dateReference} onValueChange={(v: any) => setDateReference(v)}>
+              <SelectTrigger data-testid="select-date-reference">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="start_date">Project Start Date</SelectItem>
+                <SelectItem value="due_date">Project Due Date</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Timing</Label>
+            <Select value={offsetType} onValueChange={(v: any) => setOffsetType(v)}>
+              <SelectTrigger data-testid="select-offset-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="before">Before</SelectItem>
+                <SelectItem value="on">On</SelectItem>
+                <SelectItem value="after">After</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {offsetType !== 'on' && (
+            <div className="space-y-2">
+              <Label>Days</Label>
+              <Input
+                type="number"
+                value={offsetDays}
+                onChange={(e) => setOffsetDays(parseInt(e.target.value) || 0)}
+                min={0}
+                data-testid="input-offset-days"
+              />
+            </div>
+          )}
+        </div>
+
+        {(notificationType === 'email' || notificationType === 'push') && (
+          <div className="space-y-2">
+            <Label>Link to Client Request Template (Optional)</Label>
+            <Select value={clientRequestTemplateId} onValueChange={setClientRequestTemplateId}>
+              <SelectTrigger data-testid="select-client-request-template">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {notificationType === 'email' && (
+          <>
+            <div className="space-y-2">
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTitle}
+                onChange={(e) => setEmailTitle(e.target.value)}
+                placeholder="Enter email subject"
+                data-testid="input-email-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Body</Label>
+              <Textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                placeholder="Enter email body"
+                rows={6}
+                data-testid="textarea-email-body"
+              />
+            </div>
+          </>
+        )}
+
+        {notificationType === 'sms' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>SMS Content</Label>
+              <CharacterCounter current={smsContent.length} max={160} />
+            </div>
+            <Textarea
+              value={smsContent}
+              onChange={(e) => setSmsContent(e.target.value)}
+              placeholder="Enter SMS message (max 160 characters)"
+              rows={4}
+              data-testid="textarea-sms-content"
+            />
+          </div>
+        )}
+
+        {notificationType === 'push' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Push Notification Content</Label>
+              <CharacterCounter current={pushContent.length} max={200} />
+            </div>
+            <Textarea
+              value={pushContent}
+              onChange={(e) => setPushContent(e.target.value)}
+              placeholder="Enter push notification message (max 200 characters)"
+              rows={4}
+              data-testid="textarea-push-content"
+            />
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onCancel} data-testid="button-cancel-notification">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-notification">
+            Create Notification
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Stage Notification Form Component
+function StageNotificationForm({ 
+  onCancel, 
+  createMutation,
+  stages,
+  clientRequestTemplates
+}: {
+  onCancel: () => void;
+  createMutation: any;
+  stages: KanbanStage[];
+  clientRequestTemplates: ClientRequestTemplate[];
+}) {
+  const [notificationType, setNotificationType] = useState<"email" | "sms" | "push">("email");
+  const [stageId, setStageId] = useState("");
+  const [stageTrigger, setStageTrigger] = useState<"entry" | "exit">("entry");
+  const [emailTitle, setEmailTitle] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [smsContent, setSmsContent] = useState("");
+  const [pushContent, setPushContent] = useState("");
+  const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
+
+  const handleSubmit = () => {
+    const data: any = {
+      category: 'stage',
+      notificationType,
+      stageId,
+      stageTrigger,
+      clientRequestTemplateId: clientRequestTemplateId || null,
+    };
+
+    if (notificationType === 'email') {
+      data.emailTitle = emailTitle;
+      data.emailBody = emailBody;
+    } else if (notificationType === 'sms') {
+      data.smsContent = smsContent;
+    } else if (notificationType === 'push') {
+      data.pushContent = pushContent;
+    }
+
+    createMutation.mutate(data);
+  };
+
+  const canSubmit = () => {
+    if (!stageId) return false;
+    if (notificationType === 'email') return emailTitle && emailBody;
+    if (notificationType === 'sms') return smsContent && smsContent.length <= 160;
+    if (notificationType === 'push') return pushContent && pushContent.length <= 200;
+    return false;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Add Stage Notification</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Notification Type</Label>
+            <Select value={notificationType} onValueChange={(v: any) => setNotificationType(v)}>
+              <SelectTrigger data-testid="select-stage-notification-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="push">Push Notification</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Stage</Label>
+            <Select value={stageId} onValueChange={setStageId}>
+              <SelectTrigger data-testid="select-stage">
+                <SelectValue placeholder="Select stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {stages.map(stage => (
+                  <SelectItem key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Trigger</Label>
+          <Select value={stageTrigger} onValueChange={(v: any) => setStageTrigger(v)}>
+            <SelectTrigger data-testid="select-stage-trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entry">When project enters this stage</SelectItem>
+              <SelectItem value="exit">When project exits this stage</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {(notificationType === 'email' || notificationType === 'push') && (
+          <div className="space-y-2">
+            <Label>Link to Client Request Template (Optional)</Label>
+            <Select value={clientRequestTemplateId} onValueChange={setClientRequestTemplateId}>
+              <SelectTrigger data-testid="select-stage-client-request-template">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {notificationType === 'email' && (
+          <>
+            <div className="space-y-2">
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTitle}
+                onChange={(e) => setEmailTitle(e.target.value)}
+                placeholder="Enter email subject"
+                data-testid="input-stage-email-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Body</Label>
+              <Textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                placeholder="Enter email body"
+                rows={6}
+                data-testid="textarea-stage-email-body"
+              />
+            </div>
+          </>
+        )}
+
+        {notificationType === 'sms' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>SMS Content</Label>
+              <CharacterCounter current={smsContent.length} max={160} />
+            </div>
+            <Textarea
+              value={smsContent}
+              onChange={(e) => setSmsContent(e.target.value)}
+              placeholder="Enter SMS message (max 160 characters)"
+              rows={4}
+              data-testid="textarea-stage-sms-content"
+            />
+          </div>
+        )}
+
+        {notificationType === 'push' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Push Notification Content</Label>
+              <CharacterCounter current={pushContent.length} max={200} />
+            </div>
+            <Textarea
+              value={pushContent}
+              onChange={(e) => setPushContent(e.target.value)}
+              placeholder="Enter push notification message (max 200 characters)"
+              rows={4}
+              data-testid="textarea-stage-push-content"
+            />
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onCancel} data-testid="button-cancel-stage-notification">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-stage-notification">
+            Create Notification
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Notification Card Component with Reminders
+function NotificationCard({
+  notification,
+  stages,
+  clientRequestTemplates,
+  onEdit,
+  onDelete,
+  onAddReminder,
+  addingReminderForNotification,
+  createReminderMutation,
+  onDeleteReminder
+}: {
+  notification: ProjectTypeNotification;
+  stages: KanbanStage[];
+  clientRequestTemplates: ClientRequestTemplate[];
+  onEdit: (n: ProjectTypeNotification) => void;
+  onDelete: (id: string) => void;
+  onAddReminder: (notificationId: string) => void;
+  addingReminderForNotification: string | null;
+  createReminderMutation: any;
+  onDeleteReminder: (id: string) => void;
+}) {
+  const getNotificationSummary = () => {
+    if (notification.category === 'project') {
+      const offsetLabel = notification.offsetType === 'on' ? 'On' : 
+        `${notification.offsetDays} day${notification.offsetDays !== 1 ? 's' : ''} ${notification.offsetType}`;
+      const dateRef = notification.dateReference === 'start_date' ? 'project start' : 'due date';
+      return `${offsetLabel} ${dateRef}`;
+    } else {
+      const stage = stages.find(s => s.id === notification.stageId);
+      const trigger = notification.stageTrigger === 'entry' ? 'enters' : 'exits';
+      return `When project ${trigger} "${stage?.name || 'Unknown'}"`;
+    }
+  };
+
+  const getContent = () => {
+    if (notification.notificationType === 'email') {
+      return notification.emailTitle;
+    } else if (notification.notificationType === 'sms') {
+      return notification.smsContent;
+    } else {
+      return notification.pushContent;
+    }
+  };
+
+  const linkedTemplate = clientRequestTemplates.find(t => t.id === notification.clientRequestTemplateId);
+  const hasLinkedTemplate = !!notification.clientRequestTemplateId;
+
+  return (
+    <Card data-testid={`card-notification-${notification.id}`}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Badge variant="outline">{notification.notificationType.toUpperCase()}</Badge>
+            <Badge variant="secondary">{notification.category === 'project' ? 'Date-based' : 'Stage-based'}</Badge>
+            <span className="text-sm text-muted-foreground">{getNotificationSummary()}</span>
+          </div>
+          <div className="flex space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(notification.id)}
+              data-testid={`button-delete-notification-${notification.id}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <p className="text-sm font-medium">{getContent()}</p>
+          {notification.notificationType === 'email' && notification.emailBody && (
+            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{notification.emailBody}</p>
+          )}
+        </div>
+
+        {linkedTemplate && (
+          <div className="bg-muted p-3 rounded-lg">
+            <p className="text-sm font-medium mb-2">
+              Linked to template: {linkedTemplate.name}
+            </p>
+            
+            {hasLinkedTemplate && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-medium">Client Request Reminders</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onAddReminder(notification.id)}
+                    data-testid={`button-add-reminder-${notification.id}`}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Reminder
+                  </Button>
+                </div>
+
+                {addingReminderForNotification === notification.id && (
+                  <ReminderForm
+                    notificationId={notification.id}
+                    onCancel={() => onAddReminder('')}
+                    createMutation={createReminderMutation}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Reminder Form Component
+function ReminderForm({
+  notificationId,
+  onCancel,
+  createMutation
+}: {
+  notificationId: string;
+  onCancel: () => void;
+  createMutation: any;
+}) {
+  const [notificationType, setNotificationType] = useState<"email" | "push">("email");
+  const [daysAfter, setDaysAfter] = useState(7);
+  const [emailTitle, setEmailTitle] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [pushContent, setPushContent] = useState("");
+
+  const handleSubmit = () => {
+    const data: any = {
+      notificationId,
+      notificationType,
+      daysAfterCreation: daysAfter,
+    };
+
+    if (notificationType === 'email') {
+      data.emailTitle = emailTitle;
+      data.emailBody = emailBody;
+    } else {
+      data.pushContent = pushContent;
+    }
+
+    createMutation.mutate(data);
+  };
+
+  const canSubmit = () => {
+    if (notificationType === 'email') return emailTitle && emailBody;
+    if (notificationType === 'push') return pushContent && pushContent.length <= 200;
+    return false;
+  };
+
+  return (
+    <Card className="mt-2">
+      <CardContent className="pt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Notification Type</Label>
+            <Select value={notificationType} onValueChange={(v: any) => setNotificationType(v)}>
+              <SelectTrigger data-testid="select-reminder-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="push">Push Notification</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Days After Request Created</Label>
+            <Input
+              type="number"
+              value={daysAfter}
+              onChange={(e) => setDaysAfter(parseInt(e.target.value) || 0)}
+              min={1}
+              data-testid="input-reminder-days-after"
+            />
+          </div>
+        </div>
+
+        {notificationType === 'email' && (
+          <>
+            <div className="space-y-2">
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTitle}
+                onChange={(e) => setEmailTitle(e.target.value)}
+                placeholder="Enter email subject"
+                data-testid="input-reminder-email-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Body</Label>
+              <Textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                placeholder="Enter email body"
+                rows={4}
+                data-testid="textarea-reminder-email-body"
+              />
+            </div>
+          </>
+        )}
+
+        {notificationType === 'push' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Push Notification Content</Label>
+              <CharacterCounter current={pushContent.length} max={200} />
+            </div>
+            <Textarea
+              value={pushContent}
+              onChange={(e) => setPushContent(e.target.value)}
+              placeholder="Enter push notification message (max 200 characters)"
+              rows={4}
+              data-testid="textarea-reminder-push-content"
+            />
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" size="sm" onClick={onCancel} data-testid="button-cancel-reminder">
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-reminder">
+            Add Reminder
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ProjectTypeDetail() {
   const { id: projectTypeId } = useParams();
   const [location, navigate] = useLocation();
@@ -606,6 +1259,13 @@ export default function ProjectTypeDetail() {
   // State for settings (service linkage)
   const [isEditingServiceLinkage, setIsEditingServiceLinkage] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  
+  // State for notifications
+  const [isAddingProjectNotification, setIsAddingProjectNotification] = useState(false);
+  const [isAddingStageNotification, setIsAddingStageNotification] = useState(false);
+  const [editingNotification, setEditingNotification] = useState<ProjectTypeNotification | null>(null);
+  const [addingReminderForNotification, setAddingReminderForNotification] = useState<string | null>(null);
+  const [editingReminder, setEditingReminder] = useState<ClientRequestReminder | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -665,6 +1325,18 @@ export default function ProjectTypeDetail() {
   const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
     enabled: !!projectType && !projectType.serviceId && isAuthenticated && !!user,
+  });
+  
+  // Fetch notifications for this project type
+  const { data: notifications, isLoading: notificationsLoading } = useQuery<ProjectTypeNotification[]>({
+    queryKey: ["/api/project-types", projectTypeId, "notifications"],
+    enabled: !!projectTypeId && isAuthenticated && !!user,
+  });
+  
+  // Fetch client request templates
+  const { data: clientRequestTemplates } = useQuery<ClientRequestTemplate[]>({
+    queryKey: ["/api/templates"],
+    enabled: isAuthenticated && !!user,
   });
 
   // Use service-specific roles for service-linked project types, or users for non-service types
@@ -1172,6 +1844,117 @@ export default function ProjectTypeDetail() {
       });
     },
   });
+  
+  // Notification mutations
+  const createNotificationMutation = useMutation({
+    mutationFn: async (notification: InsertProjectTypeNotification) => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      return await apiRequest("POST", `/api/project-types/${projectTypeId}/notifications`, notification);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Notification created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setIsAddingProjectNotification(false);
+      setIsAddingStageNotification(false);
+      setEditingNotification(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const updateNotificationMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateProjectTypeNotification & { id: string }) => {
+      return await apiRequest("PATCH", `/api/notifications/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Notification updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setEditingNotification(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteNotificationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/notifications/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Notification deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Reminder mutations
+  const createReminderMutation = useMutation({
+    mutationFn: async ({ notificationId, ...reminder }: InsertClientRequestReminder & { notificationId: string }) => {
+      return await apiRequest("POST", `/api/notifications/${notificationId}/reminders`, reminder);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Reminder created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setAddingReminderForNotification(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create reminder",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const updateReminderMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateClientRequestReminder & { id: string }) => {
+      return await apiRequest("PATCH", `/api/reminders/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Reminder updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setEditingReminder(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update reminder",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteReminderMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/reminders/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Reminder deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete reminder",
+        variant: "destructive",
+      });
+    },
+  });
 
   if (authLoading || !user) {
     return (
@@ -1437,7 +2220,7 @@ export default function ProjectTypeDetail() {
         <div className="flex-1 overflow-auto">
           <Tabs defaultValue="stages" className="h-full">
             <div className="border-b border-border bg-card px-6">
-              <TabsList className="grid w-full max-w-2xl grid-cols-4">
+              <TabsList className="grid w-full max-w-3xl grid-cols-5">
                 <TabsTrigger value="stages" className="flex items-center" data-testid="tab-stages">
                   <Layers className="w-4 h-4 mr-2" />
                   Kanban Stages
@@ -1449,6 +2232,10 @@ export default function ProjectTypeDetail() {
                 <TabsTrigger value="approvals" className="flex items-center" data-testid="tab-approvals">
                   <ShieldCheck className="w-4 h-4 mr-2" />
                   Stage Approvals
+                </TabsTrigger>
+                <TabsTrigger value="notifications" className="flex items-center" data-testid="tab-notifications">
+                  <Bell className="w-4 h-4 mr-2" />
+                  Notifications
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center" data-testid="tab-settings">
                   <Settings className="w-4 h-4 mr-2" />
@@ -2386,6 +3173,122 @@ export default function ProjectTypeDetail() {
                   </CardContent>
                 </Card>
               )}
+            </TabsContent>
+            
+            {/* Notifications Tab */}
+            <TabsContent value="notifications" className="p-6 space-y-8">
+              <div>
+                <h2 className="text-2xl font-semibold mb-2">Notification Management</h2>
+                <p className="text-muted-foreground">
+                  Configure automated client notifications for this project type
+                </p>
+              </div>
+              
+              {/* Section 1: Project Notifications (Date-based) */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Calendar className="w-5 h-5 mr-2" />
+                      Project Notifications
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Date-based notifications triggered relative to project start or due dates</p>
+                  </div>
+                  <Button
+                    onClick={() => setIsAddingProjectNotification(true)}
+                    data-testid="button-add-project-notification"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Project Notification
+                  </Button>
+                </div>
+
+                {isAddingProjectNotification && (
+                  <ProjectNotificationForm
+                    onCancel={() => setIsAddingProjectNotification(false)}
+                    createMutation={createNotificationMutation}
+                    clientRequestTemplates={clientRequestTemplates || []}
+                  />
+                )}
+
+                <div className="grid gap-4">
+                  {notifications?.filter(n => n.category === 'project').map(notification => (
+                    <NotificationCard
+                      key={notification.id}
+                      notification={notification}
+                      stages={stages || []}
+                      clientRequestTemplates={clientRequestTemplates || []}
+                      onEdit={setEditingNotification}
+                      onDelete={(id) => deleteNotificationMutation.mutate(id)}
+                      onAddReminder={setAddingReminderForNotification}
+                      addingReminderForNotification={addingReminderForNotification}
+                      createReminderMutation={createReminderMutation}
+                      onDeleteReminder={(id) => deleteReminderMutation.mutate(id)}
+                    />
+                  ))}
+                  {!notifications?.some(n => n.category === 'project') && !isAddingProjectNotification && (
+                    <Card>
+                      <CardContent className="p-6 text-center text-muted-foreground">
+                        No project notifications configured yet
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 2: Stage Notifications */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Workflow className="w-5 h-5 mr-2" />
+                      Stage Notifications
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Workflow stage trigger notifications sent when projects enter or exit stages</p>
+                  </div>
+                  <Button
+                    onClick={() => setIsAddingStageNotification(true)}
+                    disabled={!stages || stages.length === 0}
+                    data-testid="button-add-stage-notification"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Stage Notification
+                  </Button>
+                </div>
+
+                {isAddingStageNotification && (
+                  <StageNotificationForm
+                    onCancel={() => setIsAddingStageNotification(false)}
+                    createMutation={createNotificationMutation}
+                    stages={stages || []}
+                    clientRequestTemplates={clientRequestTemplates || []}
+                  />
+                )}
+
+                <div className="grid gap-4">
+                  {notifications?.filter(n => n.category === 'stage').map(notification => (
+                    <NotificationCard
+                      key={notification.id}
+                      notification={notification}
+                      stages={stages || []}
+                      clientRequestTemplates={clientRequestTemplates || []}
+                      onEdit={setEditingNotification}
+                      onDelete={(id) => deleteNotificationMutation.mutate(id)}
+                      onAddReminder={setAddingReminderForNotification}
+                      addingReminderForNotification={addingReminderForNotification}
+                      createReminderMutation={createReminderMutation}
+                      onDeleteReminder={(id) => deleteReminderMutation.mutate(id)}
+                    />
+                  ))}
+                  {!notifications?.some(n => n.category === 'stage') && !isAddingStageNotification && (
+                    <Card>
+                      <CardContent className="p-6 text-center text-muted-foreground">
+                        No stage notifications configured yet
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
             </TabsContent>
 
             {/* Settings Tab */}

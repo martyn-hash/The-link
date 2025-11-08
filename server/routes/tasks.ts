@@ -29,6 +29,7 @@ import {
 import { sendTaskAssignmentEmail } from "../emailService";
 import { sendPushNotification } from "../push-service";
 import type { PushNotificationPayload } from "../push-service";
+import { stopTaskInstanceReminders } from "../notification-scheduler";
 
 export function registerTaskRoutes(
   app: Express,
@@ -1343,6 +1344,16 @@ export function registerTaskRoutes(
       }
 
       const updated = await storage.updateTaskInstance(id, updateData);
+
+      // Stop reminders if task is cancelled or if stopReminders flag is set
+      if (status === 'cancelled' || req.body.stopReminders === true) {
+        try {
+          await stopTaskInstanceReminders(id, req.user?.id || 'staff', 'staff_cancelled');
+        } catch (reminderError) {
+          console.error('[Notifications] Error stopping reminders:', reminderError);
+        }
+      }
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating task instance status:", error);

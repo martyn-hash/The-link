@@ -44,8 +44,10 @@ import AdminTaskTypes from "@/pages/admin-task-types";
 import DataImport from "@/pages/data-import";
 import PushDiagnostics from "@/pages/push-diagnostics";
 import PushNotificationTemplates from "@/pages/push-notification-templates";
+import ScheduledNotifications from "@/pages/scheduled-notifications";
 import ActivityLogs from "@/pages/activity-logs";
 import UserActivityTracking from "@/pages/user-activity-tracking";
+import CompanySettingsPage from "@/pages/company-settings";
 import PortalLogin from "@/pages/portal/PortalLogin";
 import PortalVerify from "@/pages/portal/PortalVerify";
 import PortalInstall from "@/pages/portal/PortalInstall";
@@ -156,8 +158,11 @@ function Router() {
       <Route path="/push-notification-templates" component={PushNotificationTemplates} />
       <Route path="/data-import" component={DataImport} />
       <Route path="/push-diagnostics" component={PushDiagnostics} />
+      <Route path="/admin/scheduled-notifications" component={ScheduledNotifications} />
+      <Route path="/scheduled-notifications" component={ScheduledNotifications} />
       <Route path="/super-admin/activity-logs" component={ActivityLogs} />
       <Route path="/super-admin/user-activity-tracking" component={UserActivityTracking} />
+      <Route path="/company-settings" component={CompanySettingsPage} />
       
       {/* Catch-all NotFound route */}
       <Route component={NotFound} />

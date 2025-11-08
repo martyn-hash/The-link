@@ -37,6 +37,7 @@ import { companiesHouseService } from "../companies-house-service";
 import { runChSync } from "../ch-sync-service";
 import * as serviceMapper from "../core/service-mapper";
 import type { AuthenticatedRequest } from "../auth";
+import { scheduleProjectNotifications, cancelClientServiceNotifications } from "../notification-scheduler";
 
 export function registerClientRoutes(
   app: Express,
@@ -1080,6 +1081,28 @@ export function registerClientRoutes(
         const clientService = await serviceMapper.createClientServiceMapping(clientServiceData);
 
         console.log(`[Routes] Successfully created client service mapping: ${clientService.id}`);
+
+        // Schedule project notifications
+        try {
+          // Get the full client service with all details
+          const fullClientService = await storage.getClientServiceById(clientService.id);
+          
+          // Only schedule if the service has project dates
+          if (fullClientService && fullClientService.nextStartDate) {
+            await scheduleProjectNotifications({
+              clientServiceId: fullClientService.id,
+              clientId: fullClientService.clientId,
+              projectTypeId: fullClientService.serviceId,
+              nextStartDate: fullClientService.nextStartDate,
+              nextDueDate: fullClientService.nextDueDate || null,
+            });
+            console.log(`[Notifications] Scheduled notifications for client service ${fullClientService.id}`);
+          }
+        } catch (notifError) {
+          console.error('[Notifications] Error scheduling notifications for client service:', notifError);
+          // Don't fail the request if notification scheduling fails
+        }
+
         return res.status(201).json(clientService);
       } catch (mapperError: any) {
         console.error('[Routes] Service mapper error:', mapperError);
@@ -1314,6 +1337,27 @@ export function registerClientRoutes(
           }
         }
 
+        // Schedule/update project notifications
+        try {
+          // Get the full client service with all details
+          const fullClientService = await storage.getClientServiceById(id);
+          
+          // Only schedule if the service has project dates
+          if (fullClientService && fullClientService.nextStartDate) {
+            await scheduleProjectNotifications({
+              clientServiceId: fullClientService.id,
+              clientId: fullClientService.clientId,
+              projectTypeId: fullClientService.serviceId,
+              nextStartDate: fullClientService.nextStartDate,
+              nextDueDate: fullClientService.nextDueDate || null,
+            });
+            console.log(`[Notifications] Updated scheduled notifications for client service ${fullClientService.id}`);
+          }
+        } catch (notifError) {
+          console.error('[Notifications] Error updating notifications for client service:', notifError);
+          // Don't fail the request if notification scheduling fails
+        }
+
         return res.json(clientService);
       } catch (mapperError: any) {
         console.error('[Routes] Service mapper error:', mapperError);
@@ -1353,6 +1397,19 @@ export function registerClientRoutes(
       const existingClientService = await storage.getClientServiceById(id);
       if (!existingClientService) {
         return res.status(404).json({ message: "Client service not found" });
+      }
+
+      // Cancel scheduled notifications before deleting the service
+      try {
+        await cancelClientServiceNotifications(
+          id,
+          req.user?.effectiveUserId || req.user?.id || 'system',
+          'Client service deleted'
+        );
+        console.log(`[Notifications] Cancelled notifications for client service ${id}`);
+      } catch (cleanupError) {
+        console.error('[Notifications] Error cleaning up notifications:', cleanupError);
+        // Don't fail the deletion if notification cleanup fails
       }
 
       await storage.deleteClientService(id);

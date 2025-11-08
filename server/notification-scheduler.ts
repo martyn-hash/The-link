@@ -13,7 +13,7 @@ import {
   type ProjectTypeNotification,
   type ClientRequestReminder,
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNotNull } from "drizzle-orm";
 
 /**
  * Notification Scheduler Service
@@ -377,29 +377,35 @@ export async function cancelTaskInstanceReminders(
 }
 
 /**
- * Mark reminders to stop for a task instance
- * 
- * This prevents future reminders from being sent but doesn't cancel already scheduled ones.
+ * Stop all scheduled reminders for a task instance
+ * Called when client submits the task or staff marks reminders to stop
  */
 export async function stopTaskInstanceReminders(
   taskInstanceId: string,
-  stoppedBy: string
+  stoppedBy: string,
+  reason: 'client_submitted' | 'staff_cancelled'
 ): Promise<void> {
-  console.log(`[NotificationScheduler] Stopping future reminders for task ${taskInstanceId}`);
-
+  // Cancel all scheduled notifications for this task instance that are reminders
+  // Status should be 'scheduled' to avoid cancelling already sent/failed ones
   await db
     .update(scheduledNotifications)
     .set({
-      stopReminders: true,
+      status: 'cancelled',
+      sentAt: new Date(),
+      failureReason: reason === 'client_submitted' 
+        ? 'Task submitted by client' 
+        : 'Reminders cancelled by staff',
       cancelledBy: stoppedBy,
+      cancelledAt: new Date(),
       updatedAt: new Date(),
     })
     .where(
       and(
         eq(scheduledNotifications.taskInstanceId, taskInstanceId),
-        eq(scheduledNotifications.status, "scheduled")
+        eq(scheduledNotifications.status, 'scheduled'),
+        isNotNull(scheduledNotifications.clientRequestReminderId) // Only reminders
       )
     );
-
-  console.log(`[NotificationScheduler] Stopped future reminders for task ${taskInstanceId}`);
+    
+  console.log(`[NotificationScheduler] Stopped reminders for task instance ${taskInstanceId} (reason: ${reason})`);
 }

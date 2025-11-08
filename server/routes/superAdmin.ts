@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { storage } from "../storage";
+import { updateCompanySettingsSchema } from "@shared/schema";
 
 /**
  * Super Admin routes for activity logs and login attempts
@@ -224,6 +225,60 @@ export function registerSuperAdminRoutes(
       } catch (error) {
         console.error("Error exporting user activity tracking:", error);
         res.status(500).json({ message: "Failed to export user activity tracking" });
+      }
+    }
+  );
+
+  // Get company settings
+  app.get(
+    "/api/super-admin/company-settings",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const settings = await storage.getCompanySettings();
+        
+        // If no settings exist, return default values
+        if (!settings) {
+          res.json({
+            emailSenderName: "The Link Team"
+          });
+          return;
+        }
+        
+        res.json(settings);
+      } catch (error) {
+        console.error("Error fetching company settings:", error);
+        res.status(500).json({ message: "Failed to fetch company settings" });
+      }
+    }
+  );
+
+  // Update company settings
+  app.put(
+    "/api/super-admin/company-settings",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        // Validate request body
+        const validationResult = updateCompanySettingsSchema.safeParse(req.body);
+        
+        if (!validationResult.success) {
+          res.status(400).json({ 
+            message: "Invalid company settings data",
+            errors: validationResult.error.errors
+          });
+          return;
+        }
+        
+        const updatedSettings = await storage.updateCompanySettings(validationResult.data);
+        res.json(updatedSettings);
+      } catch (error) {
+        console.error("Error updating company settings:", error);
+        res.status(500).json({ message: "Failed to update company settings" });
       }
     }
   );

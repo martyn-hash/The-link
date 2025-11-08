@@ -5,6 +5,7 @@ import { validateFileUpload, MAX_FILE_SIZE } from "../utils/fileValidation";
 import { createDocumentsFromAttachments } from "../utils/documentHelpers";
 import { verifyThreadAccess } from "../middleware/attachmentAccess";
 import { sendNewClientMessageNotification } from "../notification-template-service";
+import { stopTaskInstanceReminders } from "../notification-scheduler";
 import { z } from "zod";
 
 // Push notification schemas
@@ -898,6 +899,14 @@ export async function registerPortalRoutes(app: Express): Promise<void> {
       await storage.updateTaskInstance(id, {
         status: 'submitted',
       });
+
+      // Stop any scheduled reminders for this task
+      try {
+        await stopTaskInstanceReminders(id, req.portalUser?.relatedPersonId || 'client', 'client_submitted');
+      } catch (reminderError) {
+        console.error('[Notifications] Error stopping reminders:', reminderError);
+        // Don't fail the submission if reminder stopping fails
+      }
 
       res.json({ message: "Task submitted successfully" });
     } catch (error) {
