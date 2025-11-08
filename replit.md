@@ -66,6 +66,18 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Attachment Deduplication**: Uses SHA-256 content hashing for efficient storage in Google Cloud Storage, skipping inline and oversized attachments.
 -   **Complete UI**: Integrated email threads into the client detail page and a dedicated `/messages` page, featuring an EmailThreadViewer modal with rich text reply capabilities.
 
+### Client Notification & Reminder System
+
+A comprehensive automated notification system enables multi-channel communications (email, SMS, push) to clients based on project lifecycle events and client request reminders. The system features:
+-   **Project Notifications**: Date-based notifications relative to project start/due dates with configurable offsets, plus stage-based notifications triggered when projects enter/exit workflow stages.
+-   **Client Request Reminders**: Automated reminder sequences for client request templates, with configurable intervals and automatic stopping when clients submit or staff cancel.
+-   **Admin Management**: Scheduled Notifications admin page (`/admin/scheduled-notifications`) with calendar and list views, filtering by client/project/status, and bulk cancellation operations.
+-   **Idempotent Scheduling**: Delete-then-insert pattern ensures no duplicate notifications when services are updated.
+-   **Multi-Channel Delivery**: SendGrid for emails (with configurable sender name), VoodooSMS placeholder for SMS, and integration with existing push notification infrastructure.
+-   **Character Limits**: SMS (160 chars), push title (50 chars), push body (120 chars) enforced at validation and UI levels.
+-   **Automated Cleanup**: Service deletion automatically cancels associated notifications; reminder sequences stop on task submission or staff cancellation using proper audit fields (cancelReason, cancelledAt, cancelledBy).
+-   **Hourly Cron**: Background job runs 07:00-19:00 UK time to process due notifications and update delivery history.
+
 ## External Dependencies
 
 ### Third-Party Services
@@ -87,3 +99,14 @@ The email threading system integrates Microsoft Graph to ingest staff emails and
 -   **Build Pipeline**: Vite, esbuild, TypeScript, PostCSS.
 -   **Development Enhancements**: `@replit/vite-plugin-runtime-error-modal`, `@replit/vite-plugin-cartographer`, `tsx`.
 -   **Database Tools**: `drizzle-kit`, `drizzle-orm`.
+
+## Testing Credentials
+
+For automated browser testing or manual verification, use the following credentials to log in:
+
+-   **URL**: Navigate to the root page (`/`)
+-   **Login Method**: Password tab
+-   **Email**: `admin@example.com`
+-   **Password**: `admin123`
+
+This account has admin permissions to access all features including project types, client management, scheduled notifications, and company settings.
