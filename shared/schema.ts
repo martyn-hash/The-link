@@ -2983,6 +2983,217 @@ export const taskDocuments = pgTable("task_documents", {
   index("idx_task_documents_uploaded_by").on(table.uploadedBy),
 ]);
 
+// ============================================================
+// NOTIFICATION & REMINDER SYSTEM TABLES
+// ============================================================
+
+// Notification type enum - channels through which notifications can be sent
+export const notificationTypeEnum = pgEnum("notification_type", ["email", "sms", "push"]);
+
+// Notification category enum - differentiates project vs stage notifications
+export const notificationCategoryEnum = pgEnum("notification_category", ["project", "stage"]);
+
+// Date reference enum - for project notifications (start_date or due_date)
+export const dateReferenceEnum = pgEnum("date_reference", ["start_date", "due_date"]);
+
+// Date offset type enum - before, on, or after the reference date
+export const dateOffsetTypeEnum = pgEnum("date_offset_type", ["before", "on", "after"]);
+
+// Stage trigger enum - whether notification fires on entering or exiting a stage
+export const stageTriggerEnum = pgEnum("stage_trigger", ["entry", "exit"]);
+
+// Notification status enum - tracks the lifecycle of a scheduled notification
+export const notificationStatusEnum = pgEnum("notification_status", [
+  "scheduled", 
+  "sent", 
+  "failed", 
+  "cancelled"
+]);
+
+// Company settings table - global configuration for the system
+export const companySettings = pgTable("company_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  emailSenderName: varchar("email_sender_name").default("The Link Team"), // Sender name for SendGrid emails
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Project type notifications table - notification configurations for project types
+export const projectTypeNotifications = pgTable("project_type_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }),
+  
+  // Notification metadata
+  category: notificationCategoryEnum("category").notNull(), // 'project' or 'stage'
+  notificationType: notificationTypeEnum("notification_type").notNull(), // 'email', 'sms', or 'push'
+  
+  // For project notifications (category = 'project')
+  dateReference: dateReferenceEnum("date_reference"), // 'start_date' or 'due_date' (nullable for stage notifications)
+  offsetType: dateOffsetTypeEnum("offset_type"), // 'before', 'on', 'after' (nullable for stage notifications)
+  offsetDays: integer("offset_days"), // Number of days offset (nullable for stage notifications, 0 for 'on')
+  
+  // For stage notifications (category = 'stage')
+  stageId: varchar("stage_id").references(() => kanbanStages.id, { onDelete: "cascade" }), // Stage that triggers notification (nullable for project notifications)
+  stageTrigger: stageTriggerEnum("stage_trigger"), // 'entry' or 'exit' (nullable for project notifications)
+  
+  // Notification content
+  emailTitle: varchar("email_title"), // Email subject (for email type only)
+  emailBody: text("email_body"), // Email body - rich text HTML (for email type only)
+  smsContent: varchar("sms_content", { length: 160 }), // SMS message - 160 char limit (for sms type only)
+  pushContent: varchar("push_content", { length: 200 }), // Push notification message - 200 char limit (for push type only)
+  
+  // Client Request Template linking (for email and push only)
+  clientRequestTemplateId: varchar("client_request_template_id").references(() => clientRequestTemplates.id, { onDelete: "set null" }), // Links to a client request template
+  
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_project_type_notifications_project_type_id").on(table.projectTypeId),
+  index("idx_project_type_notifications_stage_id").on(table.stageId),
+  index("idx_project_type_notifications_category").on(table.category),
+  // Check constraint: project notifications must have dateReference, offsetType, offsetDays
+  check("check_project_notification_fields", sql`
+    (category != 'project' OR (date_reference IS NOT NULL AND offset_type IS NOT NULL AND offset_days IS NOT NULL))
+  `),
+  // Check constraint: stage notifications must have stageId and stageTrigger
+  check("check_stage_notification_fields", sql`
+    (category != 'stage' OR (stage_id IS NOT NULL AND stage_trigger IS NOT NULL))
+  `),
+  // Check constraint: email notifications must have emailTitle and emailBody
+  check("check_email_notification_content", sql`
+    (notification_type != 'email' OR (email_title IS NOT NULL AND email_body IS NOT NULL))
+  `),
+  // Check constraint: sms notifications must have smsContent
+  check("check_sms_notification_content", sql`
+    (notification_type != 'sms' OR sms_content IS NOT NULL)
+  `),
+  // Check constraint: push notifications must have pushContent
+  check("check_push_notification_content", sql`
+    (notification_type != 'push' OR push_content IS NOT NULL)
+  `),
+]);
+
+// Client request reminders table - reminder configurations for client request templates
+export const clientRequestReminders = pgTable("client_request_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectTypeNotificationId: varchar("project_type_notification_id").notNull().references(() => projectTypeNotifications.id, { onDelete: "cascade" }), // Parent notification that created the client request
+  
+  notificationType: notificationTypeEnum("notification_type").notNull(), // 'email', 'sms', or 'push'
+  daysAfterCreation: integer("days_after_creation").notNull(), // Days after client request was created
+  
+  // Notification content
+  emailTitle: varchar("email_title"), // Email subject (for email type only)
+  emailBody: text("email_body"), // Email body - rich text HTML (for email type only)
+  smsContent: varchar("sms_content", { length: 160 }), // SMS message - 160 char limit (for sms type only)
+  pushContent: varchar("push_content", { length: 200 }), // Push notification message - 200 char limit (for push type only)
+  
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_client_request_reminders_notification_id").on(table.projectTypeNotificationId),
+  // Check constraint: email reminders must have emailTitle and emailBody
+  check("check_email_reminder_content", sql`
+    (notification_type != 'email' OR (email_title IS NOT NULL AND email_body IS NOT NULL))
+  `),
+  // Check constraint: sms reminders must have smsContent
+  check("check_sms_reminder_content", sql`
+    (notification_type != 'sms' OR sms_content IS NOT NULL)
+  `),
+  // Check constraint: push reminders must have pushContent
+  check("check_push_reminder_content", sql`
+    (notification_type != 'push' OR push_content IS NOT NULL)
+  `),
+]);
+
+// Scheduled notifications table - actual notification instances ready to be sent
+export const scheduledNotifications = pgTable("scheduled_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Links to source configuration
+  projectTypeNotificationId: varchar("project_type_notification_id").references(() => projectTypeNotifications.id, { onDelete: "cascade" }), // For project/stage notifications
+  clientRequestReminderId: varchar("client_request_reminder_id").references(() => clientRequestReminders.id, { onDelete: "cascade" }), // For client request reminders
+  
+  // Recipient information
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  personId: varchar("person_id").references(() => people.id, { onDelete: "cascade" }), // Specific person to notify (if applicable)
+  clientServiceId: varchar("client_service_id").references(() => clientServices.id, { onDelete: "cascade" }), // Related client service
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }), // Related project (for stage notifications)
+  taskInstanceId: varchar("task_instance_id").references(() => taskInstances.id, { onDelete: "cascade" }), // Related task instance (for client request reminders)
+  
+  // Notification details
+  notificationType: notificationTypeEnum("notification_type").notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull(), // When to send the notification
+  
+  // Content (copied from template at scheduling time for immutability)
+  emailTitle: varchar("email_title"),
+  emailBody: text("email_body"),
+  smsContent: varchar("sms_content", { length: 160 }),
+  pushContent: varchar("push_content", { length: 200 }),
+  
+  // Status tracking
+  status: notificationStatusEnum("status").notNull().default("scheduled"),
+  sentAt: timestamp("sent_at"),
+  failureReason: text("failure_reason"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id, { onDelete: "set null" }), // Staff user who cancelled it
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  
+  // Reminder control for client request reminders
+  stopReminders: boolean("stop_reminders").default(false), // Staff can flag to stop further reminders
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduled_notifications_project_type_notification_id").on(table.projectTypeNotificationId),
+  index("idx_scheduled_notifications_client_request_reminder_id").on(table.clientRequestReminderId),
+  index("idx_scheduled_notifications_client_id").on(table.clientId),
+  index("idx_scheduled_notifications_person_id").on(table.personId),
+  index("idx_scheduled_notifications_client_service_id").on(table.clientServiceId),
+  index("idx_scheduled_notifications_project_id").on(table.projectId),
+  index("idx_scheduled_notifications_task_instance_id").on(table.taskInstanceId),
+  index("idx_scheduled_notifications_scheduled_for").on(table.scheduledFor),
+  index("idx_scheduled_notifications_status").on(table.status),
+  // Check constraint: must have either projectTypeNotificationId OR clientRequestReminderId
+  check("check_notification_source", sql`
+    (project_type_notification_id IS NOT NULL AND client_request_reminder_id IS NULL) OR
+    (project_type_notification_id IS NULL AND client_request_reminder_id IS NOT NULL)
+  `),
+]);
+
+// Notification history table - audit log of all sent notifications
+export const notificationHistory = pgTable("notification_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scheduledNotificationId: varchar("scheduled_notification_id").references(() => scheduledNotifications.id, { onDelete: "set null" }),
+  
+  // Recipient details (denormalized for audit trail)
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  recipientEmail: varchar("recipient_email"),
+  recipientPhone: varchar("recipient_phone"),
+  
+  // Notification details
+  notificationType: notificationTypeEnum("notification_type").notNull(),
+  content: text("content").notNull(), // The actual content that was sent
+  
+  // Status
+  status: notificationStatusEnum("status").notNull(), // 'sent' or 'failed'
+  sentAt: timestamp("sent_at"),
+  failureReason: text("failure_reason"),
+  
+  // Metadata
+  externalId: varchar("external_id"), // ID from external service (SendGrid message ID, VoodooSMS ID, etc.)
+  metadata: jsonb("metadata"), // Additional tracking data
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_notification_history_scheduled_notification_id").on(table.scheduledNotificationId),
+  index("idx_notification_history_client_id").on(table.clientId),
+  index("idx_notification_history_sent_at").on(table.sentAt),
+  index("idx_notification_history_status").on(table.status),
+  index("idx_notification_history_notification_type").on(table.notificationType),
+]);
+
 // Zod schemas for risk assessments
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
@@ -3158,6 +3369,46 @@ export const insertTaskDocumentSchema = createInsertSchema(taskDocuments).omit({
   createdAt: true,
 });
 
+// Zod schemas for notification system
+export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateCompanySettingsSchema = insertCompanySettingsSchema.partial();
+
+export const insertProjectTypeNotificationSchema = createInsertSchema(projectTypeNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProjectTypeNotificationSchema = insertProjectTypeNotificationSchema.partial();
+
+export const insertClientRequestReminderSchema = createInsertSchema(clientRequestReminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientRequestReminderSchema = insertClientRequestReminderSchema.partial();
+
+export const insertScheduledNotificationSchema = createInsertSchema(scheduledNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  sentAt: true,
+  cancelledAt: true,
+});
+
+export const updateScheduledNotificationSchema = insertScheduledNotificationSchema.partial();
+
+export const insertNotificationHistorySchema = createInsertSchema(notificationHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const bulkReassignTasksSchema = z.object({
   taskIds: z.array(z.string().uuid()),
   assignedTo: z.string().uuid(),
@@ -3254,6 +3505,22 @@ export type TaskDocument = typeof taskDocuments.$inferSelect;
 export type InsertTaskDocument = z.infer<typeof insertTaskDocumentSchema>;
 export type BulkReassignTasks = z.infer<typeof bulkReassignTasksSchema>;
 export type BulkUpdateTaskStatus = z.infer<typeof bulkUpdateTaskStatusSchema>;
+
+// Notification system type exports
+export type CompanySettings = typeof companySettings.$inferSelect;
+export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
+export type UpdateCompanySettings = z.infer<typeof updateCompanySettingsSchema>;
+export type ProjectTypeNotification = typeof projectTypeNotifications.$inferSelect;
+export type InsertProjectTypeNotification = z.infer<typeof insertProjectTypeNotificationSchema>;
+export type UpdateProjectTypeNotification = z.infer<typeof updateProjectTypeNotificationSchema>;
+export type ClientRequestReminder = typeof clientRequestReminders.$inferSelect;
+export type InsertClientRequestReminder = z.infer<typeof insertClientRequestReminderSchema>;
+export type UpdateClientRequestReminder = z.infer<typeof updateClientRequestReminderSchema>;
+export type ScheduledNotification = typeof scheduledNotifications.$inferSelect;
+export type InsertScheduledNotification = z.infer<typeof insertScheduledNotificationSchema>;
+export type UpdateScheduledNotification = z.infer<typeof updateScheduledNotificationSchema>;
+export type NotificationHistory = typeof notificationHistory.$inferSelect;
+export type InsertNotificationHistory = z.infer<typeof insertNotificationHistorySchema>;
 
 // Email threading type exports
 export type EmailMessage = typeof emailMessages.$inferSelect;
