@@ -352,9 +352,15 @@ export async function updateClientServiceNotificationDates(
  * Cancel reminders for a task instance
  * 
  * This is used when a client submits a request or staff marks to stop reminders.
+ * NOTE: This function is deprecated - use stopTaskInstanceReminders instead for better audit trail.
+ * 
+ * @param taskInstanceId - The task instance ID
+ * @param cancelledBy - The user ID who is cancelling the reminders
+ * @param reason - The reason for cancellation
  */
 export async function cancelTaskInstanceReminders(
   taskInstanceId: string,
+  cancelledBy: string,
   reason: string
 ): Promise<void> {
   console.log(`[NotificationScheduler] Cancelling reminders for task ${taskInstanceId}: ${reason}`);
@@ -364,6 +370,7 @@ export async function cancelTaskInstanceReminders(
     .set({
       status: "cancelled",
       cancelReason: reason,
+      cancelledBy,
       cancelledAt: new Date(),
       stopReminders: true,
       updatedAt: new Date(),

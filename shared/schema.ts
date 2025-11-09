@@ -3402,7 +3402,6 @@ export const insertScheduledNotificationSchema = createInsertSchema(scheduledNot
   createdAt: true,
   updatedAt: true,
   sentAt: true,
-  cancelledAt: true,
 });
 
 export const updateScheduledNotificationSchema = insertScheduledNotificationSchema.partial();

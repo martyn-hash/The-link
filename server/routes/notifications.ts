@@ -575,7 +575,10 @@ export function registerNotificationRoutes(
       }
 
       const updated = await storage.updateScheduledNotification(scheduledNotificationId, {
-        status: 'cancelled'
+        status: 'cancelled',
+        cancelledBy: req.user.id,
+        cancelledAt: new Date(),
+        cancelReason: 'Manually cancelled by staff'
       });
       res.json(updated);
     } catch (error) {
@@ -613,7 +616,12 @@ export function registerNotificationRoutes(
             continue;
           }
 
-          await storage.updateScheduledNotification(id, { status: 'cancelled' });
+          await storage.updateScheduledNotification(id, { 
+            status: 'cancelled',
+            cancelledBy: req.user.id,
+            cancelledAt: new Date(),
+            cancelReason: 'Bulk cancelled by staff'
+          });
           results.cancelled++;
         } catch (error) {
           results.failed++;
