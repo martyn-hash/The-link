@@ -8,6 +8,7 @@ import {
   updateClientRequestReminderSchema,
   type ScheduledNotification,
 } from "@shared/schema";
+import { scheduleProjectNotifications } from "../notification-scheduler";
 
 // Parameter validation schemas
 const paramNotificationIdSchema = z.object({
@@ -108,6 +109,42 @@ export function registerNotificationRoutes(
       }
 
       const notification = await storage.createProjectTypeNotification(notificationData);
+      
+      // Schedule notifications retroactively for all existing services
+      try {
+        // Only schedule for project notifications (not stage notifications)
+        if (notification.category === 'project') {
+          console.log(`[Notifications] Scheduling notifications retroactively for new notification ${notification.id}`);
+          
+          // Get the service for this project type
+          const service = await storage.getServiceByProjectTypeId(projectTypeId);
+          if (service) {
+            // Get all client services
+            const clientServices = await storage.getClientServicesByServiceId(service.id);
+            console.log(`[Notifications] Found ${clientServices.length} client service(s) to schedule`);
+            
+            for (const clientService of clientServices) {
+              // Schedule if service has either start date or due date
+              if (clientService.nextStartDate || clientService.nextDueDate) {
+                await scheduleProjectNotifications({
+                  clientServiceId: clientService.id,
+                  clientId: clientService.clientId,
+                  projectTypeId: projectTypeId,
+                  nextStartDate: clientService.nextStartDate,
+                  nextDueDate: clientService.nextDueDate || null,
+                });
+              }
+            }
+            
+            // Note: People services are not yet fully implemented in the notification system
+            // and are skipped for now (consistent with main project scheduler)
+          }
+        }
+      } catch (scheduleError) {
+        console.error('[Notifications] Error scheduling notifications retroactively:', scheduleError);
+        // Don't fail the request if retroactive scheduling fails
+      }
+      
       res.json(notification);
     } catch (error) {
       console.error("Error creating project type notification:", error instanceof Error ? error.message : error);
@@ -169,6 +206,42 @@ export function registerNotificationRoutes(
       }
 
       const updated = await storage.updateProjectTypeNotification(notificationId, updateData);
+      
+      // Schedule notifications retroactively for all existing services
+      try {
+        // Only schedule for project notifications (not stage notifications)
+        if (updated.category === 'project') {
+          console.log(`[Notifications] Re-scheduling notifications retroactively for updated notification ${updated.id}`);
+          
+          // Get the service for this project type
+          const service = await storage.getServiceByProjectTypeId(updated.projectTypeId);
+          if (service) {
+            // Get all client services
+            const clientServices = await storage.getClientServicesByServiceId(service.id);
+            console.log(`[Notifications] Found ${clientServices.length} client service(s) to re-schedule`);
+            
+            for (const clientService of clientServices) {
+              // Schedule if service has either start date or due date
+              if (clientService.nextStartDate || clientService.nextDueDate) {
+                await scheduleProjectNotifications({
+                  clientServiceId: clientService.id,
+                  clientId: clientService.clientId,
+                  projectTypeId: updated.projectTypeId,
+                  nextStartDate: clientService.nextStartDate,
+                  nextDueDate: clientService.nextDueDate || null,
+                });
+              }
+            }
+            
+            // Note: People services are not yet fully implemented in the notification system
+            // and are skipped for now (consistent with main project scheduler)
+          }
+        }
+      } catch (scheduleError) {
+        console.error('[Notifications] Error re-scheduling notifications retroactively:', scheduleError);
+        // Don't fail the request if retroactive scheduling fails
+      }
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating project type notification:", error instanceof Error ? error.message : error);
