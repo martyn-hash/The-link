@@ -219,26 +219,46 @@ async function getRecipientInfo(notification: ScheduledNotification): Promise<{
 async function processSingleNotification(notification: ScheduledNotification): Promise<void> {
   console.log(`[NotificationSender] Processing notification ${notification.id} (${notification.notificationType})`);
 
+  // Re-check the notification status to prevent race conditions
+  // (e.g., notification was cancelled while we were processing the batch)
+  const [currentNotification] = await db
+    .select()
+    .from(scheduledNotifications)
+    .where(eq(scheduledNotifications.id, notification.id))
+    .limit(1);
+
+  if (!currentNotification) {
+    console.log(`[NotificationSender] Notification ${notification.id} no longer exists, skipping`);
+    return;
+  }
+
+  if (currentNotification.status !== "scheduled") {
+    console.log(
+      `[NotificationSender] Notification ${notification.id} status changed to ${currentNotification.status}, skipping`
+    );
+    return;
+  }
+
   // Get company settings for email sender name
   const [settings] = await db.select().from(companySettings).limit(1);
   const senderName = settings?.emailSenderName || "The Link Team";
 
-  // Get recipient contact information
-  const { email, phone } = await getRecipientInfo(notification);
+  // Get recipient contact information using the refreshed notification data
+  const { email, phone } = await getRecipientInfo(currentNotification);
 
   let result: SendNotificationResult;
 
-  // Send the notification based on type
-  switch (notification.notificationType) {
+  // Send the notification based on type (using refreshed notification data)
+  switch (currentNotification.notificationType) {
     case "email":
       if (!email) {
-        console.error(`[NotificationSender] No email address found for notification ${notification.id}`);
+        console.error(`[NotificationSender] No email address found for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "No email address found for recipient",
         };
-      } else if (!notification.emailTitle || !notification.emailBody) {
-        console.error(`[NotificationSender] Missing email content for notification ${notification.id}`);
+      } else if (!currentNotification.emailTitle || !currentNotification.emailBody) {
+        console.error(`[NotificationSender] Missing email content for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "Missing email title or body",
@@ -246,8 +266,8 @@ async function processSingleNotification(notification: ScheduledNotification): P
       } else {
         result = await sendEmailNotification(
           email,
-          notification.emailTitle,
-          notification.emailBody,
+          currentNotification.emailTitle,
+          currentNotification.emailBody,
           senderName
         );
       }
@@ -255,25 +275,25 @@ async function processSingleNotification(notification: ScheduledNotification): P
 
     case "sms":
       if (!phone) {
-        console.error(`[NotificationSender] No phone number found for notification ${notification.id}`);
+        console.error(`[NotificationSender] No phone number found for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "No phone number found for recipient",
         };
-      } else if (!notification.smsContent) {
-        console.error(`[NotificationSender] Missing SMS content for notification ${notification.id}`);
+      } else if (!currentNotification.smsContent) {
+        console.error(`[NotificationSender] Missing SMS content for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "Missing SMS content",
         };
       } else {
-        result = await sendSMSNotification(phone, notification.smsContent);
+        result = await sendSMSNotification(phone, currentNotification.smsContent);
       }
       break;
 
     case "push":
-      if (!notification.pushTitle || !notification.pushBody) {
-        console.error(`[NotificationSender] Missing push title or body for notification ${notification.id}`);
+      if (!currentNotification.pushTitle || !currentNotification.pushBody) {
+        console.error(`[NotificationSender] Missing push title or body for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "Missing push title or body",
@@ -281,23 +301,24 @@ async function processSingleNotification(notification: ScheduledNotification): P
       } else {
         // Send push notification with separate title and body
         result = await sendPushNotificationViaService(
-          notification.clientId,
-          notification.personId,
-          notification.pushTitle,
-          notification.pushBody
+          currentNotification.clientId,
+          currentNotification.personId,
+          currentNotification.pushTitle,
+          currentNotification.pushBody
         );
       }
       break;
 
     default:
-      console.error(`[NotificationSender] Unknown notification type: ${notification.notificationType}`);
+      console.error(`[NotificationSender] Unknown notification type: ${currentNotification.notificationType}`);
       result = {
         success: false,
-        error: `Unknown notification type: ${notification.notificationType}`,
+        error: `Unknown notification type: ${currentNotification.notificationType}`,
       };
   }
 
-  // Update the scheduled notification status
+  // Update the scheduled notification status with conditional WHERE to prevent race conditions
+  // Only update if still in "scheduled" status to avoid overwriting a concurrent cancellation
   if (result.success) {
     await db
       .update(scheduledNotifications)
@@ -306,7 +327,12 @@ async function processSingleNotification(notification: ScheduledNotification): P
         sentAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(scheduledNotifications.id, notification.id));
+      .where(
+        and(
+          eq(scheduledNotifications.id, notification.id),
+          eq(scheduledNotifications.status, "scheduled")
+        )
+      );
   } else {
     await db
       .update(scheduledNotifications)
@@ -315,22 +341,27 @@ async function processSingleNotification(notification: ScheduledNotification): P
         failureReason: result.error,
         updatedAt: new Date(),
       })
-      .where(eq(scheduledNotifications.id, notification.id));
+      .where(
+        and(
+          eq(scheduledNotifications.id, notification.id),
+          eq(scheduledNotifications.status, "scheduled")
+        )
+      );
   }
 
-  // Record in notification history
+  // Record in notification history (using refreshed notification data)
   const historyRecord: InsertNotificationHistory = {
-    scheduledNotificationId: notification.id,
-    clientId: notification.clientId,
+    scheduledNotificationId: currentNotification.id,
+    clientId: currentNotification.clientId,
     recipientEmail: email,
     recipientPhone: phone,
-    notificationType: notification.notificationType,
+    notificationType: currentNotification.notificationType,
     content:
-      notification.notificationType === "email"
-        ? `${notification.emailTitle}\n\n${notification.emailBody}`
-        : notification.notificationType === "sms"
-        ? notification.smsContent || ""
-        : `${notification.pushTitle || ""} - ${notification.pushBody || ""}`,
+      currentNotification.notificationType === "email"
+        ? `${currentNotification.emailTitle}\n\n${currentNotification.emailBody}`
+        : currentNotification.notificationType === "sms"
+        ? currentNotification.smsContent || ""
+        : `${currentNotification.pushTitle || ""} - ${currentNotification.pushBody || ""}`,
     status: result.success ? "sent" : "failed",
     sentAt: result.success ? new Date() : null,
     failureReason: result.error || null,
@@ -341,7 +372,7 @@ async function processSingleNotification(notification: ScheduledNotification): P
   await db.insert(notificationHistory).values(historyRecord);
 
   console.log(
-    `[NotificationSender] Notification ${notification.id} ${result.success ? "sent" : "failed"}`
+    `[NotificationSender] Notification ${currentNotification.id} ${result.success ? "sent" : "failed"}`
   );
 }
 

@@ -162,21 +162,33 @@ export async function scheduleProjectNotifications(
     );
   }
 
-  // Delete existing scheduled notifications for this client service that are still scheduled
-  // This provides idempotency - re-running won't create duplicates
-  await db
-    .delete(scheduledNotifications)
-    .where(
-      and(
-        eq(scheduledNotifications.clientServiceId, clientServiceId),
-        eq(scheduledNotifications.status, "scheduled")
-      )
-    );
+  // Delete existing scheduled notifications and insert new ones in a transaction
+  // This ensures atomicity - either both operations succeed or both fail
+  try {
+    await db.transaction(async (tx) => {
+      // Delete existing scheduled notifications for this client service that are still scheduled
+      // This provides idempotency - re-running won't create duplicates
+      await tx
+        .delete(scheduledNotifications)
+        .where(
+          and(
+            eq(scheduledNotifications.clientServiceId, clientServiceId),
+            eq(scheduledNotifications.status, "scheduled")
+          )
+        );
 
-  // Insert all scheduled notifications
-  if (scheduledNotificationsToInsert.length > 0) {
-    await db.insert(scheduledNotifications).values(scheduledNotificationsToInsert);
-    console.log(`[NotificationScheduler] Created ${scheduledNotificationsToInsert.length} scheduled notification(s)`);
+      // Insert all scheduled notifications
+      if (scheduledNotificationsToInsert.length > 0) {
+        await tx.insert(scheduledNotifications).values(scheduledNotificationsToInsert);
+        console.log(`[NotificationScheduler] Created ${scheduledNotificationsToInsert.length} scheduled notification(s)`);
+      }
+    });
+  } catch (error) {
+    console.error(
+      `[NotificationScheduler] Transaction failed for client service ${clientServiceId}:`,
+      error instanceof Error ? error.message : error
+    );
+    throw error; // Re-throw to let caller handle
   }
 }
 
@@ -273,21 +285,33 @@ export async function scheduleClientRequestReminders(
     );
   }
 
-  // Delete existing scheduled reminders for this task instance that are still scheduled
-  // This provides idempotency - re-running won't create duplicates
-  await db
-    .delete(scheduledNotifications)
-    .where(
-      and(
-        eq(scheduledNotifications.taskInstanceId, taskInstanceId),
-        eq(scheduledNotifications.status, "scheduled")
-      )
-    );
+  // Delete existing scheduled reminders and insert new ones in a transaction
+  // This ensures atomicity - either both operations succeed or both fail
+  try {
+    await db.transaction(async (tx) => {
+      // Delete existing scheduled reminders for this task instance that are still scheduled
+      // This provides idempotency - re-running won't create duplicates
+      await tx
+        .delete(scheduledNotifications)
+        .where(
+          and(
+            eq(scheduledNotifications.taskInstanceId, taskInstanceId),
+            eq(scheduledNotifications.status, "scheduled")
+          )
+        );
 
-  // Insert all scheduled reminders
-  if (scheduledNotificationsToInsert.length > 0) {
-    await db.insert(scheduledNotifications).values(scheduledNotificationsToInsert);
-    console.log(`[NotificationScheduler] Created ${scheduledNotificationsToInsert.length} scheduled reminder(s)`);
+      // Insert all scheduled reminders
+      if (scheduledNotificationsToInsert.length > 0) {
+        await tx.insert(scheduledNotifications).values(scheduledNotificationsToInsert);
+        console.log(`[NotificationScheduler] Created ${scheduledNotificationsToInsert.length} scheduled reminder(s)`);
+      }
+    });
+  } catch (error) {
+    console.error(
+      `[NotificationScheduler] Transaction failed for task instance ${taskInstanceId}:`,
+      error instanceof Error ? error.message : error
+    );
+    throw error; // Re-throw to let caller handle
   }
 }
 
