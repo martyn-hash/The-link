@@ -14,6 +14,7 @@ import type { ProjectTypeNotification, KanbanStage, ClientRequestTemplate, Proje
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
+import TopNavigation from "@/components/top-navigation";
 
 // Character counter component
 function CharacterCounter({ current, max }: { current: number; max: number }) {
@@ -183,9 +184,11 @@ export default function NotificationEditPage() {
   const stages = projectType?.stages || [];
   
   return (
-    <div className="container mx-auto p-4 md:p-6 max-w-4xl">
-      {/* Header */}
-      <div className="mb-6">
+    <>
+      <TopNavigation />
+      <div className="container mx-auto p-4 md:p-6 max-w-4xl">
+        {/* Header */}
+        <div className="mb-6">
         <Button
           variant="ghost"
           onClick={handleCancel}
@@ -423,6 +426,7 @@ export default function NotificationEditPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }

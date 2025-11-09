@@ -274,6 +274,52 @@ async function ensureDateReferenceColumn(): Promise<void> {
 }
 
 /**
+ * Add notificationsActive column to project_types table if it doesn't exist
+ */
+async function ensureNotificationsActiveColumn(): Promise<void> {
+  const exists = await columnExists('project_types', 'notifications_active');
+  
+  if (!exists) {
+    console.log('[Schema Migration] Adding notifications_active column to project_types table...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE project_types 
+        ADD COLUMN notifications_active BOOLEAN DEFAULT true;
+      `);
+      console.log('[Schema Migration] ✓ Successfully added notifications_active column');
+    } catch (error) {
+      console.error('[Schema Migration] ✗ Failed to add notifications_active column:', error);
+      throw error;
+    }
+  } else {
+    console.log('[Schema Migration] ✓ notifications_active column already exists in project_types');
+  }
+}
+
+/**
+ * Add receiveNotifications column to people table if it doesn't exist
+ */
+async function ensureReceiveNotificationsColumn(): Promise<void> {
+  const exists = await columnExists('people', 'receive_notifications');
+  
+  if (!exists) {
+    console.log('[Schema Migration] Adding receive_notifications column to people table...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE people 
+        ADD COLUMN receive_notifications BOOLEAN DEFAULT true;
+      `);
+      console.log('[Schema Migration] ✓ Successfully added receive_notifications column');
+    } catch (error) {
+      console.error('[Schema Migration] ✗ Failed to add receive_notifications column:', error);
+      throw error;
+    }
+  } else {
+    console.log('[Schema Migration] ✓ receive_notifications column already exists in people');
+  }
+}
+
+/**
  * Add firm settings columns to company_settings table if they don't exist
  */
 async function ensureFirmSettingsColumns(): Promise<void> {
@@ -340,6 +386,8 @@ export async function runSchemaMigrations(): Promise<void> {
     await migratePushNotificationFields();
     await ensureDateReferenceColumn();
     await ensureFirmSettingsColumns();
+    await ensureNotificationsActiveColumn();
+    await ensureReceiveNotificationsColumn();
     
     console.log('[Schema Migration] All schema migrations completed successfully');
   } catch (error) {

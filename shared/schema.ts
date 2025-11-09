@@ -351,6 +351,7 @@ export const people = pgTable("people", {
   notes: text("notes"), // Existing field
   // New fields for enhanced person data
   isMainContact: boolean("is_main_contact").default(false),
+  receiveNotifications: boolean("receive_notifications").default(true), // opt-in/opt-out flag for email/SMS notifications
   niNumber: text("ni_number"), // National Insurance Number
   personalUtrNumber: text("personal_utr_number"), // Personal UTR Number
   photoIdVerified: boolean("photo_id_verified").default(false),
@@ -550,6 +551,7 @@ export const projectTypes: any = pgTable("project_types", {
   description: text("description"), // optional description of the project type
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }), // Optional reference to service for role inheritance
   active: boolean("active").default(true), // to enable/disable project types
+  notificationsActive: boolean("notifications_active").default(true), // master switch for all notifications for this project type
   singleProjectPerClient: boolean("single_project_per_client").default(false), // if true, only one active project of this type can exist per client
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
