@@ -1357,9 +1357,9 @@ export function registerClientRoutes(
               clientId: fullClientService.clientId,
               projectTypeId: fullClientService.serviceId,
               nextStartDate: fullClientService.nextStartDate,
-              relatedPeople: activePeopleIds,
+              relatedPeople: peopleIds,
             });
-            console.log(`[Notifications] Updated start_date scheduled notifications for client service ${fullClientService.id} with ${activePeopleIds.length} related people`);
+            console.log(`[Notifications] Updated start_date scheduled notifications for client service ${fullClientService.id} with ${peopleIds.length} related people`);
           }
         } catch (notifError) {
           console.error('[Notifications] Error updating notifications for client service:', notifError);

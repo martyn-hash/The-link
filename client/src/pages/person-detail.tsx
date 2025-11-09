@@ -155,6 +155,7 @@ export default function PersonDetail() {
       personalUtrNumber: "",
       photoIdVerified: false,
       addressVerified: false,
+      receiveNotifications: true,
       linkedinUrl: "",
       twitterUrl: "",
       facebookUrl: "",
@@ -188,6 +189,7 @@ export default function PersonDetail() {
         personalUtrNumber: person.personalUtrNumber || "",
         photoIdVerified: Boolean(person.photoIdVerified),
         addressVerified: Boolean(person.addressVerified),
+        receiveNotifications: Boolean(person.receiveNotifications ?? true),
         linkedinUrl: person.linkedinUrl || "",
         twitterUrl: person.twitterUrl || "",
         facebookUrl: person.facebookUrl || "",
@@ -1040,6 +1042,25 @@ export default function PersonDetail() {
                         </FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>Address Verified</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="receiveNotifications"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-receive-notifications"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Receive email & SMS notifications</FormLabel>
                         </div>
                       </FormItem>
                     )}
