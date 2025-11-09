@@ -3127,6 +3127,7 @@ export const scheduledNotifications = pgTable("scheduled_notifications", {
   // Notification details
   notificationType: notificationTypeEnum("notification_type").notNull(),
   scheduledFor: timestamp("scheduled_for").notNull(), // When to send the notification
+  dateReference: dateReferenceEnum("date_reference"), // 'start_date' or 'due_date' (nullable - only for project notifications)
   
   // Content (copied from template at scheduling time for immutability)
   emailTitle: varchar("email_title"),
