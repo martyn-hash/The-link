@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -763,13 +765,23 @@ function ProjectNotificationForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <Textarea
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Enter email body"
-                rows={6}
-                data-testid="textarea-email-body"
-              />
+              <div data-testid="richtext-email-body">
+                <ReactQuill
+                  value={emailBody}
+                  onChange={setEmailBody}
+                  theme="snow"
+                  placeholder="Enter email body"
+                  modules={{
+                    toolbar: [
+                      [{ 'header': [1, 2, 3, false] }],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                      ['link'],
+                      ['clean']
+                    ]
+                  }}
+                />
+              </div>
             </div>
           </>
         )}
@@ -968,13 +980,23 @@ function StageNotificationForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <Textarea
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Enter email body"
-                rows={6}
-                data-testid="textarea-stage-email-body"
-              />
+              <div data-testid="richtext-stage-email-body">
+                <ReactQuill
+                  value={emailBody}
+                  onChange={setEmailBody}
+                  theme="snow"
+                  placeholder="Enter email body"
+                  modules={{
+                    toolbar: [
+                      [{ 'header': [1, 2, 3, false] }],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                      ['link'],
+                      ['clean']
+                    ]
+                  }}
+                />
+              </div>
             </div>
           </>
         )}
@@ -1235,13 +1257,23 @@ function ReminderForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <Textarea
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Enter email body"
-                rows={4}
-                data-testid="textarea-reminder-email-body"
-              />
+              <div data-testid="richtext-reminder-email-body">
+                <ReactQuill
+                  value={emailBody}
+                  onChange={setEmailBody}
+                  theme="snow"
+                  placeholder="Enter email body"
+                  modules={{
+                    toolbar: [
+                      [{ 'header': [1, 2, 3, false] }],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                      ['link'],
+                      ['clean']
+                    ]
+                  }}
+                />
+              </div>
             </div>
           </>
         )}
