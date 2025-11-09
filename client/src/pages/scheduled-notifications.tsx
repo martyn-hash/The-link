@@ -63,6 +63,7 @@ export default function ScheduledNotificationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all"); // New: filter by notification source
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   
@@ -85,6 +86,7 @@ export default function ScheduledNotificationsPage() {
     if (statusFilter !== "all") params.status = statusFilter;
     if (clientFilter !== "all") params.clientId = clientFilter;
     if (projectFilter !== "all") params.projectId = projectFilter;
+    if (sourceFilter !== "all") params.dateReference = sourceFilter; // New: filter by source type
     if (dateFrom) params.startDate = dateFrom;
     if (dateTo) params.endDate = dateTo;
     return params;
@@ -155,6 +157,7 @@ export default function ScheduledNotificationsPage() {
     setStatusFilter("all");
     setClientFilter("all");
     setProjectFilter("all");
+    setSourceFilter("all");
     setDateFrom("");
     setDateTo("");
   };
@@ -225,6 +228,28 @@ export default function ScheduledNotificationsPage() {
     }
   };
 
+  const getSourceBadge = (notification: NotificationWithRelations) => {
+    // Check if notification has a project or is service-based
+    const isProjectBased = notification.projectId != null;
+    const isServiceBased = !isProjectBased;
+    
+    if (isProjectBased) {
+      return (
+        <Badge variant="default" className="bg-purple-600" data-testid="badge-source-project">
+          <Calendar className="w-3 h-3 mr-1" />
+          Project
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="default" className="bg-orange-600" data-testid="badge-source-service">
+          <CalendarClock className="w-3 h-3 mr-1" />
+          Service
+        </Badge>
+      );
+    }
+  };
+
   const getContentPreview = (notification: NotificationWithRelations) => {
     let content = "";
     if (notification.emailBody) content = notification.emailBody;
@@ -237,7 +262,7 @@ export default function ScheduledNotificationsPage() {
   };
 
   const scheduledNotifications = notifications.filter(n => n.status === "scheduled");
-  const hasFiltersApplied = statusFilter !== "all" || clientFilter !== "all" || projectFilter !== "all" || dateFrom || dateTo;
+  const hasFiltersApplied = statusFilter !== "all" || clientFilter !== "all" || projectFilter !== "all" || sourceFilter !== "all" || dateFrom || dateTo;
 
   // Calendar helper functions
   const generateCalendarDays = () => {
@@ -352,7 +377,7 @@ export default function ScheduledNotificationsPage() {
             <CardDescription>Filter notifications by status, client, project, and date range</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="status-filter">Status</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -365,6 +390,20 @@ export default function ScheduledNotificationsPage() {
                     <SelectItem value="sent">Sent</SelectItem>
                     <SelectItem value="failed">Failed</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="source-filter">Source</Label>
+                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                  <SelectTrigger id="source-filter" data-testid="select-source-filter">
+                    <SelectValue placeholder="All sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All sources</SelectItem>
+                    <SelectItem value="start_date">Service-based</SelectItem>
+                    <SelectItem value="due_date">Project-based</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -531,6 +570,7 @@ export default function ScheduledNotificationsPage() {
                       <TableHead>Client Name</TableHead>
                       <TableHead>Project</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Content Preview</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -563,6 +603,9 @@ export default function ScheduledNotificationsPage() {
                             {getTypeIcon(notification.notificationType)}
                             {notification.notificationType}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {getSourceBadge(notification)}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(notification.status)}

@@ -3876,6 +3876,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProject(id: string, updateData: Partial<InsertProject>): Promise<Project> {
+    // Get the current project to detect changes
+    const currentProject = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+    const oldProject = currentProject[0];
+    
+    if (!oldProject) {
+      throw new Error("Project not found");
+    }
+
     const [updatedProject] = await db
       .update(projects)
       .set({
@@ -3887,6 +3895,72 @@ export class DatabaseStorage implements IStorage {
 
     if (!updatedProject) {
       throw new Error("Project not found");
+    }
+
+    // Handle notification scheduling/rescheduling/cancellation when dueDate changes
+    const oldDueDate = oldProject.dueDate;
+    const newDueDate = updateData.dueDate !== undefined ? updateData.dueDate : oldDueDate;
+    
+    // Case 1: Setting an initial due date (null → date)
+    if (!oldDueDate && newDueDate) {
+      console.log(`[Storage] Project ${id} gained a due date (${newDueDate.toISOString()}), scheduling notifications`);
+      
+      const { scheduleProjectDueDateNotifications } = await import("./notification-scheduler");
+      
+      try {
+        await scheduleProjectDueDateNotifications({
+          projectId: id,
+          clientServiceId: oldProject.clientServiceId || '',
+          clientId: oldProject.clientId,
+          projectTypeId: oldProject.projectTypeId,
+          dueDate: newDueDate,
+        });
+      } catch (error) {
+        console.error(`[Storage] Failed to schedule notifications for project ${id}:`, error);
+      }
+    }
+    // Case 2: Changing an existing due date (date → different date)
+    else if (oldDueDate && newDueDate && oldDueDate.getTime() !== newDueDate.getTime()) {
+      console.log(`[Storage] Project ${id} dueDate changed from ${oldDueDate.toISOString()} to ${newDueDate.toISOString()}, re-scheduling notifications`);
+      
+      const { scheduleProjectDueDateNotifications } = await import("./notification-scheduler");
+      
+      try {
+        await scheduleProjectDueDateNotifications({
+          projectId: id,
+          clientServiceId: oldProject.clientServiceId || '',
+          clientId: oldProject.clientId,
+          projectTypeId: oldProject.projectTypeId,
+          dueDate: newDueDate,
+        });
+      } catch (error) {
+        console.error(`[Storage] Failed to re-schedule notifications for project ${id}:`, error);
+      }
+    }
+    // Case 3: Clearing a due date (date → null)
+    else if (oldDueDate && updateData.dueDate === null) {
+      console.log(`[Storage] Project ${id} due date cleared, cancelling due_date notifications`);
+      
+      const { cancelProjectDueDateNotifications } = await import("./notification-scheduler");
+      
+      try {
+        await cancelProjectDueDateNotifications(id, null, "Due date removed from project");
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
+      }
+    }
+
+    // Handle notification cancellation when project is archived or made inactive
+    if ((updateData.archived === true && !oldProject.archived) || (updateData.inactive === true && !oldProject.inactive)) {
+      console.log(`[Storage] Project ${id} archived/inactive, cancelling due_date notifications`);
+      
+      const { cancelProjectDueDateNotifications } = await import("./notification-scheduler");
+      
+      try {
+        await cancelProjectDueDateNotifications(id, null, updateData.archived ? 'Project archived' : 'Project marked inactive');
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
+      }
     }
 
     return updatedProject;
