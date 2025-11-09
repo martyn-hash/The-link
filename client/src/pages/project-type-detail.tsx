@@ -776,12 +776,13 @@ function ProjectNotificationForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <div data-testid="richtext-email-body">
+              <div data-testid="richtext-email-body" style={{ minHeight: '300px' }}>
                 <ReactQuill
                   value={emailBody}
                   onChange={setEmailBody}
                   theme="snow"
                   placeholder="Enter email body"
+                  style={{ height: '250px', marginBottom: '42px' }}
                   modules={{
                     toolbar: [
                       [{ 'header': [1, 2, 3, false] }],
@@ -998,12 +999,13 @@ function StageNotificationForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <div data-testid="richtext-stage-email-body">
+              <div data-testid="richtext-stage-email-body" style={{ minHeight: '300px' }}>
                 <ReactQuill
                   value={emailBody}
                   onChange={setEmailBody}
                   theme="snow"
                   placeholder="Enter email body"
+                  style={{ height: '250px', marginBottom: '42px' }}
                   modules={{
                     toolbar: [
                       [{ 'header': [1, 2, 3, false] }],
@@ -1315,12 +1317,13 @@ function ReminderForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <div data-testid="richtext-reminder-email-body">
+              <div data-testid="richtext-reminder-email-body" style={{ minHeight: '300px' }}>
                 <ReactQuill
                   value={emailBody}
                   onChange={setEmailBody}
                   theme="snow"
                   placeholder="Enter email body"
+                  style={{ height: '250px', marginBottom: '42px' }}
                   modules={{
                     toolbar: [
                       [{ 'header': [1, 2, 3, false] }],
@@ -1485,7 +1488,7 @@ export default function ProjectTypeDetail() {
   
   // Fetch client request templates
   const { data: clientRequestTemplates } = useQuery<ClientRequestTemplate[]>({
-    queryKey: ["/api/templates"],
+    queryKey: ["/api/client-request-templates"],
     enabled: isAuthenticated && !!user,
   });
 

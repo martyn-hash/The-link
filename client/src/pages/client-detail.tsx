@@ -7267,7 +7267,7 @@ export default function ClientDetail() {
               <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
               <TabsTrigger value="documents" data-testid="tab-documents" className="text-sm py-2">Docs</TabsTrigger>
               <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-sm py-2">Tasks</TabsTrigger>
-              <DropdownMenu onOpenChange={(open) => { if (open) setActiveTab("risk"); }}>
+              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant={activeTab === "risk" ? "secondary" : "ghost"}
@@ -7449,16 +7449,7 @@ export default function ClientDetail() {
               >
                 Tasks
               </TabsTrigger>
-              <DropdownMenu onOpenChange={(open) => { 
-                if (open) {
-                  setActiveTab("risk");
-                  const container = document.querySelector('.snap-x');
-                  const tab = document.querySelector('[data-testid="dropdown-risk-notifications-mobile"]');
-                  if (container && tab) {
-                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                  }
-                }
-              }}>
+              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant={activeTab === "risk" ? "secondary" : "ghost"}
