@@ -783,7 +783,7 @@ export function registerNotificationRoutes(
   // Get all scheduled notifications (with filtering)
   app.get("/api/scheduled-notifications", isAuthenticated, async (req: any, res: any) => {
     try {
-      const { status, clientId, projectId, startDate, endDate } = req.query;
+      const { status, clientId, projectId, dateReference, startDate, endDate } = req.query;
       
       let notifications = await storage.getAllScheduledNotifications();
 
@@ -796,6 +796,9 @@ export function registerNotificationRoutes(
       }
       if (projectId) {
         notifications = notifications.filter((n: ScheduledNotification) => n.projectId === projectId);
+      }
+      if (dateReference) {
+        notifications = notifications.filter((n: ScheduledNotification) => n.dateReference === dateReference);
       }
       if (startDate) {
         const start = new Date(startDate as string);
