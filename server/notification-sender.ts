@@ -193,10 +193,17 @@ async function getRecipientInfo(notification: ScheduledNotification): Promise<{
       .select({
         email: people.primaryEmail,
         phone: people.primaryPhone,
+        receiveNotifications: people.receiveNotifications,
       })
       .from(people)
       .where(eq(people.id, notification.personId))
       .limit(1);
+
+    // Check if person has opted out of notifications
+    if (person && person.receiveNotifications === false) {
+      console.log(`[NotificationSender] Person ${notification.personId} has opted out of notifications - skipping`);
+      return { email: null, phone: null };
+    }
 
     if (person) {
       email = person.email;
