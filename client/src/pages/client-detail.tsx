@@ -7274,7 +7274,7 @@ export default function ClientDetail() {
                     className="text-sm py-2 h-9 px-3 w-full"
                     data-testid="dropdown-risk-notifications"
                   >
-                    <span>{riskView === "risk" ? "Risk" : "Notifications"}</span>
+                    <span>More...</span>
                     <ChevronDown className="ml-1 h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -7284,6 +7284,7 @@ export default function ClientDetail() {
                       setActiveTab("risk");
                       setRiskView("risk");
                     }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
                     data-testid="menu-item-risk"
                   >
                     Risk
@@ -7293,6 +7294,7 @@ export default function ClientDetail() {
                       setActiveTab("risk");
                       setRiskView("notifications");
                     }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
                     data-testid="menu-item-notifications"
                   >
                     Notifications
@@ -7464,7 +7466,7 @@ export default function ClientDetail() {
                     style={{ width: '80vw' }}
                     data-testid="dropdown-risk-notifications-mobile"
                   >
-                    <span>{riskView === "risk" ? "Risk" : "Notifications"}</span>
+                    <span>More...</span>
                     <ChevronDown className="ml-1 h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -7474,6 +7476,7 @@ export default function ClientDetail() {
                       setActiveTab("risk");
                       setRiskView("risk");
                     }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
                     data-testid="menu-item-risk-mobile"
                   >
                     Risk
@@ -7483,6 +7486,7 @@ export default function ClientDetail() {
                       setActiveTab("risk");
                       setRiskView("notifications");
                     }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
                     data-testid="menu-item-notifications-mobile"
                   >
                     Notifications

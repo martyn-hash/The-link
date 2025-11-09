@@ -204,15 +204,21 @@ export async function scheduleServiceStartDateNotifications(
       continue;
     }
 
-    // Determine recipients (if filteredPeople specified, create one notification per person, otherwise one for client)
-    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
+    // Skip if no eligible recipients (all opted out or no people associated with client)
+    if (filteredPeople.length === 0) {
+      console.log(
+        `[NotificationScheduler] Skipping notification ${notification.id} - no eligible recipients (all opted out or no people associated with client)`
+      );
+      continue;
+    }
 
-    for (const personId of recipients) {
+    // Create one notification per recipient
+    for (const personId of filteredPeople) {
       scheduledNotificationsToInsert.push({
         projectTypeNotificationId: notification.id,
         clientRequestReminderId: null,
         clientId,
-        personId: personId || null,
+        personId,
         clientServiceId,
         projectId: null, // Service-based notifications don't have projectId
         taskInstanceId: null,
@@ -232,7 +238,7 @@ export async function scheduleServiceStartDateNotifications(
     }
 
     console.log(
-      `[NotificationScheduler] Scheduled start_date notification ${notification.id} for ${scheduledFor.toISOString()} (${recipients.length} recipient(s))`
+      `[NotificationScheduler] Scheduled start_date notification ${notification.id} for ${scheduledFor.toISOString()} (${filteredPeople.length} recipient(s))`
     );
   }
 
@@ -341,15 +347,21 @@ export async function scheduleProjectDueDateNotifications(
       continue;
     }
 
-    // Determine recipients (using filtered people)
-    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
+    // Skip if no eligible recipients (all opted out or no people associated with client)
+    if (filteredPeople.length === 0) {
+      console.log(
+        `[NotificationScheduler] Skipping notification ${notification.id} - no eligible recipients (all opted out or no people associated with client)`
+      );
+      continue;
+    }
 
-    for (const personId of recipients) {
+    // Create one notification per recipient
+    for (const personId of filteredPeople) {
       scheduledNotificationsToInsert.push({
         projectTypeNotificationId: notification.id,
         clientRequestReminderId: null,
         clientId,
-        personId: personId || null,
+        personId,
         clientServiceId, // Keep link to service for traceability
         projectId, // Project-based notifications have projectId set
         taskInstanceId: null,
@@ -369,7 +381,7 @@ export async function scheduleProjectDueDateNotifications(
     }
 
     console.log(
-      `[NotificationScheduler] Scheduled due_date notification ${notification.id} for ${scheduledFor.toISOString()} (${recipients.length} recipient(s))`
+      `[NotificationScheduler] Scheduled due_date notification ${notification.id} for ${scheduledFor.toISOString()} (${filteredPeople.length} recipient(s))`
     );
   }
 
@@ -492,15 +504,21 @@ export async function scheduleProjectNotifications(
       continue;
     }
 
-    // Determine recipients (if filteredPeople specified, create one notification per person, otherwise one for client)
-    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
+    // Skip if no eligible recipients (all opted out or no people associated with client)
+    if (filteredPeople.length === 0) {
+      console.log(
+        `[NotificationScheduler] Skipping notification ${notification.id} - no eligible recipients (all opted out or no people associated with client)`
+      );
+      continue;
+    }
 
-    for (const personId of recipients) {
+    // Create one notification per recipient
+    for (const personId of filteredPeople) {
       scheduledNotificationsToInsert.push({
         projectTypeNotificationId: notification.id,
         clientRequestReminderId: null,
         clientId,
-        personId: personId || null,
+        personId,
         clientServiceId,
         projectId: null, // Will be set when project is created
         taskInstanceId: null,
@@ -520,7 +538,7 @@ export async function scheduleProjectNotifications(
     }
 
     console.log(
-      `[NotificationScheduler] Scheduled notification ${notification.id} for ${scheduledFor.toISOString()} (${recipients.length} recipient(s))`
+      `[NotificationScheduler] Scheduled notification ${notification.id} for ${scheduledFor.toISOString()} (${filteredPeople.length} recipient(s))`
     );
   }
 
@@ -618,15 +636,21 @@ export async function scheduleClientRequestReminders(
       continue;
     }
 
-    // Determine recipients (using filtered people)
-    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
+    // Skip if no eligible recipients (all opted out or no people associated with client)
+    if (filteredPeople.length === 0) {
+      console.log(
+        `[NotificationScheduler] Skipping reminder ${reminder.id} - no eligible recipients (all opted out or no people associated with client)`
+      );
+      continue;
+    }
 
-    for (const personId of recipients) {
+    // Create one reminder per recipient
+    for (const personId of filteredPeople) {
       scheduledNotificationsToInsert.push({
         projectTypeNotificationId: null,
         clientRequestReminderId: reminder.id,
         clientId,
-        personId: personId || null,
+        personId,
         clientServiceId: null,
         projectId: null,
         taskInstanceId,
@@ -646,7 +670,7 @@ export async function scheduleClientRequestReminders(
     }
 
     console.log(
-      `[NotificationScheduler] Scheduled reminder ${reminder.id} for ${scheduledFor.toISOString()} (${recipients.length} recipient(s))`
+      `[NotificationScheduler] Scheduled reminder ${reminder.id} for ${scheduledFor.toISOString()} (${filteredPeople.length} recipient(s))`
     );
   }
 
@@ -722,7 +746,7 @@ export async function updateClientServiceNotificationDates(
   params: ScheduleProjectNotificationsParams,
   cancelledBy: string
 ): Promise<void> {
-  const { clientServiceId } = params;
+  const { clientServiceId, clientId } = params;
 
   console.log(`[NotificationScheduler] Updating notification dates for client service ${clientServiceId}`);
 
@@ -733,8 +757,19 @@ export async function updateClientServiceNotificationDates(
     "Service dates updated - notifications rescheduled"
   );
 
+  // Fetch peopleIds for this client if not already provided
+  let peopleIds = params.relatedPeople || [];
+  if (peopleIds.length === 0) {
+    const { storage } = await import("./storage");
+    const allRelatedPeople = await storage.getClientPeopleByClientId(clientId);
+    peopleIds = allRelatedPeople.map(p => p.person.id);
+  }
+
   // Create new scheduled notifications with updated dates
-  await scheduleProjectNotifications(params);
+  await scheduleProjectNotifications({
+    ...params,
+    relatedPeople: peopleIds,
+  });
 
   console.log(`[NotificationScheduler] Updated notification dates for client service ${clientServiceId}`);
 }

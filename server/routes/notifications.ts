@@ -197,14 +197,26 @@ export function registerNotificationRoutes(
       let errors = 0;
       const rescheduledProjectIds = new Set<string>();
       
+      // Cache peopleIds per client to avoid redundant DB queries
+      const clientPeopleCache = new Map<string, string[]>();
+      
       for (const { project, clientService } of rescheduleplan) {
         try {
+          // Fetch peopleIds for this client (with caching)
+          let peopleIds = clientPeopleCache.get(project.clientId);
+          if (!peopleIds) {
+            const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
+            peopleIds = allRelatedPeople.map(p => p.person.id);
+            clientPeopleCache.set(project.clientId, peopleIds);
+          }
+          
           await scheduleProjectDueDateNotifications({
             projectId: project.id,
             clientServiceId: clientService.id,
             clientId: project.clientId,
             projectTypeId: project.projectTypeId,
             dueDate: project.dueDate!,
+            relatedPeople: peopleIds,
           });
           
           rescheduledProjectIds.add(project.id);
@@ -325,6 +337,9 @@ export function registerNotificationRoutes(
       const clientServices = await storage.getClientServicesByServiceId(service.id);
       console.log(`[Notifications] Found ${clientServices.length} client service(s) to re-schedule`);
       
+      // Cache peopleIds per client to avoid redundant DB queries
+      const clientPeopleCache = new Map<string, string[]>();
+      
       let serviceScheduled = 0;
       let serviceSkipped = 0;
       let serviceErrors = 0;
@@ -333,11 +348,20 @@ export function registerNotificationRoutes(
       for (const clientService of clientServices) {
         if (clientService.nextStartDate) {
           try {
+            // Fetch peopleIds for this client (with caching)
+            let peopleIds = clientPeopleCache.get(clientService.clientId);
+            if (!peopleIds) {
+              const allRelatedPeople = await storage.getClientPeopleByClientId(clientService.clientId);
+              peopleIds = allRelatedPeople.map(p => p.person.id);
+              clientPeopleCache.set(clientService.clientId, peopleIds);
+            }
+            
             await scheduleServiceStartDateNotifications({
               clientServiceId: clientService.id,
               clientId: clientService.clientId,
               projectTypeId: projectTypeId,
               nextStartDate: clientService.nextStartDate,
+              relatedPeople: peopleIds,
             });
             serviceScheduled++;
           } catch (scheduleError) {
@@ -365,12 +389,21 @@ export function registerNotificationRoutes(
           // Find the client service for this project
           const clientService = clientServices.find(cs => cs.clientId === project.clientId);
           if (clientService) {
+            // Fetch peopleIds for this client (with caching)
+            let peopleIds = clientPeopleCache.get(project.clientId);
+            if (!peopleIds) {
+              const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
+              peopleIds = allRelatedPeople.map(p => p.person.id);
+              clientPeopleCache.set(project.clientId, peopleIds);
+            }
+            
             await scheduleProjectDueDateNotifications({
               projectId: project.id,
               clientServiceId: clientService.id,
               clientId: project.clientId,
               projectTypeId: projectTypeId,
               dueDate: project.dueDate!,
+              relatedPeople: peopleIds,
             });
             projectScheduled++;
           } else {
@@ -823,15 +856,27 @@ export function registerNotificationRoutes(
             const clientServices = await storage.getClientServicesByServiceId(service.id);
             console.log(`[Notifications] Found ${clientServices.length} client service(s) to schedule`);
             
+            // Cache peopleIds per client to avoid redundant DB queries
+            const clientPeopleCache = new Map<string, string[]>();
+            
             // Schedule start_date notifications for services
             if (notification.dateReference === 'start_date') {
               for (const clientService of clientServices) {
                 if (clientService.nextStartDate) {
+                  // Fetch peopleIds for this client (with caching)
+                  let peopleIds = clientPeopleCache.get(clientService.clientId);
+                  if (!peopleIds) {
+                    const allRelatedPeople = await storage.getClientPeopleByClientId(clientService.clientId);
+                    peopleIds = allRelatedPeople.map(p => p.person.id);
+                    clientPeopleCache.set(clientService.clientId, peopleIds);
+                  }
+                  
                   await scheduleServiceStartDateNotifications({
                     clientServiceId: clientService.id,
                     clientId: clientService.clientId,
                     projectTypeId: projectTypeId,
                     nextStartDate: clientService.nextStartDate,
+                    relatedPeople: peopleIds,
                   });
                 }
               }
@@ -848,12 +893,21 @@ export function registerNotificationRoutes(
               for (const project of projectsForType) {
                 const clientService = clientServices.find(cs => cs.clientId === project.clientId);
                 if (clientService) {
+                  // Fetch peopleIds for this client (with caching)
+                  let peopleIds = clientPeopleCache.get(project.clientId);
+                  if (!peopleIds) {
+                    const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
+                    peopleIds = allRelatedPeople.map(p => p.person.id);
+                    clientPeopleCache.set(project.clientId, peopleIds);
+                  }
+                  
                   await scheduleProjectDueDateNotifications({
                     projectId: project.id,
                     clientServiceId: clientService.id,
                     clientId: project.clientId,
                     projectTypeId: projectTypeId,
                     dueDate: project.dueDate!,
+                    relatedPeople: peopleIds,
                   });
                 }
               }
@@ -943,15 +997,27 @@ export function registerNotificationRoutes(
             const clientServices = await storage.getClientServicesByServiceId(service.id);
             console.log(`[Notifications] Found ${clientServices.length} client service(s) to re-schedule`);
             
+            // Cache peopleIds per client to avoid redundant DB queries
+            const clientPeopleCache = new Map<string, string[]>();
+            
             // Schedule start_date notifications for services
             if (updated.dateReference === 'start_date') {
               for (const clientService of clientServices) {
                 if (clientService.nextStartDate) {
+                  // Fetch peopleIds for this client (with caching)
+                  let peopleIds = clientPeopleCache.get(clientService.clientId);
+                  if (!peopleIds) {
+                    const allRelatedPeople = await storage.getClientPeopleByClientId(clientService.clientId);
+                    peopleIds = allRelatedPeople.map(p => p.person.id);
+                    clientPeopleCache.set(clientService.clientId, peopleIds);
+                  }
+                  
                   await scheduleServiceStartDateNotifications({
                     clientServiceId: clientService.id,
                     clientId: clientService.clientId,
                     projectTypeId: updated.projectTypeId,
                     nextStartDate: clientService.nextStartDate,
+                    relatedPeople: peopleIds,
                   });
                 }
               }
@@ -968,12 +1034,21 @@ export function registerNotificationRoutes(
               for (const project of projectsForType) {
                 const clientService = clientServices.find(cs => cs.clientId === project.clientId);
                 if (clientService) {
+                  // Fetch peopleIds for this client (with caching)
+                  let peopleIds = clientPeopleCache.get(project.clientId);
+                  if (!peopleIds) {
+                    const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
+                    peopleIds = allRelatedPeople.map(p => p.person.id);
+                    clientPeopleCache.set(project.clientId, peopleIds);
+                  }
+                  
                   await scheduleProjectDueDateNotifications({
                     projectId: project.id,
                     clientServiceId: clientService.id,
                     clientId: project.clientId,
                     projectTypeId: updated.projectTypeId,
                     dueDate: project.dueDate!,
+                    relatedPeople: peopleIds,
                   });
                 }
               }

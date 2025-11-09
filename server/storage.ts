@@ -3916,12 +3916,17 @@ export class DatabaseStorage implements IStorage {
       const { scheduleProjectDueDateNotifications } = await import("./notification-scheduler");
       
       try {
+        // Fetch peopleIds for this client
+        const allRelatedPeople = await this.getClientPeopleByClientId(oldProject.clientId);
+        const peopleIds = allRelatedPeople.map(p => p.person.id);
+        
         await scheduleProjectDueDateNotifications({
           projectId: id,
           clientServiceId: oldProject.clientServiceId || '',
           clientId: oldProject.clientId,
           projectTypeId: oldProject.projectTypeId,
           dueDate: newDueDate,
+          relatedPeople: peopleIds,
         });
       } catch (error) {
         console.error(`[Storage] Failed to schedule notifications for project ${id}:`, error);
@@ -3934,12 +3939,17 @@ export class DatabaseStorage implements IStorage {
       const { scheduleProjectDueDateNotifications } = await import("./notification-scheduler");
       
       try {
+        // Fetch peopleIds for this client
+        const allRelatedPeople = await this.getClientPeopleByClientId(oldProject.clientId);
+        const peopleIds = allRelatedPeople.map(p => p.person.id);
+        
         await scheduleProjectDueDateNotifications({
           projectId: id,
           clientServiceId: oldProject.clientServiceId || '',
           clientId: oldProject.clientId,
           projectTypeId: oldProject.projectTypeId,
           dueDate: newDueDate,
+          relatedPeople: peopleIds,
         });
       } catch (error) {
         console.error(`[Storage] Failed to re-schedule notifications for project ${id}:`, error);

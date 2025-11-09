@@ -255,6 +255,14 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
     return <Badge variant="outline" data-testid="badge-category-unknown">{category}</Badge>;
   };
 
+  // Capitalize channel type
+  const capitalizeChannel = (channel: string): string => {
+    if (channel === "email") return "Email";
+    if (channel === "sms") return "SMS";
+    if (channel === "push") return "Push";
+    return channel;
+  };
+
   // Get type icon
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -455,7 +463,7 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                           />
                         </TableCell>
                         <TableCell>{getCategoryBadge(notification.category)}</TableCell>
-                        <TableCell className="text-sm">{notification.notificationTypeLabel}</TableCell>
+                        <TableCell className="text-sm">{capitalizeChannel(notification.notificationType)}</TableCell>
                         <TableCell>
                           {notification.recipient ? (
                             <div>
@@ -531,7 +539,7 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                           />
                         </TableCell>
                         <TableCell>{getCategoryBadge(notification.category)}</TableCell>
-                        <TableCell className="text-sm">{notification.notificationTypeLabel}</TableCell>
+                        <TableCell className="text-sm">{capitalizeChannel(notification.notificationType)}</TableCell>
                         <TableCell>
                           {notification.recipient ? (
                             <div>
