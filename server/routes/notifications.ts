@@ -8,7 +8,7 @@ import {
   updateClientRequestReminderSchema,
   type ScheduledNotification,
 } from "@shared/schema";
-import { scheduleProjectNotifications } from "../notification-scheduler";
+import { scheduleServiceStartDateNotifications, scheduleProjectDueDateNotifications } from "../notification-scheduler";
 
 // Parameter validation schemas
 const paramNotificationIdSchema = z.object({
@@ -45,6 +45,208 @@ export function registerNotificationRoutes(
   
   // ==================== Project Type Notifications ====================
   
+  // CRITICAL MIGRATION: Fix legacy due_date notifications
+  // This endpoint cancels all scheduled due_date notifications with projectId=null
+  // and recreates them properly linked to projects
+  // MUST BE RUN ONCE BEFORE DEPLOYING THE NEW NOTIFICATION SYSTEM
+  // SAFE TO RUN MULTIPLE TIMES (idempotent)
+  app.post("/api/admin/migrate-due-date-notifications", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const dryRun = req.query.dryRun === 'true';
+      console.log(`[Migration] Starting due_date notification migration... ${dryRun ? '(DRY RUN)' : ''}`);
+      
+      // Step 1: Find all due_date notifications with projectId=null (both scheduled AND cancelled for retry safety)
+      const db = (await import("../db")).db;
+      const { scheduledNotifications: snTable, projectTypeNotifications: ptnTable } = await import("@shared/schema");
+      const { eq, and, isNull, or } = await import("drizzle-orm");
+      
+      const legacyNotifications = await db
+        .select({
+          scheduledNotification: snTable,
+          projectTypeNotification: ptnTable,
+        })
+        .from(snTable)
+        .innerJoin(ptnTable, eq(snTable.projectTypeNotificationId, ptnTable.id))
+        .where(
+          and(
+            isNull(snTable.projectId),
+            eq(ptnTable.dateReference, "due_date"),
+            eq(ptnTable.category, "project"),
+            or(
+              eq(snTable.status, "scheduled"),
+              and(
+                eq(snTable.status, "cancelled"),
+                eq(snTable.cancelReason, "Legacy due_date notification migrated to project-based system")
+              )
+            )
+          )
+        );
+      
+      console.log(`[Migration] Found ${legacyNotifications.length} legacy due_date notification(s) to migrate`);
+      
+      if (legacyNotifications.length === 0) {
+        return res.json({
+          success: true,
+          message: "No legacy due_date notifications found. Migration not needed or already complete.",
+          legacyCount: 0,
+          cancelledCount: 0,
+          rescheduledCount: 0,
+          errors: 0,
+          dryRun
+        });
+      }
+      
+      if (dryRun) {
+        // Just return what would be done
+        const activeProjects = (await storage.getAllProjects()).filter(p => p.dueDate && !p.archived && !p.inactive);
+        return res.json({
+          success: true,
+          message: `DRY RUN: Would cancel ${legacyNotifications.length} legacy notification(s) and reschedule ${activeProjects.length} project(s)`,
+          legacyCount: legacyNotifications.length,
+          cancelledCount: 0,
+          rescheduledCount: 0,
+          errors: 0,
+          dryRun: true
+        });
+      }
+      
+      // Step 2: Get all active projects FIRST (before cancelling) so we can reschedule even if cancellation fails
+      const allProjects = await storage.getAllProjects();
+      const activeProjects = allProjects.filter(p => p.dueDate && !p.archived && !p.inactive);
+      
+      console.log(`[Migration] Found ${activeProjects.length} active project(s) to reschedule`);
+      
+      // Build reschedule plan
+      const rescheduleplan: Array<{ project: any; clientService: any }> = [];
+      for (const project of activeProjects) {
+        const service = await storage.getServiceByProjectTypeId(project.projectTypeId);
+        if (!service) {
+          console.warn(`[Migration] No service found for project type ${project.projectTypeId}, skipping project ${project.id}`);
+          continue;
+        }
+        
+        const clientServices = await storage.getClientServicesByServiceId(service.id);
+        const clientService = clientServices.find(cs => cs.clientId === project.clientId);
+        
+        if (!clientService) {
+          console.warn(`[Migration] No client service found for project ${project.id}, skipping`);
+          continue;
+        }
+        
+        rescheduleplan.push({
+          project,
+          clientService
+        });
+      }
+      
+      console.log(`[Migration] Prepared reschedule plan for ${rescheduleplan.length} project(s)`);
+      
+      // Step 3: Reschedule FIRST (idempotent - scheduleProjectDueDateNotifications deletes old ones)
+      // This ensures we don't lose notifications if migration fails
+      let rescheduled = 0;
+      let errors = 0;
+      const rescheduledProjectIds = new Set<string>();
+      
+      for (const { project, clientService } of rescheduleplan) {
+        try {
+          await scheduleProjectDueDateNotifications({
+            projectId: project.id,
+            clientServiceId: clientService.id,
+            clientId: project.clientId,
+            projectTypeId: project.projectTypeId,
+            dueDate: project.dueDate!,
+          });
+          
+          rescheduledProjectIds.add(project.id);
+          rescheduled++;
+          console.log(`[Migration] Rescheduled project ${project.id}`);
+        } catch (error) {
+          console.error(`[Migration] Error rescheduling project ${project.id}:`, error);
+          errors++;
+          // Continue with other projects even if one fails
+        }
+      }
+      
+      console.log(`[Migration] Rescheduled ${rescheduled} project(s), ${errors} error(s)`);
+      
+      // Build set of clientServiceIds that were successfully rescheduled
+      const rescheduledClientServiceIds = new Set(
+        Array.from(rescheduledProjectIds).flatMap(projectId => {
+          const plan = rescheduleplan.find(item => item.project.id === projectId);
+          return plan ? [plan.clientService.id] : [];
+        })
+      );
+      
+      console.log(`[Migration] Successfully rescheduled ${rescheduledClientServiceIds.size} unique client service(s)`);
+      
+      // Step 4: Cancel ONLY legacy notifications for successfully rescheduled projects
+      // This prevents data loss for projects that were skipped during reschedule
+      let cancelledCount = 0;
+      let skippedCount = 0;
+      const adminUser = await storage.getUserByEmail('admin@example.com');
+      const cancelledBy = adminUser?.id || req.user?.id || 'system';
+      
+      for (const legacyNotif of legacyNotifications) {
+        const clientServiceId = legacyNotif.scheduledNotification.clientServiceId;
+        
+        // Cancel if: (1) orphaned (no clientServiceId), OR (2) clientService was successfully rescheduled
+        const shouldCancel = !clientServiceId || rescheduledClientServiceIds.has(clientServiceId);
+        
+        if (shouldCancel) {
+          try {
+            await db
+              .update(snTable)
+              .set({
+                status: 'cancelled',
+                cancelledBy,
+                cancelledAt: new Date(),
+                cancelReason: 'Legacy due_date notification migrated to project-based system',
+                updatedAt: new Date(),
+              })
+              .where(eq(snTable.id, legacyNotif.scheduledNotification.id));
+            cancelledCount++;
+          } catch (error) {
+            console.error(`[Migration] Error cancelling legacy notification ${legacyNotif.scheduledNotification.id}:`, error);
+          }
+        } else {
+          // Keep legacy notification because project couldn't be rescheduled
+          console.warn(`[Migration] Keeping legacy notification ${legacyNotif.scheduledNotification.id} - project not rescheduled`);
+          skippedCount++;
+        }
+      }
+      
+      console.log(`[Migration] Cancelled ${cancelledCount} legacy due_date notification(s), kept ${skippedCount} (project not rescheduled)`);
+      
+      const totalLegacy = legacyNotifications.length;
+      const message = `Migration complete! Rescheduled ${rescheduled}/${rescheduleplan.length} project(s), cancelled ${cancelledCount}/${totalLegacy} legacy notification(s), kept ${skippedCount}. ${errors} error(s).`;
+      console.log(`[Migration] ${message}`);
+      
+      // Check for any remaining duplicates
+      const remainingLegacy = skippedCount;
+      const warningMessage = remainingLegacy > 0 
+        ? `WARNING: ${remainingLegacy} legacy notification(s) could not be cancelled. Rerun migration to complete cleanup.`
+        : 'Migration fully complete - no legacy notifications remaining.';
+      
+      console.log(`[Migration] ${warningMessage}`);
+      
+      res.json({
+        success: true,
+        message,
+        warningMessage: remainingLegacy > 0 ? warningMessage : undefined,
+        legacyCount: legacyNotifications.length,
+        cancelledCount,
+        remainingLegacy,
+        rescheduledCount: rescheduled,
+        plannedReschedules: rescheduleplan.length,
+        errors,
+        dryRun: false
+      });
+    } catch (error) {
+      console.error("Error during due_date notification migration:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Migration failed - all changes rolled back", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+  
   // Manually trigger re-scheduling of all notifications for a project type
   app.post("/api/project-types/:projectTypeId/reschedule-notifications", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
@@ -73,43 +275,77 @@ export function registerNotificationRoutes(
       const clientServices = await storage.getClientServicesByServiceId(service.id);
       console.log(`[Notifications] Found ${clientServices.length} client service(s) to re-schedule`);
       
-      let scheduled = 0;
-      let skipped = 0;
-      let errors = 0;
+      let serviceScheduled = 0;
+      let serviceSkipped = 0;
+      let serviceErrors = 0;
       
+      // Schedule start_date notifications for services
       for (const clientService of clientServices) {
-        // Schedule if service has either start date or due date
-        if (clientService.nextStartDate || clientService.nextDueDate) {
+        if (clientService.nextStartDate) {
           try {
-            await scheduleProjectNotifications({
+            await scheduleServiceStartDateNotifications({
               clientServiceId: clientService.id,
               clientId: clientService.clientId,
               projectTypeId: projectTypeId,
               nextStartDate: clientService.nextStartDate,
-              nextDueDate: clientService.nextDueDate || null,
             });
-            scheduled++;
+            serviceScheduled++;
           } catch (scheduleError) {
             console.error(`[Notifications] Error scheduling for client service ${clientService.id}:`, scheduleError);
-            errors++;
+            serviceErrors++;
           }
         } else {
-          skipped++;
+          serviceSkipped++;
         }
       }
       
-      const message = errors > 0
-        ? `Re-scheduled notifications for ${scheduled} client service(s). ${skipped} skipped (no dates), ${errors} failed.`
-        : `Re-scheduled notifications for ${scheduled} client service(s). ${skipped} service(s) skipped (no dates configured).`;
+      // Schedule due_date notifications for existing projects
+      const allProjects = await storage.getAllProjects();
+      const projectsForType = allProjects.filter(
+        p => p.projectTypeId === projectTypeId && p.dueDate && !p.archived && !p.inactive
+      );
+      console.log(`[Notifications] Found ${projectsForType.length} active project(s) to re-schedule due_date notifications`);
+      
+      let projectScheduled = 0;
+      let projectSkipped = 0;
+      let projectErrors = 0;
+      
+      for (const project of projectsForType) {
+        try {
+          // Find the client service for this project
+          const clientService = clientServices.find(cs => cs.clientId === project.clientId);
+          if (clientService) {
+            await scheduleProjectDueDateNotifications({
+              projectId: project.id,
+              clientServiceId: clientService.id,
+              clientId: project.clientId,
+              projectTypeId: projectTypeId,
+              dueDate: project.dueDate!,
+            });
+            projectScheduled++;
+          } else {
+            projectSkipped++;
+          }
+        } catch (scheduleError) {
+          console.error(`[Notifications] Error scheduling for project ${project.id}:`, scheduleError);
+          projectErrors++;
+        }
+      }
+      
+      const message = `Re-scheduled start_date notifications for ${serviceScheduled} service(s) (${serviceSkipped} skipped, ${serviceErrors} errors). Re-scheduled due_date notifications for ${projectScheduled} project(s) (${projectSkipped} skipped, ${projectErrors} errors).`;
       console.log(`[Notifications] ${message}`);
       
       res.json({ 
         success: true, 
         message,
-        scheduled,
-        skipped,
-        errors,
-        total: clientServices.length
+        serviceScheduled,
+        serviceSkipped,
+        serviceErrors,
+        projectScheduled,
+        projectSkipped,
+        projectErrors,
+        totalServices: clientServices.length,
+        totalProjects: projectsForType.length
       });
     } catch (error) {
       console.error("Error manually re-scheduling notifications:", error instanceof Error ? error.message : error);
@@ -182,7 +418,7 @@ export function registerNotificationRoutes(
 
       const notification = await storage.createProjectTypeNotification(notificationData);
       
-      // Schedule notifications retroactively for all existing services
+      // Schedule notifications retroactively for all existing services and projects
       try {
         // Only schedule for project notifications (not stage notifications)
         if (notification.category === 'project') {
@@ -195,16 +431,39 @@ export function registerNotificationRoutes(
             const clientServices = await storage.getClientServicesByServiceId(service.id);
             console.log(`[Notifications] Found ${clientServices.length} client service(s) to schedule`);
             
-            for (const clientService of clientServices) {
-              // Schedule if service has either start date or due date
-              if (clientService.nextStartDate || clientService.nextDueDate) {
-                await scheduleProjectNotifications({
-                  clientServiceId: clientService.id,
-                  clientId: clientService.clientId,
-                  projectTypeId: projectTypeId,
-                  nextStartDate: clientService.nextStartDate,
-                  nextDueDate: clientService.nextDueDate || null,
-                });
+            // Schedule start_date notifications for services
+            if (notification.dateReference === 'start_date') {
+              for (const clientService of clientServices) {
+                if (clientService.nextStartDate) {
+                  await scheduleServiceStartDateNotifications({
+                    clientServiceId: clientService.id,
+                    clientId: clientService.clientId,
+                    projectTypeId: projectTypeId,
+                    nextStartDate: clientService.nextStartDate,
+                  });
+                }
+              }
+            }
+            
+            // Schedule due_date notifications for existing projects
+            if (notification.dateReference === 'due_date') {
+              const allProjects = await storage.getAllProjects();
+              const projectsForType = allProjects.filter(
+                p => p.projectTypeId === projectTypeId && p.dueDate && !p.archived && !p.inactive
+              );
+              console.log(`[Notifications] Found ${projectsForType.length} active project(s) to schedule due_date notifications`);
+              
+              for (const project of projectsForType) {
+                const clientService = clientServices.find(cs => cs.clientId === project.clientId);
+                if (clientService) {
+                  await scheduleProjectDueDateNotifications({
+                    projectId: project.id,
+                    clientServiceId: clientService.id,
+                    clientId: project.clientId,
+                    projectTypeId: projectTypeId,
+                    dueDate: project.dueDate!,
+                  });
+                }
               }
             }
             
@@ -279,7 +538,7 @@ export function registerNotificationRoutes(
 
       const updated = await storage.updateProjectTypeNotification(notificationId, updateData);
       
-      // Schedule notifications retroactively for all existing services
+      // Schedule notifications retroactively for all existing services and projects
       try {
         // Only schedule for project notifications (not stage notifications)
         if (updated.category === 'project') {
@@ -292,16 +551,39 @@ export function registerNotificationRoutes(
             const clientServices = await storage.getClientServicesByServiceId(service.id);
             console.log(`[Notifications] Found ${clientServices.length} client service(s) to re-schedule`);
             
-            for (const clientService of clientServices) {
-              // Schedule if service has either start date or due date
-              if (clientService.nextStartDate || clientService.nextDueDate) {
-                await scheduleProjectNotifications({
-                  clientServiceId: clientService.id,
-                  clientId: clientService.clientId,
-                  projectTypeId: updated.projectTypeId,
-                  nextStartDate: clientService.nextStartDate,
-                  nextDueDate: clientService.nextDueDate || null,
-                });
+            // Schedule start_date notifications for services
+            if (updated.dateReference === 'start_date') {
+              for (const clientService of clientServices) {
+                if (clientService.nextStartDate) {
+                  await scheduleServiceStartDateNotifications({
+                    clientServiceId: clientService.id,
+                    clientId: clientService.clientId,
+                    projectTypeId: updated.projectTypeId,
+                    nextStartDate: clientService.nextStartDate,
+                  });
+                }
+              }
+            }
+            
+            // Schedule due_date notifications for existing projects
+            if (updated.dateReference === 'due_date') {
+              const allProjects = await storage.getAllProjects();
+              const projectsForType = allProjects.filter(
+                p => p.projectTypeId === updated.projectTypeId && p.dueDate && !p.archived && !p.inactive
+              );
+              console.log(`[Notifications] Found ${projectsForType.length} active project(s) to re-schedule due_date notifications`);
+              
+              for (const project of projectsForType) {
+                const clientService = clientServices.find(cs => cs.clientId === project.clientId);
+                if (clientService) {
+                  await scheduleProjectDueDateNotifications({
+                    projectId: project.id,
+                    clientServiceId: clientService.id,
+                    clientId: project.clientId,
+                    projectTypeId: updated.projectTypeId,
+                    dueDate: project.dueDate!,
+                  });
+                }
               }
             }
             

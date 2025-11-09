@@ -186,6 +186,94 @@ async function migratePushNotificationFields(): Promise<void> {
 }
 
 /**
+ * Add date_reference column to project_type_notifications and scheduled_notifications tables
+ */
+async function ensureDateReferenceColumn(): Promise<void> {
+  // Create enum type if it doesn't exist
+  try {
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'date_reference') THEN
+          CREATE TYPE date_reference AS ENUM ('start_date', 'due_date');
+        END IF;
+      END$$;
+    `);
+    console.log('[Schema Migration] ✓ date_reference enum type ensured');
+  } catch (error) {
+    console.error('[Schema Migration] ✗ Failed to create date_reference enum:', error);
+    throw error;
+  }
+  
+  // Add date_reference column to project_type_notifications
+  const ptnExists = await columnExists('project_type_notifications', 'date_reference');
+  if (!ptnExists) {
+    console.log('[Schema Migration] Adding date_reference column to project_type_notifications...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE project_type_notifications 
+        ADD COLUMN date_reference date_reference;
+      `);
+      console.log('[Schema Migration] ✓ Added date_reference to project_type_notifications');
+    } catch (error) {
+      console.error('[Schema Migration] ✗ Failed to add date_reference to project_type_notifications:', error);
+      throw error;
+    }
+  } else {
+    console.log('[Schema Migration] ✓ date_reference column already exists in project_type_notifications');
+  }
+  
+  // Add date_reference column to scheduled_notifications
+  const snExists = await columnExists('scheduled_notifications', 'date_reference');
+  if (!snExists) {
+    console.log('[Schema Migration] Adding date_reference column to scheduled_notifications...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE scheduled_notifications 
+        ADD COLUMN date_reference date_reference;
+      `);
+      console.log('[Schema Migration] ✓ Added date_reference to scheduled_notifications');
+      
+      // Backfill date_reference for existing rows
+      // Heuristic: If projectId is set, it's likely due_date; otherwise start_date
+      console.log('[Schema Migration] Backfilling date_reference for existing scheduled_notifications...');
+      await db.execute(sql`
+        UPDATE scheduled_notifications
+        SET date_reference = CASE
+          WHEN project_id IS NOT NULL THEN 'due_date'::date_reference
+          ELSE 'start_date'::date_reference
+        END
+        WHERE date_reference IS NULL;
+      `);
+      console.log('[Schema Migration] ✓ Backfilled date_reference for existing scheduled_notifications');
+    } catch (error) {
+      console.error('[Schema Migration] ✗ Failed to add/backfill date_reference to scheduled_notifications:', error);
+      throw error;
+    }
+  } else {
+    console.log('[Schema Migration] ✓ date_reference column already exists in scheduled_notifications');
+    
+    // Even if column exists, backfill any NULL values
+    try {
+      const result = await db.execute(sql`
+        UPDATE scheduled_notifications
+        SET date_reference = CASE
+          WHEN project_id IS NOT NULL THEN 'due_date'::date_reference
+          ELSE 'start_date'::date_reference
+        END
+        WHERE date_reference IS NULL;
+      `);
+      const rowCount = (result as any).rowCount || 0;
+      if (rowCount > 0) {
+        console.log(`[Schema Migration] ✓ Backfilled date_reference for ${rowCount} existing scheduled_notifications`);
+      }
+    } catch (error) {
+      console.warn('[Schema Migration] ⚠️  Could not backfill date_reference:', error);
+    }
+  }
+}
+
+/**
  * Run all schema migrations
  * Called on server startup to ensure database schema is up to date
  */
@@ -196,6 +284,7 @@ export async function runSchemaMigrations(): Promise<void> {
     // Add more migration checks here as needed
     await ensureSuperAdminColumn();
     await migratePushNotificationFields();
+    await ensureDateReferenceColumn();
     
     console.log('[Schema Migration] All schema migrations completed successfully');
   } catch (error) {

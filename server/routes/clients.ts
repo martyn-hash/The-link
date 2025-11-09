@@ -37,7 +37,7 @@ import { companiesHouseService } from "../companies-house-service";
 import { runChSync } from "../ch-sync-service";
 import * as serviceMapper from "../core/service-mapper";
 import type { AuthenticatedRequest } from "../auth";
-import { scheduleProjectNotifications, cancelClientServiceNotifications } from "../notification-scheduler";
+import { scheduleServiceStartDateNotifications, cancelClientServiceNotifications } from "../notification-scheduler";
 
 export function registerClientRoutes(
   app: Express,
@@ -1087,16 +1087,15 @@ export function registerClientRoutes(
           // Get the full client service with all details
           const fullClientService = await storage.getClientServiceById(clientService.id);
           
-          // Only schedule if the service has project dates
+          // Only schedule start_date notifications (due_date notifications are scheduled when project is created)
           if (fullClientService && fullClientService.nextStartDate) {
-            await scheduleProjectNotifications({
+            await scheduleServiceStartDateNotifications({
               clientServiceId: fullClientService.id,
               clientId: fullClientService.clientId,
               projectTypeId: fullClientService.serviceId,
               nextStartDate: fullClientService.nextStartDate,
-              nextDueDate: fullClientService.nextDueDate || null,
             });
-            console.log(`[Notifications] Scheduled notifications for client service ${fullClientService.id}`);
+            console.log(`[Notifications] Scheduled start_date notifications for client service ${fullClientService.id}`);
           }
         } catch (notifError) {
           console.error('[Notifications] Error scheduling notifications for client service:', notifError);
@@ -1342,16 +1341,15 @@ export function registerClientRoutes(
           // Get the full client service with all details
           const fullClientService = await storage.getClientServiceById(id);
           
-          // Only schedule if the service has project dates
+          // Only schedule start_date notifications (due_date notifications are scheduled when project is created)
           if (fullClientService && fullClientService.nextStartDate) {
-            await scheduleProjectNotifications({
+            await scheduleServiceStartDateNotifications({
               clientServiceId: fullClientService.id,
               clientId: fullClientService.clientId,
               projectTypeId: fullClientService.serviceId,
               nextStartDate: fullClientService.nextStartDate,
-              nextDueDate: fullClientService.nextDueDate || null,
             });
-            console.log(`[Notifications] Updated scheduled notifications for client service ${fullClientService.id}`);
+            console.log(`[Notifications] Updated start_date scheduled notifications for client service ${fullClientService.id}`);
           }
         } catch (notifError) {
           console.error('[Notifications] Error updating notifications for client service:', notifError);

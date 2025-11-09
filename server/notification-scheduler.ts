@@ -20,6 +20,10 @@ import { eq, and, sql, isNotNull } from "drizzle-orm";
  * 
  * This service handles the creation and management of scheduled notifications
  * based on project type configurations and client service assignments.
+ * 
+ * ARCHITECTURE NOTE:
+ * - start_date notifications are service-based (scheduled when service is assigned/updated)
+ * - due_date notifications are project-based (scheduled when project is created)
  */
 
 interface ScheduleProjectNotificationsParams {
@@ -29,6 +33,23 @@ interface ScheduleProjectNotificationsParams {
   nextStartDate: Date | null;
   nextDueDate: Date | null;
   relatedPeople?: string[]; // Person IDs who should receive notifications
+}
+
+interface ScheduleServiceStartDateNotificationsParams {
+  clientServiceId: string;
+  clientId: string;
+  projectTypeId: string;
+  nextStartDate: Date;
+  relatedPeople?: string[];
+}
+
+interface ScheduleProjectDueDateNotificationsParams {
+  projectId: string;
+  clientServiceId: string;
+  clientId: string;
+  projectTypeId: string;
+  dueDate: Date;
+  relatedPeople?: string[];
 }
 
 /**
@@ -57,10 +78,265 @@ function calculateNotificationDate(
 }
 
 /**
+ * Schedule start_date notifications for a client service
+ * 
+ * This creates scheduled notification records based on the project type's
+ * start_date notification configuration. These notifications are service-based
+ * and are scheduled when a service is assigned to a client or when service dates change.
+ */
+export async function scheduleServiceStartDateNotifications(
+  params: ScheduleServiceStartDateNotificationsParams
+): Promise<void> {
+  const {
+    clientServiceId,
+    clientId,
+    projectTypeId,
+    nextStartDate,
+    relatedPeople = [],
+  } = params;
+
+  console.log(`[NotificationScheduler] Scheduling start_date notifications for client service ${clientServiceId}`);
+
+  // Fetch active project notifications with dateReference='start_date'
+  const notifications = await db
+    .select()
+    .from(projectTypeNotifications)
+    .where(
+      and(
+        eq(projectTypeNotifications.projectTypeId, projectTypeId),
+        eq(projectTypeNotifications.category, "project"),
+        eq(projectTypeNotifications.dateReference, "start_date"),
+        eq(projectTypeNotifications.isActive, true)
+      )
+    );
+
+  if (notifications.length === 0) {
+    console.log(`[NotificationScheduler] No start_date notifications configured for project type ${projectTypeId}`);
+    return;
+  }
+
+  console.log(`[NotificationScheduler] Found ${notifications.length} start_date notification(s) to schedule`);
+
+  // Create scheduled notifications for each configuration
+  const scheduledNotificationsToInsert: InsertScheduledNotification[] = [];
+
+  for (const notification of notifications) {
+    // Calculate when to send the notification
+    const scheduledFor = calculateNotificationDate(
+      nextStartDate,
+      notification.offsetType!,
+      notification.offsetDays!
+    );
+
+    // If the notification is in the past, skip it
+    if (scheduledFor < new Date()) {
+      console.log(
+        `[NotificationScheduler] Skipping notification ${notification.id} - scheduled date ${scheduledFor.toISOString()} is in the past`
+      );
+      continue;
+    }
+
+    // Determine recipients (if relatedPeople specified, create one notification per person, otherwise one for client)
+    const recipients = relatedPeople.length > 0 ? relatedPeople : [null];
+
+    for (const personId of recipients) {
+      scheduledNotificationsToInsert.push({
+        projectTypeNotificationId: notification.id,
+        clientRequestReminderId: null,
+        clientId,
+        personId: personId || null,
+        clientServiceId,
+        projectId: null, // Service-based notifications don't have projectId
+        taskInstanceId: null,
+        notificationType: notification.notificationType,
+        scheduledFor,
+        emailTitle: notification.emailTitle || null,
+        emailBody: notification.emailBody || null,
+        smsContent: notification.smsContent || null,
+        pushTitle: notification.pushTitle || null,
+        pushBody: notification.pushBody || null,
+        status: "scheduled",
+        failureReason: null,
+        cancelledBy: null,
+        cancelReason: null,
+        stopReminders: false,
+      });
+    }
+
+    console.log(
+      `[NotificationScheduler] Scheduled start_date notification ${notification.id} for ${scheduledFor.toISOString()} (${recipients.length} recipient(s))`
+    );
+  }
+
+  // Delete existing start_date scheduled notifications and insert new ones in a transaction
+  try {
+    await db.transaction(async (tx) => {
+      // Delete existing start_date notifications for this client service
+      // We identify start_date notifications by: clientServiceId match AND projectId IS NULL
+      // (due_date notifications will have projectId set)
+      const startDateNotificationIds = notifications.map(n => n.id);
+      
+      if (startDateNotificationIds.length > 0) {
+        await tx
+          .delete(scheduledNotifications)
+          .where(
+            and(
+              eq(scheduledNotifications.clientServiceId, clientServiceId),
+              eq(scheduledNotifications.status, "scheduled"),
+              sql`${scheduledNotifications.projectId} IS NULL`,
+              sql`${scheduledNotifications.projectTypeNotificationId} IN (${sql.join(startDateNotificationIds.map(id => sql`${id}`), sql`, `)})`
+            )
+          );
+      }
+
+      // Insert all scheduled notifications
+      if (scheduledNotificationsToInsert.length > 0) {
+        await tx.insert(scheduledNotifications).values(scheduledNotificationsToInsert);
+        console.log(`[NotificationScheduler] Created ${scheduledNotificationsToInsert.length} start_date scheduled notification(s)`);
+      }
+    });
+  } catch (error) {
+    console.error(
+      `[NotificationScheduler] Transaction failed for client service ${clientServiceId}:`,
+      error instanceof Error ? error.message : error
+    );
+    throw error;
+  }
+}
+
+/**
+ * Schedule due_date notifications for a project
+ * 
+ * This creates scheduled notification records based on the project type's
+ * due_date notification configuration. These notifications are project-based
+ * and are scheduled when a project is created from a service.
+ */
+export async function scheduleProjectDueDateNotifications(
+  params: ScheduleProjectDueDateNotificationsParams
+): Promise<void> {
+  const {
+    projectId,
+    clientServiceId,
+    clientId,
+    projectTypeId,
+    dueDate,
+    relatedPeople = [],
+  } = params;
+
+  console.log(`[NotificationScheduler] Scheduling due_date notifications for project ${projectId}`);
+
+  // Fetch active project notifications with dateReference='due_date'
+  const notifications = await db
+    .select()
+    .from(projectTypeNotifications)
+    .where(
+      and(
+        eq(projectTypeNotifications.projectTypeId, projectTypeId),
+        eq(projectTypeNotifications.category, "project"),
+        eq(projectTypeNotifications.dateReference, "due_date"),
+        eq(projectTypeNotifications.isActive, true)
+      )
+    );
+
+  if (notifications.length === 0) {
+    console.log(`[NotificationScheduler] No due_date notifications configured for project type ${projectTypeId}`);
+    return;
+  }
+
+  console.log(`[NotificationScheduler] Found ${notifications.length} due_date notification(s) to schedule`);
+
+  // Create scheduled notifications for each configuration
+  const scheduledNotificationsToInsert: InsertScheduledNotification[] = [];
+
+  for (const notification of notifications) {
+    // Calculate when to send the notification
+    const scheduledFor = calculateNotificationDate(
+      dueDate,
+      notification.offsetType!,
+      notification.offsetDays!
+    );
+
+    // If the notification is in the past, skip it
+    if (scheduledFor < new Date()) {
+      console.log(
+        `[NotificationScheduler] Skipping notification ${notification.id} - scheduled date ${scheduledFor.toISOString()} is in the past`
+      );
+      continue;
+    }
+
+    // Determine recipients
+    const recipients = relatedPeople.length > 0 ? relatedPeople : [null];
+
+    for (const personId of recipients) {
+      scheduledNotificationsToInsert.push({
+        projectTypeNotificationId: notification.id,
+        clientRequestReminderId: null,
+        clientId,
+        personId: personId || null,
+        clientServiceId, // Keep link to service for traceability
+        projectId, // Project-based notifications have projectId set
+        taskInstanceId: null,
+        notificationType: notification.notificationType,
+        scheduledFor,
+        emailTitle: notification.emailTitle || null,
+        emailBody: notification.emailBody || null,
+        smsContent: notification.smsContent || null,
+        pushTitle: notification.pushTitle || null,
+        pushBody: notification.pushBody || null,
+        status: "scheduled",
+        failureReason: null,
+        cancelledBy: null,
+        cancelReason: null,
+        stopReminders: false,
+      });
+    }
+
+    console.log(
+      `[NotificationScheduler] Scheduled due_date notification ${notification.id} for ${scheduledFor.toISOString()} (${recipients.length} recipient(s))`
+    );
+  }
+
+  // Delete existing due_date scheduled notifications and insert new ones in a transaction
+  try {
+    await db.transaction(async (tx) => {
+      // Delete existing due_date notifications for this project
+      // Only delete notifications that match the due_date notification IDs to avoid deleting stage-based notifications
+      const dueDateNotificationIds = notifications.map(n => n.id);
+      
+      if (dueDateNotificationIds.length > 0) {
+        await tx
+          .delete(scheduledNotifications)
+          .where(
+            and(
+              eq(scheduledNotifications.projectId, projectId),
+              eq(scheduledNotifications.status, "scheduled"),
+              sql`${scheduledNotifications.projectTypeNotificationId} IN (${sql.join(dueDateNotificationIds.map(id => sql`${id}`), sql`, `)})`
+            )
+          );
+      }
+
+      // Insert all scheduled notifications
+      if (scheduledNotificationsToInsert.length > 0) {
+        await tx.insert(scheduledNotifications).values(scheduledNotificationsToInsert);
+        console.log(`[NotificationScheduler] Created ${scheduledNotificationsToInsert.length} due_date scheduled notification(s)`);
+      }
+    });
+  } catch (error) {
+    console.error(
+      `[NotificationScheduler] Transaction failed for project ${projectId}:`,
+      error instanceof Error ? error.message : error
+    );
+    throw error;
+  }
+}
+
+/**
  * Schedule project notifications for a client service
  * 
  * This creates scheduled notification records based on the project type's
  * notification configuration and the service's start/due dates.
+ * 
+ * @deprecated Use scheduleServiceStartDateNotifications instead
  */
 export async function scheduleProjectNotifications(
   params: ScheduleProjectNotificationsParams
@@ -440,4 +716,35 @@ export async function stopTaskInstanceReminders(
     );
     
   console.log(`[NotificationScheduler] Stopped reminders for task instance ${taskInstanceId} (reason: ${reason})`);
+}
+
+/**
+ * Cancel all due_date notifications for a project
+ * 
+ * This is used when a project is deleted, archived, or completed.
+ */
+export async function cancelProjectDueDateNotifications(
+  projectId: string,
+  cancelledBy: string,
+  cancelReason: string
+): Promise<void> {
+  console.log(`[NotificationScheduler] Cancelling due_date notifications for project ${projectId}`);
+
+  await db
+    .update(scheduledNotifications)
+    .set({
+      status: "cancelled",
+      cancelledBy,
+      cancelledAt: new Date(),
+      cancelReason,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(scheduledNotifications.projectId, projectId),
+        eq(scheduledNotifications.status, "scheduled")
+      )
+    );
+
+  console.log(`[NotificationScheduler] Cancelled due_date notifications for project ${projectId}`);
 }
