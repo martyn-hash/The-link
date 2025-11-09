@@ -3040,7 +3040,8 @@ export const projectTypeNotifications = pgTable("project_type_notifications", {
   emailTitle: varchar("email_title"), // Email subject (for email type only)
   emailBody: text("email_body"), // Email body - rich text HTML (for email type only)
   smsContent: varchar("sms_content", { length: 160 }), // SMS message - 160 char limit (for sms type only)
-  pushContent: varchar("push_content", { length: 200 }), // Push notification message - 200 char limit (for push type only)
+  pushTitle: varchar("push_title", { length: 50 }), // Push notification title - 50 char limit (for push type only)
+  pushBody: varchar("push_body", { length: 120 }), // Push notification body - 120 char limit (for push type only)
   
   // Client Request Template linking (for email and push only)
   clientRequestTemplateId: varchar("client_request_template_id").references(() => clientRequestTemplates.id, { onDelete: "set null" }), // Links to a client request template
@@ -3068,9 +3069,9 @@ export const projectTypeNotifications = pgTable("project_type_notifications", {
   check("check_sms_notification_content", sql`
     (notification_type != 'sms' OR sms_content IS NOT NULL)
   `),
-  // Check constraint: push notifications must have pushContent
+  // Check constraint: push notifications must have pushTitle and pushBody
   check("check_push_notification_content", sql`
-    (notification_type != 'push' OR push_content IS NOT NULL)
+    (notification_type != 'push' OR (push_title IS NOT NULL AND push_body IS NOT NULL))
   `),
 ]);
 
@@ -3086,7 +3087,8 @@ export const clientRequestReminders = pgTable("client_request_reminders", {
   emailTitle: varchar("email_title"), // Email subject (for email type only)
   emailBody: text("email_body"), // Email body - rich text HTML (for email type only)
   smsContent: varchar("sms_content", { length: 160 }), // SMS message - 160 char limit (for sms type only)
-  pushContent: varchar("push_content", { length: 200 }), // Push notification message - 200 char limit (for push type only)
+  pushTitle: varchar("push_title", { length: 50 }), // Push notification title - 50 char limit (for push type only)
+  pushBody: varchar("push_body", { length: 120 }), // Push notification body - 120 char limit (for push type only)
   
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -3101,9 +3103,9 @@ export const clientRequestReminders = pgTable("client_request_reminders", {
   check("check_sms_reminder_content", sql`
     (notification_type != 'sms' OR sms_content IS NOT NULL)
   `),
-  // Check constraint: push reminders must have pushContent
+  // Check constraint: push reminders must have pushTitle and pushBody
   check("check_push_reminder_content", sql`
-    (notification_type != 'push' OR push_content IS NOT NULL)
+    (notification_type != 'push' OR (push_title IS NOT NULL AND push_body IS NOT NULL))
   `),
 ]);
 
@@ -3130,7 +3132,8 @@ export const scheduledNotifications = pgTable("scheduled_notifications", {
   emailTitle: varchar("email_title"),
   emailBody: text("email_body"),
   smsContent: varchar("sms_content", { length: 160 }),
-  pushContent: varchar("push_content", { length: 200 }),
+  pushTitle: varchar("push_title", { length: 50 }),
+  pushBody: varchar("push_body", { length: 120 }),
   
   // Status tracking
   status: notificationStatusEnum("status").notNull().default("scheduled"),

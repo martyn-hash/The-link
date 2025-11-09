@@ -229,7 +229,7 @@ export default function ScheduledNotificationsPage() {
     let content = "";
     if (notification.emailBody) content = notification.emailBody;
     else if (notification.smsContent) content = notification.smsContent;
-    else if (notification.pushContent) content = notification.pushContent;
+    else if (notification.pushTitle && notification.pushBody) content = `${notification.pushTitle} - ${notification.pushBody}`;
     
     // Strip HTML tags for preview
     const stripped = content.replace(/<[^>]*>/g, "");

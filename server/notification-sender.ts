@@ -88,7 +88,8 @@ async function sendSMSNotification(
 async function sendPushNotificationViaService(
   clientId: string,
   personId: string | null,
-  content: string
+  title: string,
+  body: string
 ): Promise<SendNotificationResult> {
   try {
     // Get push subscriptions for client portal users of this client
@@ -130,8 +131,8 @@ async function sendPushNotificationViaService(
 
     // Send push notification to all subscriptions
     const payload = {
-      title: "Notification",
-      body: content,
+      title,
+      body,
       data: {
         type: "client_notification",
         clientId,
@@ -271,17 +272,19 @@ async function processSingleNotification(notification: ScheduledNotification): P
       break;
 
     case "push":
-      if (!notification.pushContent) {
-        console.error(`[NotificationSender] Missing push content for notification ${notification.id}`);
+      if (!notification.pushTitle || !notification.pushBody) {
+        console.error(`[NotificationSender] Missing push title or body for notification ${notification.id}`);
         result = {
           success: false,
-          error: "Missing push content",
+          error: "Missing push title or body",
         };
       } else {
+        // Send push notification with separate title and body
         result = await sendPushNotificationViaService(
           notification.clientId,
           notification.personId,
-          notification.pushContent
+          notification.pushTitle,
+          notification.pushBody
         );
       }
       break;
@@ -327,7 +330,7 @@ async function processSingleNotification(notification: ScheduledNotification): P
         ? `${notification.emailTitle}\n\n${notification.emailBody}`
         : notification.notificationType === "sms"
         ? notification.smsContent || ""
-        : notification.pushContent || "",
+        : `${notification.pushTitle || ""} - ${notification.pushBody || ""}`,
     status: result.success ? "sent" : "failed",
     sentAt: result.success ? new Date() : null,
     failureReason: result.error || null,
@@ -406,7 +409,8 @@ export async function sendTestNotification(
     title?: string;
     body?: string;
     smsContent?: string;
-    pushContent?: string;
+    pushTitle?: string;
+    pushBody?: string;
   }
 ): Promise<SendNotificationResult> {
   console.log(`[NotificationSender] Sending test ${notificationType} notification`);
@@ -435,13 +439,13 @@ export async function sendTestNotification(
       return await sendSMSNotification(recipient.phone, content.smsContent);
 
     case "push":
-      if (!recipient.clientId || !content.pushContent) {
+      if (!recipient.clientId || !content.pushTitle || !content.pushBody) {
         return {
           success: false,
-          error: "Missing client ID or push content for test push notification",
+          error: "Missing client ID, push title, or push body for test push notification",
         };
       }
-      return await sendPushNotificationViaService(recipient.clientId, null, content.pushContent);
+      return await sendPushNotificationViaService(recipient.clientId, null, content.pushTitle, content.pushBody);
 
     default:
       return {

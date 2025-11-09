@@ -74,7 +74,8 @@ A comprehensive automated notification system enables multi-channel communicatio
 -   **Admin Management**: Scheduled Notifications admin page (`/admin/scheduled-notifications`) with calendar and list views, filtering by client/project/status, and bulk cancellation operations.
 -   **Idempotent Scheduling**: Delete-then-insert pattern ensures no duplicate notifications when services are updated.
 -   **Multi-Channel Delivery**: SendGrid for emails (with configurable sender name), VoodooSMS placeholder for SMS, and integration with existing push notification infrastructure.
--   **Character Limits**: SMS (160 chars), push title (50 chars), push body (120 chars) enforced at validation and UI levels.
+-   **Character Limits**: SMS (160 chars), push title (50 chars), push body (120 chars) enforced at validation, schema constraints, and UI levels.
+-   **Schema Migration**: Automatic migration system handles the transition from legacy `pushContent` (200 chars) to separate `pushTitle` (50 chars) and `pushBody` (120 chars) fields, with transactional safety and data backfill.
 -   **Automated Cleanup**: Service deletion automatically cancels associated notifications; reminder sequences stop on task submission or staff cancellation using proper audit fields (cancelReason, cancelledAt, cancelledBy).
 -   **Hourly Cron**: Background job runs 07:00-19:00 UK time to process due notifications and update delivery history.
 

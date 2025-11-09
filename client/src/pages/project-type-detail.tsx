@@ -622,7 +622,8 @@ function ProjectNotificationForm({
   const [emailTitle, setEmailTitle] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [smsContent, setSmsContent] = useState("");
-  const [pushContent, setPushContent] = useState("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
   const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
 
   const handleSubmit = () => {
@@ -641,7 +642,8 @@ function ProjectNotificationForm({
     } else if (notificationType === 'sms') {
       data.smsContent = smsContent;
     } else if (notificationType === 'push') {
-      data.pushContent = pushContent;
+      data.pushTitle = pushTitle;
+      data.pushBody = pushBody;
     }
 
     createMutation.mutate(data);
@@ -650,7 +652,7 @@ function ProjectNotificationForm({
   const canSubmit = () => {
     if (notificationType === 'email') return emailTitle && emailBody;
     if (notificationType === 'sms') return smsContent && smsContent.length <= 160;
-    if (notificationType === 'push') return pushContent && pushContent.length <= 200;
+    if (notificationType === 'push') return pushTitle && pushTitle.length <= 50 && pushBody && pushBody.length <= 120;
     return false;
   };
 
@@ -778,19 +780,33 @@ function ProjectNotificationForm({
         )}
 
         {notificationType === 'push' && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Push Notification Content</Label>
-              <CharacterCounter current={pushContent.length} max={200} />
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Title</Label>
+                <CharacterCounter current={pushTitle.length} max={50} />
+              </div>
+              <Input
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                placeholder="Enter push notification title (max 50 characters)"
+                data-testid="input-push-title"
+              />
             </div>
-            <Textarea
-              value={pushContent}
-              onChange={(e) => setPushContent(e.target.value)}
-              placeholder="Enter push notification message (max 200 characters)"
-              rows={4}
-              data-testid="textarea-push-content"
-            />
-          </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Body</Label>
+                <CharacterCounter current={pushBody.length} max={120} />
+              </div>
+              <Textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                placeholder="Enter push notification body (max 120 characters)"
+                rows={3}
+                data-testid="textarea-push-body"
+              />
+            </div>
+          </>
         )}
 
         <div className="flex justify-end space-x-2">
@@ -824,7 +840,8 @@ function StageNotificationForm({
   const [emailTitle, setEmailTitle] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [smsContent, setSmsContent] = useState("");
-  const [pushContent, setPushContent] = useState("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
   const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
 
   const handleSubmit = () => {
@@ -842,7 +859,8 @@ function StageNotificationForm({
     } else if (notificationType === 'sms') {
       data.smsContent = smsContent;
     } else if (notificationType === 'push') {
-      data.pushContent = pushContent;
+      data.pushTitle = pushTitle;
+      data.pushBody = pushBody;
     }
 
     createMutation.mutate(data);
@@ -852,7 +870,7 @@ function StageNotificationForm({
     if (!stageId) return false;
     if (notificationType === 'email') return emailTitle && emailBody;
     if (notificationType === 'sms') return smsContent && smsContent.length <= 160;
-    if (notificationType === 'push') return pushContent && pushContent.length <= 200;
+    if (notificationType === 'push') return pushTitle && pushTitle.length <= 50 && pushBody && pushBody.length <= 120;
     return false;
   };
 
@@ -967,19 +985,33 @@ function StageNotificationForm({
         )}
 
         {notificationType === 'push' && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Push Notification Content</Label>
-              <CharacterCounter current={pushContent.length} max={200} />
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Title</Label>
+                <CharacterCounter current={pushTitle.length} max={50} />
+              </div>
+              <Input
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                placeholder="Enter push notification title (max 50 characters)"
+                data-testid="input-stage-push-title"
+              />
             </div>
-            <Textarea
-              value={pushContent}
-              onChange={(e) => setPushContent(e.target.value)}
-              placeholder="Enter push notification message (max 200 characters)"
-              rows={4}
-              data-testid="textarea-stage-push-content"
-            />
-          </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Body</Label>
+                <CharacterCounter current={pushBody.length} max={120} />
+              </div>
+              <Textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                placeholder="Enter push notification body (max 120 characters)"
+                rows={3}
+                data-testid="textarea-stage-push-body"
+              />
+            </div>
+          </>
         )}
 
         <div className="flex justify-end space-x-2">
@@ -1036,7 +1068,7 @@ function NotificationCard({
     } else if (notification.notificationType === 'sms') {
       return notification.smsContent;
     } else {
-      return notification.pushContent;
+      return `${notification.pushTitle || ''} - ${notification.pushBody || ''}`;
     }
   };
 
@@ -1123,7 +1155,8 @@ function ReminderForm({
   const [daysAfter, setDaysAfter] = useState(7);
   const [emailTitle, setEmailTitle] = useState("");
   const [emailBody, setEmailBody] = useState("");
-  const [pushContent, setPushContent] = useState("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
 
   const handleSubmit = () => {
     const data: any = {
@@ -1136,7 +1169,8 @@ function ReminderForm({
       data.emailTitle = emailTitle;
       data.emailBody = emailBody;
     } else {
-      data.pushContent = pushContent;
+      data.pushTitle = pushTitle;
+      data.pushBody = pushBody;
     }
 
     createMutation.mutate(data);
@@ -1144,7 +1178,7 @@ function ReminderForm({
 
   const canSubmit = () => {
     if (notificationType === 'email') return emailTitle && emailBody;
-    if (notificationType === 'push') return pushContent && pushContent.length <= 200;
+    if (notificationType === 'push') return pushTitle && pushTitle.length <= 50 && pushBody && pushBody.length <= 120;
     return false;
   };
 
@@ -1202,19 +1236,33 @@ function ReminderForm({
         )}
 
         {notificationType === 'push' && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Push Notification Content</Label>
-              <CharacterCounter current={pushContent.length} max={200} />
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Title</Label>
+                <CharacterCounter current={pushTitle.length} max={50} />
+              </div>
+              <Input
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                placeholder="Enter push notification title (max 50 characters)"
+                data-testid="input-reminder-push-title"
+              />
             </div>
-            <Textarea
-              value={pushContent}
-              onChange={(e) => setPushContent(e.target.value)}
-              placeholder="Enter push notification message (max 200 characters)"
-              rows={4}
-              data-testid="textarea-reminder-push-content"
-            />
-          </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Body</Label>
+                <CharacterCounter current={pushBody.length} max={120} />
+              </div>
+              <Textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                placeholder="Enter push notification body (max 120 characters)"
+                rows={3}
+                data-testid="textarea-reminder-push-body"
+              />
+            </div>
+          </>
         )}
 
         <div className="flex justify-end space-x-2">
