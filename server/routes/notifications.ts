@@ -7,8 +7,15 @@ import {
   insertClientRequestReminderSchema,
   updateClientRequestReminderSchema,
   type ScheduledNotification,
+  type Client,
+  type Project,
+  type ProjectType,
+  type Service,
+  type ClientService,
+  type CompanySettings,
 } from "@shared/schema";
 import { scheduleServiceStartDateNotifications, scheduleProjectDueDateNotifications } from "../notification-scheduler";
+import type { NotificationVariableContext } from "../notification-variables";
 
 // Parameter validation schemas
 const paramNotificationIdSchema = z.object({
@@ -34,6 +41,49 @@ const validateParams = <T>(schema: z.ZodSchema<T>, params: any): { success: true
     ? { success: true, data: result.data }
     : { success: false, errors: result.error.issues };
 };
+
+// Helper function to build notification variable context from database models
+function buildNotificationContext(params: {
+  client: Client;
+  project: Project;
+  projectType: ProjectType;
+  service?: Service;
+  clientService?: ClientService;
+  companySettings?: CompanySettings;
+}): NotificationVariableContext {
+  const { client, project, projectType, service, clientService, companySettings } = params;
+  
+  return {
+    client: {
+      id: client.id,
+      name: client.name,
+      email: client.email,
+      clientType: client.clientType,
+      financialYearEnd: null, // Not present in schema
+    },
+    project: {
+      id: project.id,
+      description: project.description || "",
+      projectTypeName: projectType.name,
+      currentStatus: project.currentStatus || "in_progress",
+      startDate: null, // Not present in schema
+      dueDate: project.dueDate,
+    },
+    service: service && clientService ? {
+      name: service.name,
+      description: service.description,
+      frequency: clientService.frequency,
+      nextStartDate: clientService.nextStartDate,
+      nextDueDate: clientService.nextDueDate,
+    } : undefined,
+    firmSettings: companySettings ? {
+      firmName: companySettings.firmName || "",
+      firmPhone: companySettings.firmPhone,
+      firmEmail: companySettings.firmEmail,
+      portalUrl: companySettings.portalUrl,
+    } : undefined,
+  };
+}
 
 export function registerNotificationRoutes(
   app: Express,
@@ -401,6 +451,165 @@ export function registerNotificationRoutes(
     } catch (error) {
       console.error("Error fetching notification:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch notification" });
+    }
+  });
+  
+  // Preview a notification with variable replacements
+  app.get("/api/project-types/:projectTypeId/notifications/:notificationId/preview", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const projectTypeValidation = validateParams(paramProjectTypeIdSchema, req.params);
+      if (!projectTypeValidation.success) {
+        return res.status(400).json({ message: "Invalid project type ID", errors: projectTypeValidation.errors });
+      }
+      
+      const notificationValidation = validateParams(paramNotificationIdSchema, req.params);
+      if (!notificationValidation.success) {
+        return res.status(400).json({ message: "Invalid notification ID", errors: notificationValidation.errors });
+      }
+
+      const { projectTypeId } = projectTypeValidation.data;
+      const { notificationId } = notificationValidation.data;
+      
+      // Get the notification
+      const notification = await storage.getProjectTypeNotificationById(notificationId);
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      // Verify notification belongs to project type
+      if (notification.projectTypeId !== projectTypeId) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      // Validate stage ownership for stage-scoped notifications
+      if (notification.category === 'stage' && notification.stageId) {
+        const stage = await storage.getStageById(notification.stageId);
+        if (!stage) {
+          return res.status(404).json({ message: "Stage not found" });
+        }
+        
+        // Validate stage belongs to the project type
+        if (stage.projectTypeId !== projectTypeId) {
+          return res.status(400).json({ message: "Stage does not belong to this project type" });
+        }
+      }
+      
+      // Find a sample active project for this project type
+      const allProjects = await storage.getAllProjects();
+      let sampleProject: Project | undefined;
+      
+      if (notification.category === 'stage' && notification.stageId) {
+        // For stage notifications, find a project currently in the specified stage
+        // Get the stage name to match against currentStatus
+        const stage = await storage.getStageById(notification.stageId);
+        if (!stage) {
+          return res.json({
+            hasData: false,
+            message: "Stage not found."
+          });
+        }
+        
+        sampleProject = allProjects.find(p => 
+          p.projectTypeId === projectTypeId && 
+          p.currentStatus === stage.name &&
+          !p.archived && 
+          !p.inactive
+        );
+        
+        if (!sampleProject) {
+          return res.json({
+            hasData: false,
+            message: `No active projects found in stage "${stage.name}". Preview is not available.`
+          });
+        }
+      } else {
+        // For project notifications, find any active project of this type
+        sampleProject = allProjects.find(p => 
+          p.projectTypeId === projectTypeId && 
+          !p.archived && 
+          !p.inactive
+        );
+        
+        if (!sampleProject) {
+          return res.json({
+            hasData: false,
+            message: "No active projects found for this project type. Preview is not available."
+          });
+        }
+      }
+      
+      // Get client data
+      const client = await storage.getClientById(sampleProject.clientId);
+      if (!client) {
+        return res.json({
+          hasData: false,
+          message: "Client data not found for sample project."
+        });
+      }
+      
+      // Get project type
+      const projectType = await storage.getProjectTypeById(projectTypeId);
+      if (!projectType) {
+        return res.json({
+          hasData: false,
+          message: "Project type not found."
+        });
+      }
+      
+      // Get service data
+      const service = await storage.getServiceByProjectTypeId(projectTypeId);
+      const clientService = service ? 
+        (await storage.getClientServicesByServiceId(service.id)).find(cs => cs.clientId === client.id) : 
+        undefined;
+      
+      // Get company settings
+      const companySettings = await storage.getCompanySettings();
+      
+      // Build notification context using helper
+      const context = buildNotificationContext({
+        client,
+        project: sampleProject,
+        projectType,
+        service,
+        clientService,
+        companySettings,
+      });
+      
+      // Process variables using the notification processor
+      const { processNotificationVariables } = await import("../notification-variables");
+      
+      // Process content based on notification type
+      let processedContent: any = {};
+      
+      if (notification.notificationType === 'email') {
+        processedContent = {
+          type: 'email',
+          emailTitle: processNotificationVariables(notification.emailTitle || '', context),
+          emailBody: processNotificationVariables(notification.emailBody || '', context)
+        };
+      } else if (notification.notificationType === 'sms') {
+        processedContent = {
+          type: 'sms',
+          smsContent: processNotificationVariables(notification.smsContent || '', context)
+        };
+      } else if (notification.notificationType === 'push') {
+        processedContent = {
+          type: 'push',
+          pushTitle: processNotificationVariables(notification.pushTitle || '', context),
+          pushBody: processNotificationVariables(notification.pushBody || '', context)
+        };
+      }
+      
+      res.json({
+        hasData: true,
+        projectId: sampleProject.id,
+        projectDescription: sampleProject.description || "",
+        clientName: client.name,
+        processedContent
+      });
+    } catch (error) {
+      console.error("Error previewing notification:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to preview notification" });
     }
   });
 
