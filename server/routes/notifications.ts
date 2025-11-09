@@ -642,9 +642,10 @@ export function registerNotificationRoutes(
       let project: Project | null = null;
       let projectType: ProjectType | null = null;
       if (scheduledNotification.projectId) {
-        project = await storage.getProjectById(scheduledNotification.projectId);
-        if (project) {
-          projectType = await storage.getProjectTypeById(project.projectTypeId);
+        const projectData = await storage.getProject(scheduledNotification.projectId);
+        if (projectData) {
+          project = projectData as Project;
+          projectType = await storage.getProjectTypeById(projectData.projectTypeId);
         }
       } else if (scheduledNotification.clientServiceId) {
         // If no project but has clientServiceId, get projectType from service

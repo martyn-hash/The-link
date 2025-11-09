@@ -174,6 +174,36 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
     bulkCancelMutation.mutate(Array.from(selectedIds));
   };
 
+  // Bulk reactivate mutation
+  const bulkReactivateMutation = useMutation({
+    mutationFn: async (notificationIds: string[]) => {
+      // Call reactivate endpoint for each notification
+      const promises = notificationIds.map(id => 
+        apiRequest("PATCH", `/api/scheduled-notifications/${id}/reactivate`, {})
+      );
+      return await Promise.all(promises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-notifications/client", clientId] });
+      setSelectedIds(new Set());
+      toast({
+        title: "Notifications reactivated",
+        description: `Successfully reactivated ${selectedIds.size} notification(s).`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to reactivate notifications. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleBulkReactivate = () => {
+    bulkReactivateMutation.mutate(Array.from(selectedIds));
+  };
+
   // Preview notification handler
   const handlePreview = async (notificationId: string) => {
     setIsLoadingPreview(true);
@@ -373,8 +403,8 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={handleBulkCancel}
-                disabled={bulkCancelMutation.isPending}
+                onClick={activeTab === "active" ? handleBulkCancel : handleBulkReactivate}
+                disabled={activeTab === "active" ? bulkCancelMutation.isPending : bulkReactivateMutation.isPending}
                 data-testid="button-bulk-cancel"
               >
                 {activeTab === "active" ? "Do Not Send" : "Reactivate"}
