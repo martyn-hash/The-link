@@ -1794,6 +1794,31 @@ export default function ProjectTypeDetail() {
     },
   });
   
+  // Notifications active toggle mutation
+  const toggleNotificationsActiveMutation = useMutation({
+    mutationFn: async (notificationsActive: boolean) => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, { 
+        notificationsActive 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
+      toast({ 
+        title: "Success", 
+        description: "Notifications setting updated successfully" 
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update notifications setting",
+        variant: "destructive",
+      });
+    },
+  });
+  
   // Custom field mutations
   const createCustomFieldMutation = useMutation({
     mutationFn: async (field: any) => {
@@ -3362,6 +3387,36 @@ export default function ProjectTypeDetail() {
                   Configure automated client notifications for this project type
                 </p>
               </div>
+              
+              {/* Notifications Master Toggle */}
+              <Card className={projectType?.notificationsActive === false ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20" : ""}>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Bell className="h-5 w-5" />
+                        <h3 className="font-semibold">Automated Notifications</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {projectType?.notificationsActive === false 
+                          ? "⚠️ All notifications are currently disabled for this project type. No emails, SMS, or push notifications will be sent to clients."
+                          : "When enabled, clients will automatically receive configured notifications via email, SMS, and push notifications."}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">
+                        {projectType?.notificationsActive === false ? "Disabled" : "Enabled"}
+                      </span>
+                      <Switch
+                        checked={projectType?.notificationsActive !== false}
+                        onCheckedChange={(checked) => toggleNotificationsActiveMutation.mutate(checked)}
+                        disabled={toggleNotificationsActiveMutation.isPending}
+                        data-testid="switch-notifications-active"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
               
               {/* Section 1: Project Notifications (Date-based) */}
               <div className="space-y-4">
