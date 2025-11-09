@@ -3,6 +3,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -1133,7 +1134,11 @@ function NotificationCard({
         <div>
           <p className="text-sm font-medium" data-testid={`text-notification-content-${notification.id}`}>{getContent()}</p>
           {notification.notificationType === 'email' && notification.emailBody && (
-            <p className="text-sm text-muted-foreground mt-2 line-clamp-2" data-testid={`text-notification-body-preview-${notification.id}`}>{notification.emailBody}</p>
+            <div 
+              className="text-sm text-muted-foreground mt-2 line-clamp-2" 
+              data-testid={`text-notification-body-preview-${notification.id}`}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(notification.emailBody) }}
+            />
           )}
         </div>
 
