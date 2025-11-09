@@ -26,6 +26,12 @@ import { eq, and, sql, isNotNull } from "drizzle-orm";
  * - due_date notifications are project-based (scheduled when project is created)
  */
 
+/**
+ * System user identifier for automated operations
+ * Used when notifications are cancelled/updated by the system rather than a specific user
+ */
+export const SYSTEM_USER_ID = 'system';
+
 interface ScheduleProjectNotificationsParams {
   clientServiceId: string;
   clientId: string;
@@ -600,10 +606,10 @@ export async function cancelClientServiceNotifications(
   clientServiceId: string,
   cancelledBy: string,
   cancelReason: string
-): Promise<void> {
+): Promise<number> {
   console.log(`[NotificationScheduler] Cancelling notifications for client service ${clientServiceId}`);
 
-  await db
+  const result = await db
     .update(scheduledNotifications)
     .set({
       status: "cancelled",
@@ -617,9 +623,11 @@ export async function cancelClientServiceNotifications(
         eq(scheduledNotifications.clientServiceId, clientServiceId),
         eq(scheduledNotifications.status, "scheduled")
       )
-    );
+    )
+    .returning({ id: scheduledNotifications.id });
 
-  console.log(`[NotificationScheduler] Cancelled notifications for client service ${clientServiceId}`);
+  console.log(`[NotificationScheduler] Cancelled ${result.length} notification(s) for client service ${clientServiceId}`);
+  return result.length;
 }
 
 /**
@@ -727,10 +735,10 @@ export async function cancelProjectDueDateNotifications(
   projectId: string,
   cancelledBy: string,
   cancelReason: string
-): Promise<void> {
+): Promise<number> {
   console.log(`[NotificationScheduler] Cancelling due_date notifications for project ${projectId}`);
 
-  await db
+  const result = await db
     .update(scheduledNotifications)
     .set({
       status: "cancelled",
@@ -744,7 +752,9 @@ export async function cancelProjectDueDateNotifications(
         eq(scheduledNotifications.projectId, projectId),
         eq(scheduledNotifications.status, "scheduled")
       )
-    );
+    )
+    .returning({ id: scheduledNotifications.id });
 
-  console.log(`[NotificationScheduler] Cancelled due_date notifications for project ${projectId}`);
+  console.log(`[NotificationScheduler] Cancelled ${result.length} due_date notification(s) for project ${projectId}`);
+  return result.length;
 }

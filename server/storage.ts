@@ -3941,10 +3941,10 @@ export class DatabaseStorage implements IStorage {
     else if (oldDueDate && updateData.dueDate === null) {
       console.log(`[Storage] Project ${id} due date cleared, cancelling due_date notifications`);
       
-      const { cancelProjectDueDateNotifications } = await import("./notification-scheduler");
+      const { cancelProjectDueDateNotifications, SYSTEM_USER_ID } = await import("./notification-scheduler");
       
       try {
-        await cancelProjectDueDateNotifications(id, null, "Due date removed from project");
+        await cancelProjectDueDateNotifications(id, SYSTEM_USER_ID, "Due date removed from project");
       } catch (error) {
         console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
       }
@@ -3954,10 +3954,10 @@ export class DatabaseStorage implements IStorage {
     if ((updateData.archived === true && !oldProject.archived) || (updateData.inactive === true && !oldProject.inactive)) {
       console.log(`[Storage] Project ${id} archived/inactive, cancelling due_date notifications`);
       
-      const { cancelProjectDueDateNotifications } = await import("./notification-scheduler");
+      const { cancelProjectDueDateNotifications, SYSTEM_USER_ID } = await import("./notification-scheduler");
       
       try {
-        await cancelProjectDueDateNotifications(id, null, updateData.archived ? 'Project archived' : 'Project marked inactive');
+        await cancelProjectDueDateNotifications(id, SYSTEM_USER_ID, updateData.archived ? 'Project archived' : 'Project marked inactive');
       } catch (error) {
         console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
       }
