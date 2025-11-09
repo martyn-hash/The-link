@@ -557,7 +557,7 @@ export function registerNotificationRoutes(
   });
 
   // Cancel a scheduled notification
-  app.post("/api/scheduled-notifications/:scheduledNotificationId/cancel", isAuthenticated, requireManager, async (req: any, res: any) => {
+  app.post("/api/scheduled-notifications/:scheduledNotificationId/cancel", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       const { scheduledNotificationId } = req.params;
       const validation = validateParams(paramScheduledNotificationIdSchema, req.params);
@@ -588,7 +588,7 @@ export function registerNotificationRoutes(
   });
 
   // Bulk cancel scheduled notifications
-  app.post("/api/scheduled-notifications/bulk-cancel", isAuthenticated, requireManager, async (req: any, res: any) => {
+  app.post("/api/scheduled-notifications/bulk-cancel", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
     try {
       const schema = z.object({
         notificationIds: z.array(z.string().uuid())
