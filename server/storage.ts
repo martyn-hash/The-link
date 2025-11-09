@@ -288,6 +288,7 @@ import {
   companySettings,
   type CompanySettings,
   type UpdateCompanySettings,
+  type PreviewCandidate,
 } from "@shared/schema";
 
 // Add the OAuth account types
@@ -1141,6 +1142,15 @@ export interface IStorage {
   // Notification System - Notification History operations
   getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]>;
   getNotificationHistoryByProjectId(projectId: string): Promise<NotificationHistory[]>;
+  
+  // Notification System - Preview Candidates operations
+  getPreviewCandidates(params: {
+    projectTypeId: string;
+    channel?: 'email' | 'sms' | 'push';
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ candidates: PreviewCandidate[]; total: number }>;
   
   // Company Settings operations
   getCompanySettings(): Promise<CompanySettings | undefined>;
@@ -12775,6 +12785,98 @@ export class DatabaseStorage implements IStorage {
       .from(notificationHistory)
       .where(eq(notificationHistory.projectId, projectId))
       .orderBy(desc(notificationHistory.createdAt));
+  }
+  
+  // ============================================
+  // NOTIFICATION SYSTEM - Preview Candidates operations
+  // ============================================
+  
+  async getPreviewCandidates(params: {
+    projectTypeId: string;
+    channel?: 'email' | 'sms' | 'push';
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ candidates: PreviewCandidate[]; total: number }> {
+    const { projectTypeId, channel, search, limit = 20, offset = 0 } = params;
+    
+    // Use raw SQL to avoid Drizzle ORM internal issues
+    let sqlQuery = `
+      SELECT DISTINCT ON (people.id, clients.id)
+        people.id as person_id,
+        people.full_name as person_name,
+        people.primary_email as person_email,
+        people.primary_phone as person_phone,
+        clients.id as client_id,
+        clients.name as client_name,
+        projects.id as project_id,
+        projects.description as project_name,
+        projects.current_status as project_status,
+        projects.due_date as project_due_date,
+        projects.updated_at as project_updated_at,
+        push_subscriptions.id as has_push_subscription
+      FROM projects
+      INNER JOIN clients ON projects.client_id = clients.id
+      INNER JOIN client_people ON clients.id = client_people.client_id
+      INNER JOIN people ON client_people.person_id = people.id
+      LEFT JOIN client_portal_users ON client_portal_users.person_id = people.id AND client_portal_users.client_id = clients.id
+      LEFT JOIN push_subscriptions ON push_subscriptions.client_portal_user_id = client_portal_users.id
+      WHERE projects.project_type_id = $1
+        AND projects.deleted_at IS NULL
+        AND clients.deleted_at IS NULL
+        AND client_people.deleted_at IS NULL
+        AND projects.archived = false
+        AND projects.inactive = false
+    `;
+    
+    const queryParams: any[] = [projectTypeId];
+    let paramIndex = 2;
+    
+    // Add channel filtering
+    if (channel === 'email') {
+      sqlQuery += ` AND people.primary_email IS NOT NULL AND TRIM(people.primary_email) != ''`;
+    } else if (channel === 'sms') {
+      sqlQuery += ` AND people.primary_phone IS NOT NULL AND TRIM(people.primary_phone) != ''`;
+    } else if (channel === 'push') {
+      sqlQuery += ` AND push_subscriptions.id IS NOT NULL`;
+    }
+    
+    // Add search filtering
+    if (search) {
+      sqlQuery += ` AND (people.full_name ILIKE $${paramIndex} OR people.primary_email ILIKE $${paramIndex} OR clients.name ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    sqlQuery += ` ORDER BY people.id, clients.id, projects.updated_at DESC`;
+    
+    const rawResults = await db.execute(sql.raw(sqlQuery, ...queryParams));
+    const rows = rawResults.rows as any[];
+    
+    // Map results and apply pagination
+    const total = rows.length;
+    const paginatedRows = rows.slice(offset, offset + limit);
+    
+    const candidates: PreviewCandidate[] = paginatedRows.map((r: any) => ({
+      personId: r.person_id,
+      personName: r.person_name,
+      personEmail: r.person_email,
+      personPhone: r.person_phone,
+      clientId: r.client_id,
+      clientName: r.client_name,
+      projectId: r.project_id,
+      projectName: r.project_name,
+      projectStatus: r.project_status,
+      projectDueDate: r.project_due_date,
+      hasEmail: !!r.person_email && typeof r.person_email === 'string' && r.person_email.trim() !== '',
+      hasPhone: !!r.person_phone && typeof r.person_phone === 'string' && r.person_phone.trim() !== '',
+      pushOptIn: !!r.has_push_subscription,
+    }));
+    
+    return {
+      candidates,
+      total,
+    };
   }
   
   // Company Settings operations
