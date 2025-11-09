@@ -32,6 +32,59 @@ import { eq, and, sql, isNotNull } from "drizzle-orm";
  */
 export const SYSTEM_USER_ID = 'system';
 
+/**
+ * Check if notifications are active for a project type
+ * Returns true if notificationsActive is true or null/undefined (default behavior)
+ */
+async function areNotificationsActive(projectTypeId: string): Promise<boolean> {
+  const result = await db
+    .select({ notificationsActive: projectTypes.notificationsActive })
+    .from(projectTypes)
+    .where(eq(projectTypes.id, projectTypeId))
+    .limit(1);
+  
+  if (result.length === 0) {
+    console.warn(`[NotificationScheduler] Project type ${projectTypeId} not found`);
+    return false;
+  }
+  
+  // Default to true if notificationsActive is null/undefined (backward compatibility)
+  const isActive = result[0].notificationsActive !== false;
+  
+  if (!isActive) {
+    console.log(`[NotificationScheduler] Notifications are disabled for project type ${projectTypeId}`);
+  }
+  
+  return isActive;
+}
+
+/**
+ * Filter people by receiveNotifications flag
+ * Only returns person IDs where receiveNotifications is true (or null/undefined for backward compatibility)
+ */
+async function filterPeopleByNotificationPreference(personIds: string[]): Promise<string[]> {
+  if (personIds.length === 0) {
+    return [];
+  }
+  
+  const results = await db
+    .select({ id: people.id, receiveNotifications: people.receiveNotifications })
+    .from(people)
+    .where(sql`${people.id} IN (${sql.join(personIds.map(id => sql`${id}`), sql`, `)})`);
+  
+  // Filter to only those who have receiveNotifications !== false (default to true)
+  const filtered = results
+    .filter(p => p.receiveNotifications !== false)
+    .map(p => p.id);
+  
+  const excludedCount = personIds.length - filtered.length;
+  if (excludedCount > 0) {
+    console.log(`[NotificationScheduler] Excluded ${excludedCount} person(s) who have opted out of notifications`);
+  }
+  
+  return filtered;
+}
+
 interface ScheduleProjectNotificationsParams {
   clientServiceId: string;
   clientId: string;
@@ -103,6 +156,15 @@ export async function scheduleServiceStartDateNotifications(
 
   console.log(`[NotificationScheduler] Scheduling start_date notifications for client service ${clientServiceId}`);
 
+  // Check if notifications are active for this project type
+  if (!(await areNotificationsActive(projectTypeId))) {
+    console.log(`[NotificationScheduler] Skipping scheduling - notifications disabled for project type ${projectTypeId}`);
+    return;
+  }
+
+  // Filter people by notification preferences
+  const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
+
   // Fetch active project notifications with dateReference='start_date'
   const notifications = await db
     .select()
@@ -142,8 +204,8 @@ export async function scheduleServiceStartDateNotifications(
       continue;
     }
 
-    // Determine recipients (if relatedPeople specified, create one notification per person, otherwise one for client)
-    const recipients = relatedPeople.length > 0 ? relatedPeople : [null];
+    // Determine recipients (if filteredPeople specified, create one notification per person, otherwise one for client)
+    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
 
     for (const personId of recipients) {
       scheduledNotificationsToInsert.push({
@@ -231,6 +293,15 @@ export async function scheduleProjectDueDateNotifications(
 
   console.log(`[NotificationScheduler] Scheduling due_date notifications for project ${projectId}`);
 
+  // Check if notifications are active for this project type
+  if (!(await areNotificationsActive(projectTypeId))) {
+    console.log(`[NotificationScheduler] Skipping scheduling - notifications disabled for project type ${projectTypeId}`);
+    return;
+  }
+
+  // Filter people by notification preferences
+  const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
+
   // Fetch active project notifications with dateReference='due_date'
   const notifications = await db
     .select()
@@ -270,8 +341,8 @@ export async function scheduleProjectDueDateNotifications(
       continue;
     }
 
-    // Determine recipients
-    const recipients = relatedPeople.length > 0 ? relatedPeople : [null];
+    // Determine recipients (using filtered people)
+    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
 
     for (const personId of recipients) {
       scheduledNotificationsToInsert.push({
@@ -358,6 +429,15 @@ export async function scheduleProjectNotifications(
 
   console.log(`[NotificationScheduler] Scheduling notifications for client service ${clientServiceId}`);
 
+  // Check if notifications are active for this project type
+  if (!(await areNotificationsActive(projectTypeId))) {
+    console.log(`[NotificationScheduler] Skipping scheduling - notifications disabled for project type ${projectTypeId}`);
+    return;
+  }
+
+  // Filter people by notification preferences
+  const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
+
   // Fetch all active project notifications for this project type (category = 'project')
   const notifications = await db
     .select()
@@ -412,8 +492,8 @@ export async function scheduleProjectNotifications(
       continue;
     }
 
-    // Determine recipients (if relatedPeople specified, create one notification per person, otherwise one for client)
-    const recipients = relatedPeople.length > 0 ? relatedPeople : [null];
+    // Determine recipients (if filteredPeople specified, create one notification per person, otherwise one for client)
+    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
 
     for (const personId of recipients) {
       scheduledNotificationsToInsert.push({
@@ -501,6 +581,9 @@ export async function scheduleClientRequestReminders(
 
   console.log(`[NotificationScheduler] Scheduling client request reminders for task ${taskInstanceId}`);
 
+  // Filter people by notification preferences
+  const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
+
   // Fetch all active reminders for this project type notification
   const reminders = await db
     .select()
@@ -535,8 +618,8 @@ export async function scheduleClientRequestReminders(
       continue;
     }
 
-    // Determine recipients
-    const recipients = relatedPeople.length > 0 ? relatedPeople : [null];
+    // Determine recipients (using filtered people)
+    const recipients = filteredPeople.length > 0 ? filteredPeople : [null];
 
     for (const personId of recipients) {
       scheduledNotificationsToInsert.push({
