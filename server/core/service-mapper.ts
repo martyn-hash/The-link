@@ -124,18 +124,35 @@ export async function createClientServiceMapping(
     throw new Error(`Client with ID '${clientServiceData.clientId}' not found`);
   }
 
-  // Check for duplicate mapping
-  const mappingExists = await storage.checkClientServiceMappingExists(
-    clientServiceData.clientId,
-    clientServiceData.serviceId
-  );
-  if (mappingExists) {
-    throw new Error(
-      `Client-service mapping already exists between client '${client.name || client.id}' ` +
-      `and service '${service.name}'. Each client can only be mapped to a service once.`
-    );
+  // Check for existing mapping and update if it exists (idempotent)
+  const existingServices = await storage.getClientServicesByClientId(clientServiceData.clientId);
+  const existingService = existingServices.find(s => s.serviceId === clientServiceData.serviceId);
+  
+  if (existingService) {
+    console.log(`[ServiceMapper] Updating existing client service mapping ${existingService.id}`);
+    
+    let finalData = { ...clientServiceData };
+
+    // Handle different service types
+    if (service.isStaticService) {
+      // Static services don't need frequency or dates
+      // Leave them as provided (can be null)
+    } else if (service.isCompaniesHouseConnected) {
+      // CH services get dates from client's CH data
+      finalData = await prepareCompaniesHouseServiceData(service, client, finalData);
+    } else {
+      // Regular services need a frequency
+      if (!finalData.frequency) {
+        finalData.frequency = (existingService.frequency || 'monthly') as any;
+      }
+    }
+
+    // Convert dates and update mapping
+    const processedData = convertServiceDates(finalData);
+    return await storage.updateClientService(existingService.id, processedData);
   }
 
+  console.log(`[ServiceMapper] Creating new client service mapping`);
   let finalData = { ...clientServiceData };
 
   // Handle different service types
@@ -179,18 +196,19 @@ export async function createPeopleServiceMapping(
     throw new Error(`Person with ID '${peopleServiceData.personId}' not found`);
   }
 
-  // Check for duplicate mapping
-  const mappingExists = await storage.checkPeopleServiceMappingExists(
-    peopleServiceData.personId,
-    peopleServiceData.serviceId
-  );
-  if (mappingExists) {
-    throw new Error(
-      `Person-service mapping already exists between person '${person.fullName || person.id}' ` +
-      `and service '${service.name}'. Each person can only be mapped to a service once.`
-    );
+  // Check for existing mapping and update if it exists (idempotent)
+  const existingServices = await storage.getPeopleServicesByPersonId(peopleServiceData.personId);
+  const existingService = existingServices.find(s => s.serviceId === peopleServiceData.serviceId);
+  
+  if (existingService) {
+    console.log(`[ServiceMapper] Updating existing people service mapping ${existingService.id}`);
+    
+    // Convert dates and update mapping
+    const processedData = convertServiceDates(peopleServiceData);
+    return await storage.updatePeopleService(existingService.id, processedData);
   }
 
+  console.log(`[ServiceMapper] Creating new people service mapping`);
   // Convert dates and create mapping
   const processedData = convertServiceDates(peopleServiceData);
   return await storage.createPeopleService(processedData);
