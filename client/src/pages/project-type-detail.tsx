@@ -38,8 +38,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow, RefreshCcw, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow, RefreshCcw, Loader2, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
 import {
@@ -1076,121 +1077,138 @@ function StageNotificationForm({
   );
 }
 
-// Notification Card Component with Reminders
-function NotificationCard({
+// Notification Row Component (Table-based view following data_view_guidelines.md)
+function NotificationRow({
   notification,
+  projectTypeId,
   stages,
   clientRequestTemplates,
-  onEdit,
   onDelete,
-  onAddReminder,
-  addingReminderForNotification,
-  createReminderMutation,
-  onDeleteReminder
 }: {
   notification: ProjectTypeNotification;
+  projectTypeId: string;
   stages: KanbanStage[];
   clientRequestTemplates: ClientRequestTemplate[];
-  onEdit: (n: ProjectTypeNotification) => void;
   onDelete: (id: string) => void;
-  onAddReminder: (notificationId: string) => void;
-  addingReminderForNotification: string | null;
-  createReminderMutation: any;
-  onDeleteReminder: (id: string) => void;
 }) {
-  const getNotificationSummary = () => {
+  const [, navigate] = useLocation();
+  
+  const getTriggerSummary = () => {
     if (notification.category === 'project') {
       const offsetLabel = notification.offsetType === 'on' ? 'On' : 
         `${notification.offsetDays} day${notification.offsetDays !== 1 ? 's' : ''} ${notification.offsetType}`;
-      const dateRef = notification.dateReference === 'start_date' ? 'project start' : 'due date';
+      const dateRef = notification.dateReference === 'start_date' ? 'start date' : 'due date';
       return `${offsetLabel} ${dateRef}`;
     } else {
       const stage = stages.find(s => s.id === notification.stageId);
       const trigger = notification.stageTrigger === 'entry' ? 'enters' : 'exits';
-      return `When project ${trigger} "${stage?.name || 'Unknown'}"`;
+      return `When ${trigger} "${stage?.name || 'Unknown'}"`;
     }
   };
 
-  const getContent = () => {
+  const getContentPreview = () => {
     if (notification.notificationType === 'email') {
-      return notification.emailTitle;
+      return notification.emailTitle || '-';
+    } else if (notification.notificationType === 'sms') {
+      return notification.smsContent || '-';
+    } else {
+      return notification.pushTitle || '-';
+    }
+  };
+
+  const getFullContent = () => {
+    if (notification.notificationType === 'email') {
+      return notification.emailBody ? 
+        `${notification.emailTitle}\n\n${notification.emailBody.replace(/<[^>]*>/g, '')}` : 
+        notification.emailTitle;
     } else if (notification.notificationType === 'sms') {
       return notification.smsContent;
     } else {
-      return `${notification.pushTitle || ''} - ${notification.pushBody || ''}`;
+      return `${notification.pushTitle}\n${notification.pushBody}`;
     }
   };
 
   const linkedTemplate = clientRequestTemplates.find(t => t.id === notification.clientRequestTemplateId);
-  const hasLinkedTemplate = !!notification.clientRequestTemplateId;
 
   return (
-    <Card data-testid={`card-notification-${notification.id}`}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Badge variant="outline" data-testid={`badge-notification-type-${notification.id}`}>{notification.notificationType.toUpperCase()}</Badge>
-            <Badge variant="secondary" data-testid={`badge-notification-category-${notification.id}`}>{notification.category === 'project' ? 'Date-based' : 'Stage-based'}</Badge>
-            <span className="text-sm text-muted-foreground" data-testid={`text-notification-summary-${notification.id}`}>{getNotificationSummary()}</span>
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(notification.id)}
-              data-testid={`button-delete-notification-${notification.id}`}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <p className="text-sm font-medium" data-testid={`text-notification-content-${notification.id}`}>{getContent()}</p>
-          {notification.notificationType === 'email' && notification.emailBody && (
-            <div 
-              className="text-sm text-muted-foreground mt-2 line-clamp-2" 
-              data-testid={`text-notification-body-preview-${notification.id}`}
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(notification.emailBody) }}
-            />
-          )}
-        </div>
-
-        {linkedTemplate && (
-          <div className="bg-muted p-3 rounded-lg">
-            <p className="text-sm font-medium mb-2" data-testid={`text-linked-template-${notification.id}`}>
-              Linked to template: {linkedTemplate.name}
-            </p>
-            
-            {hasLinkedTemplate && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-medium">Client Request Reminders</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddReminder(notification.id)}
-                    data-testid={`button-add-reminder-${notification.id}`}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Reminder
-                  </Button>
-                </div>
-
-                {addingReminderForNotification === notification.id && (
-                  <ReminderForm
-                    notificationId={notification.id}
-                    onCancel={() => onAddReminder('')}
-                    createMutation={createReminderMutation}
-                  />
-                )}
-              </div>
-            )}
-          </div>
+    <TableRow data-testid={`row-notification-${notification.id}`}>
+      <TableCell className="font-medium">
+        <Badge 
+          variant="outline" 
+          className="uppercase"
+          data-testid={`badge-type-${notification.id}`}
+        >
+          {notification.notificationType}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-trigger-${notification.id}`}>
+          {getTriggerSummary()}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-sm truncate max-w-xs block cursor-help" data-testid={`text-content-${notification.id}`}>
+                {getContentPreview()}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-md">
+              <p className="whitespace-pre-wrap text-sm">{getFullContent()}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </TableCell>
+      
+      <TableCell>
+        {linkedTemplate ? (
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-sm"
+            onClick={() => navigate(`/admin/client-request-templates`)}
+            data-testid={`button-template-${notification.id}`}
+          >
+            {linkedTemplate.name}
+          </Button>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
         )}
-      </CardContent>
-    </Card>
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/settings/project-types/${projectTypeId}/notifications/${notification.id}/edit`)}
+            data-testid={`button-edit-${notification.id}`}
+          >
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid={`button-preview-${notification.id}`}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Preview
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(notification.id)}
+            data-testid={`button-delete-${notification.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -3352,29 +3370,39 @@ export default function ProjectTypeDetail() {
                   />
                 )}
 
-                <div className="grid gap-4">
-                  {notifications?.filter(n => n.category === 'project').map(notification => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      stages={stages || []}
-                      clientRequestTemplates={clientRequestTemplates || []}
-                      onEdit={setEditingNotification}
-                      onDelete={(id) => deleteNotificationMutation.mutate(id)}
-                      onAddReminder={setAddingReminderForNotification}
-                      addingReminderForNotification={addingReminderForNotification}
-                      createReminderMutation={createReminderMutation}
-                      onDeleteReminder={(id) => deleteReminderMutation.mutate(id)}
-                    />
-                  ))}
-                  {!notifications?.some(n => n.category === 'project') && !isAddingProjectNotification && (
-                    <Card>
-                      <CardContent className="p-6 text-center text-muted-foreground">
-                        No project notifications configured yet
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+                {notifications?.some(n => n.category === 'project') ? (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Trigger</TableHead>
+                          <TableHead>Content</TableHead>
+                          <TableHead>Template</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {notifications.filter(n => n.category === 'project').map(notification => (
+                          <NotificationRow
+                            key={notification.id}
+                            notification={notification}
+                            projectTypeId={projectTypeId}
+                            stages={stages || []}
+                            clientRequestTemplates={clientRequestTemplates || []}
+                            onDelete={(id) => deleteNotificationMutation.mutate(id)}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : !isAddingProjectNotification && (
+                  <Card>
+                    <CardContent className="p-6 text-center text-muted-foreground">
+                      No project notifications configured yet
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Section 2: Stage Notifications */}
@@ -3450,29 +3478,39 @@ export default function ProjectTypeDetail() {
                   />
                 )}
 
-                <div className="grid gap-4">
-                  {notifications?.filter(n => n.category === 'stage').map(notification => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      stages={stages || []}
-                      clientRequestTemplates={clientRequestTemplates || []}
-                      onEdit={setEditingNotification}
-                      onDelete={(id) => deleteNotificationMutation.mutate(id)}
-                      onAddReminder={setAddingReminderForNotification}
-                      addingReminderForNotification={addingReminderForNotification}
-                      createReminderMutation={createReminderMutation}
-                      onDeleteReminder={(id) => deleteReminderMutation.mutate(id)}
-                    />
-                  ))}
-                  {!notifications?.some(n => n.category === 'stage') && !isAddingStageNotification && (
-                    <Card>
-                      <CardContent className="p-6 text-center text-muted-foreground">
-                        No stage notifications configured yet
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+                {notifications?.some(n => n.category === 'stage') ? (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Trigger</TableHead>
+                          <TableHead>Content</TableHead>
+                          <TableHead>Template</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {notifications.filter(n => n.category === 'stage').map(notification => (
+                          <NotificationRow
+                            key={notification.id}
+                            notification={notification}
+                            projectTypeId={projectTypeId}
+                            stages={stages || []}
+                            clientRequestTemplates={clientRequestTemplates || []}
+                            onDelete={(id) => deleteNotificationMutation.mutate(id)}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : !isAddingStageNotification && (
+                  <Card>
+                    <CardContent className="p-6 text-center text-muted-foreground">
+                      No stage notifications configured yet
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </TabsContent>
 
