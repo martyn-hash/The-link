@@ -41,6 +41,7 @@ import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
 import DocumentFolderView from "@/components/DocumentFolderView";
 import { CreateFolderDialog } from "@/components/CreateFolderDialog";
 import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
+import { ClientNotificationsView } from "@/components/ClientNotificationsView";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { EmailThreadViewer } from "@/components/EmailThreadViewer";
 import { CommunicationCard } from "@/components/communication-card";
@@ -6724,6 +6725,7 @@ export default function ClientDetail() {
   
   // DEBUG: Tab jumping investigation
   const [activeTab, setActiveTab] = useState<string>("overview");
+  const [riskView, setRiskView] = useState<'risk' | 'notifications'>('risk');
   const debugMetricsRef = useRef<any[]>([]);
 
   // Tab scrolling is now handled by SwipeableTabsWrapper component
@@ -7265,7 +7267,38 @@ export default function ClientDetail() {
               <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
               <TabsTrigger value="documents" data-testid="tab-documents" className="text-sm py-2">Docs</TabsTrigger>
               <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-sm py-2">Tasks</TabsTrigger>
-              <TabsTrigger value="risk" data-testid="tab-risk" className="text-sm py-2">Risk</TabsTrigger>
+              <DropdownMenu onOpenChange={(open) => { if (open) setActiveTab("risk"); }}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTab === "risk" ? "secondary" : "ghost"}
+                    className="text-sm py-2 h-9 px-3 w-full"
+                    data-testid="dropdown-risk-notifications"
+                  >
+                    <span>{riskView === "risk" ? "Risk" : "Notifications"}</span>
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("risk");
+                    }}
+                    data-testid="menu-item-risk"
+                  >
+                    Risk
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("notifications");
+                    }}
+                    data-testid="menu-item-notifications"
+                  >
+                    Notifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TabsList>
           </div>
 
@@ -7414,21 +7447,48 @@ export default function ClientDetail() {
               >
                 Tasks
               </TabsTrigger>
-              <TabsTrigger 
-                value="risk" 
-                data-testid="tab-risk" 
-                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
-                style={{ width: '80vw' }}
-                onClick={() => {
+              <DropdownMenu onOpenChange={(open) => { 
+                if (open) {
+                  setActiveTab("risk");
                   const container = document.querySelector('.snap-x');
-                  const tab = document.querySelector('[data-testid="tab-risk"]');
+                  const tab = document.querySelector('[data-testid="dropdown-risk-notifications-mobile"]');
                   if (container && tab) {
                     tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                   }
-                }}
-              >
-                Risk
-              </TabsTrigger>
+                }
+              }}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTab === "risk" ? "secondary" : "ghost"}
+                    className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0"
+                    style={{ width: '80vw' }}
+                    data-testid="dropdown-risk-notifications-mobile"
+                  >
+                    <span>{riskView === "risk" ? "Risk" : "Notifications"}</span>
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("risk");
+                    }}
+                    data-testid="menu-item-risk-mobile"
+                  >
+                    Risk
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("notifications");
+                    }}
+                    data-testid="menu-item-notifications-mobile"
+                  >
+                    Notifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TabsList>
             </div>
           </div>
@@ -7444,7 +7504,7 @@ export default function ClientDetail() {
                 {activeTab === "chronology" && "History"}
                 {activeTab === "documents" && "Documents"}
                 {activeTab === "tasks" && "Tasks"}
-                {activeTab === "risk" && "Risk Assessment"}
+                {activeTab === "risk" && (riskView === "risk" ? "Risk Assessment" : "Notifications")}
               </h2>
             </div>
           )}
@@ -8967,7 +9027,11 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-6">
-            <RiskAssessmentTab clientId={id} />
+            {riskView === "risk" ? (
+              <RiskAssessmentTab clientId={id!} />
+            ) : (
+              <ClientNotificationsView clientId={id!} />
+            )}
           </TabsContent>
           </SwipeableTabsWrapper>
         </Tabs>

@@ -613,6 +613,154 @@ export function registerNotificationRoutes(
     }
   });
 
+  // Preview a scheduled notification with variable replacements
+  app.get("/api/scheduled-notifications/:scheduledNotificationId/preview", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const validation = validateParams(paramScheduledNotificationIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid scheduled notification ID", errors: validation.errors });
+      }
+
+      const { scheduledNotificationId } = validation.data;
+      
+      // Get the scheduled notification
+      const scheduledNotification = await storage.getScheduledNotificationById(scheduledNotificationId);
+      if (!scheduledNotification) {
+        return res.status(404).json({ message: "Scheduled notification not found" });
+      }
+      
+      // Get client data
+      const client = await storage.getClientById(scheduledNotification.clientId);
+      if (!client) {
+        return res.json({
+          hasData: false,
+          message: "Client data not found for this notification."
+        });
+      }
+      
+      // Get project data if available
+      let project: Project | null = null;
+      let projectType: ProjectType | null = null;
+      if (scheduledNotification.projectId) {
+        project = await storage.getProjectById(scheduledNotification.projectId);
+        if (project) {
+          projectType = await storage.getProjectTypeById(project.projectTypeId);
+        }
+      } else if (scheduledNotification.clientServiceId) {
+        // If no project but has clientServiceId, get projectType from service
+        const clientService = await storage.getClientServiceById(scheduledNotification.clientServiceId);
+        if (clientService) {
+          const service = await storage.getServiceById(clientService.serviceId);
+          if (service && service.projectTypeId) {
+            projectType = await storage.getProjectTypeById(service.projectTypeId);
+            // Find any active project for this client and project type as fallback
+            const allProjects = await storage.getAllProjects();
+            project = allProjects.find(p => 
+              p.projectTypeId === service.projectTypeId && 
+              p.clientId === client.id &&
+              !p.archived && 
+              !p.inactive
+            ) || null;
+          }
+        }
+      }
+      
+      // Create a fallback project if none found
+      if (!project) {
+        const now = new Date();
+        project = {
+          id: 'preview-project',
+          description: 'Sample Project',
+          projectTypeId: projectType?.id || 'unknown',
+          clientId: client.id,
+          dueDate: now,
+          currentStatus: 'in_progress',
+          archived: false,
+          inactive: false,
+          createdAt: now,
+          updatedAt: now
+        } as Project;
+      }
+      
+      if (!projectType) {
+        projectType = {
+          id: 'preview-project-type',
+          name: 'Sample Service',
+          description: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isActive: true,
+          notificationsActive: true
+        } as ProjectType;
+      }
+      
+      // Get service data
+      let service: Service | undefined;
+      let clientService: ClientService | undefined;
+      if (scheduledNotification.clientServiceId) {
+        clientService = await storage.getClientServiceById(scheduledNotification.clientServiceId);
+        if (clientService) {
+          service = await storage.getServiceById(clientService.serviceId);
+        }
+      } else if (projectType && projectType.id !== 'preview-project-type') {
+        service = await storage.getServiceByProjectTypeId(projectType.id);
+        if (service) {
+          const allClientServices = await storage.getClientServicesByServiceId(service.id);
+          clientService = allClientServices.find(cs => cs.clientId === client.id);
+        }
+      }
+      
+      // Get company settings
+      const companySettings = await storage.getCompanySettings();
+      
+      // Build notification context
+      const context = buildNotificationContext({
+        client,
+        project,
+        projectType,
+        service,
+        clientService,
+        companySettings,
+      });
+      
+      // Process variables
+      const { processNotificationVariables } = await import("../notification-variables");
+      
+      // Process content based on notification type
+      let processedContent: any = {};
+      
+      if (scheduledNotification.notificationType === 'email') {
+        processedContent = {
+          type: 'email',
+          emailTitle: processNotificationVariables(scheduledNotification.emailTitle || '', context),
+          emailBody: processNotificationVariables(scheduledNotification.emailBody || '', context)
+        };
+      } else if (scheduledNotification.notificationType === 'sms') {
+        processedContent = {
+          type: 'sms',
+          smsContent: processNotificationVariables(scheduledNotification.smsContent || '', context)
+        };
+      } else if (scheduledNotification.notificationType === 'push') {
+        processedContent = {
+          type: 'push',
+          pushTitle: processNotificationVariables(scheduledNotification.pushTitle || '', context),
+          pushBody: processNotificationVariables(scheduledNotification.pushBody || '', context)
+        };
+      }
+      
+      res.json({
+        hasData: true,
+        projectId: project.id,
+        projectName: project.description || projectType.name,
+        clientName: client.name,
+        processedContent
+      });
+    } catch (error) {
+      console.error("Error previewing scheduled notification:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to preview scheduled notification" });
+    }
+  });
+
   // Create a new project type notification
   app.post("/api/project-types/:projectTypeId/notifications", isAuthenticated, requireAdmin, async (req: any, res: any) => {
     try {
@@ -1169,6 +1317,65 @@ export function registerNotificationRoutes(
       }
 
       res.status(500).json({ message: "Failed to cancel notifications" });
+    }
+  });
+
+  // Get scheduled notifications for a specific client (with filtering)
+  app.get("/api/scheduled-notifications/client/:clientId", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      const { category, type, recipientId, dateFrom, dateTo, status } = req.query;
+      
+      const filters = {
+        category,
+        type,
+        recipientId,
+        dateFrom,
+        dateTo,
+        status
+      };
+
+      const notifications = await storage.getScheduledNotificationsForClient(clientId, filters);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching client scheduled notifications:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Reactivate a cancelled scheduled notification
+  app.patch("/api/scheduled-notifications/:scheduledNotificationId/reactivate", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const { scheduledNotificationId } = req.params;
+      const validation = validateParams(paramScheduledNotificationIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid scheduled notification ID", errors: validation.errors });
+      }
+
+      const notification = await storage.getScheduledNotificationById(scheduledNotificationId);
+      if (!notification) {
+        return res.status(404).json({ message: "Scheduled notification not found" });
+      }
+
+      if (notification.status !== 'cancelled') {
+        return res.status(400).json({ message: "Only cancelled notifications can be reactivated" });
+      }
+
+      // Check if the scheduled date is in the future
+      if (new Date(notification.scheduledFor) < new Date()) {
+        return res.status(400).json({ message: "Cannot reactivate notifications scheduled in the past" });
+      }
+
+      const updated = await storage.updateScheduledNotification(scheduledNotificationId, {
+        status: 'scheduled',
+        cancelledBy: null,
+        cancelledAt: null,
+        cancelReason: null
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error reactivating scheduled notification:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to reactivate notification" });
     }
   });
 

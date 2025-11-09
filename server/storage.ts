@@ -1128,6 +1128,14 @@ export interface IStorage {
   // Notification System - Scheduled Notification operations
   getAllScheduledNotifications(): Promise<ScheduledNotification[]>;
   getScheduledNotificationById(id: string): Promise<ScheduledNotification | undefined>;
+  getScheduledNotificationsForClient(clientId: string, filters?: {
+    category?: string;
+    type?: string;
+    recipientId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+  }): Promise<any[]>;
   updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification>;
   
   // Notification System - Notification History operations
@@ -12641,6 +12649,93 @@ export class DatabaseStorage implements IStorage {
       .from(scheduledNotifications)
       .where(eq(scheduledNotifications.id, id));
     return notification;
+  }
+
+  async getScheduledNotificationsForClient(clientId: string, filters?: {
+    category?: string;
+    type?: string;
+    recipientId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+  }): Promise<any[]> {
+    // Build base query with joins
+    const result = await db
+      .select({
+        notification: scheduledNotifications,
+        recipient: people,
+        projectTypeNotification: projectTypeNotifications,
+        projectType: projectTypes,
+        clientRequestReminder: clientRequestReminders,
+      })
+      .from(scheduledNotifications)
+      .leftJoin(people, eq(scheduledNotifications.personId, people.id))
+      .leftJoin(projectTypeNotifications, eq(scheduledNotifications.projectTypeNotificationId, projectTypeNotifications.id))
+      .leftJoin(projectTypes, eq(projectTypeNotifications.projectTypeId, projectTypes.id))
+      .leftJoin(clientRequestReminders, eq(scheduledNotifications.clientRequestReminderId, clientRequestReminders.id))
+      .where(
+        and(
+          eq(scheduledNotifications.clientId, clientId),
+          filters?.status ? eq(scheduledNotifications.status, filters.status) : undefined,
+          filters?.recipientId ? eq(scheduledNotifications.personId, filters.recipientId) : undefined,
+          filters?.dateFrom ? gte(scheduledNotifications.scheduledFor, new Date(filters.dateFrom)) : undefined,
+          filters?.dateTo ? lte(scheduledNotifications.scheduledFor, new Date(filters.dateTo)) : undefined,
+          filters?.category === 'project_notification' ? isNotNull(scheduledNotifications.projectTypeNotificationId) : undefined,
+          filters?.category === 'client_request_reminder' ? isNotNull(scheduledNotifications.clientRequestReminderId) : undefined
+        )
+      )
+      .orderBy(desc(scheduledNotifications.scheduledFor));
+    
+    // Map to enriched format
+    return result.map(row => {
+      // Determine category
+      const category = row.notification.projectTypeNotificationId 
+        ? 'project_notification' 
+        : row.notification.clientRequestReminderId 
+        ? 'client_request_reminder' 
+        : 'unknown';
+      
+      // Build notification type label
+      let notificationTypeLabel = 'Unknown';
+      if (row.projectTypeNotification) {
+        // Project notification type
+        if (row.projectTypeNotification.category === 'stage') {
+          notificationTypeLabel = `Stage: ${row.projectTypeNotification.stageName || 'Unknown'}`;
+        } else {
+          // Date-based notification
+          const ref = row.projectTypeNotification.dateReference;
+          const offset = row.projectTypeNotification.daysOffset || 0;
+          if (offset === 0) {
+            notificationTypeLabel = ref === 'start_date' ? 'Service Start Date' : 'Project Due Date';
+          } else if (offset > 0) {
+            notificationTypeLabel = `${offset} day${offset > 1 ? 's' : ''} after ${ref === 'start_date' ? 'start' : 'due date'}`;
+          } else {
+            notificationTypeLabel = `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before ${ref === 'start_date' ? 'start' : 'due date'}`;
+          }
+        }
+      } else if (row.clientRequestReminder) {
+        // Client request reminder type
+        const interval = row.clientRequestReminder.intervalDays;
+        const sequence = row.clientRequestReminder.sequenceOrder;
+        notificationTypeLabel = `Reminder ${sequence} (${interval} days)`;
+      }
+      
+      return {
+        ...row.notification,
+        category,
+        notificationTypeLabel,
+        recipient: row.recipient ? {
+          id: row.recipient.id,
+          fullName: row.recipient.fullName,
+          primaryEmail: row.recipient.primaryEmail,
+          primaryPhone: row.recipient.primaryPhone,
+        } : null,
+        projectType: row.projectType ? {
+          id: row.projectType.id,
+          name: row.projectType.name,
+        } : null,
+      };
+    });
   }
 
   async updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification> {
