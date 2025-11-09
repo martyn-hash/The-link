@@ -43,6 +43,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow, RefreshCcw, Loader2, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
+import { NotificationPreviewDialog } from "@/components/NotificationPreviewDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1092,6 +1093,15 @@ function NotificationRow({
   onDelete: (id: string) => void;
 }) {
   const [, navigate] = useLocation();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  
+  const previewMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/project-types/${projectTypeId}/notifications/${notification.id}/preview`);
+      if (!res.ok) throw new Error('Failed to fetch preview');
+      return res.json();
+    },
+  });
   
   const getTriggerSummary = () => {
     if (notification.category === 'project') {
@@ -1193,11 +1203,21 @@ function NotificationRow({
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => {
+              previewMutation.mutate();
+              setPreviewOpen(true);
+            }}
             data-testid={`button-preview-${notification.id}`}
           >
             <Eye className="h-4 w-4 mr-2" />
             Preview
           </Button>
+          <NotificationPreviewDialog
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            previewData={previewMutation.data || null}
+            isLoading={previewMutation.isPending}
+          />
           <Button
             variant="ghost"
             size="sm"
