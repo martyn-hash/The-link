@@ -41,6 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow, RefreshCcw, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -753,6 +754,13 @@ function ProjectNotificationForm({
           </div>
         )}
 
+        <div className="rounded-lg border bg-muted/50 p-3">
+          <p className="text-sm text-muted-foreground mb-2">
+            You can personalize your notification using dynamic variables that will be automatically replaced with real data.
+          </p>
+          <NotificationVariableGuide channel={notificationType} />
+        </div>
+
         {notificationType === 'email' && (
           <>
             <div className="space-y-2">
@@ -967,6 +975,13 @@ function StageNotificationForm({
             </Select>
           </div>
         )}
+
+        <div className="rounded-lg border bg-muted/50 p-3">
+          <p className="text-sm text-muted-foreground mb-2">
+            You can personalize your notification using dynamic variables that will be automatically replaced with real data.
+          </p>
+          <NotificationVariableGuide channel={notificationType} />
+        </div>
 
         {notificationType === 'email' && (
           <>
