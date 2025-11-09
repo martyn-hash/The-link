@@ -72,11 +72,13 @@ A comprehensive automated notification system enables multi-channel communicatio
 -   **Project Notifications**: Date-based notifications relative to project start/due dates with configurable offsets, plus stage-based notifications triggered when projects enter/exit workflow stages.
 -   **Client Request Reminders**: Automated reminder sequences for client request templates, with configurable intervals and automatic stopping when clients submit or staff cancel.
 -   **Admin Management**: Scheduled Notifications admin page (`/admin/scheduled-notifications`) with calendar and list views, filtering by client/project/status, and bulk cancellation operations.
--   **Idempotent Scheduling**: Delete-then-insert pattern ensures no duplicate notifications when services are updated.
+-   **Idempotent Scheduling**: Delete-then-insert pattern ensures no duplicate notifications when services are updated. Service assignment is idempotent - existing client/people services are updated instead of throwing duplicate errors.
+-   **Retroactive Scheduling**: When project type notifications are created or updated, all existing client services with dates automatically get scheduled notifications. Admin manual re-scheduling tool available on project type detail page with per-service error handling and statistics feedback.
 -   **Multi-Channel Delivery**: SendGrid for emails (with configurable sender name), VoodooSMS placeholder for SMS, and integration with existing push notification infrastructure.
 -   **Character Limits**: SMS (160 chars), push title (50 chars), push body (120 chars) enforced at validation, schema constraints, and UI levels.
 -   **Schema Migration**: Automatic migration system handles the transition from legacy `pushContent` (200 chars) to separate `pushTitle` (50 chars) and `pushBody` (120 chars) fields, with transactional safety and data backfill.
--   **Automated Cleanup**: Service deletion automatically cancels associated notifications; reminder sequences stop on task submission or staff cancellation using proper audit fields (cancelReason, cancelledAt, cancelledBy).
+-   **Complete Audit Trail**: All cancellation operations (individual and bulk) consistently populate audit fields: `cancelledBy` (user ID), `cancelledAt` (timestamp), `cancelReason` (description). Schema updated to allow `cancelledAt` in update operations. Authorization properly configured with `resolveEffectiveUser` middleware for manager-level access.
+-   **Automated Cleanup**: Service deletion automatically cancels associated notifications; reminder sequences stop on task submission or staff cancellation using proper audit fields.
 -   **Hourly Cron**: Background job runs 07:00-19:00 UK time to process due notifications and update delivery history.
 
 ## External Dependencies
