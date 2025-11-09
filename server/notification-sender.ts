@@ -6,12 +6,21 @@ import {
   people,
   clientPortalUsers,
   companySettings,
+  projects,
+  projectTypes,
+  clientServices,
+  services,
+  users,
   type ScheduledNotification,
   type InsertNotificationHistory,
 } from "@shared/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { getUncachableSendGridClient } from "./sendgridService";
 import { sendPushNotification, type PushSubscriptionData } from "./push-service";
+import { 
+  processNotificationVariables, 
+  type NotificationVariableContext 
+} from "./notification-variables";
 
 /**
  * Notification Sender Service
@@ -214,9 +223,151 @@ async function getRecipientInfo(notification: ScheduledNotification): Promise<{
 }
 
 /**
+ * Build notification variable context by fetching all required data
+ * Uses parallel queries for efficiency
+ */
+async function buildNotificationVariableContext(
+  notification: ScheduledNotification,
+  firmSettings: typeof companySettings.$inferSelect | null
+): Promise<NotificationVariableContext> {
+  // Fetch all required data in parallel
+  const [clientData, personData, projectData, serviceData] = await Promise.all([
+    // Always fetch client data
+    db
+      .select({
+        id: clients.id,
+        name: clients.name,
+        email: clients.email,
+        clientType: clients.clientType,
+        financialYearEnd: clients.nextAccountsPeriodEnd,
+      })
+      .from(clients)
+      .where(eq(clients.id, notification.clientId))
+      .limit(1),
+    
+    // Fetch person data if personId exists
+    notification.personId
+      ? db
+          .select({
+            id: people.id,
+            fullName: people.fullName,
+            email: people.primaryEmail,
+          })
+          .from(people)
+          .where(eq(people.id, notification.personId))
+          .limit(1)
+      : Promise.resolve([]),
+    
+    // Fetch project data with staff if projectId exists
+    notification.projectId
+      ? db
+          .select({
+            id: projects.id,
+            description: projects.description,
+            projectTypeName: projectTypes.name,
+            currentStatus: projects.currentStatus,
+            dueDate: projects.dueDate,
+            projectOwnerId: projects.projectOwnerId,
+            currentAssigneeId: projects.currentAssigneeId,
+          })
+          .from(projects)
+          .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
+          .where(eq(projects.id, notification.projectId))
+          .limit(1)
+      : Promise.resolve([]),
+    
+    // Fetch service data if clientServiceId exists
+    notification.clientServiceId
+      ? db
+          .select({
+            name: services.name,
+            description: services.description,
+            frequency: clientServices.frequency,
+            nextStartDate: clientServices.nextStartDate,
+            nextDueDate: clientServices.nextDueDate,
+          })
+          .from(clientServices)
+          .leftJoin(services, eq(clientServices.serviceId, services.id))
+          .where(eq(clientServices.id, notification.clientServiceId))
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
+  
+  // Fetch staff users if we have project data with assignees
+  let projectOwner;
+  let assignedStaff;
+  
+  if (projectData[0]) {
+    const staffIds = [
+      projectData[0].projectOwnerId,
+      projectData[0].currentAssigneeId,
+    ].filter(Boolean);
+    
+    if (staffIds.length > 0) {
+      const staffData = await db
+        .select()
+        .from(users)
+        .where(sql`${users.id} = ANY(${staffIds})`);
+      
+      projectOwner = staffData.find(u => u.id === projectData[0].projectOwnerId);
+      assignedStaff = staffData.find(u => u.id === projectData[0].currentAssigneeId);
+    }
+  }
+  
+  // Build and return the context
+  const context: NotificationVariableContext = {
+    client: clientData[0] ? {
+      id: clientData[0].id,
+      name: clientData[0].name,
+      email: clientData[0].email,
+      clientType: clientData[0].clientType,
+      financialYearEnd: clientData[0].financialYearEnd,
+    } : undefined,
+    
+    person: personData[0] ? {
+      id: personData[0].id,
+      fullName: personData[0].fullName,
+      email: personData[0].email,
+    } : undefined,
+    
+    project: projectData[0] ? {
+      id: projectData[0].id,
+      description: projectData[0].description,
+      projectTypeName: projectData[0].projectTypeName || "",
+      currentStatus: projectData[0].currentStatus,
+      startDate: null, // Projects don't have startDate - use service nextStartDate instead
+      dueDate: projectData[0].dueDate,
+    } : undefined,
+    
+    service: serviceData[0] ? {
+      name: serviceData[0].name || "",
+      description: serviceData[0].description,
+      frequency: serviceData[0].frequency,
+      nextStartDate: serviceData[0].nextStartDate,
+      nextDueDate: serviceData[0].nextDueDate,
+    } : undefined,
+    
+    projectOwner,
+    assignedStaff,
+    
+    firmSettings: firmSettings ? {
+      firmName: firmSettings.firmName || "The Link",
+      firmPhone: firmSettings.firmPhone,
+      firmEmail: firmSettings.firmEmail,
+      portalUrl: firmSettings.portalUrl,
+    } : undefined,
+  };
+  
+  return context;
+}
+
+/**
  * Process a single scheduled notification
  */
-async function processSingleNotification(notification: ScheduledNotification): Promise<void> {
+async function processSingleNotification(
+  notification: ScheduledNotification,
+  firmSettings: typeof companySettings.$inferSelect | null
+): Promise<void> {
   console.log(`[NotificationSender] Processing notification ${notification.id} (${notification.notificationType})`);
 
   // Re-check the notification status to prevent race conditions
@@ -239,16 +390,35 @@ async function processSingleNotification(notification: ScheduledNotification): P
     return;
   }
 
-  // Get company settings for email sender name
-  const [settings] = await db.select().from(companySettings).limit(1);
-  const senderName = settings?.emailSenderName || "The Link Team";
+  // Build variable context by fetching all required data
+  const variableContext = await buildNotificationVariableContext(currentNotification, firmSettings);
+  
+  // Process notification content variables
+  const processedEmailTitle = currentNotification.emailTitle 
+    ? processNotificationVariables(currentNotification.emailTitle, variableContext)
+    : null;
+  const processedEmailBody = currentNotification.emailBody
+    ? processNotificationVariables(currentNotification.emailBody, variableContext)
+    : null;
+  const processedSmsContent = currentNotification.smsContent
+    ? processNotificationVariables(currentNotification.smsContent, variableContext)
+    : null;
+  const processedPushTitle = currentNotification.pushTitle
+    ? processNotificationVariables(currentNotification.pushTitle, variableContext)
+    : null;
+  const processedPushBody = currentNotification.pushBody
+    ? processNotificationVariables(currentNotification.pushBody, variableContext)
+    : null;
+
+  // Get email sender name from firm settings
+  const senderName = firmSettings?.emailSenderName || "The Link Team";
 
   // Get recipient contact information using the refreshed notification data
   const { email, phone } = await getRecipientInfo(currentNotification);
 
   let result: SendNotificationResult;
 
-  // Send the notification based on type (using refreshed notification data)
+  // Send the notification based on type (using processed notification content)
   switch (currentNotification.notificationType) {
     case "email":
       if (!email) {
@@ -257,7 +427,7 @@ async function processSingleNotification(notification: ScheduledNotification): P
           success: false,
           error: "No email address found for recipient",
         };
-      } else if (!currentNotification.emailTitle || !currentNotification.emailBody) {
+      } else if (!processedEmailTitle || !processedEmailBody) {
         console.error(`[NotificationSender] Missing email content for notification ${currentNotification.id}`);
         result = {
           success: false,
@@ -266,8 +436,8 @@ async function processSingleNotification(notification: ScheduledNotification): P
       } else {
         result = await sendEmailNotification(
           email,
-          currentNotification.emailTitle,
-          currentNotification.emailBody,
+          processedEmailTitle,
+          processedEmailBody,
           senderName
         );
       }
@@ -280,31 +450,31 @@ async function processSingleNotification(notification: ScheduledNotification): P
           success: false,
           error: "No phone number found for recipient",
         };
-      } else if (!currentNotification.smsContent) {
+      } else if (!processedSmsContent) {
         console.error(`[NotificationSender] Missing SMS content for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "Missing SMS content",
         };
       } else {
-        result = await sendSMSNotification(phone, currentNotification.smsContent);
+        result = await sendSMSNotification(phone, processedSmsContent);
       }
       break;
 
     case "push":
-      if (!currentNotification.pushTitle || !currentNotification.pushBody) {
+      if (!processedPushTitle || !processedPushBody) {
         console.error(`[NotificationSender] Missing push title or body for notification ${currentNotification.id}`);
         result = {
           success: false,
           error: "Missing push title or body",
         };
       } else {
-        // Send push notification with separate title and body
+        // Send push notification with processed separate title and body
         result = await sendPushNotificationViaService(
           currentNotification.clientId,
           currentNotification.personId,
-          currentNotification.pushTitle,
-          currentNotification.pushBody
+          processedPushTitle,
+          processedPushBody
         );
       }
       break;
@@ -385,6 +555,9 @@ async function processSingleNotification(notification: ScheduledNotification): P
 export async function processDueNotifications(): Promise<void> {
   console.log("[NotificationSender] Checking for due notifications...");
 
+  // Fetch firm settings once for the entire batch (performance optimization)
+  const [firmSettings] = await db.select().from(companySettings).limit(1);
+
   // Find all scheduled notifications that are due and not stopped
   const dueNotifications = await db
     .select()
@@ -407,7 +580,7 @@ export async function processDueNotifications(): Promise<void> {
   // Process each notification
   for (const notification of dueNotifications) {
     try {
-      await processSingleNotification(notification);
+      await processSingleNotification(notification, firmSettings || null);
     } catch (error) {
       console.error(`[NotificationSender] Error processing notification ${notification.id}:`, error);
       

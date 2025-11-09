@@ -274,6 +274,60 @@ async function ensureDateReferenceColumn(): Promise<void> {
 }
 
 /**
+ * Add firm settings columns to company_settings table if they don't exist
+ */
+async function ensureFirmSettingsColumns(): Promise<void> {
+  const firmNameExists = await columnExists('company_settings', 'firm_name');
+  const firmPhoneExists = await columnExists('company_settings', 'firm_phone');
+  const firmEmailExists = await columnExists('company_settings', 'firm_email');
+  const portalUrlExists = await columnExists('company_settings', 'portal_url');
+  
+  if (firmNameExists && firmPhoneExists && firmEmailExists && portalUrlExists) {
+    console.log('[Schema Migration] ✓ Firm settings columns already exist in company_settings');
+    return;
+  }
+  
+  console.log('[Schema Migration] Adding firm settings columns to company_settings table...');
+  
+  try {
+    await db.transaction(async (tx) => {
+      if (!firmNameExists) {
+        await tx.execute(sql`
+          ALTER TABLE company_settings 
+          ADD COLUMN firm_name VARCHAR DEFAULT 'The Link';
+        `);
+      }
+      
+      if (!firmPhoneExists) {
+        await tx.execute(sql`
+          ALTER TABLE company_settings 
+          ADD COLUMN firm_phone VARCHAR;
+        `);
+      }
+      
+      if (!firmEmailExists) {
+        await tx.execute(sql`
+          ALTER TABLE company_settings 
+          ADD COLUMN firm_email VARCHAR;
+        `);
+      }
+      
+      if (!portalUrlExists) {
+        await tx.execute(sql`
+          ALTER TABLE company_settings 
+          ADD COLUMN portal_url VARCHAR;
+        `);
+      }
+    });
+    
+    console.log('[Schema Migration] ✓ Successfully added firm settings columns to company_settings');
+  } catch (error) {
+    console.error('[Schema Migration] ✗ Failed to add firm settings columns:', error);
+    throw error;
+  }
+}
+
+/**
  * Run all schema migrations
  * Called on server startup to ensure database schema is up to date
  */
@@ -285,6 +339,7 @@ export async function runSchemaMigrations(): Promise<void> {
     await ensureSuperAdminColumn();
     await migratePushNotificationFields();
     await ensureDateReferenceColumn();
+    await ensureFirmSettingsColumns();
     
     console.log('[Schema Migration] All schema migrations completed successfully');
   } catch (error) {

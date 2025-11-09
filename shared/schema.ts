@@ -3014,6 +3014,10 @@ export const notificationStatusEnum = pgEnum("notification_status", [
 export const companySettings = pgTable("company_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   emailSenderName: varchar("email_sender_name").default("The Link Team"), // Sender name for SendGrid emails
+  firmName: varchar("firm_name").default("The Link"), // Firm name for notification templates
+  firmPhone: varchar("firm_phone"), // Firm phone number for notification templates
+  firmEmail: varchar("firm_email"), // Firm email for notification templates
+  portalUrl: varchar("portal_url"), // Base URL for client portal links (e.g., https://example.replit.app)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
