@@ -45,6 +45,78 @@ export function registerNotificationRoutes(
   
   // ==================== Project Type Notifications ====================
   
+  // Manually trigger re-scheduling of all notifications for a project type
+  app.post("/api/project-types/:projectTypeId/reschedule-notifications", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validation = validateParams(paramProjectTypeIdSchema, req.params);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid project type ID", errors: validation.errors });
+      }
+
+      const { projectTypeId } = validation.data;
+      
+      // Verify project type exists
+      const projectType = await storage.getProjectTypeById(projectTypeId);
+      if (!projectType) {
+        return res.status(404).json({ message: "Project type not found" });
+      }
+
+      console.log(`[Notifications] Manual re-scheduling triggered for project type ${projectTypeId}`);
+      
+      // Get the service for this project type
+      const service = await storage.getServiceByProjectTypeId(projectTypeId);
+      if (!service) {
+        return res.status(404).json({ message: "No service found for this project type" });
+      }
+
+      // Get all client services
+      const clientServices = await storage.getClientServicesByServiceId(service.id);
+      console.log(`[Notifications] Found ${clientServices.length} client service(s) to re-schedule`);
+      
+      let scheduled = 0;
+      let skipped = 0;
+      let errors = 0;
+      
+      for (const clientService of clientServices) {
+        // Schedule if service has either start date or due date
+        if (clientService.nextStartDate || clientService.nextDueDate) {
+          try {
+            await scheduleProjectNotifications({
+              clientServiceId: clientService.id,
+              clientId: clientService.clientId,
+              projectTypeId: projectTypeId,
+              nextStartDate: clientService.nextStartDate,
+              nextDueDate: clientService.nextDueDate || null,
+            });
+            scheduled++;
+          } catch (scheduleError) {
+            console.error(`[Notifications] Error scheduling for client service ${clientService.id}:`, scheduleError);
+            errors++;
+          }
+        } else {
+          skipped++;
+        }
+      }
+      
+      const message = errors > 0
+        ? `Re-scheduled notifications for ${scheduled} client service(s). ${skipped} skipped (no dates), ${errors} failed.`
+        : `Re-scheduled notifications for ${scheduled} client service(s). ${skipped} service(s) skipped (no dates configured).`;
+      console.log(`[Notifications] ${message}`);
+      
+      res.json({ 
+        success: true, 
+        message,
+        scheduled,
+        skipped,
+        errors,
+        total: clientServices.length
+      });
+    } catch (error) {
+      console.error("Error manually re-scheduling notifications:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to re-schedule notifications" });
+    }
+  });
+  
   // Get all notifications for a project type
   app.get("/api/project-types/:projectTypeId/notifications", isAuthenticated, async (req: any, res: any) => {
     try {

@@ -36,8 +36,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow, RefreshCcw, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface EditingStage {
   id?: string;
@@ -1281,7 +1292,7 @@ function ReminderForm({
 export default function ProjectTypeDetail() {
   const { id: projectTypeId } = useParams();
   const [location, navigate] = useLocation();
-  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -1311,6 +1322,7 @@ export default function ProjectTypeDetail() {
   // State for notifications
   const [isAddingProjectNotification, setIsAddingProjectNotification] = useState(false);
   const [isAddingStageNotification, setIsAddingStageNotification] = useState(false);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [editingNotification, setEditingNotification] = useState<ProjectTypeNotification | null>(null);
   const [addingReminderForNotification, setAddingReminderForNotification] = useState<string | null>(null);
   const [editingReminder, setEditingReminder] = useState<ClientRequestReminder | null>(null);
@@ -1945,6 +1957,35 @@ export default function ProjectTypeDetail() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const rescheduleNotificationsMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      return await apiRequest("POST", `/api/project-types/${projectTypeId}/reschedule-notifications`);
+    },
+    onSuccess: (data: any) => {
+      setShowRescheduleDialog(false);
+      const description = data.errors > 0
+        ? `${data.scheduled} scheduled, ${data.skipped} skipped, ${data.errors} failed of ${data.total} service(s)`
+        : `${data.scheduled} scheduled, ${data.skipped} skipped of ${data.total} service(s)`;
+      
+      toast({ 
+        title: "Notifications re-scheduled", 
+        description,
+        variant: data.errors > 0 ? "destructive" : "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+    },
+    onError: (error: any) => {
+      setShowRescheduleDialog(false);
+      toast({
+        title: "Re-schedule failed",
+        description: error.message || "Failed to re-schedule notifications",
         variant: "destructive",
       });
     },
@@ -3294,14 +3335,58 @@ export default function ProjectTypeDetail() {
                     </h3>
                     <p className="text-sm text-muted-foreground">Workflow stage trigger notifications sent when projects enter or exit stages</p>
                   </div>
-                  <Button
-                    onClick={() => setIsAddingStageNotification(true)}
-                    disabled={!stages || stages.length === 0}
-                    data-testid="button-add-stage-notification"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Stage Notification
-                  </Button>
+                  <div className="flex gap-2">
+                    {isAdmin && (
+                      <AlertDialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-reschedule-notifications"
+                            disabled={rescheduleNotificationsMutation.isPending}
+                          >
+                            {rescheduleNotificationsMutation.isPending ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Rescheduling…
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-2">
+                                <RefreshCcw className="h-4 w-4" />
+                                Reschedule Notifications
+                              </span>
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reschedule all notifications?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will re-run scheduling for every existing service tied to this project type. Services with up-to-date schedules will be skipped automatically.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel data-testid="button-reschedule-cancel">Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              data-testid="button-reschedule-confirm"
+                              disabled={rescheduleNotificationsMutation.isPending}
+                              onClick={() => rescheduleNotificationsMutation.mutate()}
+                            >
+                              Confirm
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    <Button
+                      onClick={() => setIsAddingStageNotification(true)}
+                      disabled={!stages || stages.length === 0}
+                      data-testid="button-add-stage-notification"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Stage Notification
+                    </Button>
+                  </div>
                 </div>
 
                 {isAddingStageNotification && (
