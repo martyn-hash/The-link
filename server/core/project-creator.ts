@@ -307,15 +307,19 @@ export async function createProjectFromDueService(
   
   // 8. Schedule due_date notifications for this project
   try {
+    // Fetch all related people for the client
+    const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
+    const peopleIds = allRelatedPeople.map(p => p.person.id);
+    
     await scheduleProjectDueDateNotifications({
       projectId: project.id,
       clientServiceId: dueService.id,
       clientId: project.clientId,
       projectTypeId: project.projectTypeId,
       dueDate: project.dueDate!,
-      relatedPeople: [] // TODO: Add related people if needed
+      relatedPeople: peopleIds
     });
-    console.log(`[Project Creator] Scheduled due_date notifications for project ${project.id}`);
+    console.log(`[Project Creator] Scheduled due_date notifications for project ${project.id} with ${peopleIds.length} related people`);
   } catch (notifError) {
     console.error(`[Project Creator] Failed to schedule due_date notifications for project ${project.id}:`, notifError);
     // Don't fail project creation if notifications fail
