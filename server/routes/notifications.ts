@@ -369,6 +369,40 @@ export function registerNotificationRoutes(
       res.status(500).json({ message: "Failed to fetch notifications" });
     }
   });
+  
+  // Get a single notification by ID
+  app.get("/api/project-types/:projectTypeId/notifications/:notificationId", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const projectTypeValidation = validateParams(paramProjectTypeIdSchema, req.params);
+      if (!projectTypeValidation.success) {
+        return res.status(400).json({ message: "Invalid project type ID", errors: projectTypeValidation.errors });
+      }
+      
+      const notificationValidation = validateParams(paramNotificationIdSchema, req.params);
+      if (!notificationValidation.success) {
+        return res.status(400).json({ message: "Invalid notification ID", errors: notificationValidation.errors });
+      }
+
+      const { projectTypeId } = projectTypeValidation.data;
+      const { notificationId } = notificationValidation.data;
+      
+      const notification = await storage.getProjectTypeNotificationById(notificationId);
+      
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      // Verify notification belongs to the specified project type
+      if (notification.projectTypeId !== projectTypeId) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      res.json(notification);
+    } catch (error) {
+      console.error("Error fetching notification:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch notification" });
+    }
+  });
 
   // Create a new project type notification
   app.post("/api/project-types/:projectTypeId/notifications", isAuthenticated, requireAdmin, async (req: any, res: any) => {
