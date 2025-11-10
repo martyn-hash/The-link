@@ -487,8 +487,8 @@ export function registerNotificationRoutes(
     }
   });
   
-  // Preview a notification with variable replacements
-  app.get("/api/project-types/:projectTypeId/notifications/:notificationId/preview", isAuthenticated, async (req: any, res: any) => {
+  // Get preview candidates for a notification
+  app.get("/api/project-types/:projectTypeId/notifications/:notificationId/preview-candidates", isAuthenticated, async (req: any, res: any) => {
     try {
       const projectTypeValidation = validateParams(paramProjectTypeIdSchema, req.params);
       if (!projectTypeValidation.success) {
@@ -514,6 +514,48 @@ export function registerNotificationRoutes(
         return res.status(404).json({ message: "Notification not found" });
       }
       
+      // Get preview candidates
+      const candidates = await storage.getPreviewCandidates(projectTypeId, notification);
+      
+      res.json(candidates);
+    } catch (error) {
+      console.error("Error fetching preview candidates:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch preview candidates" });
+    }
+  });
+  
+  // Preview a notification with variable replacements
+  app.get("/api/project-types/:projectTypeId/notifications/:notificationId/preview", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const projectTypeValidation = validateParams(paramProjectTypeIdSchema, req.params);
+      if (!projectTypeValidation.success) {
+        return res.status(400).json({ message: "Invalid project type ID", errors: projectTypeValidation.errors });
+      }
+      
+      const notificationValidation = validateParams(paramNotificationIdSchema, req.params);
+      if (!notificationValidation.success) {
+        return res.status(400).json({ message: "Invalid notification ID", errors: notificationValidation.errors });
+      }
+
+      const { projectTypeId } = projectTypeValidation.data;
+      const { notificationId } = notificationValidation.data;
+      
+      // Get optional query parameters for specific client/project/person
+      const clientId = req.query.clientId as string | undefined;
+      const projectId = req.query.projectId as string | undefined;
+      const personId = req.query.personId as string | undefined;
+      
+      // Get the notification
+      const notification = await storage.getProjectTypeNotificationById(notificationId);
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      // Verify notification belongs to project type
+      if (notification.projectTypeId !== projectTypeId) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
       // Validate stage ownership for stage-scoped notifications
       if (notification.category === 'stage' && notification.stageId) {
         const stage = await storage.getStageById(notification.stageId);
@@ -527,9 +569,19 @@ export function registerNotificationRoutes(
         }
       }
       
-      // Find a sample active project for this project type
-      const allProjects = await storage.getAllProjects();
+      // Find the project to use for preview
       let sampleProject: Project | undefined;
+      
+      if (projectId) {
+        // Use specified project
+        const proj = await storage.getProject(projectId);
+        if (!proj || proj.projectTypeId !== projectTypeId) {
+          return res.status(404).json({ message: "Specified project not found or does not match project type" });
+        }
+        sampleProject = proj;
+      } else {
+        // Auto-pick a sample active project for this project type
+        const allProjects = await storage.getAllProjects();
       
       if (notification.category === 'stage' && notification.stageId) {
         // For stage notifications, find a project currently in the specified stage
@@ -570,6 +622,7 @@ export function registerNotificationRoutes(
           });
         }
       }
+      }
       
       // Get client data
       const client = await storage.getClientById(sampleProject.clientId);
@@ -595,12 +648,22 @@ export function registerNotificationRoutes(
         (await storage.getClientServicesByServiceId(service.id)).find(cs => cs.clientId === client.id) : 
         undefined;
       
+      // Get person data if personId is provided
+      let person: Person | undefined;
+      if (personId) {
+        person = await storage.getPersonById(personId);
+        if (!person) {
+          return res.status(404).json({ message: "Specified person not found" });
+        }
+      }
+      
       // Get company settings
       const companySettings = await storage.getCompanySettings();
       
       // Build notification context using helper
       const context = buildNotificationContext({
         client,
+        person,
         project: sampleProject,
         projectType,
         service,

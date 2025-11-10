@@ -3578,3 +3578,37 @@ export type ProjectWithRelations = Project & {
   }[];
   stageRoleAssignee?: User; // The user assigned to the role for the current stage
 };
+
+// Notification preview candidate schemas
+export const previewCandidateRecipientSchema = z.object({
+  personId: z.string(),
+  fullName: z.string(),
+  email: z.string().nullable(),
+  canPreview: z.boolean(),
+  ineligibleReason: z.string().optional(),
+});
+
+export const previewCandidateSchema = z.object({
+  clientId: z.string(),
+  clientName: z.string(),
+  projectId: z.string(),
+  projectName: z.string().nullable(),
+  projectDescription: z.string().nullable(),
+  stageId: z.string().nullable(),
+  stageName: z.string().nullable(),
+  dueDate: z.date().nullable(),
+  clientServiceId: z.string(),
+  clientServiceName: z.string(),
+  frequency: z.string().nullable(),
+  recipients: z.array(previewCandidateRecipientSchema),
+});
+
+export const previewCandidatesResponseSchema = z.object({
+  candidates: z.array(previewCandidateSchema),
+  hasEligibleCandidates: z.boolean(),
+  message: z.string().optional(),
+});
+
+export type PreviewCandidateRecipient = z.infer<typeof previewCandidateRecipientSchema>;
+export type PreviewCandidate = z.infer<typeof previewCandidateSchema>;
+export type PreviewCandidatesResponse = z.infer<typeof previewCandidatesResponseSchema>;

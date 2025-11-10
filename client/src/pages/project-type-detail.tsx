@@ -23,7 +23,8 @@ import type {
   ClientRequestReminder,
   InsertClientRequestReminder,
   UpdateClientRequestReminder,
-  ClientRequestTemplate
+  ClientRequestTemplate,
+  PreviewCandidatesResponse
 } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, Shield
 import { Switch } from "@/components/ui/switch";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
 import { NotificationPreviewDialog } from "@/components/NotificationPreviewDialog";
+import { ClientPersonSelectionModal } from "@/components/ClientPersonSelectionModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1095,15 +1097,43 @@ function NotificationRow({
   onDelete: (id: string) => void;
 }) {
   const [, navigate] = useLocation();
+  const [selectionModalOpen, setSelectionModalOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   
+  // Fetch preview candidates when selection modal opens
+  const candidatesQuery = useQuery<PreviewCandidatesResponse>({
+    queryKey: ['/api/project-types', projectTypeId, 'notifications', notification.id, 'preview-candidates'],
+    enabled: selectionModalOpen,
+  });
+  
   const previewMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/project-types/${projectTypeId}/notifications/${notification.id}/preview`);
+    mutationFn: async ({ clientId, projectId, personId }: { clientId?: string; projectId?: string; personId?: string }) => {
+      const params = new URLSearchParams();
+      if (clientId) params.append('clientId', clientId);
+      if (projectId) params.append('projectId', projectId);
+      if (personId) params.append('personId', personId);
+      
+      const url = `/api/project-types/${projectTypeId}/notifications/${notification.id}/preview${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch preview');
       return res.json();
     },
   });
+  
+  const handlePreviewClick = () => {
+    setSelectionModalOpen(true);
+  };
+  
+  const handleClientPersonSelect = (clientId: string, projectId: string, personId: string) => {
+    // Close selection modal
+    setSelectionModalOpen(false);
+    
+    // Call preview with selected params
+    previewMutation.mutate({ clientId, projectId, personId });
+    
+    // Open preview dialog
+    setPreviewOpen(true);
+  };
   
   const getTriggerSummary = () => {
     if (notification.category === 'project') {
@@ -1205,15 +1235,21 @@ function NotificationRow({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              previewMutation.mutate();
-              setPreviewOpen(true);
-            }}
+            onClick={handlePreviewClick}
             data-testid={`button-preview-${notification.id}`}
           >
             <Eye className="h-4 w-4 mr-2" />
             Preview
           </Button>
+          <ClientPersonSelectionModal
+            open={selectionModalOpen}
+            onOpenChange={setSelectionModalOpen}
+            candidates={candidatesQuery.data?.candidates || []}
+            hasEligibleCandidates={candidatesQuery.data?.hasEligibleCandidates || false}
+            message={candidatesQuery.data?.message}
+            isLoading={candidatesQuery.isLoading}
+            onSelect={handleClientPersonSelect}
+          />
           <NotificationPreviewDialog
             open={previewOpen}
             onOpenChange={setPreviewOpen}

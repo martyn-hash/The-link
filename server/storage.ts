@@ -1117,6 +1117,7 @@ export interface IStorage {
   createProjectTypeNotification(notification: InsertProjectTypeNotification): Promise<ProjectTypeNotification>;
   updateProjectTypeNotification(id: string, notification: UpdateProjectTypeNotification): Promise<ProjectTypeNotification>;
   deleteProjectTypeNotification(id: string): Promise<void>;
+  getPreviewCandidates(projectTypeId: string, notification: ProjectTypeNotification): Promise<import("@shared/schema").PreviewCandidatesResponse>;
   
   // Notification System - Client Request Reminder operations
   getClientRequestRemindersByNotificationId(notificationId: string): Promise<ClientRequestReminder[]>;
@@ -12599,6 +12600,195 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectTypeNotification(id: string): Promise<void> {
     await db.delete(projectTypeNotifications).where(eq(projectTypeNotifications.id, id));
+  }
+
+  async getPreviewCandidates(projectTypeId: string, notification: ProjectTypeNotification): Promise<import("@shared/schema").PreviewCandidatesResponse> {
+    // Step 1: Get the service for this project type
+    const service = await this.getServiceByProjectTypeId(projectTypeId);
+    if (!service) {
+      return {
+        candidates: [],
+        hasEligibleCandidates: false,
+        message: "No service mapped to this project type. Preview is not available."
+      };
+    }
+
+    // Step 2: Get active client services (pre-filter in SQL)
+    const allClientServices = await db
+      .select({
+        clientService: clientServices,
+        client: clients
+      })
+      .from(clientServices)
+      .innerJoin(clients, eq(clientServices.clientId, clients.id))
+      .where(
+        and(
+          eq(clientServices.serviceId, service.id),
+          eq(clientServices.inactive, false),
+          isNull(clientServices.endDate),
+          not(eq(clientServices.frequency, 'one_time_only'))
+        )
+      );
+
+    if (allClientServices.length === 0) {
+      return {
+        candidates: [],
+        hasEligibleCandidates: false,
+        message: "No active client services found for this project type. Preview is not available."
+      };
+    }
+
+    // Step 3: Batch fetch projects for all clients
+    const clientIds = allClientServices.map(cs => cs.clientService.clientId);
+    let projectQuery = db
+      .select()
+      .from(projects)
+      .where(
+        and(
+          inArray(projects.clientId, clientIds),
+          eq(projects.projectTypeId, projectTypeId),
+          eq(projects.archived, false),
+          eq(projects.inactive, false)
+        )
+      );
+
+    // Filter by stage if this is a stage notification
+    if (notification.category === 'stage' && notification.stageId) {
+      const stage = await this.getStageById(notification.stageId);
+      if (!stage) {
+        return {
+          candidates: [],
+          hasEligibleCandidates: false,
+          message: "Stage not found. Preview is not available."
+        };
+      }
+      projectQuery = projectQuery.where(eq(projects.currentStatus, stage.name)) as any;
+    }
+
+    const allProjects = await projectQuery;
+
+    if (allProjects.length === 0) {
+      const message = notification.category === 'stage' 
+        ? "No active projects found in the specified stage. Preview is not available."
+        : "No active projects found for this project type. Preview is not available.";
+      return {
+        candidates: [],
+        hasEligibleCandidates: false,
+        message
+      };
+    }
+
+    // Step 4: Batch fetch people for all clients
+    const allClientPeopleData = await db
+      .select({
+        clientPerson: clientPeople,
+        person: people
+      })
+      .from(clientPeople)
+      .innerJoin(people, eq(clientPeople.personId, people.id))
+      .where(inArray(clientPeople.clientId, clientIds));
+
+    // Group data by client
+    const clientProjectsMap = new Map<string, Project[]>();
+    allProjects.forEach(project => {
+      const existing = clientProjectsMap.get(project.clientId) || [];
+      existing.push(project);
+      clientProjectsMap.set(project.clientId, existing);
+    });
+
+    const clientPeopleMap = new Map<string, (typeof allClientPeopleData[0])[]>();
+    allClientPeopleData.forEach(row => {
+      const existing = clientPeopleMap.get(row.clientPerson.clientId) || [];
+      existing.push(row);
+      clientPeopleMap.set(row.clientPerson.clientId, existing);
+    });
+
+    // Step 5: Build candidates - one per (client, project) combination
+    const candidates: import("@shared/schema").PreviewCandidate[] = [];
+
+    for (const { clientService, client } of allClientServices) {
+      const clientProjects = clientProjectsMap.get(client.id) || [];
+      if (clientProjects.length === 0) continue;
+
+      const relatedPeople = clientPeopleMap.get(client.id) || [];
+      
+      // Create a candidate for EACH project (not just one per client)
+      for (const project of clientProjects) {
+        // Build recipients with eligibility checks
+        const recipients: import("@shared/schema").PreviewCandidateRecipient[] = relatedPeople.map(({ person }) => {
+          let canPreview = true;
+          let ineligibleReason: string | undefined;
+
+          // Check receive notifications flag
+          if (!person.receiveNotifications) {
+            canPreview = false;
+            ineligibleReason = "Notifications disabled for this contact";
+          }
+          // Check channel-specific requirements
+          else if (notification.notificationType === 'email' && !person.primaryEmail) {
+            canPreview = false;
+            ineligibleReason = "No email address on file";
+          }
+          else if (notification.notificationType === 'sms' && !person.mobile) {
+            canPreview = false;
+            ineligibleReason = "No mobile number on file";
+          }
+          // Check channel-specific opt-ins
+          else if (notification.notificationType === 'email' && !person.receiveEmailNotifications) {
+            canPreview = false;
+            ineligibleReason = "Email notifications disabled for this contact";
+          }
+          else if (notification.notificationType === 'push' && !person.receivePushNotifications) {
+            canPreview = false;
+            ineligibleReason = "Push notifications disabled for this contact";
+          }
+
+          return {
+            personId: person.id,
+            fullName: person.fullName,
+            email: person.primaryEmail,
+            canPreview,
+            ineligibleReason
+          };
+        });
+
+        // Only add candidate if there's at least one person (even if ineligible)
+        if (recipients.length > 0) {
+          // Get stage info if applicable
+          let stageName: string | null = null;
+          if (project.currentStatus) {
+            stageName = project.currentStatus;
+          }
+
+          candidates.push({
+            clientId: client.id,
+            clientName: client.name,
+            projectId: project.id,
+            projectName: project.name,
+            projectDescription: project.description,
+            stageId: notification.stageId,
+            stageName,
+            dueDate: project.dueDate,
+            clientServiceId: clientService.id,
+            clientServiceName: service.name,
+            frequency: clientService.frequency,
+            recipients
+          });
+        }
+      }
+    }
+
+    const hasEligibleCandidates = candidates.some(c => 
+      c.recipients.some(r => r.canPreview)
+    );
+
+    return {
+      candidates,
+      hasEligibleCandidates,
+      message: !hasEligibleCandidates 
+        ? "Clients found but no eligible contacts. Contacts need notifications enabled and appropriate contact details (email/mobile)."
+        : undefined
+    };
   }
 
   // ============================================
