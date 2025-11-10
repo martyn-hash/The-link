@@ -188,7 +188,28 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
     },
-    onSuccess: () => {
+    onSuccess: async (data: any) => {
+      // Handle new response format: { project, notificationPreview }
+      const preview = data.notificationPreview;
+      
+      // If there's a notification preview, automatically send it without user approval
+      if (preview) {
+        try {
+          await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
+            projectId: project.id,
+            dedupeKey: preview.dedupeKey,
+            emailSubject: preview.emailSubject,
+            emailBody: preview.emailBody,
+            pushTitle: preview.pushTitle,
+            pushBody: preview.pushBody,
+            suppress: false,
+          });
+        } catch (error) {
+          console.error("Failed to send stage change notification:", error);
+          // Don't fail the whole flow if notification fails
+        }
+      }
+      
       toast({
         title: "Success",
         description: "Project status updated successfully",

@@ -42,7 +42,9 @@ import type {
   StageApproval,
   StageApprovalField,
   InsertStageApprovalResponse,
+  StageChangeNotificationPreview,
 } from "@shared/schema";
+import { StageChangeNotificationModal } from "./stage-change-notification-modal";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -135,6 +137,8 @@ export default function ChangeStatusModal({
   const [notes, setNotes] = useState("");
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const [showApprovalForm, setShowApprovalForm] = useState(false);
+  const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -395,15 +399,25 @@ export default function ChangeStatusModal({
       // Return context with previous data for rollback
       return { previousProjects };
     },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Project status updated successfully",
-      });
-      // Refetch to ensure we have the latest server state
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      onStatusUpdated?.();
-      onClose();
+    onSuccess: (data: any) => {
+      // Handle new response format: { project, notificationPreview }
+      const updatedProject = data.project || data;
+      const preview = data.notificationPreview;
+
+      if (preview) {
+        // Show notification approval modal
+        setNotificationPreview(preview);
+        setShowNotificationModal(true);
+      } else {
+        // No notification to send, complete the flow
+        toast({
+          title: "Success",
+          description: "Project status updated successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+        onStatusUpdated?.();
+        onClose();
+      }
     },
     onError: (error: any, _variables, context) => {
       // Rollback to previous state on error
@@ -413,6 +427,49 @@ export default function ChangeStatusModal({
       toast({
         title: "Error",
         description: error.message || "Failed to update project status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for sending stage change notification after user approval
+  const sendNotificationMutation = useMutation({
+    mutationFn: async (data: {
+      emailSubject: string;
+      emailBody: string;
+      pushTitle: string | null;
+      pushBody: string | null;
+      suppress: boolean;
+    }) => {
+      if (!notificationPreview) throw new Error("No notification preview available");
+      
+      return await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
+        projectId: project.id,
+        dedupeKey: notificationPreview.dedupeKey,
+        ...data,
+      });
+    },
+    onSuccess: (data: any) => {
+      const wasSent = !data.suppress && data.sent;
+      
+      toast({
+        title: "Success",
+        description: wasSent 
+          ? "Notification sent successfully" 
+          : "Notification suppressed",
+      });
+      
+      // Complete the flow: invalidate cache, call callbacks, close modals
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setShowNotificationModal(false);
+      setNotificationPreview(null);
+      onStatusUpdated?.();
+      onClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send notification",
         variant: "destructive",
       });
     },
@@ -621,6 +678,7 @@ export default function ChangeStatusModal({
     updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={showApprovalForm ? "max-w-6xl" : "max-w-2xl"} data-testid="dialog-change-status">
         <DialogHeader>
@@ -1001,5 +1059,16 @@ export default function ChangeStatusModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Stage Change Notification Approval Modal */}
+    <StageChangeNotificationModal
+      isOpen={showNotificationModal}
+      onClose={() => setShowNotificationModal(false)}
+      preview={notificationPreview}
+      onSend={async (editedData) => {
+        await sendNotificationMutation.mutateAsync(editedData);
+      }}
+    />
+    </>
   );
 }

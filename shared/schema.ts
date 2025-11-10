@@ -3628,3 +3628,43 @@ export const previewCandidatesResponseSchema = z.object({
 export type PreviewCandidateRecipient = z.infer<typeof previewCandidateRecipientSchema>;
 export type PreviewCandidate = z.infer<typeof previewCandidateSchema>;
 export type PreviewCandidatesResponse = z.infer<typeof previewCandidatesResponseSchema>;
+
+// Stage change notification preview schemas
+export const stageChangeNotificationRecipientSchema = z.object({
+  userId: z.string(),
+  name: z.string(),
+  email: z.string(),
+});
+
+export const stageChangeNotificationPreviewSchema = z.object({
+  projectId: z.string(),
+  newStageName: z.string(),
+  oldStageName: z.string().optional(),
+  dedupeKey: z.string(),  // Composite key for preventing duplicate sends
+  recipients: z.array(stageChangeNotificationRecipientSchema),
+  emailSubject: z.string(),  // Pre-rendered email subject
+  emailBody: z.string(),     // Pre-rendered email body (HTML)
+  pushTitle: z.string().nullable(),  // Pre-rendered push title
+  pushBody: z.string().nullable(),   // Pre-rendered push body
+  metadata: z.object({
+    projectName: z.string(),
+    clientName: z.string(),
+    dueDate: z.string().optional(),
+    changeReason: z.string().optional(),
+    notes: z.string().optional(),
+  }),
+});
+
+export const sendStageChangeNotificationSchema = z.object({
+  projectId: z.string(),
+  dedupeKey: z.string(),
+  emailSubject: z.string(),
+  emailBody: z.string(),
+  pushTitle: z.string().nullable(),
+  pushBody: z.string().nullable(),
+  suppress: z.boolean().default(false),  // If true, don't send but mark as suppressed
+});
+
+export type StageChangeNotificationRecipient = z.infer<typeof stageChangeNotificationRecipientSchema>;
+export type StageChangeNotificationPreview = z.infer<typeof stageChangeNotificationPreviewSchema>;
+export type SendStageChangeNotification = z.infer<typeof sendStageChangeNotificationSchema>;

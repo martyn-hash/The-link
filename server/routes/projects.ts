@@ -385,14 +385,17 @@ export function registerProjectRoutes(
 
       const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
 
-      // Send stage change notification to role assignee
-      await storage.sendStageChangeNotifications(
+      // Prepare stage change notification preview instead of sending immediately
+      const notificationPreview = await storage.prepareStageChangeNotification(
         updatedProject.id,
         updateData.newStatus,
         project.currentStatus
       );
 
-      res.json(updatedProject);
+      res.json({ 
+        project: updatedProject, 
+        notificationPreview 
+      });
     } catch (error) {
       console.error("[PATCH /api/projects/:id/status] Error updating project status:", error instanceof Error ? error.message : error);
       console.error("[PATCH /api/projects/:id/status] Full error stack:", error);
@@ -404,6 +407,128 @@ export function registerProjectRoutes(
         res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Failed to update project status" });
+      }
+    }
+  });
+
+  // Send stage change notification after user approval
+  app.post("/api/projects/:id/send-stage-change-notification", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const projectId = req.params.id;
+      
+      // Validate request body
+      const { sendStageChangeNotificationSchema } = await import("@shared/schema");
+      const notificationData = sendStageChangeNotificationSchema.parse({
+        ...req.body,
+        projectId,
+      });
+
+      // Verify user has permission to send notifications for this project
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // If suppress flag is true, don't send the notification
+      if (notificationData.suppress) {
+        console.log(`[Notification] User suppressed stage change notification for project ${projectId} with dedupe key ${notificationData.dedupeKey}`);
+        return res.json({ 
+          success: true, 
+          message: "Notification suppressed",
+          sent: false 
+        });
+      }
+
+      // Get the notification preview to find recipients
+      const preview = await storage.prepareStageChangeNotification(
+        projectId,
+        project.currentStatus
+      );
+
+      if (!preview) {
+        return res.status(400).json({ message: "No notification preview available" });
+      }
+
+      // Verify dedupe key matches (security check)
+      if (preview.dedupeKey !== notificationData.dedupeKey) {
+        return res.status(400).json({ message: "Invalid dedupe key - notification may have already been processed" });
+      }
+
+      // Send emails to all recipients with user-edited content
+      const { sendEmail } = await import("../emailService");
+      
+      const emailPromises = preview.recipients.map(async (recipient) => {
+        try {
+          const emailSent = await sendEmail({
+            to: recipient.email,
+            subject: notificationData.emailSubject,  // Use edited subject
+            html: notificationData.emailBody,        // Use edited body (as HTML)
+          });
+
+          if (emailSent) {
+            console.log(`Stage change notification sent to ${recipient.email} for project ${projectId}`);
+            return { success: true, email: recipient.email };
+          } else {
+            console.warn(`Failed to send stage change notification to ${recipient.email} for project ${projectId}`);
+            return { success: false, email: recipient.email, error: 'Email sending failed' };
+          }
+        } catch (error) {
+          console.error(`Error sending stage change notification to ${recipient.email}:`, error);
+          return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+      });
+
+      const results = await Promise.allSettled(emailPromises);
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+      const failed = results.length - successful;
+
+      // Send push notifications if provided
+      if (notificationData.pushTitle && notificationData.pushBody) {
+        try {
+          const { sendProjectStageChangeNotification } = await import('../notification-template-service');
+          
+          for (const recipient of preview.recipients) {
+            try {
+              await sendProjectStageChangeNotification(
+                projectId,
+                notificationData.pushTitle,
+                notificationData.pushBody,
+                preview.oldStageName || 'Unknown',
+                preview.newStageName,
+                recipient.userId,
+                recipient.name,
+                preview.metadata.dueDate
+              );
+            } catch (pushError) {
+              console.error(`Failed to send push notification to user ${recipient.userId}:`, pushError);
+            }
+          }
+        } catch (error) {
+          console.error(`Error sending push notifications for project ${projectId}:`, error);
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        message: `Notifications sent: ${successful} successful, ${failed} failed`,
+        sent: true,
+        stats: { successful, failed }
+      });
+    } catch (error) {
+      console.error("[POST /api/projects/:id/send-stage-change-notification] Error:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message) {
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to send stage change notification" });
       }
     }
   });

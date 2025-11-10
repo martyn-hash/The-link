@@ -285,6 +285,7 @@ import {
   type UpdateScheduledNotification,
   type NotificationHistory,
   type InsertNotificationHistory,
+  type StageChangeNotificationPreview,
   companySettings,
   type CompanySettings,
   type UpdateCompanySettings,
@@ -608,6 +609,7 @@ export interface IStorage {
   getUsersByRole(role: string): Promise<User[]>;
   
   // Stage change notification operations
+  prepareStageChangeNotification(projectId: string, newStageName: string, oldStageName?: string): Promise<StageChangeNotificationPreview | null>;
   sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void>;
   
   // Services CRUD
@@ -5923,6 +5925,235 @@ export class DatabaseStorage implements IStorage {
         eq(magicLinkTokens.used, false),
         sql`${magicLinkTokens.expiresAt} > now()`
       ));
+  }
+
+  async prepareStageChangeNotification(
+    projectId: string, 
+    newStageName: string, 
+    oldStageName?: string
+  ): Promise<StageChangeNotificationPreview | null> {
+    try {
+      // Only prepare notifications if the stage actually changed
+      if (oldStageName && oldStageName === newStageName) {
+        return null;
+      }
+
+      // Get the project with all related data
+      const project = await this.getProject(projectId);
+      if (!project) {
+        console.warn(`Project ${projectId} not found for stage change notification preview`);
+        return null;
+      }
+
+      // Get the new kanban stage to find the assigned role
+      const [newStage] = await db
+        .select()
+        .from(kanbanStages)
+        .where(eq(kanbanStages.name, newStageName));
+
+      if (!newStage) {
+        console.warn(`Kanban stage '${newStageName}' not found for notification preview`);
+        return null;
+      }
+
+      // Determine which users to notify based on the stage assignment
+      let usersToNotify: User[] = [];
+      
+      if (newStage.assignedUserId) {
+        // Direct user assignment - notify specific user
+        const assignedUser = await this.getUser(newStage.assignedUserId);
+        if (assignedUser) {
+          usersToNotify = [assignedUser];
+        }
+      } else if (newStage.assignedWorkRoleId) {
+        // Work role assignment - notify users assigned to this role for the client
+        const workRole = await this.getWorkRoleById(newStage.assignedWorkRoleId);
+        if (workRole) {
+          const roleAssignment = await this.resolveRoleAssigneeForClient(
+            project.clientId, 
+            project.projectTypeId, 
+            workRole.name
+          );
+          if (roleAssignment) {
+            usersToNotify = [roleAssignment];
+          }
+        }
+      }
+
+      if (usersToNotify.length === 0) {
+        console.log(`No users to notify for stage '${newStageName}', skipping notification preview`);
+        return null;
+      }
+
+      // Get project with client information and chronology for email
+      const projectWithClient = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+        with: {
+          client: true,
+          chronology: {
+            orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+            with: {
+              fieldResponses: {
+                with: {
+                  customField: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!projectWithClient) {
+        console.warn(`Project with client data not found for ${projectId}`);
+        return null;
+      }
+      
+      // Get the most recent chronology entry (the current stage change)
+      const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
+        ? projectWithClient.chronology[0] 
+        : null;
+      
+      // Extract change reason and notes from the most recent entry
+      const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
+      const notes = mostRecentChronologyEntry?.notes || undefined;
+
+      // PERFORMANCE FIX: Batch-load notification preferences for all users at once
+      const userIds = usersToNotify.map(user => user.id);
+      const allPreferences = await db
+        .select()
+        .from(userNotificationPreferences)
+        .where(inArray(userNotificationPreferences.userId, userIds));
+      
+      // Create a map for quick preference lookup
+      const preferencesMap = new Map<string, UserNotificationPreferences>();
+      allPreferences.forEach(pref => {
+        preferencesMap.set(pref.userId, pref);
+      });
+
+      // Filter users who need notifications and validate their data
+      const finalUsersToNotify = usersToNotify.filter(user => {
+        // Get preferences or use defaults
+        const preferences = preferencesMap.get(user.id);
+        const notifyStageChanges = preferences?.notifyStageChanges ?? true; // Default to true
+        
+        if (!notifyStageChanges) {
+          console.log(`User ${user.email} has stage change notifications disabled, skipping`);
+          return false;
+        }
+
+        // Validate user has required fields for email
+        if (!user.email || !user.firstName) {
+          console.warn(`User ${user.id} missing email or name, skipping notification`);
+          return false;
+        }
+
+        return true;
+      });
+
+      if (finalUsersToNotify.length === 0) {
+        console.log(`No eligible users to notify for project ${projectId} stage change to ${newStageName}`);
+        return null;
+      }
+
+      // Prepare chronology data for email (only need toStatus and timestamp)
+      const chronologyForEmail = (projectWithClient.chronology || []).map(entry => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
+      }));
+
+      // Prepare stage config for email
+      const stageConfigForEmail = {
+        maxInstanceTime: newStage.maxInstanceTime,
+      };
+
+      // Calculate due date
+      let formattedDueDate: string | undefined = undefined;
+      
+      if (chronologyForEmail && chronologyForEmail.length > 0 && stageConfigForEmail.maxInstanceTime) {
+        const { addBusinessHours } = await import('@shared/businessTime');
+        
+        // Find when project entered current stage
+        const sortedChronology = [...chronologyForEmail].sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        const stageEntry = sortedChronology.find(entry => entry.toStatus === newStageName);
+        
+        let assignedTimestamp: string | null = null;
+        if (stageEntry) {
+          assignedTimestamp = stageEntry.timestamp;
+        } else if (projectWithClient.createdAt) {
+          assignedTimestamp = projectWithClient.createdAt instanceof Date 
+            ? projectWithClient.createdAt.toISOString() 
+            : projectWithClient.createdAt;
+        }
+        
+        // Calculate due date if we have max time and assignment timestamp
+        if (assignedTimestamp && stageConfigForEmail.maxInstanceTime > 0) {
+          const deadlineDate = addBusinessHours(assignedTimestamp, stageConfigForEmail.maxInstanceTime);
+          formattedDueDate = deadlineDate.toLocaleString('en-GB', { 
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+          });
+        }
+      }
+
+      // Generate deduplication key
+      const recipientIds = finalUsersToNotify.map(u => u.id).sort().join(',');
+      const dedupeKey = `${projectId}:${newStageName}:${changeReason || 'none'}:${recipientIds}`;
+
+      // Pre-render email subject and body
+      const emailSubject = `Project Stage Update: ${projectWithClient.description} - ${newStageName}`;
+      
+      // Build email body (simplified version - actual implementation would use email template service)
+      const emailBody = `
+        <p>Hello,</p>
+        <p>The project "${projectWithClient.description}" for ${projectWithClient.client.name} has been moved to stage: <strong>${newStageName}</strong></p>
+        ${oldStageName ? `<p>Previous stage: ${oldStageName}</p>` : ''}
+        ${changeReason ? `<p>Change reason: ${changeReason}</p>` : ''}
+        ${notes ? `<p>Notes: ${notes}</p>` : ''}
+        ${formattedDueDate ? `<p>Due date: ${formattedDueDate}</p>` : ''}
+        <p>Please log into The Link system to review the project and take the necessary action.</p>
+        <p>Best regards,<br/>The Link Team</p>
+      `.trim();
+
+      // Pre-render push notification title and body
+      const pushTitle = `${newStageName}: ${projectWithClient.description}`;
+      const pushBody = `${projectWithClient.client.name}${formattedDueDate ? ` | Due: ${formattedDueDate}` : ''}`;
+
+      // Build recipients array
+      const recipients = finalUsersToNotify.map(user => ({
+        userId: user.id,
+        name: `${user.firstName} ${user.lastName || ''}`.trim(),
+        email: user.email!,
+      }));
+
+      return {
+        projectId,
+        newStageName,
+        oldStageName,
+        dedupeKey,
+        recipients,
+        emailSubject,
+        emailBody,
+        pushTitle,
+        pushBody,
+        metadata: {
+          projectName: projectWithClient.description,
+          clientName: projectWithClient.client.name,
+          dueDate: formattedDueDate,
+          changeReason,
+          notes,
+        },
+      };
+    } catch (error) {
+      console.error(`Error preparing stage change notification for project ${projectId}:`, error);
+      return null;
+    }
   }
 
   async sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void> {
