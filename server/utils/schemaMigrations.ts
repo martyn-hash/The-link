@@ -374,6 +374,30 @@ async function ensureFirmSettingsColumns(): Promise<void> {
 }
 
 /**
+ * Add push_notifications_enabled column to company_settings table
+ */
+async function ensurePushNotificationsEnabledColumn(): Promise<void> {
+  const exists = await columnExists('company_settings', 'push_notifications_enabled');
+  
+  if (exists) {
+    console.log('[Schema Migration] ✓ push_notifications_enabled column already exists in company_settings');
+    return;
+  }
+  
+  console.log('[Schema Migration] Adding push_notifications_enabled column to company_settings...');
+  try {
+    await db.execute(sql`
+      ALTER TABLE company_settings 
+      ADD COLUMN push_notifications_enabled BOOLEAN NOT NULL DEFAULT false;
+    `);
+    console.log('[Schema Migration] ✓ Successfully added push_notifications_enabled to company_settings');
+  } catch (error) {
+    console.error('[Schema Migration] ✗ Failed to add push_notifications_enabled to company_settings:', error);
+    throw error;
+  }
+}
+
+/**
  * Run all schema migrations
  * Called on server startup to ensure database schema is up to date
  */
@@ -386,6 +410,7 @@ export async function runSchemaMigrations(): Promise<void> {
     await migratePushNotificationFields();
     await ensureDateReferenceColumn();
     await ensureFirmSettingsColumns();
+    await ensurePushNotificationsEnabledColumn(); // Must run early - used by notification scheduler
     await ensureNotificationsActiveColumn();
     await ensureReceiveNotificationsColumn();
     
