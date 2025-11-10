@@ -75,8 +75,20 @@ A comprehensive automated multi-channel (email, SMS, push) notification system t
 - Automated Cleanup: Service deletion cancels associated notifications.
 - Hourly Cron: Background job processes due notifications.
 - Notification Management UI: Table-based display with edit functionality and a preview capability with real-time cache invalidation for fresh eligibility data.
-- Client-Specific Notifications View: Dedicated three-tab interface (Active, Do Not Send, Sent Notifications) for managing scheduled notifications for a specific client. Sent Notifications tab displays historical sent notifications ordered by sentAt timestamp.
+- Client-Specific Notifications View: Dedicated four-tab interface (Active, Do Not Send, Sent Notifications, Failed) for managing scheduled notifications for a specific client. Sent Notifications tab displays historical sent notifications ordered by sentAt timestamp.
 - Auto-Cancellation: Scheduled notifications are automatically cancelled when a project is completed (via Complete button) or moved to a final stage (canBeFinalStage=true). Cancelled notifications show in the Do Not Send tab with appropriate cancellation reasons. System-initiated cancellations use cancelledBy=null to avoid foreign key violations.
+- Pre-Validation System: Before making expensive API calls to SendGrid/VoodooSMS/push services, the system validates recipient contact information:
+  - Email: Validates format using regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+  - SMS: Validates E.164 international format using regex `/^\+[1-9]\d{1,14}$/`
+  - Push: Verifies active push subscriptions exist for the client
+  - Invalid notifications are immediately marked as 'failed' with descriptive error messages, without making API calls (saves costs)
+  - Push subscription queries are optimized to avoid duplicate database calls
+- Failed Notifications Tracking: Failed notifications (from pre-validation or API errors) are:
+  - Marked with status='failed' and a descriptive failureReason field
+  - Displayed in the "Failed" tab with red badges showing the specific validation error
+  - Logged in notification_history with sentAt=NULL for audit trail
+  - Accessible via dedicated UI tab showing failure reasons for troubleshooting
+- Unique Contact Constraints: Case-insensitive unique constraint on people.primaryEmail and unique constraint on people.primaryPhone to prevent duplicate contact information across all people in the system.
 - Performance Optimization: Composite indexes on (client_id, status, scheduled_for) and (client_id, status, sent_at) ensure efficient querying for all notification tabs.
 
 ## External Dependencies
