@@ -1089,18 +1089,25 @@ export function registerClientRoutes(
           
           // Only schedule start_date notifications (due_date notifications are scheduled when project is created)
           if (fullClientService && fullClientService.nextStartDate) {
-            // Fetch all related people for the client
-            const allRelatedPeople = await storage.getClientPeopleByClientId(fullClientService.clientId);
-            const peopleIds = allRelatedPeople.map(p => p.person.id);
+            // Get the service to access its projectTypeId
+            const service = await storage.getServiceById(fullClientService.serviceId);
             
-            await scheduleServiceStartDateNotifications({
-              clientServiceId: fullClientService.id,
-              clientId: fullClientService.clientId,
-              projectTypeId: fullClientService.serviceId,
-              nextStartDate: fullClientService.nextStartDate,
-              relatedPeople: peopleIds,
-            });
-            console.log(`[Notifications] Scheduled start_date notifications for client service ${fullClientService.id} with ${peopleIds.length} related people`);
+            if (!service || !service.projectTypeId) {
+              console.warn(`[Notifications] Cannot schedule notifications - service ${fullClientService.serviceId} has no project type mapped`);
+            } else {
+              // Fetch all related people for the client
+              const allRelatedPeople = await storage.getClientPeopleByClientId(fullClientService.clientId);
+              const peopleIds = allRelatedPeople.map(p => p.person.id);
+              
+              await scheduleServiceStartDateNotifications({
+                clientServiceId: fullClientService.id,
+                clientId: fullClientService.clientId,
+                projectTypeId: service.projectTypeId,
+                nextStartDate: fullClientService.nextStartDate,
+                relatedPeople: peopleIds,
+              });
+              console.log(`[Notifications] Scheduled start_date notifications for client service ${fullClientService.id} (project type: ${service.projectTypeId}) with ${peopleIds.length} related people`);
+            }
           }
         } catch (notifError) {
           console.error('[Notifications] Error scheduling notifications for client service:', notifError);
@@ -1348,18 +1355,25 @@ export function registerClientRoutes(
           
           // Only schedule start_date notifications (due_date notifications are scheduled when project is created)
           if (fullClientService && fullClientService.nextStartDate) {
-            // Fetch all related people for the client
-            const allRelatedPeople = await storage.getClientPeopleByClientId(fullClientService.clientId);
-            const peopleIds = allRelatedPeople.map(p => p.person.id);
+            // Get the service to access its projectTypeId
+            const service = await storage.getServiceById(fullClientService.serviceId);
             
-            await scheduleServiceStartDateNotifications({
-              clientServiceId: fullClientService.id,
-              clientId: fullClientService.clientId,
-              projectTypeId: fullClientService.serviceId,
-              nextStartDate: fullClientService.nextStartDate,
-              relatedPeople: peopleIds,
-            });
-            console.log(`[Notifications] Updated start_date scheduled notifications for client service ${fullClientService.id} with ${peopleIds.length} related people`);
+            if (!service || !service.projectTypeId) {
+              console.warn(`[Notifications] Cannot update notifications - service ${fullClientService.serviceId} has no project type mapped`);
+            } else {
+              // Fetch all related people for the client
+              const allRelatedPeople = await storage.getClientPeopleByClientId(fullClientService.clientId);
+              const peopleIds = allRelatedPeople.map(p => p.person.id);
+              
+              await scheduleServiceStartDateNotifications({
+                clientServiceId: fullClientService.id,
+                clientId: fullClientService.clientId,
+                projectTypeId: service.projectTypeId,
+                nextStartDate: fullClientService.nextStartDate,
+                relatedPeople: peopleIds,
+              });
+              console.log(`[Notifications] Updated start_date scheduled notifications for client service ${fullClientService.id} (project type: ${service.projectTypeId}) with ${peopleIds.length} related people`);
+            }
           }
         } catch (notifError) {
           console.error('[Notifications] Error updating notifications for client service:', notifError);

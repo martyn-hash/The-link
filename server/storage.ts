@@ -12603,15 +12603,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPreviewCandidates(projectTypeId: string, notification: ProjectTypeNotification): Promise<import("@shared/schema").PreviewCandidatesResponse> {
+    console.log(`[PreviewCandidates] Starting preview candidate search for project type ${projectTypeId}, notification type: ${notification.notificationType}`);
+    
     // Step 1: Get the service for this project type
     const service = await this.getServiceByProjectTypeId(projectTypeId);
     if (!service) {
+      console.log(`[PreviewCandidates] No service mapped to project type ${projectTypeId}`);
       return {
         candidates: [],
         hasEligibleCandidates: false,
         message: "No service mapped to this project type. Preview is not available."
       };
     }
+    console.log(`[PreviewCandidates] Found service: ${service.name} (${service.id})`);
 
     // Step 2: Get active client services (pre-filter in SQL)
     const allClientServices = await db
@@ -12624,12 +12628,12 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(clientServices.serviceId, service.id),
-          eq(clientServices.inactive, false),
-          isNull(clientServices.endDate),
+          eq(clientServices.isActive, true),
           not(eq(clientServices.frequency, 'one_time_only'))
         )
       );
 
+    console.log(`[PreviewCandidates] Found ${allClientServices.length} active client service(s)`);
     if (allClientServices.length === 0) {
       return {
         candidates: [],
@@ -12667,10 +12671,12 @@ export class DatabaseStorage implements IStorage {
       .from(projects)
       .where(and(...projectConditions));
 
+    console.log(`[PreviewCandidates] Found ${allProjects.length} active project(s) for this project type`);
     if (allProjects.length === 0) {
       const message = notification.category === 'stage' 
         ? "No active projects found in the specified stage. Preview is not available."
         : "No active projects found for this project type. Preview is not available.";
+      console.log(`[PreviewCandidates] ${message}`);
       return {
         candidates: [],
         hasEligibleCandidates: false,
@@ -12687,6 +12693,8 @@ export class DatabaseStorage implements IStorage {
       .from(clientPeople)
       .innerJoin(people, eq(clientPeople.personId, people.id))
       .where(inArray(clientPeople.clientId, clientIds));
+    
+    console.log(`[PreviewCandidates] Found ${allClientPeopleData.length} people across all clients`);
 
     // Group data by client
     const clientProjectsMap = new Map<string, Project[]>();
