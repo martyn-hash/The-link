@@ -3578,21 +3578,3 @@ export type ProjectWithRelations = Project & {
   }[];
   stageRoleAssignee?: User; // The user assigned to the role for the current stage
 };
-
-// Notification preview candidate type
-export type PreviewCandidate = {
-  personId: string;
-  personName: string;
-  personEmail: string | null;
-  personPhone: string | null;
-  clientId: string;
-  clientName: string;
-  projectId: string;
-  projectName: string;
-  projectStatus: string;
-  projectDueDate: Date | null;
-  projectStartDate: Date | null;
-  hasEmail: boolean;
-  hasPhone: boolean;
-  pushOptIn: boolean;
-};
