@@ -3030,6 +3030,7 @@ export const companySettings = pgTable("company_settings", {
   firmPhone: varchar("firm_phone"), // Firm phone number for notification templates
   firmEmail: varchar("firm_email"), // Firm email for notification templates
   portalUrl: varchar("portal_url"), // Base URL for client portal links (e.g., https://example.replit.app)
+  pushNotificationsEnabled: boolean("push_notifications_enabled").default(false).notNull(), // Global toggle for push notifications
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

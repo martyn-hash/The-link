@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Settings, Save } from "lucide-react";
+import { Settings, Save, Bell } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 export default function CompanySettingsPage() {
@@ -18,6 +19,7 @@ export default function CompanySettingsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [emailSenderName, setEmailSenderName] = useState("");
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
 
   // Redirect if not super admin
   useEffect(() => {
@@ -36,6 +38,7 @@ export default function CompanySettingsPage() {
   useEffect(() => {
     if (settings) {
       setEmailSenderName(settings.emailSenderName || "The Link Team");
+      setPushNotificationsEnabled(settings.pushNotificationsEnabled || false);
     }
   }, [settings]);
 
@@ -63,6 +66,7 @@ export default function CompanySettingsPage() {
   const handleSave = () => {
     updateSettingsMutation.mutate({
       emailSenderName,
+      pushNotificationsEnabled,
     });
   };
 
@@ -131,6 +135,47 @@ export default function CompanySettingsPage() {
                 onClick={handleSave}
                 disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
                 data-testid="button-save-company-settings"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Push Notifications Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="w-5 h-5" />
+              Push Notifications
+            </CardTitle>
+            <CardDescription>
+              Control whether push notifications are sent to clients
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between space-x-4">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="push-notifications-enabled">Enable Push Notifications</Label>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, the system will schedule and send push notifications to clients. Turn off until clients are using the portal to avoid unnecessary notifications.
+                </p>
+              </div>
+              <Switch
+                id="push-notifications-enabled"
+                data-testid="switch-push-notifications-enabled"
+                checked={pushNotificationsEnabled}
+                onCheckedChange={setPushNotificationsEnabled}
+                disabled={settingsLoading || updateSettingsMutation.isPending}
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSave}
+                disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                data-testid="button-save-push-settings"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}

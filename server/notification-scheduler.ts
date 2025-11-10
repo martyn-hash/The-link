@@ -9,6 +9,7 @@ import {
   clients,
   people,
   taskInstances,
+  companySettings,
   type InsertScheduledNotification,
   type ProjectTypeNotification,
   type ClientRequestReminder,
@@ -56,6 +57,26 @@ async function areNotificationsActive(projectTypeId: string): Promise<boolean> {
   }
   
   return isActive;
+}
+
+/**
+ * Check if push notifications are enabled globally
+ * Returns false if push notifications are disabled in company settings
+ */
+async function arePushNotificationsEnabled(): Promise<boolean> {
+  const [settings] = await db
+    .select({ pushNotificationsEnabled: companySettings.pushNotificationsEnabled })
+    .from(companySettings)
+    .limit(1);
+  
+  // Default to false if no settings exist (conservative approach)
+  const isEnabled = settings?.pushNotificationsEnabled || false;
+  
+  if (!isEnabled) {
+    console.log(`[NotificationScheduler] Push notifications are disabled globally in company settings`);
+  }
+  
+  return isEnabled;
 }
 
 /**
@@ -162,6 +183,9 @@ export async function scheduleServiceStartDateNotifications(
     return;
   }
 
+  // Check if push notifications are enabled globally (cache for this scheduling run)
+  const pushEnabled = await arePushNotificationsEnabled();
+
   // Filter people by notification preferences
   const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
 
@@ -208,6 +232,14 @@ export async function scheduleServiceStartDateNotifications(
     if (filteredPeople.length === 0) {
       console.log(
         `[NotificationScheduler] Skipping notification ${notification.id} - no eligible recipients (all opted out or no people associated with client)`
+      );
+      continue;
+    }
+
+    // Skip push notifications if globally disabled
+    if (notification.notificationType === 'push' && !pushEnabled) {
+      console.log(
+        `[NotificationScheduler] Skipping push notification ${notification.id} - push notifications are disabled globally`
       );
       continue;
     }
@@ -305,6 +337,9 @@ export async function scheduleProjectDueDateNotifications(
     return;
   }
 
+  // Check if push notifications are enabled globally (cache for this scheduling run)
+  const pushEnabled = await arePushNotificationsEnabled();
+
   // Filter people by notification preferences
   const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
 
@@ -351,6 +386,14 @@ export async function scheduleProjectDueDateNotifications(
     if (filteredPeople.length === 0) {
       console.log(
         `[NotificationScheduler] Skipping notification ${notification.id} - no eligible recipients (all opted out or no people associated with client)`
+      );
+      continue;
+    }
+
+    // Skip push notifications if globally disabled
+    if (notification.notificationType === 'push' && !pushEnabled) {
+      console.log(
+        `[NotificationScheduler] Skipping push notification ${notification.id} - push notifications are disabled globally`
       );
       continue;
     }
@@ -512,6 +555,14 @@ export async function scheduleProjectNotifications(
       continue;
     }
 
+    // Skip push notifications if globally disabled
+    if (notification.notificationType === 'push' && !pushEnabled) {
+      console.log(
+        `[NotificationScheduler] Skipping push notification ${notification.id} - push notifications are disabled globally`
+      );
+      continue;
+    }
+
     // Create one notification per recipient
     for (const personId of filteredPeople) {
       scheduledNotificationsToInsert.push({
@@ -598,6 +649,9 @@ export async function scheduleClientRequestReminders(
   } = params;
 
   console.log(`[NotificationScheduler] Scheduling client request reminders for task ${taskInstanceId}`);
+
+  // Check if push notifications are enabled globally (cache for this scheduling run)
+  const pushEnabled = await arePushNotificationsEnabled();
 
   // Filter people by notification preferences
   const filteredPeople = await filterPeopleByNotificationPreference(relatedPeople);
