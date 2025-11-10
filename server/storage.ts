@@ -4231,6 +4231,18 @@ export class DatabaseStorage implements IStorage {
     // CRITICAL FIX: Use captured oldStatus instead of project.currentStatus to avoid scope issues
     await this.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
 
+    // Auto-cancel remaining notifications when project moves to a final stage
+    // (stages that can be final stages are intended as completion points)
+    if (stage.canBeFinalStage && oldStatus !== update.newStatus) {
+      console.log(`[Storage] Project ${update.projectId} moved to final stage '${update.newStatus}', cancelling all remaining notifications`);
+      
+      try {
+        await this.cancelScheduledNotificationsForProject(update.projectId, `Project moved to final stage: ${update.newStatus}`);
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for project ${update.projectId}:`, error);
+      }
+    }
+
     return updatedProject;
   }
 
@@ -12982,6 +12994,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         status: 'cancelled',
         cancelReason: reason,
+        cancelledBy: null, // System-initiated cancellation (no specific user)
         cancelledAt: new Date(),
         updatedAt: new Date()
       })
