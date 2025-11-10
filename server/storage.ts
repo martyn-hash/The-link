@@ -12640,17 +12640,14 @@ export class DatabaseStorage implements IStorage {
 
     // Step 3: Batch fetch projects for all clients
     const clientIds = allClientServices.map(cs => cs.clientService.clientId);
-    let projectQuery = db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          inArray(projects.clientId, clientIds),
-          eq(projects.projectTypeId, projectTypeId),
-          eq(projects.archived, false),
-          eq(projects.inactive, false)
-        )
-      );
+    
+    // Build query conditions
+    const projectConditions = [
+      inArray(projects.clientId, clientIds),
+      eq(projects.projectTypeId, projectTypeId),
+      eq(projects.archived, false),
+      eq(projects.inactive, false)
+    ];
 
     // Filter by stage if this is a stage notification
     if (notification.category === 'stage' && notification.stageId) {
@@ -12662,10 +12659,13 @@ export class DatabaseStorage implements IStorage {
           message: "Stage not found. Preview is not available."
         };
       }
-      projectQuery = projectQuery.where(eq(projects.currentStatus, stage.name)) as any;
+      projectConditions.push(eq(projects.currentStatus, stage.name));
     }
 
-    const allProjects = await projectQuery;
+    const allProjects = await db
+      .select()
+      .from(projects)
+      .where(and(...projectConditions));
 
     if (allProjects.length === 0) {
       const message = notification.category === 'stage' 
