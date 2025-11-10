@@ -70,10 +70,11 @@ A comprehensive automated multi-channel (email, SMS, push) notification system t
 - Idempotent and Retroactive Scheduling: Ensures no duplicates and allows scheduling for existing services.
 - Multi-Channel Delivery: SendGrid for emails, VoodooSMS placeholder for SMS, and existing push infrastructure.
 - Character Limits: Enforced for SMS and push notifications.
+- SMS E.164 Validation: Phone numbers must be in international E.164 format (e.g., +447441392660) for SMS delivery. The preview system validates phone formats and marks non-compliant contacts as ineligible with actionable error messages.
 - Audit Trail: Comprehensive logging for all cancellation operations.
 - Automated Cleanup: Service deletion cancels associated notifications.
 - Hourly Cron: Background job processes due notifications.
-- Notification Management UI: Table-based display with edit functionality and a preview capability.
+- Notification Management UI: Table-based display with edit functionality and a preview capability with real-time cache invalidation for fresh eligibility data.
 - Client-Specific Notifications View: Dedicated interface for managing scheduled notifications for a specific client.
 
 ## External Dependencies
