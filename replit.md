@@ -75,7 +75,9 @@ A comprehensive automated multi-channel (email, SMS, push) notification system t
 - Automated Cleanup: Service deletion cancels associated notifications.
 - Hourly Cron: Background job processes due notifications.
 - Notification Management UI: Table-based display with edit functionality and a preview capability with real-time cache invalidation for fresh eligibility data.
-- Client-Specific Notifications View: Dedicated interface for managing scheduled notifications for a specific client.
+- Client-Specific Notifications View: Dedicated three-tab interface (Active, Do Not Send, Sent Notifications) for managing scheduled notifications for a specific client. Sent Notifications tab displays historical sent notifications ordered by sentAt timestamp.
+- Auto-Cancellation: Scheduled notifications are automatically cancelled when a project is completed (via Complete button) or moved to a final stage (canBeFinalStage=true). Cancelled notifications show in the Do Not Send tab with appropriate cancellation reasons. System-initiated cancellations use cancelledBy=null to avoid foreign key violations.
+- Performance Optimization: Composite indexes on (client_id, status, scheduled_for) and (client_id, status, sent_at) ensure efficient querying for all notification tabs.
 
 ## External Dependencies
 
