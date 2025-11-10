@@ -1101,9 +1101,13 @@ function NotificationRow({
   const [previewOpen, setPreviewOpen] = useState(false);
   
   // Fetch preview candidates when selection modal opens
+  // Set staleTime: 0 and refetchOnMount: 'always' to ensure fresh SMS eligibility data
   const candidatesQuery = useQuery<PreviewCandidatesResponse>({
     queryKey: ['/api/project-types', projectTypeId, 'notifications', notification.id, 'preview-candidates'],
     enabled: selectionModalOpen,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
   
   const previewMutation = useMutation({
@@ -1120,7 +1124,7 @@ function NotificationRow({
     },
   });
   
-  const handlePreviewClick = () => {
+  const handlePreviewClick = async () => {
     setSelectionModalOpen(true);
   };
   

@@ -12602,6 +12602,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(projectTypeNotifications).where(eq(projectTypeNotifications.id, id));
   }
 
+  // Helper function to validate E.164 phone number format
+  // E.164 format: +[country code][subscriber number]
+  // Example: +447441392660 (UK number)
+  // Must start with +, followed by 1-15 digits total
+  private isValidE164PhoneNumber(phoneNumber: string | null | undefined): boolean {
+    if (!phoneNumber) return false;
+    // E.164 regex: Must start with +, then 1-15 digits (no spaces, dashes, etc.)
+    const e164Regex = /^\+[1-9]\d{1,14}$/;
+    return e164Regex.test(phoneNumber);
+  }
+
   async getPreviewCandidates(projectTypeId: string, notification: ProjectTypeNotification): Promise<import("@shared/schema").PreviewCandidatesResponse> {
     console.log(`[PreviewCandidates] Starting preview candidate search for project type ${projectTypeId}, notification type: ${notification.notificationType}`);
     
@@ -12737,9 +12748,14 @@ export class DatabaseStorage implements IStorage {
             canPreview = false;
             ineligibleReason = "No email address on file";
           }
-          else if (notification.notificationType === 'sms' && !person.primaryPhone) {
-            canPreview = false;
-            ineligibleReason = "No mobile number on file";
+          else if (notification.notificationType === 'sms') {
+            if (!person.primaryPhone) {
+              canPreview = false;
+              ineligibleReason = "No mobile number on file";
+            } else if (!this.isValidE164PhoneNumber(person.primaryPhone)) {
+              canPreview = false;
+              ineligibleReason = `Phone number must be in E.164 format (e.g., +447441392660). Current format: ${person.primaryPhone}`;
+            }
           }
           // Note: Channel-specific opt-ins (receiveEmailNotifications, receivePushNotifications) 
           // are not currently in the schema. We only check the general receiveNotifications flag above.
