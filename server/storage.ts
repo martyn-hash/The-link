@@ -12737,19 +12737,12 @@ export class DatabaseStorage implements IStorage {
             canPreview = false;
             ineligibleReason = "No email address on file";
           }
-          else if (notification.notificationType === 'sms' && !person.mobile) {
+          else if (notification.notificationType === 'sms' && !person.primaryPhone) {
             canPreview = false;
             ineligibleReason = "No mobile number on file";
           }
-          // Check channel-specific opt-ins
-          else if (notification.notificationType === 'email' && !person.receiveEmailNotifications) {
-            canPreview = false;
-            ineligibleReason = "Email notifications disabled for this contact";
-          }
-          else if (notification.notificationType === 'push' && !person.receivePushNotifications) {
-            canPreview = false;
-            ineligibleReason = "Push notifications disabled for this contact";
-          }
+          // Note: Channel-specific opt-ins (receiveEmailNotifications, receivePushNotifications) 
+          // are not currently in the schema. We only check the general receiveNotifications flag above.
 
           return {
             personId: person.id,
