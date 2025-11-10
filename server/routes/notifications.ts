@@ -352,7 +352,7 @@ export function registerNotificationRoutes(
             let peopleIds = clientPeopleCache.get(clientService.clientId);
             if (!peopleIds) {
               const allRelatedPeople = await storage.getClientPeopleByClientId(clientService.clientId);
-              peopleIds = allRelatedPeople.map(p => p.person.id);
+              peopleIds = allRelatedPeople.map(p => p.personId);
               clientPeopleCache.set(clientService.clientId, peopleIds);
             }
             
@@ -393,7 +393,7 @@ export function registerNotificationRoutes(
             let peopleIds = clientPeopleCache.get(project.clientId);
             if (!peopleIds) {
               const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
-              peopleIds = allRelatedPeople.map(p => p.person.id);
+              peopleIds = allRelatedPeople.map(p => p.personId);
               clientPeopleCache.set(project.clientId, peopleIds);
             }
             
