@@ -3165,6 +3165,8 @@ export const scheduledNotifications = pgTable("scheduled_notifications", {
   index("idx_scheduled_notifications_task_instance_id").on(table.taskInstanceId),
   index("idx_scheduled_notifications_scheduled_for").on(table.scheduledFor),
   index("idx_scheduled_notifications_status").on(table.status),
+  // Composite index for Sent Notifications tab performance (client + status + sent date)
+  index("idx_scheduled_notifications_client_status_sent").on(table.clientId, table.status, table.sentAt),
   // Check constraint: must have either projectTypeNotificationId OR clientRequestReminderId
   check("check_notification_source", sql`
     (project_type_notification_id IS NOT NULL AND client_request_reminder_id IS NULL) OR

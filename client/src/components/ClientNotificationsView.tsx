@@ -22,6 +22,7 @@ type NotificationWithRelations = {
   notificationTypeLabel: string;
   notificationType: string;
   scheduledFor: string;
+  sentAt?: string | null;
   status: string;
   recipient: {
     id: string;
@@ -46,7 +47,7 @@ interface ClientNotificationsViewProps {
 
 export function ClientNotificationsView({ clientId }: ClientNotificationsViewProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"active" | "cancelled">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "sent">("active");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Preview dialog state
@@ -75,8 +76,10 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
     // Filter by status based on active tab
     if (activeTab === "active") {
       if (!params.status) params.status = "scheduled";
-    } else {
+    } else if (activeTab === "cancelled") {
       params.status = "cancelled";
+    } else if (activeTab === "sent") {
+      params.status = "sent";
     }
     
     return params;
@@ -294,12 +297,13 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={(val) => {
-          setActiveTab(val as "active" | "cancelled");
+          setActiveTab(val as "active" | "cancelled" | "sent");
           setSelectedIds(new Set());
         }}>
           <TabsList className="mb-4">
             <TabsTrigger value="active" data-testid="tab-active-notifications">Active</TabsTrigger>
             <TabsTrigger value="cancelled" data-testid="tab-cancelled-notifications">Do Not Send</TabsTrigger>
+            <TabsTrigger value="sent" data-testid="tab-sent-notifications">Sent Notifications</TabsTrigger>
           </TabsList>
 
           {/* Filter Controls */}
@@ -560,6 +564,70 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                             size="sm"
                             onClick={() => handlePreview(notification.id)}
                             data-testid={`button-preview-cancelled-${notification.id}`}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Preview
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="sent">
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No sent notifications found.
+              </div>
+            ) : (
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Sent Date</TableHead>
+                      <TableHead>Project Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notifications.map((notification) => (
+                      <TableRow key={notification.id} data-testid={`row-notification-sent-${notification.id}`}>
+                        <TableCell>{getCategoryBadge(notification.category)}</TableCell>
+                        <TableCell className="text-sm">{capitalizeChannel(notification.notificationType)}</TableCell>
+                        <TableCell>
+                          {notification.recipient ? (
+                            <div>
+                              <div className="font-medium">{notification.recipient.fullName}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {notification.recipient.primaryEmail || notification.recipient.primaryPhone || "-"}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">{notification.sentAt ? formatRelativeDate(notification.sentAt) : "-"}</TableCell>
+                        <TableCell className="text-sm">{notification.projectType?.name || "-"}</TableCell>
+                        <TableCell>{getStatusBadge(notification.status)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePreview(notification.id)}
+                            data-testid={`button-preview-sent-${notification.id}`}
                           >
                             <Eye className="h-4 w-4 mr-2" />
                             Preview

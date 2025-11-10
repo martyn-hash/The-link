@@ -1138,6 +1138,7 @@ export interface IStorage {
     status?: string;
   }): Promise<any[]>;
   updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification>;
+  cancelScheduledNotificationsForProject(projectId: string, reason: string): Promise<void>;
   
   // Notification System - Notification History operations
   getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]>;
@@ -3979,6 +3980,17 @@ export class DatabaseStorage implements IStorage {
         await cancelProjectDueDateNotifications(id, SYSTEM_USER_ID, updateData.archived ? 'Project archived' : 'Project marked inactive');
       } catch (error) {
         console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
+      }
+    }
+
+    // Auto-cancel remaining notifications when project is completed
+    if (updateData.completionStatus && !oldProject.completionStatus) {
+      console.log(`[Storage] Project ${id} completed, cancelling all remaining notifications`);
+      
+      try {
+        await this.cancelScheduledNotificationsForProject(id, 'Project completed');
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for completed project ${id}:`, error);
       }
     }
 
@@ -12901,7 +12913,7 @@ export class DatabaseStorage implements IStorage {
           filters?.category === 'client_request_reminder' ? isNotNull(scheduledNotifications.clientRequestReminderId) : undefined
         )
       )
-      .orderBy(desc(scheduledNotifications.scheduledFor));
+      .orderBy(filters?.status === 'sent' ? desc(scheduledNotifications.sentAt) : desc(scheduledNotifications.scheduledFor));
     
     // Map to enriched format
     return result.map(row => {
@@ -12962,6 +12974,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(scheduledNotifications.id, id))
       .returning();
     return updated;
+  }
+
+  async cancelScheduledNotificationsForProject(projectId: string, reason: string): Promise<void> {
+    await db
+      .update(scheduledNotifications)
+      .set({
+        status: 'cancelled',
+        cancelReason: reason,
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(scheduledNotifications.projectId, projectId),
+          eq(scheduledNotifications.status, 'scheduled')
+        )
+      );
   }
 
   // ============================================
