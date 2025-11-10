@@ -1,4 +1,4 @@
-import { sql, relations } from 'drizzle-orm';
+import { sql, relations, SQL } from 'drizzle-orm';
 import {
   index,
   jsonb,
@@ -11,11 +11,16 @@ import {
   pgEnum,
   check,
   unique,
+  uniqueIndex,
   alias,
   AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export function lower(column: AnyPgColumn): SQL {
+  return sql`lower(${column})`;
+}
 
 // Session storage table for Replit Auth
 export const sessions = pgTable(
@@ -357,7 +362,12 @@ export const people = pgTable("people", {
   photoIdVerified: boolean("photo_id_verified").default(false),
   addressVerified: boolean("address_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(), // Existing field
-});
+}, (table) => [
+  // Unique constraint on primary_email (case-insensitive)
+  uniqueIndex("unique_people_primary_email").on(lower(table.primaryEmail)),
+  // Unique constraint on primary_phone
+  uniqueIndex("unique_people_primary_phone").on(table.primaryPhone),
+]);
 
 // Client-People relationships - matches existing database structure
 export const clientPeople = pgTable("client_people", {
