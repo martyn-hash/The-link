@@ -100,6 +100,19 @@ A comprehensive automated multi-channel (email, SMS, push) notification system t
 - Unique Contact Constraints: Case-insensitive unique constraint on people.primaryEmail and unique constraint on people.primaryPhone to prevent duplicate contact information across all people in the system.
 - Performance Optimization: Composite indexes on (client_id, status, scheduled_for) and (client_id, status, sent_at) ensure efficient querying for all notification tabs.
 
+### Service Inactive Management
+
+A permission-controlled system for marking client services as inactive, preventing them from being scheduled for future projects while maintaining full audit trails:
+- Three Required Inactive Reasons: Services can be marked inactive with mandatory reason selection: "Created in Error", "No Longer Required", or "Client Doing Work Themselves".
+- Permission Control: Only users with `canMakeServicesInactive` permission can deactivate services, providing role-based access control.
+- Automatic Metadata Population: Backend auto-populates `inactiveAt` timestamp and `inactiveByUserId` when a service is marked inactive.
+- Scheduling Date Clearing: `nextStartDate` and `nextDueDate` are automatically cleared to NULL when a service is deactivated.
+- Chronology Logging: Service status changes are logged to client chronology with formatted messages (e.g., "Service 'X' was marked inactive - Reason: Created In Error").
+- UI Status Display: Inactive services show a red-backgrounded status section with formatted reason and deactivation date.
+- Validation & Data Integrity: Backend validates that `inactiveReason` can only be set when `isActive` is false, and ensures all inactive metadata is cleared when reactivating services.
+- Scheduling Exclusion: The nightly project scheduler filters out inactive services (`isActive: false`), preventing automated project generation for deactivated services.
+- Schema Migration Support: Automatic migrations create the `inactive_reason` enum type and add `inactiveReason`, `inactiveAt`, and `inactiveByUserId` columns to `client_services` table.
+
 ## External Dependencies
 
 ### Third-Party Services

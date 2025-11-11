@@ -398,6 +398,91 @@ async function ensurePushNotificationsEnabledColumn(): Promise<void> {
 }
 
 /**
+ * Add can_make_services_inactive column to users table
+ */
+async function ensureCanMakeServicesInactiveColumn(): Promise<void> {
+  const exists = await columnExists('users', 'can_make_services_inactive');
+  
+  if (!exists) {
+    console.log('[Schema Migration] Adding can_make_services_inactive column to users table...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE users 
+        ADD COLUMN can_make_services_inactive BOOLEAN DEFAULT false;
+      `);
+      console.log('[Schema Migration] ✓ Successfully added can_make_services_inactive column');
+    } catch (error) {
+      console.error('[Schema Migration] ✗ Failed to add can_make_services_inactive column:', error);
+      throw error;
+    }
+  } else {
+    console.log('[Schema Migration] ✓ can_make_services_inactive column already exists in users');
+  }
+}
+
+/**
+ * Add inactive service columns to client_services table
+ */
+async function ensureInactiveServiceColumns(): Promise<void> {
+  // Create enum type if it doesn't exist
+  try {
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inactive_reason') THEN
+          CREATE TYPE inactive_reason AS ENUM ('created_in_error', 'no_longer_required', 'client_doing_work_themselves');
+        END IF;
+      END$$;
+    `);
+    console.log('[Schema Migration] ✓ inactive_reason enum type ensured');
+  } catch (error) {
+    console.error('[Schema Migration] ✗ Failed to create inactive_reason enum:', error);
+    throw error;
+  }
+  
+  const reasonExists = await columnExists('client_services', 'inactive_reason');
+  const atExists = await columnExists('client_services', 'inactive_at');
+  const byUserExists = await columnExists('client_services', 'inactive_by_user_id');
+  
+  if (reasonExists && atExists && byUserExists) {
+    console.log('[Schema Migration] ✓ Inactive service columns already exist in client_services');
+    return;
+  }
+  
+  console.log('[Schema Migration] Adding inactive service columns to client_services table...');
+  
+  try {
+    await db.transaction(async (tx) => {
+      if (!reasonExists) {
+        await tx.execute(sql`
+          ALTER TABLE client_services 
+          ADD COLUMN inactive_reason inactive_reason;
+        `);
+      }
+      
+      if (!atExists) {
+        await tx.execute(sql`
+          ALTER TABLE client_services 
+          ADD COLUMN inactive_at TIMESTAMP WITH TIME ZONE;
+        `);
+      }
+      
+      if (!byUserExists) {
+        await tx.execute(sql`
+          ALTER TABLE client_services 
+          ADD COLUMN inactive_by_user_id VARCHAR REFERENCES users(id);
+        `);
+      }
+    });
+    
+    console.log('[Schema Migration] ✓ Successfully added inactive service columns to client_services');
+  } catch (error) {
+    console.error('[Schema Migration] ✗ Failed to add inactive service columns:', error);
+    throw error;
+  }
+}
+
+/**
  * Run all schema migrations
  * Called on server startup to ensure database schema is up to date
  */
@@ -413,6 +498,8 @@ export async function runSchemaMigrations(): Promise<void> {
     await ensurePushNotificationsEnabledColumn(); // Must run early - used by notification scheduler
     await ensureNotificationsActiveColumn();
     await ensureReceiveNotificationsColumn();
+    await ensureCanMakeServicesInactiveColumn();
+    await ensureInactiveServiceColumns();
     
     console.log('[Schema Migration] All schema migrations completed successfully');
   } catch (error) {

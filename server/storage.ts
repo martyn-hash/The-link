@@ -7193,7 +7193,12 @@ export class DatabaseStorage implements IStorage {
         frequency: cs.frequency,
         nextStartDate: cs.nextStartDate,
         nextDueDate: cs.nextDueDate,
+        intendedStartDay: cs.intendedStartDay,
+        intendedDueDay: cs.intendedDueDay,
         isActive: cs.isActive,
+        inactiveReason: cs.inactiveReason,
+        inactiveAt: cs.inactiveAt,
+        inactiveByUserId: cs.inactiveByUserId,
         udfValues: cs.udfValues,
         createdAt: cs.createdAt,
         client: {

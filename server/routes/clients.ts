@@ -1238,7 +1238,7 @@ export function registerClientRoutes(
         }
 
         // Auto-populate inactive metadata
-        validationResult.data.inactiveAt = new Date().toISOString() as any;
+        validationResult.data.inactiveAt = new Date() as any;
         validationResult.data.inactiveByUserId = req.user?.effectiveUserId || req.user?.id;
         
         // Clear scheduling dates when making inactive
@@ -1442,7 +1442,9 @@ export function registerClientRoutes(
           // Don't fail the request if notification scheduling fails
         }
 
-        return res.json(clientService);
+        // Fetch and return the full client service with all related data
+        const updatedClientService = await storage.getClientServiceById(id);
+        return res.json(updatedClientService);
       } catch (mapperError: any) {
         console.error('[Routes] Service mapper error:', mapperError);
 
