@@ -97,7 +97,7 @@ A comprehensive automated multi-channel (email, SMS, push) notification system t
   - Displayed in the "Failed" tab with red badges showing the specific validation error
   - Logged in notification_history with sentAt=NULL for audit trail
   - Accessible via dedicated UI tab showing failure reasons for troubleshooting
-- Unique Contact Constraints: Case-insensitive unique constraint on people.primaryEmail and unique constraint on people.primaryPhone to prevent duplicate contact information across all people in the system.
+- **Contact Fields Flexibility (Nov 2025)**: The `people.primaryEmail` and `people.primaryPhone` fields allow duplicate values and accept any string format. All unique constraints and format validation have been removed to accommodate varied contact data scenarios. Applications should implement business logic to handle potential duplicates if needed.
 - Performance Optimization: Composite indexes on (client_id, status, scheduled_for) and (client_id, status, sent_at) ensure efficient querying for all notification tabs.
 
 ### Service Inactive Management
