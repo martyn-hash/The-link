@@ -93,10 +93,15 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(threadFromUrl);
 
   // Fetch threads for this project
-  const { data: threads, isLoading: threadsLoading } = useQuery<ProjectMessageThread[]>({
+  const { data: threadsResponse, isLoading: threadsLoading } = useQuery<{
+    threads: ProjectMessageThread[];
+    pagination: { hasNextPage: boolean; nextCursor: string | null };
+  }>({
     queryKey: ['/api/internal/project-messages/threads', projectId],
     enabled: !!user && !!projectId,
   });
+
+  const threads = threadsResponse?.threads ?? [];
 
   // Fetch messages for selected thread
   const { data: messages, isLoading: messagesLoading } = useQuery<ProjectMessage[]>({

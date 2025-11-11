@@ -746,10 +746,15 @@ export function registerMessageRoutes(
   });
 
   // Get all threads for a project (only threads where user is a participant)
+  // Supports pagination with cursor and limit query parameters
   app.get("/api/internal/project-messages/threads/:projectId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectId } = req.params;
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      
+      // Pagination parameters
+      const limit = parseInt(req.query.limit as string) || 5;
+      const cursor = req.query.cursor as string | undefined;
 
       // Check if user has access to this project
       const project = await storage.getProject(projectId);
@@ -775,8 +780,32 @@ export function registerMessageRoutes(
         }
       }
 
+      // Sort threads by lastMessageAt descending (most recent first)
+      const sortedThreads = userThreads.sort((a, b) => {
+        const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      // Apply cursor-based pagination
+      let paginatedThreads = sortedThreads;
+      if (cursor) {
+        // Find the index of the cursor thread
+        const cursorIndex = sortedThreads.findIndex(t => t.id === cursor);
+        if (cursorIndex >= 0) {
+          // Start from the thread after the cursor
+          paginatedThreads = sortedThreads.slice(cursorIndex + 1);
+        } else {
+          // Invalid cursor, start from beginning
+          paginatedThreads = sortedThreads;
+        }
+      }
+
+      // Limit the results
+      const threadsToReturn = paginatedThreads.slice(0, limit);
+
       // Enrich threads with user and participant information
-      const enrichedThreads = await Promise.all(userThreads.map(async (thread) => {
+      const enrichedThreads = await Promise.all(threadsToReturn.map(async (thread) => {
         const creator = thread.createdByUserId ? await storage.getUser(thread.createdByUserId) : undefined;
         const participants = await storage.getProjectMessageParticipantsByThreadId(thread.id);
         const participantUsers = await Promise.all(
@@ -793,7 +822,19 @@ export function registerMessageRoutes(
         };
       }));
 
-      res.json(enrichedThreads);
+      // Determine if there are more threads after the current batch
+      const hasNextPage = paginatedThreads.length > limit;
+      const nextCursor = hasNextPage && threadsToReturn.length > 0 
+        ? threadsToReturn[threadsToReturn.length - 1].id 
+        : null;
+
+      res.json({
+        threads: enrichedThreads,
+        pagination: {
+          hasNextPage,
+          nextCursor,
+        },
+      });
     } catch (error) {
       console.error("Error fetching project message threads:", error);
       res.status(500).json({ message: "Failed to fetch threads" });
