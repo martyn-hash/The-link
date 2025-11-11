@@ -54,6 +54,15 @@ A dedicated `/internal-chat` page facilitates independent staff-to-staff message
 
 Extensive mobile optimizations convert desktop table layouts to mobile-friendly card layouts on small viewports, ensuring touch target compliance and responsive designs across key pages.
 
+### Project Timeline Color Coding
+
+The project timeline (chronology) displays stage changes with intelligent color coding to provide instant visual feedback on project status:
+- **Red (Late/Overdue)**: All stage changes show in red when the project is past its due date, providing immediate visibility of overdue work.
+- **Amber (Behind Schedule)**: Stage changes that exceed configured time limits (either maxInstanceTime for a single visit or cumulative maxTotalTime across multiple visits) are highlighted in amber.
+- **Green (On Track)**: All other stage changes display in green, indicating progress is within expected timeframes.
+- The system processes chronology in chronological order to accurately track cumulative time spent in each stage, ensuring only the transition that causes a limit breach is marked amber.
+- All stage changes receive color coding with no neutral/gray states, making project health immediately visible at a glance.
+
 ### Email Threading & Deduplication System
 
 The email threading system integrates Microsoft Graph to ingest staff emails and link them to client timelines, featuring deduplication, thread grouping, multi-layered client association, delta sync, email sending, noise control, and attachment deduplication. It includes a complete UI for viewing and replying to email threads.
