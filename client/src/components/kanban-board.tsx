@@ -121,8 +121,13 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     staleTime: 5 * 60 * 1000,
   });
 
-  // Transform stages to match expected structure
-  const stageConfig = stages?.reduce((acc, stage, index) => {
+  // Filter out any completion-related stages from the original stages list
+  const filteredStages = stages?.filter(stage => 
+    !stage.name.toLowerCase().includes('completed')
+  ) ?? [];
+
+  // Transform filtered stages to match expected structure
+  const stageConfig = filteredStages.reduce((acc, stage, index) => {
     acc[stage.name] = {
       title: stage.name.split('_').map(word => 
         word.charAt(0).toUpperCase() + word.slice(1)
@@ -130,13 +135,47 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       color: stage.color ?? "#6b7280",
       assignedTo: "Role-based", // This will be determined by role assignments
       order: stage.order ?? index,
+      isCompletionColumn: false,
     };
     return acc;
-  }, {} as Record<string, { title: string; color: string; assignedTo: string; order: number }>);
+  }, {} as Record<string, { title: string; color: string; assignedTo: string; order: number; isCompletionColumn: boolean }>);
+  
+  // Calculate max order from filtered stages
+  const maxOrder = filteredStages.reduce((max, stage) => Math.max(max, stage.order ?? 0), 0);
+  
+  // Add synthetic completion columns for completed projects
+  const stageConfigWithCompletions = stageConfig ? {
+    ...stageConfig,
+    'Completed - Unsuccessful': {
+      title: 'Completed - Unsuccessful',
+      color: '#ef4444',
+      assignedTo: 'System',
+      order: maxOrder + 1,
+      isCompletionColumn: true,
+    },
+    'Completed - Success': {
+      title: 'Completed - Success',
+      color: '#22c55e',
+      assignedTo: 'System',
+      order: maxOrder + 2,
+      isCompletionColumn: true,
+    },
+  } : stageConfig;
 
-  // Group projects by status
+  // Group projects by status, mapping completion statuses to synthetic columns
   const projectsByStatus = projects.reduce((acc, project) => {
-    const status = project.currentStatus;
+    let status: string;
+    
+    // Map completion statuses to synthetic column names
+    if (project.completionStatus === 'completed_successfully') {
+      status = 'Completed - Success';
+    } else if (project.completionStatus === 'completed_unsuccessfully') {
+      status = 'Completed - Unsuccessful';
+    } else {
+      // Use regular current status for active projects
+      status = project.currentStatus;
+    }
+    
     if (!acc[status]) acc[status] = [];
     acc[status].push(project);
     return acc;
@@ -144,7 +183,15 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+    const draggedProjectId = event.active.id as string;
+    const draggedProject = projects.find(p => p.id === draggedProjectId);
+    
+    // Block drag operations for completed projects (read-only)
+    if (draggedProject?.completionStatus) {
+      return;
+    }
+    
+    setActiveId(draggedProjectId);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -176,6 +223,12 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       if (targetProject) {
         targetStatusName = targetProject.currentStatus;
       }
+    }
+
+    // Prevent drops into completion columns (read-only)
+    if (targetStatusName && stageConfigWithCompletions?.[targetStatusName as keyof typeof stageConfigWithCompletions]?.isCompletionColumn) {
+      setOveredColumn(null);
+      return;
     }
 
     // Handle status change if we found a valid target status
@@ -239,7 +292,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
   }
 
   // Show loading state while stages are being fetched
-  if (stagesLoading || !stageConfig) {
+  if (stagesLoading || !stageConfigWithCompletions) {
     return (
       <div className="p-6" data-testid="kanban-board-loading">
         <div className="flex space-x-6 h-full overflow-x-auto">
@@ -270,7 +323,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
   }
 
   // Sort stages by order with deterministic fallback and get ordered entries
-  const orderedStages = Object.entries(stageConfig).sort(([, a], [, b]) => {
+  const orderedStages = Object.entries(stageConfigWithCompletions).sort(([, a], [, b]) => {
     const orderA = a.order ?? 0;
     const orderB = b.order ?? 0;
     return orderA - orderB;
@@ -304,29 +357,29 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
             
             return (
               <DroppableColumn key={status} id={`column-${status}`}>
-                <Card className="h-full">
-                    <CardHeader className="sticky top-0 bg-card border-b border-border rounded-t-lg">
+                <Card className={`h-full ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''}`}>
+                    <CardHeader className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <div 
                             className="w-3 h-3 rounded-full" 
                             style={getColorStyle(config.color)}
                           />
-                          <h3 className="font-semibold text-foreground text-sm">
+                          <h3 className={`font-semibold text-sm ${config.isCompletionColumn ? 'text-muted-foreground' : 'text-foreground'}`}>
                             {config.title}
                           </h3>
                           <Badge variant="secondary" className="text-xs">
                             {stageProjects.length}
                           </Badge>
                         </div>
-                        <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+                        {!config.isCompletionColumn && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Assigned to {config.assignedTo}
+                        {config.isCompletionColumn ? 'Read-only' : `Assigned to ${config.assignedTo}`}
                       </p>
                     </CardHeader>
                     
-                    <CardContent className="p-4 space-y-3 min-h-96">
+                    <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''}`}>
                       <SortableContext
                         items={stageProjects.map(p => p.id)}
                         strategy={verticalListSortingStrategy}

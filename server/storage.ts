@@ -418,14 +418,15 @@ export interface IStorage {
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
-  getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
-  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
-  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
+  getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
   getProjectsByClientServiceId(clientServiceId: string): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
   getActiveProjectsByClientAndType(clientId: string, projectTypeId: string): Promise<Project[]>;
+  getUniqueDueDatesForService(serviceId: string): Promise<string[]>;
   
   // Chronology operations
   createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology>;
@@ -3251,7 +3252,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
     if (filters?.month) {
@@ -3261,11 +3262,13 @@ export class DatabaseStorage implements IStorage {
     // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
-    } else if (filters?.showArchived === false) {
-      // When showArchived is false, exclude archived projects
+    } else if (filters?.showArchived === true) {
+      // When showArchived is true, show ONLY archived projects
+      whereConditions.push(eq(projects.archived, true));
+    } else {
+      // Default: exclude archived projects (when showArchived is false or undefined)
       whereConditions.push(eq(projects.archived, false));
     }
-    // When showArchived is true or undefined, don't filter by archived status (include all)
     
     // Handle inactive filtering: default to excluding inactive projects unless explicitly requested
     if (filters?.inactive !== undefined) {
@@ -3305,8 +3308,19 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Dynamic date filtering
-    if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+    // Exact due date filtering (takes precedence over dynamic date filters)
+    if (filters?.dueDate) {
+      const targetDate = new Date(filters.dueDate);
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      whereConditions.push(
+        and(
+          gte(projects.dueDate, sql`${targetDate}`),
+          lt(projects.dueDate, sql`${nextDay}`)
+        )!
+      );
+    } else if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+      // Dynamic date filtering
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
@@ -3449,9 +3463,13 @@ export class DatabaseStorage implements IStorage {
     // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    } else if (filters?.showArchived === true) {
+      // When showArchived is true, show ONLY archived projects
+      whereConditions.push(eq(projects.archived, true));
     } else if (filters?.showArchived === false) {
       whereConditions.push(eq(projects.archived, false));
     }
+    // When showArchived is undefined, don't filter by archived status (include all)
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
@@ -3613,9 +3631,13 @@ export class DatabaseStorage implements IStorage {
     // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    } else if (filters?.showArchived === true) {
+      // When showArchived is true, show ONLY archived projects
+      whereConditions.push(eq(projects.archived, true));
     } else if (filters?.showArchived === false) {
       whereConditions.push(eq(projects.archived, false));
     }
+    // When showArchived is undefined, don't filter by archived status (include all)
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
@@ -4018,6 +4040,39 @@ export class DatabaseStorage implements IStorage {
       );
 
     return activeProjects;
+  }
+
+  async getUniqueDueDatesForService(serviceId: string): Promise<string[]> {
+    // Find all project types for this service
+    const serviceProjectTypes = await db
+      .select({ id: projectTypes.id })
+      .from(projectTypes)
+      .where(eq(projectTypes.serviceId, serviceId));
+    
+    const projectTypeIds = serviceProjectTypes.map(pt => pt.id);
+    
+    if (projectTypeIds.length === 0) {
+      return [];
+    }
+
+    // Get unique due dates for projects with these project types
+    const dueDates = await db
+      .selectDistinct({ dueDate: projects.dueDate })
+      .from(projects)
+      .where(
+        and(
+          inArray(projects.projectTypeId, projectTypeIds),
+          isNotNull(projects.dueDate),
+          eq(projects.inactive, false) // Exclude inactive projects
+        )
+      )
+      .orderBy(projects.dueDate);
+
+    // Convert dates to ISO strings and filter out nulls
+    return dueDates
+      .map(d => d.dueDate)
+      .filter((date): date is Date => date !== null)
+      .map(date => date.toISOString().split('T')[0]); // Return YYYY-MM-DD format
   }
 
   async updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project> {

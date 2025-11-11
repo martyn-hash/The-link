@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type ProjectView, type User } from "@shared/schema";
@@ -72,6 +72,8 @@ interface FilterPanelProps {
   setDynamicDateFilter: (value: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom") => void;
   customDateRange: { from: Date | undefined; to: Date | undefined };
   setCustomDateRange: (value: { from: Date | undefined; to: Date | undefined }) => void;
+  serviceDueDateFilter: string;
+  setServiceDueDateFilter: (value: string) => void;
   viewMode: "kanban" | "list" | "dashboard";
   setViewMode: (value: "kanban" | "list" | "dashboard") => void;
   
@@ -102,6 +104,8 @@ export default function FilterPanel({
   setDynamicDateFilter,
   customDateRange,
   setCustomDateRange,
+  serviceDueDateFilter,
+  setServiceDueDateFilter,
   viewMode,
   setViewMode,
   services,
@@ -116,6 +120,12 @@ export default function FilterPanel({
   // Fetch saved views
   const { data: savedViews = [] } = useQuery<ProjectView[]>({
     queryKey: ["/api/project-views"],
+  });
+
+  // Fetch unique due dates for selected service
+  const { data: serviceDueDates = [] } = useQuery<string[]>({
+    queryKey: ['/api/services', serviceFilter, 'due-dates'],
+    enabled: serviceFilter !== "all",
   });
 
   // Save view mutation
@@ -133,6 +143,7 @@ export default function FilterPanel({
           from: customDateRange.from.toISOString(),
           to: customDateRange.to.toISOString(),
         } : null,
+        serviceDueDateFilter,
       };
 
       return await apiRequest(
@@ -174,6 +185,7 @@ export default function FilterPanel({
     setBehindScheduleOnly(false);
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
+    setServiceDueDateFilter("all");
   };
 
   const handleLoadView = (view: ProjectView) => {
@@ -188,6 +200,7 @@ export default function FilterPanel({
     setShowArchived(filters.showArchived || false);
     setBehindScheduleOnly(filters.behindScheduleOnly || false);
     setDynamicDateFilter(filters.dynamicDateFilter || "all");
+    setServiceDueDateFilter(filters.serviceDueDateFilter || "all");
     
     if (filters.customDateRange) {
       setCustomDateRange({
@@ -203,6 +216,30 @@ export default function FilterPanel({
     }
   };
 
+  // Mutual exclusivity wrapper for dynamic date filter
+  const handleDynamicDateChange = (value: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom") => {
+    setDynamicDateFilter(value);
+    if (value !== "all") {
+      setServiceDueDateFilter("all"); // Clear service due date when using dynamic filter
+    }
+  };
+
+  // Mutual exclusivity wrapper for service due date filter
+  const handleServiceDueDateChange = (value: string) => {
+    setServiceDueDateFilter(value);
+    if (value !== "all") {
+      setDynamicDateFilter("all"); // Clear dynamic filter when using service due date
+      setCustomDateRange({ from: undefined, to: undefined });
+    }
+  };
+
+  // Reset service due date filter when service changes
+  useEffect(() => {
+    if (serviceFilter === "all" || !serviceFilter) {
+      setServiceDueDateFilter("all");
+    }
+  }, [serviceFilter, setServiceDueDateFilter]);
+
   const activeFilterCount = () => {
     let count = 0;
     if (serviceFilter !== "all") count++;
@@ -211,7 +248,8 @@ export default function FilterPanel({
     if (userFilter !== "all" && isManagerOrAdmin) count++;
     if (showArchived) count++;
     if (behindScheduleOnly) count++;
-    if (dynamicDateFilter !== "all") count++;
+    // Count only the active date filter (mutual exclusivity)
+    if (dynamicDateFilter !== "all" || serviceDueDateFilter !== "all") count++;
     return count;
   };
 
@@ -255,7 +293,7 @@ export default function FilterPanel({
                 <CalendarIcon className="w-4 h-4" />
                 Due Date Filter
               </Label>
-              <Select value={dynamicDateFilter} onValueChange={setDynamicDateFilter}>
+              <Select value={dynamicDateFilter} onValueChange={handleDynamicDateChange}>
                 <SelectTrigger data-testid="select-date-filter">
                   <SelectValue placeholder="Select date range" />
                 </SelectTrigger>
@@ -376,6 +414,32 @@ export default function FilterPanel({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Service-Specific Due Date Filter - Only show when a service is selected */}
+            {serviceFilter !== "all" && serviceDueDates.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <Label className="flex items-center gap-2 text-sm">
+                  <CalendarIcon className="w-4 h-4" />
+                  Filter by Specific Due Date
+                </Label>
+                <Select value={serviceDueDateFilter} onValueChange={handleServiceDueDateChange}>
+                  <SelectTrigger data-testid="select-service-due-date-filter">
+                    <SelectValue placeholder="All due dates" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All due dates</SelectItem>
+                    {serviceDueDates.map((date) => (
+                      <SelectItem key={date} value={date}>
+                        {format(new Date(date), "PPP")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Showing due dates for selected service
+                </p>
+              </div>
+            )}
 
             {/* Kanban View Toggle - Only show when a specific service is selected */}
             {serviceFilter !== "all" && (

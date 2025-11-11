@@ -112,6 +112,7 @@ export default function Projects() {
     from: undefined,
     to: undefined,
   });
+  const [serviceDueDateFilter, setServiceDueDateFilter] = useState("all");
   
   // Filter panel state
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -150,6 +151,7 @@ export default function Projects() {
     from: undefined,
     to: undefined,
   });
+  const [dashboardServiceDueDateFilter, setDashboardServiceDueDateFilter] = useState("all");
 
   // Save view modal state
   const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
@@ -1361,6 +1363,8 @@ export default function Projects() {
         setDynamicDateFilter={setDynamicDateFilter}
         customDateRange={customDateRange}
         setCustomDateRange={setCustomDateRange}
+        serviceDueDateFilter={serviceDueDateFilter}
+        setServiceDueDateFilter={setServiceDueDateFilter}
         viewMode={viewMode}
         setViewMode={setViewMode}
         services={services}

@@ -174,6 +174,23 @@ export function registerProjectRoutes(
   // PROJECTS API ROUTES
   // ==================================================
 
+  // GET /api/services/:serviceId/due-dates - Get unique due dates for a service
+  app.get("/api/services/:serviceId/due-dates", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const serviceId = req.params.serviceId;
+      const dueDates = await storage.getUniqueDueDatesForService(serviceId);
+      res.json(dueDates);
+    } catch (error) {
+      console.error("Error fetching service due dates:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch service due dates" });
+    }
+  });
+
   app.get("/api/projects", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
@@ -199,6 +216,7 @@ export function registerProjectRoutes(
         dynamicDateFilter: normalize(req.query.dynamicDateFilter),
         dateFrom: normalize(req.query.dateFrom),
         dateTo: normalize(req.query.dateTo),
+        dueDate: normalize(req.query.dueDate),
       };
 
       // All authenticated users can see all projects
