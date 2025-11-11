@@ -1219,6 +1219,55 @@ export function registerClientRoutes(
         });
       }
 
+      // Validate: inactiveReason can only be set when isActive is false
+      if (validationResult.data.inactiveReason && validationResult.data.isActive !== false) {
+        return res.status(400).json({
+          message: "Inactive reason can only be set when marking a service as inactive",
+          errors: [{ field: "inactiveReason", message: "Cannot set inactive reason on an active service" }]
+        });
+      }
+
+      // Handle inactive transition - validate and auto-populate fields
+      if (validationResult.data.isActive === false && existingClientService.isActive !== false) {
+        // Validate that inactive reason is provided when marking as inactive
+        if (!validationResult.data.inactiveReason) {
+          return res.status(400).json({
+            message: "Inactive reason is required when marking a service as inactive",
+            errors: [{ field: "inactiveReason", message: "This field is required when deactivating a service" }]
+          });
+        }
+
+        // Auto-populate inactive metadata
+        validationResult.data.inactiveAt = new Date().toISOString() as any;
+        validationResult.data.inactiveByUserId = req.user?.effectiveUserId || req.user?.id;
+        
+        // Clear scheduling dates when making inactive
+        validationResult.data.nextStartDate = null as any;
+        validationResult.data.nextDueDate = null as any;
+        
+        console.log(`[Routes] Service being marked inactive with reason: ${validationResult.data.inactiveReason}`);
+      }
+
+      // Handle reactivation - clear inactive metadata
+      if (validationResult.data.isActive === true && existingClientService.isActive === false) {
+        // Clear inactive metadata when reactivating
+        validationResult.data.inactiveReason = null as any;
+        validationResult.data.inactiveAt = null as any;
+        validationResult.data.inactiveByUserId = null as any;
+        
+        console.log(`[Routes] Service being reactivated - clearing inactive metadata`);
+      }
+
+      // Ensure inactive metadata is always cleared when service is active
+      if (validationResult.data.isActive === true || (validationResult.data.isActive === undefined && existingClientService.isActive !== false)) {
+        // If not explicitly deactivating, ensure no stale inactive metadata
+        if (!validationResult.data.inactiveReason) {
+          validationResult.data.inactiveReason = null as any;
+          validationResult.data.inactiveAt = null as any;
+          validationResult.data.inactiveByUserId = null as any;
+        }
+      }
+
       try {
         const clientService = await serviceMapper.updateClientServiceMapping(id, validationResult.data);
 
@@ -1231,6 +1280,19 @@ export function registerClientRoutes(
           const fromValue = existingClientService.isActive?.toString() || 'true';
           const toValue = validationResult.data.isActive.toString();
 
+          // Build change reason based on activation/deactivation
+          let changeReason: string;
+          if (validationResult.data.isActive) {
+            // Reactivation
+            changeReason = `Service "${service?.name || 'Unknown'}" was reactivated`;
+          } else {
+            // Deactivation with reason
+            const inactiveReasonDisplay = validationResult.data.inactiveReason 
+              ? validationResult.data.inactiveReason.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+              : 'No reason specified';
+            changeReason = `Service "${service?.name || 'Unknown'}" was marked inactive - Reason: ${inactiveReasonDisplay}`;
+          }
+
           await storage.createClientChronologyEntry({
             clientId: clientService.clientId,
             eventType,
@@ -1239,7 +1301,7 @@ export function registerClientRoutes(
             fromValue,
             toValue,
             userId: req.user?.effectiveUserId || req.user?.id,
-            changeReason: `Service "${service?.name || 'Unknown'}" ${validationResult.data.isActive ? 'activated' : 'deactivated'}`,
+            changeReason,
             notes: null,
           });
         }

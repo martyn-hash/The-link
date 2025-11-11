@@ -7,7 +7,7 @@ import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Briefcase, Users, Calendar, Clock, UserIcon, Edit, Save, X } from "lucide-react";
+import { ArrowLeft, Briefcase, Users, Calendar, Clock, UserIcon, Edit, Save, X, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,6 +71,15 @@ const updateServiceSchema = z.object({
 
 type UpdateServiceData = z.infer<typeof updateServiceSchema>;
 
+// Form schema for making service inactive
+const makeInactiveSchema = z.object({
+  inactiveReason: z.enum(['created_in_error', 'no_longer_required', 'client_doing_work_themselves'], {
+    required_error: "Please select a reason",
+  }),
+});
+
+type MakeInactiveData = z.infer<typeof makeInactiveSchema>;
+
 export default function ClientServiceDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -79,6 +88,7 @@ export default function ClientServiceDetail() {
   const isMobile = useIsMobile();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showInactiveDialog, setShowInactiveDialog] = useState(false);
 
   // Fetch client service data
   const { data: clientService, isLoading, error } = useQuery<EnhancedClientService>({
@@ -108,6 +118,14 @@ export default function ClientServiceDetail() {
       serviceOwnerId: "",
       isActive: true,
       roleAssignments: [],
+    },
+  });
+
+  // Inactive form setup
+  const inactiveForm = useForm<MakeInactiveData>({
+    resolver: zodResolver(makeInactiveSchema),
+    defaultValues: {
+      inactiveReason: undefined,
     },
   });
 
@@ -153,8 +171,38 @@ export default function ClientServiceDetail() {
     },
   });
 
+  // Make inactive mutation
+  const makeInactiveMutation = useMutation({
+    mutationFn: async (data: MakeInactiveData) => {
+      return await apiRequest("PUT", `/api/client-services/${id}`, {
+        isActive: false,
+        inactiveReason: data.inactiveReason,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Service Marked Inactive",
+        description: "The service has been marked as inactive and will no longer be scheduled",
+      });
+      setShowInactiveDialog(false);
+      inactiveForm.reset();
+      queryClient.invalidateQueries({ queryKey: [`/api/client-services/${id}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to mark service as inactive",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (data: UpdateServiceData) => {
     updateServiceMutation.mutate(data);
+  };
+
+  const handleMakeInactive = (data: MakeInactiveData) => {
+    makeInactiveMutation.mutate(data);
   };
 
   if (isLoading) {
@@ -243,10 +291,22 @@ export default function ClientServiceDetail() {
                 </p>
               )}
             </div>
-            <Button onClick={() => setShowEditDialog(true)} data-testid="button-edit-service">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Service
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setShowEditDialog(true)} data-testid="button-edit-service">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Service
+              </Button>
+              {user?.canMakeServicesInactive && clientService.isActive !== false && (
+                <Button 
+                  variant="destructive" 
+                  onClick={() => setShowInactiveDialog(true)} 
+                  data-testid="button-make-inactive"
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  Make Inactive
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -260,6 +320,32 @@ export default function ClientServiceDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {clientService.isActive === false && (
+                <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 space-y-2" data-testid="section-inactive-status">
+                  <div>
+                    <label className="text-sm font-medium text-destructive">Status</label>
+                    <p className="font-semibold text-destructive" data-testid="text-inactive-status">
+                      Inactive
+                    </p>
+                  </div>
+                  {clientService.inactiveReason && (
+                    <div>
+                      <label className="text-sm text-muted-foreground">Reason</label>
+                      <p className="font-medium" data-testid="text-inactive-reason-value">
+                        {clientService.inactiveReason.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                      </p>
+                    </div>
+                  )}
+                  {clientService.inactiveAt && (
+                    <div>
+                      <label className="text-sm text-muted-foreground">Marked Inactive On</label>
+                      <p className="font-medium" data-testid="text-inactive-date-value">
+                        {formatDate(clientService.inactiveAt)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-sm text-muted-foreground">Frequency</label>
                 <p className="font-medium" data-testid="text-frequency">
@@ -563,6 +649,65 @@ export default function ClientServiceDetail() {
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {updateServiceMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Make Inactive Dialog */}
+      <Dialog open={showInactiveDialog} onOpenChange={setShowInactiveDialog}>
+        <DialogContent data-testid="dialog-make-inactive">
+          <DialogHeader>
+            <DialogTitle>Make Service Inactive</DialogTitle>
+            <DialogDescription>
+              Please select a reason for marking this service as inactive. The service will no longer be scheduled for projects.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...inactiveForm}>
+            <form onSubmit={inactiveForm.handleSubmit(handleMakeInactive)} className="space-y-4">
+              <FormField
+                control={inactiveForm.control}
+                name="inactiveReason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inactive Reason</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-inactive-reason">
+                          <SelectValue placeholder="Select a reason" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="created_in_error">Created in Error</SelectItem>
+                        <SelectItem value="no_longer_required">No Longer Required</SelectItem>
+                        <SelectItem value="client_doing_work_themselves">Client Doing Work Themselves</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowInactiveDialog(false)}
+                  disabled={makeInactiveMutation.isPending}
+                  data-testid="button-cancel-inactive"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={makeInactiveMutation.isPending}
+                  data-testid="button-confirm-inactive"
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  {makeInactiveMutation.isPending ? "Marking Inactive..." : "Make Inactive"}
                 </Button>
               </div>
             </form>

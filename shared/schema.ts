@@ -94,6 +94,9 @@ export const internalTaskStatusEnum = pgEnum("internal_task_status", ["open", "i
 // Internal task priority enum
 export const internalTaskPriorityEnum = pgEnum("internal_task_priority", ["low", "medium", "high", "urgent"]);
 
+// Inactive reason enum for client services
+export const inactiveReasonEnum = pgEnum("inactive_reason", ["created_in_error", "no_longer_required", "client_doing_work_themselves"]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -109,6 +112,7 @@ export const users = pgTable("users", {
   isFallbackUser: boolean("is_fallback_user").default(false), // Only one user can be the fallback user
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(true), // Push notifications enabled by default for staff
   notificationPreferences: jsonb("notification_preferences"), // Email, push, SMS preferences
+  canMakeServicesInactive: boolean("can_make_services_inactive").default(false), // Permission to mark services as inactive
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"), // Track when user last logged in for first-login detection
@@ -654,6 +658,9 @@ export const clientServices = pgTable("client_services", {
   intendedStartDay: integer("intended_start_day"), // Intended day-of-month for start date (29-31) to preserve across short months
   intendedDueDay: integer("intended_due_day"), // Intended day-of-month for due date (29-31) to preserve across short months
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
+  inactiveReason: inactiveReasonEnum("inactive_reason"), // Reason why service was made inactive
+  inactiveAt: timestamp("inactive_at"), // Timestamp when service was made inactive
+  inactiveByUserId: varchar("inactive_by_user_id").references(() => users.id, { onDelete: "set null" }), // User who made service inactive
   udfValues: jsonb("udf_values").default(sql`'{}'::jsonb`), // User-defined field values as key-value pairs
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -661,6 +668,7 @@ export const clientServices = pgTable("client_services", {
   index("idx_client_services_service_id").on(table.serviceId),
   index("idx_client_services_service_owner_id").on(table.serviceOwnerId),
   index("idx_client_services_next_due_date").on(table.nextDueDate), // Index for scheduling queries
+  index("idx_client_services_inactive_by_user_id").on(table.inactiveByUserId),
   unique("unique_client_service").on(table.clientId, table.serviceId),
 ]);
 
@@ -797,6 +805,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   ownedProjects: many(projects, { relationName: "projectOwner" }),
   ownedServices: many(services, { relationName: "serviceOwner" }),
   ownedClientServices: many(clientServices, { relationName: "clientServiceOwner" }),
+  inactivatedServices: many(clientServices, { relationName: "serviceInactivator" }),
   chronologyEntries: many(projectChronology),
   clientChronologyEntries: many(clientChronology),
   magicLinkTokens: many(magicLinkTokens),
@@ -1670,6 +1679,11 @@ export const clientServicesRelations = relations(clientServices, ({ one, many })
     fields: [clientServices.serviceOwnerId],
     references: [users.id],
     relationName: "clientServiceOwner",
+  }),
+  inactiveByUser: one(users, {
+    fields: [clientServices.inactiveByUserId],
+    references: [users.id],
+    relationName: "serviceInactivator",
   }),
   roleAssignments: many(clientServiceRoleAssignments),
   schedulingHistory: many(projectSchedulingHistory, { relationName: "clientServiceHistory" }),
