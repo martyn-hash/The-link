@@ -19,8 +19,8 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1731312000000,
-      "tag": "0002_drop_primary_email_unique_constraint",
+      "when": 1762861540579,
+      "tag": "0002_stormy_ego",
       "breakpoints": true
     }
   ]
