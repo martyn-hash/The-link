@@ -469,6 +469,7 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
       {modalProjectId && (
         <MessagesModal
           projectId={modalProjectId}
+          project={projects.find(p => p.id === modalProjectId)}
           open={showMessagesModal}
           onOpenChange={setShowMessagesModal}
         />

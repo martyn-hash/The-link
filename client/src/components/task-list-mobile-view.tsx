@@ -63,6 +63,7 @@ export default function TaskListMobileView({ projects, user }: TaskListMobileVie
       {modalProjectId && (
         <MessagesModal
           projectId={modalProjectId}
+          project={projects.find(p => p.id === modalProjectId)}
           open={showMessagesModal}
           onOpenChange={setShowMessagesModal}
         />

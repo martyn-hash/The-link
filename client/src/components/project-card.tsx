@@ -350,7 +350,7 @@ export default function ProjectCard({
       {...listeners}
       className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
         isSortableDragging ? "opacity-50" : ""
-      } ${isDragging ? "rotate-5 shadow-lg" : ""} ${projectStatus.bgColor}`}
+      } ${isDragging ? "rotate-5 shadow-lg" : ""} ${projectStatus.bgColor} relative`}
       onClick={onOpenModal}
       data-testid={`project-card-${project.id}`}
     >
@@ -369,7 +369,7 @@ export default function ProjectCard({
           </div>
         </div>
         
-        <div className="flex items-center justify-between text-xs gap-2 mb-2">
+        <div className="flex items-center justify-between text-xs gap-2">
           <div className="flex items-center gap-2 text-muted-foreground truncate">
             <span 
               className="font-medium truncate"
@@ -394,61 +394,62 @@ export default function ProjectCard({
             </span>
           </div>
         </div>
-
-        {hasQuickActions && (
-          <div 
-            className="flex items-center justify-end gap-1 mt-auto pt-2 border-t border-border/50"
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <TooltipProvider>
-              {onShowInfo && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onShowInfo(project.id);
-                      }}
-                      data-testid={`button-info-${project.id}`}
-                    >
-                      <Info className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>View latest stage change</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {onShowMessages && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onShowMessages(project.id);
-                      }}
-                      data-testid={`button-messages-${project.id}`}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>View project messages</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </TooltipProvider>
-          </div>
-        )}
       </CardContent>
+
+      {/* Quick action overlay buttons */}
+      {hasQuickActions && (
+        <div 
+          className="absolute bottom-2 right-2 flex items-center gap-1 z-10"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TooltipProvider>
+            {onShowInfo && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowInfo(project.id);
+                    }}
+                    data-testid={`button-info-${project.id}`}
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View latest stage change</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {onShowMessages && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowMessages(project.id);
+                    }}
+                    data-testid={`button-messages-${project.id}`}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View project messages</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </TooltipProvider>
+        </div>
+      )}
     </Card>
   );
 }
