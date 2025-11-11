@@ -113,6 +113,7 @@ export const users = pgTable("users", {
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(true), // Push notifications enabled by default for staff
   notificationPreferences: jsonb("notification_preferences"), // Email, push, SMS preferences
   canMakeServicesInactive: boolean("can_make_services_inactive").default(false), // Permission to mark services as inactive
+  canMakeProjectsInactive: boolean("can_make_projects_inactive").default(false), // Permission to mark projects as inactive
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"), // Track when user last logged in for first-login detection
@@ -401,6 +402,9 @@ export const projects = pgTable("projects", {
   dueDate: timestamp("due_date"),
   archived: boolean("archived").default(false), // to hide completed monthly cycles
   inactive: boolean("inactive").default(false), // to mark projects as inactive
+  inactiveReason: inactiveReasonEnum("inactive_reason"), // Reason for marking inactive
+  inactiveAt: timestamp("inactive_at"), // When the project was marked inactive
+  inactiveByUserId: varchar("inactive_by_user_id").references(() => users.id), // User who marked the project inactive
   completionStatus: varchar("completion_status"), // 'completed_successfully', 'completed_unsuccessfully', or null for active projects
   projectMonth: varchar("project_month"), // DD/MM/YYYY format to track which month each project belongs to
   createdAt: timestamp("created_at").defaultNow(),

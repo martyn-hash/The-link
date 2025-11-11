@@ -542,12 +542,25 @@ export function registerProjectRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
-      // SECURITY FIX: Only allow updating the inactive field to prevent privilege escalation
-      // Create constrained schema that only allows inactive field updates
-      const inactiveOnlyUpdateSchema = z.object({
-        inactive: z.boolean()
+      // Schema that allows inactive field and inactiveReason updates
+      const inactiveUpdateSchema = z.object({
+        inactive: z.boolean(),
+        inactiveReason: z.enum(["created_in_error", "no_longer_required", "client_doing_work_themselves"]).optional()
+      }).refine((data) => {
+        // If marking inactive (false -> true), inactiveReason is required
+        if (data.inactive && !data.inactiveReason) {
+          return false;
+        }
+        // If marking active (true -> false), inactiveReason should not be provided
+        if (!data.inactive && data.inactiveReason) {
+          return false;
+        }
+        return true;
+      }, {
+        message: "When marking inactive, inactiveReason is required. When reactivating, inactiveReason should not be provided.",
       });
-      const updateData = inactiveOnlyUpdateSchema.parse(req.body);
+      
+      const updateData = inactiveUpdateSchema.parse(req.body);
 
       // Verify user has permission to update this project
       const project = await storage.getProject(req.params.id);
@@ -565,9 +578,59 @@ export function registerProjectRoutes(
       if (!canUpdate) {
         return res.status(403).json({ message: "Not authorized to update this project" });
       }
+      
+      // Check permission to make projects inactive
+      if (updateData.inactive && !project.inactive && !effectiveUser.canMakeProjectsInactive) {
+        return res.status(403).json({ message: "You do not have permission to make projects inactive" });
+      }
+
+      // Prepare update data with auto-populated fields
+      const finalUpdateData: any = { inactive: updateData.inactive };
+      
+      if (updateData.inactive && !project.inactive) {
+        // Marking as inactive
+        finalUpdateData.inactiveReason = updateData.inactiveReason;
+        finalUpdateData.inactiveAt = new Date();
+        finalUpdateData.inactiveByUserId = effectiveUserId;
+        finalUpdateData.dueDate = null; // Clear due date
+        
+        // Log to project chronology
+        const reasonLabel = updateData.inactiveReason
+          ?.split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        await storage.addProjectChronologyEntry({
+          projectId: project.id,
+          fromStatus: project.currentStatus,
+          toStatus: project.currentStatus,
+          assigneeId: project.currentAssigneeId,
+          changedById: effectiveUserId,
+          changeReason: 'project_inactive',
+          notes: `Project was marked inactive - Reason: ${reasonLabel}`,
+          timestamp: new Date()
+        });
+      } else if (!updateData.inactive && project.inactive) {
+        // Reactivating - clear all inactive metadata
+        finalUpdateData.inactiveReason = null;
+        finalUpdateData.inactiveAt = null;
+        finalUpdateData.inactiveByUserId = null;
+        
+        // Log to project chronology
+        await storage.addProjectChronologyEntry({
+          projectId: project.id,
+          fromStatus: project.currentStatus,
+          toStatus: project.currentStatus,
+          assigneeId: project.currentAssigneeId,
+          changedById: effectiveUserId,
+          changeReason: 'project_reactivated',
+          notes: `Project was reactivated`,
+          timestamp: new Date()
+        });
+      }
 
       // Update the project
-      const updatedProject = await storage.updateProject(req.params.id, updateData);
+      const updatedProject = await storage.updateProject(req.params.id, finalUpdateData);
       res.json(updatedProject);
     } catch (error) {
       console.error("Error updating project:", error instanceof Error ? error.message : error);

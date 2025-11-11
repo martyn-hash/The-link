@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +21,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
@@ -38,12 +41,38 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useActivityTracker } from "@/lib/activityTracker";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 interface RoleAssigneeResponse {
   user: User | null;
   roleUsed: string | null;
   usedFallback: boolean;
   source: 'role_assignment' | 'fallback_user' | 'direct_assignment' | 'none';
+}
+
+// Form schema for making project inactive
+const makeProjectInactiveSchema = z.object({
+  inactiveReason: z.enum(["created_in_error", "no_longer_required", "client_doing_work_themselves"], {
+    required_error: "Please select a reason for marking this project inactive",
+  }),
+});
+
+type MakeProjectInactiveData = z.infer<typeof makeProjectInactiveSchema>;
+
+// Utility function to format dates
+function formatDate(date: string | Date | null): string {
+  if (!date) return 'Not provided';
+  
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(dateObj.getTime())) return 'Invalid date';
+  
+  return dateObj.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
 }
 
 export default function ProjectDetail() {
@@ -60,6 +89,15 @@ export default function ProjectDetail() {
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>("overview");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showInactiveDialog, setShowInactiveDialog] = useState(false);
+  
+  // Form for making project inactive
+  const inactiveForm = useForm<MakeProjectInactiveData>({
+    resolver: zodResolver(makeProjectInactiveSchema),
+    defaultValues: {
+      inactiveReason: undefined,
+    },
+  });
 
   // Track project view activity when component mounts
   useEffect(() => {
@@ -155,6 +193,38 @@ export default function ProjectDetail() {
       }
     }
   });
+  
+  // Mutation to make project inactive
+  const makeInactiveMutation = useMutation({
+    mutationFn: async (data: MakeProjectInactiveData) => {
+      return await apiRequest('PATCH', `/api/projects/${projectId}`, {
+        inactive: true,
+        inactiveReason: data.inactiveReason,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      toast({
+        title: "Project marked inactive",
+        description: "The project has been successfully marked as inactive.",
+      });
+      setShowInactiveDialog(false);
+      inactiveForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to mark project inactive",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Handler for making project inactive
+  const handleMakeInactive = (data: MakeProjectInactiveData) => {
+    makeInactiveMutation.mutate(data);
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -425,9 +495,55 @@ export default function ProjectDetail() {
                   Complete
                 </Button>
               )}
+              
+              {/* Make Inactive Button - Only visible for non-inactive projects with permission */}
+              {user?.canMakeProjectsInactive && !project.inactive && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowInactiveDialog(true)}
+                  data-testid="button-make-inactive"
+                >
+                  <Ban className="w-4 h-4 mr-2" />
+                  Make Inactive
+                </Button>
+              )}
             </div>
           </div>
         </div>
+        
+        {/* Inactive Status Display */}
+        {project.inactive && project.inactiveReason && (
+          <div className="mb-6 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4" data-testid="section-inactive-status">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <Ban className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-2" data-testid="text-inactive-status">
+                  Inactive
+                </h3>
+                <div className="space-y-1 text-sm text-red-800 dark:text-red-200">
+                  <div>
+                    <span className="font-medium">Reason:</span>{" "}
+                    <span data-testid="text-inactive-reason-value">
+                      {project.inactiveReason
+                        ?.split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ')}
+                    </span>
+                  </div>
+                  {project.inactiveAt && (
+                    <div>
+                      <span className="font-medium">Marked Inactive On:</span>{" "}
+                      <span data-testid="text-inactive-date-value">{formatDate(project.inactiveAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs Layout */}
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
@@ -759,6 +875,65 @@ export default function ProjectDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Make Inactive Dialog */}
+      <Dialog open={showInactiveDialog} onOpenChange={setShowInactiveDialog}>
+        <DialogContent data-testid="dialog-make-inactive">
+          <DialogHeader>
+            <DialogTitle>Make Project Inactive</DialogTitle>
+            <DialogDescription>
+              Please select a reason for marking this project as inactive. The project will no longer be included in scheduling.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...inactiveForm}>
+            <form onSubmit={inactiveForm.handleSubmit(handleMakeInactive)} className="space-y-4">
+              <FormField
+                control={inactiveForm.control}
+                name="inactiveReason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inactive Reason</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} data-testid="select-inactive-reason">
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a reason" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="created_in_error">Created in Error</SelectItem>
+                        <SelectItem value="no_longer_required">No Longer Required</SelectItem>
+                        <SelectItem value="client_doing_work_themselves">Client Doing Work Themselves</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowInactiveDialog(false);
+                    inactiveForm.reset();
+                  }}
+                  data-testid="button-cancel-inactive"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={makeInactiveMutation.isPending}
+                  data-testid="button-confirm-inactive"
+                >
+                  Make Inactive
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Change Status Modal */}
       <ChangeStatusModal
