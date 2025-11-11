@@ -113,6 +113,20 @@ A permission-controlled system for marking client services as inactive, preventi
 - Scheduling Exclusion: The nightly project scheduler filters out inactive services (`isActive: false`), preventing automated project generation for deactivated services.
 - Schema Migration Support: Automatic migrations create the `inactive_reason` enum type and add `inactiveReason`, `inactiveAt`, and `inactiveByUserId` columns to `client_services` table.
 
+### Project Inactive Management
+
+A permission-controlled system for marking projects as inactive, preventing them from being included in automated scheduling and workflows while maintaining full audit trails. Implementation follows the same pattern as Service Inactive Management for consistency:
+- Three Required Inactive Reasons: Projects can be marked inactive with mandatory reason selection: "Created in Error", "No Longer Required", or "Client Doing Work Themselves".
+- Permission Control: Only users with `canMakeProjectsInactive` permission can deactivate projects, providing role-based access control.
+- Automatic Metadata Population: Backend auto-populates `inactiveAt` timestamp and `inactiveByUserId` when a project is marked inactive.
+- Due Date Clearing: `dueDate` is automatically cleared to NULL when a project is deactivated.
+- Chronology Logging: Project status changes are logged to project chronology with formatted messages (e.g., "Project was marked inactive - Reason: No Longer Required").
+- UI Status Display: Inactive projects show a red-backgrounded status section with formatted reason and deactivation date on the project detail page.
+- Validation & Data Integrity: Backend validates that `inactiveReason` can only be set when `inactive` is true, and ensures all inactive metadata is cleared when reactivating projects.
+- Scheduling Exclusion: The `getActiveProjectsByClientAndType` storage method filters out inactive projects (`inactive: false`), ensuring inactive projects are excluded from automated scheduling and single-project-per-client constraints.
+- Notification Cancellation: When a project is marked inactive, all associated scheduled notifications are automatically cancelled to prevent unnecessary communications.
+- Schema Migration Support: Automatic migrations create the `inactive_reason` enum type for projects and add `inactiveReason`, `inactiveAt`, and `inactiveByUserId` columns to `projects` table, plus `canMakeProjectsInactive` column to `users` table.
+
 ## External Dependencies
 
 ### Third-Party Services
