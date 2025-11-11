@@ -5949,6 +5949,17 @@ export class DatabaseStorage implements IStorage {
         return null;
       }
 
+      // Check if notifications are enabled for this project type
+      const [projectType] = await db
+        .select({ notificationsActive: projectTypes.notificationsActive })
+        .from(projectTypes)
+        .where(eq(projectTypes.id, project.projectTypeId));
+
+      if (projectType && projectType.notificationsActive === false) {
+        console.log(`Notifications disabled for project type ${project.projectTypeId}, skipping notification preview`);
+        return null;
+      }
+
       // Get the new kanban stage to find the assigned role
       const [newStage] = await db
         .select()
@@ -6196,6 +6207,17 @@ export class DatabaseStorage implements IStorage {
       const project = await this.getProject(projectId);
       if (!project) {
         console.warn(`Project ${projectId} not found for stage change notifications`);
+        return;
+      }
+
+      // Check if notifications are enabled for this project type
+      const [projectType] = await db
+        .select({ notificationsActive: projectTypes.notificationsActive })
+        .from(projectTypes)
+        .where(eq(projectTypes.id, project.projectTypeId));
+
+      if (projectType && projectType.notificationsActive === false) {
+        console.log(`Notifications disabled for project type ${project.projectTypeId}, skipping notifications`);
         return;
       }
 
