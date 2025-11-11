@@ -30,8 +30,9 @@ import { eq, and, sql, isNotNull } from "drizzle-orm";
 /**
  * System user identifier for automated operations
  * Used when notifications are cancelled/updated by the system rather than a specific user
+ * NULL is used to avoid foreign key violations with the users table
  */
-export const SYSTEM_USER_ID = 'system';
+export const SYSTEM_USER_ID = null;
 
 /**
  * Check if notifications are active for a project type

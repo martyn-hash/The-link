@@ -3267,8 +3267,12 @@ export class DatabaseStorage implements IStorage {
     }
     // When showArchived is true or undefined, don't filter by archived status (include all)
     
+    // Handle inactive filtering: default to excluding inactive projects unless explicitly requested
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
+    } else {
+      // Default: exclude inactive projects from active list
+      whereConditions.push(eq(projects.inactive, false));
     }
     
     if (filters?.assigneeId) {

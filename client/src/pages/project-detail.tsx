@@ -205,6 +205,15 @@ export default function ProjectDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      // Invalidate client-specific projects queries to update the projects list on client detail page
+      if (project?.clientId) {
+        queryClient.invalidateQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey[0] as string;
+            return key?.includes(`/api/clients/${project.clientId}/projects`);
+          }
+        });
+      }
       toast({
         title: "Project marked inactive",
         description: "The project has been successfully marked as inactive.",

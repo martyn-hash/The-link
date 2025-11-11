@@ -6090,9 +6090,19 @@ function OpenProjectRow({ project, clientId }: { project: ProjectWithRelations; 
       </TableCell>
       
       <TableCell>
-        <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
-          {formatStatus(project.currentStatus)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+            {formatStatus(project.currentStatus)}
+          </Badge>
+          {project.inactive && (
+            <Badge 
+              className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"
+              data-testid={`badge-inactive-${project.id}`}
+            >
+              Inactive
+            </Badge>
+          )}
+        </div>
       </TableCell>
       
       <TableCell>
@@ -6169,9 +6179,19 @@ function CompletedProjectRow({ project, clientId }: { project: ProjectWithRelati
       </TableCell>
       
       <TableCell>
-        <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
-          {formatStatus(project.currentStatus)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+            {formatStatus(project.currentStatus)}
+          </Badge>
+          {project.inactive && (
+            <Badge 
+              className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"
+              data-testid={`badge-inactive-${project.id}`}
+            >
+              Inactive
+            </Badge>
+          )}
+        </div>
       </TableCell>
       
       <TableCell>
@@ -6325,6 +6345,14 @@ function ProjectsList({ projects, isLoading, clientId, isCompleted = false }: { 
                     >
                       {formatStatus(project.currentStatus)}
                     </Badge>
+                    {project.inactive && (
+                      <Badge 
+                        className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"
+                        data-testid={`badge-inactive-${project.id}`}
+                      >
+                        Inactive
+                      </Badge>
+                    )}
                     {isCompleted && (
                       <span className={`text-sm font-medium ${completionStatusColor}`} data-testid={`text-completion-${project.id}`}>
                         {completionStatusDisplay}
@@ -6867,6 +6895,7 @@ export default function ClientDetail() {
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: "always", // Always refetch to ensure fresh data after mutations
   });
 
   // Fetch task instances for this client
@@ -8558,7 +8587,7 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ProjectsList 
-                  projects={clientProjects?.filter(p => !p.completionStatus)} 
+                  projects={clientProjects?.filter(p => !p.completionStatus && !p.inactive)} 
                   isLoading={projectsLoading}
                   clientId={id}
                   isCompleted={false}
@@ -8576,7 +8605,7 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ProjectsList 
-                  projects={clientProjects?.filter(p => p.completionStatus)} 
+                  projects={clientProjects?.filter(p => p.completionStatus || p.inactive)} 
                   isLoading={projectsLoading}
                   clientId={id}
                   isCompleted={true}

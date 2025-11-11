@@ -205,9 +205,13 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       const cumulativeStageTime = new Map<string, number>();
       
       sortedChronology.forEach((entry: any) => {
-        const detail = entry.fromStatus 
-          ? `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`
-          : `Project created in ${formatStageName(entry.toStatus)}`;
+        // For inactive/reactivate entries, show the notes instead of status transition
+        const isInactiveEntry = entry.changeReason === 'project_inactive' || entry.changeReason === 'project_reactivated';
+        const detail = isInactiveEntry
+          ? (entry.notes || 'Project status changed')
+          : entry.fromStatus 
+            ? `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`
+            : `Project created in ${formatStageName(entry.toStatus)}`;
         
         // Calculate stage change status with priority hierarchy:
         // 1. If project is overdue (past dueDate), ALL stage changes are RED
