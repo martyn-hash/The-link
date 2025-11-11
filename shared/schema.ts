@@ -367,12 +367,7 @@ export const people = pgTable("people", {
   photoIdVerified: boolean("photo_id_verified").default(false),
   addressVerified: boolean("address_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(), // Existing field
-}, (table) => [
-  // Unique constraint on primary_email (case-insensitive) - Temporarily removed for deployment
-  // uniqueIndex("unique_people_primary_email").on(lower(table.primaryEmail)),
-  // Unique constraint on primary_phone
-  uniqueIndex("unique_people_primary_phone").on(table.primaryPhone),
-]);
+});
 
 // Client-People relationships - matches existing database structure
 export const clientPeople = pgTable("client_people", {
@@ -1067,9 +1062,9 @@ export const insertPersonSchema = createInsertSchema(people).omit({
   // Add validation for new fields
   niNumber: z.string().regex(niNumberRegex, "Invalid National Insurance number format").optional().or(z.literal("")),
   personalUtrNumber: z.string().regex(personalUtrRegex, "Personal UTR must be 10 digits").optional().or(z.literal("")),
-  // Primary contact validation
-  primaryPhone: z.string().regex(ukMobileRegex, "Invalid UK mobile number format (must be 07xxxxxxxxx or +447xxxxxxxxx)").optional().or(z.literal("")),
-  primaryEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+  // Primary contact validation - no restrictions on format
+  primaryPhone: z.string().optional().or(z.literal("")),
+  primaryEmail: z.string().optional().or(z.literal("")),
   nationality: z.enum([
     "afghan", "albanian", "algerian", "american", "andorran", "angolan", "antiguans", "argentinean", "armenian", "australian",
     "austrian", "azerbaijani", "bahamian", "bahraini", "bangladeshi", "barbadian", "barbudans", "batswana", "belarusian", "belgian",
