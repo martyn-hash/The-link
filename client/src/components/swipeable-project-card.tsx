@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useSwipeable } from "react-swipeable";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { CheckCircle2, Archive, AlertCircle, Clock, User as UserIcon, Timer } from "lucide-react";
+import { Info, MessageSquare, CheckCircle2, Archive, AlertCircle, Clock, User as UserIcon, Timer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -25,16 +25,19 @@ import {
 interface SwipeableProjectCardProps {
   project: ProjectWithRelations;
   canComplete?: boolean;
+  onShowInfo?: (projectId: string) => void;
+  onShowMessages?: (projectId: string) => void;
 }
 
-export default function SwipeableProjectCard({ project, canComplete = false }: SwipeableProjectCardProps) {
+export default function SwipeableProjectCard({ project, canComplete = false, onShowInfo, onShowMessages }: SwipeableProjectCardProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiped, setIsSwiped] = useState(false);
   
   // Calculate maxSwipe based on number of action buttons
-  const buttonCount = canComplete ? 2 : 1; // Complete + Archive OR just Archive
+  // Info (always) + Messages (always) + Complete (conditional) + Archive (always) = 3-4 buttons
+  const buttonCount = canComplete ? 4 : 3;
   const maxSwipe = buttonCount * 80; // 80px per button
 
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
@@ -173,6 +176,22 @@ export default function SwipeableProjectCard({ project, canComplete = false }: S
     },
   });
 
+  const handleInfoClick = () => {
+    if (onShowInfo) {
+      onShowInfo(project.id);
+    }
+    setSwipeOffset(0);
+    setIsSwiped(false);
+  };
+
+  const handleMessagesClick = () => {
+    if (onShowMessages) {
+      onShowMessages(project.id);
+    }
+    setSwipeOffset(0);
+    setIsSwiped(false);
+  };
+
   const handleComplete = () => {
     setShowCompleteConfirm(true);
   };
@@ -226,6 +245,28 @@ export default function SwipeableProjectCard({ project, canComplete = false }: S
       <div className="relative overflow-hidden">
         {/* Action buttons tray (revealed by swiping left) */}
         <div className="absolute right-0 top-0 bottom-0 flex items-stretch">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInfoClick();
+            }}
+            className="w-20 flex flex-col items-center justify-center bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
+            data-testid={`button-info-${project.id}`}
+          >
+            <Info className="w-6 h-6" />
+            <span className="text-xs mt-1">Info</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMessagesClick();
+            }}
+            className="w-20 flex flex-col items-center justify-center bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 transition-colors"
+            data-testid={`button-messages-${project.id}`}
+          >
+            <MessageSquare className="w-6 h-6" />
+            <span className="text-xs mt-1">Messages</span>
+          </button>
           {canComplete && (
             <button
               onClick={(e) => {
@@ -246,7 +287,7 @@ export default function SwipeableProjectCard({ project, canComplete = false }: S
               handleArchive();
             }}
             disabled={archiveMutation.isPending}
-            className="w-20 flex flex-col items-center justify-center bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors"
+            className="w-20 flex flex-col items-center justify-center bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800 disabled:opacity-50 transition-colors"
             data-testid={`button-archive-project-${project.id}`}
           >
             <Archive className="w-6 h-6" />
@@ -374,7 +415,7 @@ export default function SwipeableProjectCard({ project, canComplete = false }: S
             <AlertDialogCancel data-testid="button-cancel-archive">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmArchive}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-amber-600 hover:bg-amber-700"
               data-testid="button-confirm-archive"
             >
               Archive

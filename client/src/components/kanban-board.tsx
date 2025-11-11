@@ -5,8 +5,8 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, 
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
 import ChangeStatusModal from "./ChangeStatusModal";
-import StageChangeModal from "./stage-change-modal";
-import MessagesModal from "./messages-modal";
+import { StageChangeModal } from "./stage-change-modal";
+import { MessagesModal } from "./messages-modal";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -413,6 +413,8 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
                               project={project}
                               stageConfig={currentStageConfig}
                               onOpenModal={() => navigateToProject(project.id)}
+                              onShowInfo={handleShowInfo}
+                              onShowMessages={handleShowMessages}
                             />
                           );
                         })}
@@ -451,6 +453,24 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
           user={user}
           onStatusUpdated={handleStatusUpdated}
           initialNewStatus={targetStatus || undefined}
+        />
+      )}
+
+      {/* Stage Change Info Modal */}
+      {modalProjectId && (
+        <StageChangeModal
+          projectId={modalProjectId}
+          open={showStageChangeModal}
+          onOpenChange={setShowStageChangeModal}
+        />
+      )}
+
+      {/* Messages Modal */}
+      {modalProjectId && (
+        <MessagesModal
+          projectId={modalProjectId}
+          open={showMessagesModal}
+          onOpenChange={setShowMessagesModal}
         />
       )}
     </div>

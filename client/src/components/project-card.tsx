@@ -32,7 +32,9 @@ export default function ProjectCard({
   project, 
   stageConfig,
   onOpenModal, 
-  isDragging = false 
+  isDragging = false,
+  onShowInfo,
+  onShowMessages
 }: ProjectCardProps) {
   // Get authentication state
   const { isAuthenticated, user } = useAuth();
@@ -338,6 +340,8 @@ export default function ProjectCard({
     return "?";
   }, [isLoadingAssignee, roleAssigneeData, project.currentAssignee, project.clientManager]);
 
+  const hasQuickActions = onShowInfo || onShowMessages;
+
   return (
     <Card
       ref={setNodeRef}
@@ -350,7 +354,7 @@ export default function ProjectCard({
       onClick={onOpenModal}
       data-testid={`project-card-${project.id}`}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-4 flex flex-col">
         <div className="flex items-start justify-between mb-2">
           <h4 className="font-medium text-foreground line-clamp-1 flex-1" title={project.client.name}>
             {project.client.name}
@@ -365,7 +369,7 @@ export default function ProjectCard({
           </div>
         </div>
         
-        <div className="flex items-center justify-between text-xs gap-2">
+        <div className="flex items-center justify-between text-xs gap-2 mb-2">
           <div className="flex items-center gap-2 text-muted-foreground truncate">
             <span 
               className="font-medium truncate"
@@ -390,6 +394,60 @@ export default function ProjectCard({
             </span>
           </div>
         </div>
+
+        {hasQuickActions && (
+          <div 
+            className="flex items-center justify-end gap-1 mt-auto pt-2 border-t border-border/50"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TooltipProvider>
+              {onShowInfo && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShowInfo(project.id);
+                      }}
+                      data-testid={`button-info-${project.id}`}
+                    >
+                      <Info className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View latest stage change</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {onShowMessages && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShowMessages(project.id);
+                      }}
+                      data-testid={`button-messages-${project.id}`}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View project messages</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </TooltipProvider>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

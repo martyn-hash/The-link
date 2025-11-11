@@ -44,7 +44,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useIsMobile } from "@/hooks/use-mobile";
-import SwipeableProjectCard from "./swipeable-project-card";
+import TaskListMobileView from "./task-list-mobile-view";
 
 interface TaskListProps {
   projects: ProjectWithRelations[];
@@ -811,26 +811,8 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
               <p>You don't have any assigned tasks at the moment.</p>
             </div>
           ) : isMobile ? (
-            // Mobile view: Swipeable project cards
-            <div className="space-y-3">
-              {visibleProjects.map((project) => {
-                // Determine if user can complete this project
-                const canComplete = !project.completionStatus && (
-                  user.isAdmin ||
-                  project.currentAssigneeId === user.id ||
-                  project.clientManagerId === user.id ||
-                  project.bookkeeperId === user.id
-                );
-                
-                return (
-                  <SwipeableProjectCard
-                    key={project.id}
-                    project={project}
-                    canComplete={canComplete}
-                  />
-                );
-              })}
-            </div>
+            // Mobile view: Swipeable project cards with info/messages modals
+            <TaskListMobileView projects={visibleProjects} user={user} />
           ) : (
             // Desktop view: Table
             <div className="overflow-x-auto">
