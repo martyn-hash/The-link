@@ -26,7 +26,7 @@ interface TimelineEntry {
   assignedTo?: string;
   changedBy?: string;
   timeInStage?: string;
-  stageChangeStatus?: 'on_track' | 'behind_schedule' | 'late_overdue'; // For stage changes only
+  stageChangeStatus?: 'on_track' | 'behind_schedule' | 'late_overdue'; // For stage changes only - always set for stage_change type
   rawData: any;
 }
 
@@ -189,33 +189,62 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const timeline = useMemo((): TimelineEntry[] => {
     const entries: TimelineEntry[] = [];
 
-    // Add stage changes from chronology
+    // Check if project is overdue based on due date
+    const isProjectOverdue = project.dueDate ? new Date() > new Date(project.dueDate) : false;
+
+    // Add stage changes from chronology - process in chronological order to track cumulative time correctly
     if (project.chronology) {
-      project.chronology.forEach((entry: any) => {
+      // Sort chronology by timestamp (oldest first) to calculate running cumulative time
+      const sortedChronology = [...project.chronology].sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeA - timeB;
+      });
+      
+      // Track cumulative business hours spent in each stage as we iterate
+      const cumulativeStageTime = new Map<string, number>();
+      
+      sortedChronology.forEach((entry: any) => {
         const detail = entry.fromStatus 
           ? `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`
           : `Project created in ${formatStageName(entry.toStatus)}`;
         
-        // Calculate stage change status based on time in previous stage vs max allowed time
-        let stageChangeStatus: 'on_track' | 'behind_schedule' | 'late_overdue' | undefined;
+        // Calculate stage change status with priority hierarchy:
+        // 1. If project is overdue (past dueDate), ALL stage changes are RED
+        // 2. If stage exceeded maxInstanceTime OR maxTotalTime, show AMBER
+        // 3. Otherwise show GREEN
+        let stageChangeStatus: 'on_track' | 'behind_schedule' | 'late_overdue';
         
-        if (entry.fromStatus && entry.businessHoursInPreviousStage !== null && entry.businessHoursInPreviousStage !== undefined) {
+        if (isProjectOverdue) {
+          // Priority 1: Project is overdue - all stage changes are RED
+          stageChangeStatus = 'late_overdue';
+        } else if (entry.fromStatus && entry.businessHoursInPreviousStage !== null && entry.businessHoursInPreviousStage !== undefined) {
           const previousStageConfig = stageConfigMap.get(entry.fromStatus);
+          const hoursInPreviousStage = entry.businessHoursInPreviousStage / 60;
           
-          if (previousStageConfig?.maxInstanceTime && previousStageConfig.maxInstanceTime > 0) {
-            // Convert business minutes to hours
-            const hoursInPreviousStage = entry.businessHoursInPreviousStage / 60;
-            
-            // Determine status based on time spent vs max allowed
-            if (hoursInPreviousStage > previousStageConfig.maxInstanceTime) {
-              stageChangeStatus = 'late_overdue';
-            } else if (hoursInPreviousStage >= previousStageConfig.maxInstanceTime * 0.8) {
-              // Behind schedule if >= 80% of max time
-              stageChangeStatus = 'behind_schedule';
-            } else {
-              stageChangeStatus = 'on_track';
-            }
+          // Get cumulative time up to this point (before adding current entry's time)
+          const cumulativeMinutesUpToNow = cumulativeStageTime.get(entry.fromStatus) || 0;
+          const cumulativeHoursUpToNow = cumulativeMinutesUpToNow / 60;
+          
+          // Now add this entry's time to the running total for future iterations
+          cumulativeStageTime.set(entry.fromStatus, cumulativeMinutesUpToNow + entry.businessHoursInPreviousStage);
+          
+          // Check if either time limit is exceeded at this transition
+          const exceedsInstanceTime = previousStageConfig?.maxInstanceTime && previousStageConfig.maxInstanceTime > 0 
+            && hoursInPreviousStage > previousStageConfig.maxInstanceTime;
+          const exceedsTotalTime = previousStageConfig?.maxTotalTime && previousStageConfig.maxTotalTime > 0
+            && (cumulativeHoursUpToNow + hoursInPreviousStage) > previousStageConfig.maxTotalTime;
+          
+          if (exceedsInstanceTime || exceedsTotalTime) {
+            // Priority 2: Behind schedule - exceeded time limits
+            stageChangeStatus = 'behind_schedule';
+          } else {
+            // Priority 3: On track
+            stageChangeStatus = 'on_track';
           }
+        } else {
+          // Default to green for stage changes with no time tracking
+          stageChangeStatus = 'on_track';
         }
         
         entries.push({
@@ -354,12 +383,14 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     switch (type) {
       case 'stage_change':
         // Apply color coding based on stage change status
-        let colorClass = 'bg-gray-100 dark:bg-gray-900/20'; // Default neutral
+        // All stage changes now have a color: green (on track), amber (behind), or red (overdue)
+        let colorClass: string;
         if (stageChangeStatus === 'on_track') {
           colorClass = 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200';
         } else if (stageChangeStatus === 'behind_schedule') {
           colorClass = 'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200';
-        } else if (stageChangeStatus === 'late_overdue') {
+        } else {
+          // 'late_overdue' - also covers undefined (should never happen)
           colorClass = 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200';
         }
         return <Badge variant="outline" className={`gap-1 ${colorClass}`}><FileText className="w-3 h-3" />Stage Change</Badge>;
