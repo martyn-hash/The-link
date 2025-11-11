@@ -356,21 +356,18 @@ export default function ProjectCard({
     >
       <CardContent className="p-4 flex flex-col">
         <div className="flex items-start justify-between mb-2">
-          <h4 className="font-medium text-foreground line-clamp-1 flex-1" title={project.client.name}>
+          <h4 className="font-medium text-foreground line-clamp-1 flex-1 pr-2" title={project.client.name}>
             {project.client.name}
           </h4>
           <div className="flex items-center space-x-1 flex-shrink-0">
             {project.priority === "urgent" && (
               <AlertCircle className="w-3 h-3 text-red-500" />
             )}
-            <div title="Drag to move">
-              <GripVertical className="w-4 h-4 text-muted-foreground opacity-40" />
-            </div>
           </div>
         </div>
         
         <div className="flex items-center justify-between text-xs gap-2">
-          <div className="flex items-center gap-2 text-muted-foreground truncate">
+          <div className="flex items-center gap-2 text-muted-foreground truncate flex-1">
             <span 
               className="font-medium truncate"
               data-testid={`assignee-name-${project.id}`}
@@ -378,11 +375,9 @@ export default function ProjectCard({
             >
               {assigneeFirstName}
             </span>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
             <span 
               data-testid={`time-until-due-${project.id}`} 
-              className={`text-xs ${
+              className={`text-xs whitespace-nowrap ${
                 projectStatus.status === 'Late / Overdue' 
                   ? 'text-red-600 dark:text-red-400' 
                   : projectStatus.status === 'Behind Schedule' 
@@ -396,57 +391,66 @@ export default function ProjectCard({
         </div>
       </CardContent>
 
-      {/* Quick action overlay buttons */}
-      {hasQuickActions && (
+      {/* Info button in top-right corner */}
+      {hasQuickActions && onShowInfo && (
         <div 
-          className="absolute bottom-2 right-2 flex items-center gap-1 z-10"
+          className="absolute top-2 right-2 z-10"
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <TooltipProvider>
-            {onShowInfo && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onShowInfo(project.id);
-                    }}
-                    data-testid={`button-info-${project.id}`}
-                  >
-                    <Info className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>View latest stage change</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {onShowMessages && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onShowMessages(project.id);
-                    }}
-                    data-testid={`button-messages-${project.id}`}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>View project messages</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowInfo(project.id);
+                  }}
+                  data-testid={`button-info-${project.id}`}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View latest stage change</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
+
+      {/* Messages button in bottom-right corner */}
+      {hasQuickActions && onShowMessages && (
+        <div 
+          className="absolute bottom-2 right-2 z-10"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowMessages(project.id);
+                  }}
+                  data-testid={`button-messages-${project.id}`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View project messages</p>
+              </TooltipContent>
+            </Tooltip>
           </TooltipProvider>
         </div>
       )}
