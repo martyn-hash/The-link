@@ -15,6 +15,13 @@
       "when": 1758222116000,
       "tag": "0001_add_time_governance_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1731312000000,
+      "tag": "0002_drop_primary_email_unique_constraint",
+      "breakpoints": true
     }
   ]
 }
