@@ -206,7 +206,10 @@ export default function Projects() {
   }, [behindScheduleOnly]);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/projects", { showArchived }],
+    queryKey: ["/api/projects", { 
+      showArchived,
+      dueDate: serviceDueDateFilter !== "all" ? serviceDueDateFilter : undefined,
+    }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -284,6 +287,7 @@ export default function Projects() {
         from: filters.customDateRange?.from ? new Date(filters.customDateRange.from) : undefined,
         to: filters.customDateRange?.to ? new Date(filters.customDateRange.to) : undefined,
       });
+      setServiceDueDateFilter(filters.serviceDueDateFilter || "all");
       
       // Switch to the appropriate view mode based on the saved view
       if (view.viewMode === "kanban") {
@@ -351,6 +355,7 @@ export default function Projects() {
           from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
+        setDashboardServiceDueDateFilter(parsedFilters.serviceDueDateFilter || "all");
       }
       
       toast({
@@ -440,6 +445,7 @@ export default function Projects() {
       dynamicDateFilter,
       customDateRange,
       behindScheduleOnly,
+      serviceDueDateFilter,
     };
 
     saveViewMutation.mutate({
@@ -481,6 +487,7 @@ export default function Projects() {
           from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
+        setDashboardServiceDueDateFilter(parsedFilters.serviceDueDateFilter || "all");
       }
       
       toast({
@@ -624,6 +631,7 @@ export default function Projects() {
         from: dashboardCustomDateRange.from ? dashboardCustomDateRange.from.toISOString() : undefined,
         to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
+      serviceDueDateFilter: dashboardServiceDueDateFilter,
     };
 
     saveDashboardMutation.mutate({
@@ -653,6 +661,7 @@ export default function Projects() {
         from: dashboardCustomDateRange.from ? dashboardCustomDateRange.from.toISOString() : undefined,
         to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
+      serviceDueDateFilter: dashboardServiceDueDateFilter,
     };
 
     saveDashboardMutation.mutate({
