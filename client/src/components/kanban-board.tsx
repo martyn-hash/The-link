@@ -5,6 +5,8 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, 
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import ProjectCard from "./project-card";
 import ChangeStatusModal from "./ChangeStatusModal";
+import StageChangeModal from "./stage-change-modal";
+import MessagesModal from "./messages-modal";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,8 +59,24 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
   const [targetStatus, setTargetStatus] = useState<string | null>(null);
   const [overedColumn, setOveredColumn] = useState<string | null>(null);
   
+  // State for StageChangeModal and MessagesModal
+  const [showStageChangeModal, setShowStageChangeModal] = useState(false);
+  const [showMessagesModal, setShowMessagesModal] = useState(false);
+  const [modalProjectId, setModalProjectId] = useState<string | null>(null);
+  
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
+
+  // Handlers for quick actions
+  const handleShowInfo = (projectId: string) => {
+    setModalProjectId(projectId);
+    setShowStageChangeModal(true);
+  };
+
+  const handleShowMessages = (projectId: string) => {
+    setModalProjectId(projectId);
+    setShowMessagesModal(true);
+  };
 
   // Configure sensors with activation constraints to distinguish between clicks and drags
   const sensors = useSensors(

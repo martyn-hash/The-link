@@ -4,7 +4,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { GripVertical, AlertCircle, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { GripVertical, AlertCircle, Clock, Info, MessageSquare } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +24,8 @@ interface ProjectCardProps {
   stageConfig?: KanbanStage; // Fallback for display purposes from kanban board
   onOpenModal: () => void;
   isDragging?: boolean;
+  onShowInfo?: (projectId: string) => void;
+  onShowMessages?: (projectId: string) => void;
 }
 
 export default function ProjectCard({ 
