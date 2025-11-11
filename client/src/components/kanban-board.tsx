@@ -226,7 +226,8 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     }
 
     // Prevent drops into completion columns (read-only)
-    if (targetStatusName && stageConfigWithCompletions?.[targetStatusName as keyof typeof stageConfigWithCompletions]?.isCompletionColumn) {
+    const isCompletionColumn = targetStatusName === 'Completed - Success' || targetStatusName === 'Completed - Unsuccessful';
+    if (isCompletionColumn) {
       setOveredColumn(null);
       return;
     }
