@@ -600,7 +600,7 @@ export function registerProjectRoutes(
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
         
-        await storage.addProjectChronologyEntry({
+        await storage.createChronologyEntry({
           projectId: project.id,
           fromStatus: project.currentStatus,
           toStatus: project.currentStatus,
@@ -617,7 +617,7 @@ export function registerProjectRoutes(
         finalUpdateData.inactiveByUserId = null;
         
         // Log to project chronology
-        await storage.addProjectChronologyEntry({
+        await storage.createChronologyEntry({
           projectId: project.id,
           fromStatus: project.currentStatus,
           toStatus: project.currentStatus,
