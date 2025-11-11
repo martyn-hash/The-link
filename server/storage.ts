@@ -527,6 +527,7 @@ export interface IStorage {
   getMostRecentStageChange(projectId: string): Promise<{
     entry: any;
     stageApprovalResponses: any[];
+    projectTypeId: string;
   } | undefined>;
 
   // Helper validation methods
@@ -3922,6 +3923,7 @@ export class DatabaseStorage implements IStorage {
   async getMostRecentStageChange(projectId: string): Promise<{
     entry: any;
     stageApprovalResponses: any[];
+    projectTypeId: string;
   } | undefined> {
     // Fetch the most recent chronology entry that is a stage change
     // Stage changes have both fromStatus and toStatus populated
@@ -3945,7 +3947,7 @@ export class DatabaseStorage implements IStorage {
 
     if (!result) return undefined;
 
-    // Fetch the project's stage approval responses
+    // Fetch the project's stage approval responses and projectTypeId
     // The client-side modal will filter these based on the stage change's approval requirements
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, projectId),
@@ -3958,7 +3960,9 @@ export class DatabaseStorage implements IStorage {
       },
     });
 
-    // Return the chronology entry and the project's stage approval responses separately
+    if (!project) return undefined;
+
+    // Return the chronology entry, stage approval responses, and projectTypeId
     // This allows the client-side filtering logic to work unchanged
     return {
       entry: {
@@ -3967,7 +3971,8 @@ export class DatabaseStorage implements IStorage {
         changedBy: result.changedBy || undefined,
         fieldResponses: result.fieldResponses || [],
       },
-      stageApprovalResponses: project?.stageApprovalResponses || [],
+      stageApprovalResponses: project.stageApprovalResponses || [],
+      projectTypeId: project.projectTypeId,
     };
   }
 
