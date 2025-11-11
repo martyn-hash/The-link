@@ -523,6 +523,12 @@ export interface IStorage {
   createReasonFieldResponse(response: InsertReasonFieldResponse): Promise<ReasonFieldResponse>;
   getReasonFieldResponsesByChronologyId(chronologyId: string): Promise<ReasonFieldResponse[]>;
 
+  // Project chronology operations
+  getMostRecentStageChange(projectId: string): Promise<{
+    entry: any;
+    stageApprovalResponses: any[];
+  } | undefined>;
+
   // Helper validation methods
   validateStageReasonMapping(stageId: string, reasonId: string): Promise<{ isValid: boolean; reason?: string }>;
   validateRequiredFields(reasonId: string, fieldResponses?: { customFieldId: string; fieldType: string; valueNumber?: number; valueShortText?: string; valueLongText?: string }[]): Promise<{ isValid: boolean; reason?: string; missingFields?: string[] }>;
@@ -3910,6 +3916,58 @@ export class DatabaseStorage implements IStorage {
         fieldResponses: c.fieldResponses || [],
       })),
       stageApprovalResponses: result.stageApprovalResponses || [],
+    };
+  }
+
+  async getMostRecentStageChange(projectId: string): Promise<{
+    entry: any;
+    stageApprovalResponses: any[];
+  } | undefined> {
+    // Fetch the most recent chronology entry that is a stage change
+    // Stage changes have both fromStatus and toStatus populated
+    const result = await db.query.projectChronology.findFirst({
+      where: and(
+        eq(projectChronology.projectId, projectId),
+        isNotNull(projectChronology.fromStatus),
+        isNotNull(projectChronology.toStatus)
+      ),
+      with: {
+        assignee: true,
+        changedBy: true,
+        fieldResponses: {
+          with: {
+            customField: true,
+          },
+        },
+      },
+      orderBy: desc(projectChronology.timestamp),
+    });
+
+    if (!result) return undefined;
+
+    // Fetch the project's stage approval responses
+    // The client-side modal will filter these based on the stage change's approval requirements
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      with: {
+        stageApprovalResponses: {
+          with: {
+            field: true,
+          },
+        },
+      },
+    });
+
+    // Return the chronology entry and the project's stage approval responses separately
+    // This allows the client-side filtering logic to work unchanged
+    return {
+      entry: {
+        ...result,
+        assignee: result.assignee || undefined,
+        changedBy: result.changedBy || undefined,
+        fieldResponses: result.fieldResponses || [],
+      },
+      stageApprovalResponses: project?.stageApprovalResponses || [],
     };
   }
 

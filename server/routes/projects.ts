@@ -289,6 +289,33 @@ export function registerProjectRoutes(
     }
   });
 
+  // GET /api/projects/:id/most-recent-stage-change - Get the most recent stage change chronology entry for a project
+  app.get("/api/projects/:id/most-recent-stage-change", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const projectId = req.params.id;
+      
+      // Validate user has access to this project
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Fetch the most recent stage change with approval responses
+      const stageChangeData = await storage.getMostRecentStageChange(projectId);
+      
+      if (!stageChangeData) {
+        return res.status(404).json({ message: "No stage changes found for this project" });
+      }
+      
+      // Return the entry and stage approval responses separately
+      // Client-side modal will filter approvals based on the change reason/stage
+      res.json(stageChangeData);
+    } catch (error) {
+      console.error("Error fetching most recent stage change:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch most recent stage change" });
+    }
+  });
+
   app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
