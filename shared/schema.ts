@@ -368,8 +368,8 @@ export const people = pgTable("people", {
   addressVerified: boolean("address_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(), // Existing field
 }, (table) => [
-  // Unique constraint on primary_email (case-insensitive)
-  uniqueIndex("unique_people_primary_email").on(lower(table.primaryEmail)),
+  // Unique constraint on primary_email (case-insensitive) - Temporarily removed for deployment
+  // uniqueIndex("unique_people_primary_email").on(lower(table.primaryEmail)),
   // Unique constraint on primary_phone
   uniqueIndex("unique_people_primary_phone").on(table.primaryPhone),
 ]);
