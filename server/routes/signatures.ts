@@ -458,14 +458,163 @@ export function registerSignatureRoutes(
   /**
    * POST /api/sign/:token
    * Submit signatures (public route)
-   * This will be implemented in task 5
    */
-  app.post("/api/sign/:token", async (req, res) => {
+  app.post("/api/sign/:token", async (req: any, res) => {
     try {
-      // Placeholder - will be fully implemented in task 5
-      res.status(501).json({ 
-        error: "Signature submission not yet implemented",
-        message: "This endpoint will be implemented in task 5" 
+      const { token } = req.params;
+      const { signatures: submittedSignatures, consentAccepted } = req.body;
+
+      // Validate consent acceptance
+      if (!consentAccepted) {
+        return res.status(400).json({ error: "You must accept the consent disclosure to sign" });
+      }
+
+      // Find recipient by token
+      const [recipient] = await db
+        .select()
+        .from(signatureRequestRecipients)
+        .where(eq(signatureRequestRecipients.secureToken, token));
+
+      if (!recipient) {
+        return res.status(404).json({ error: "Invalid or expired signature link" });
+      }
+
+      // Check if token is expired
+      if (recipient.tokenExpiresAt && new Date(recipient.tokenExpiresAt) < new Date()) {
+        return res.status(403).json({ error: "This signature link has expired" });
+      }
+
+      // Check if already signed
+      if (recipient.signedAt) {
+        return res.status(400).json({ error: "You have already signed this document" });
+      }
+
+      // Get signature request
+      const [request] = await db
+        .select()
+        .from(signatureRequests)
+        .where(eq(signatureRequests.id, recipient.signatureRequestId));
+
+      if (!request || request.status === "cancelled") {
+        return res.status(400).json({ error: "This signature request is no longer active" });
+      }
+
+      // Get document for hash
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.id, request.documentId));
+
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      // Get person details
+      const [person] = await db
+        .select()
+        .from(people)
+        .where(eq(people.id, recipient.personId));
+
+      // Collect audit trail data
+      const ipAddress = req.ip || req.connection.remoteAddress || "unknown";
+      const userAgent = req.headers["user-agent"] || "unknown";
+      
+      // Parse user agent for device/browser/os info
+      const UAParser = require('ua-parser-js');
+      const parser = new UAParser(userAgent);
+      const uaResult = parser.getResult();
+      
+      const deviceInfo = uaResult.device.type || "Desktop";
+      const browserInfo = uaResult.browser.name ? 
+        `${uaResult.browser.name} ${uaResult.browser.version || ''}`.trim() : 
+        "Unknown";
+      const osInfo = uaResult.os.name ? 
+        `${uaResult.os.name} ${uaResult.os.version || ''}`.trim() : 
+        "Unknown";
+
+      // Generate document hash (SHA-256)
+      const documentHash = crypto
+        .createHash('sha256')
+        .update(document.objectPath) // Using path as version identifier
+        .digest('hex');
+
+      const now = new Date();
+
+      // Store signatures in database
+      for (const sig of submittedSignatures) {
+        await db.insert(signatures).values({
+          signatureFieldId: sig.fieldId,
+          signatureRequestRecipientId: recipient.id,
+          signatureType: sig.type, // 'drawn' or 'typed'
+          signatureData: sig.data, // Base64 image or text
+          signedAt: now,
+        });
+      }
+
+      // Create audit trail record
+      await db.insert(signatureAuditLogs).values({
+        signatureRequestRecipientId: recipient.id,
+        signerName: person?.fullName || "Unknown",
+        signerEmail: recipient.email,
+        ipAddress,
+        userAgent,
+        deviceInfo,
+        browserInfo,
+        osInfo,
+        consentAcceptedAt: now,
+        signedAt: now,
+        documentHash,
+        documentVersion: document.id, // Using document ID as version
+        authMethod: "email_link",
+        metadata: {
+          submittedFields: submittedSignatures.length,
+          timestamp: now.toISOString(),
+        },
+      });
+
+      // Update recipient status
+      await db
+        .update(signatureRequestRecipients)
+        .set({ signedAt: now })
+        .where(eq(signatureRequestRecipients.id, recipient.id));
+
+      // Check if all recipients have signed
+      const allRecipients = await db
+        .select()
+        .from(signatureRequestRecipients)
+        .where(eq(signatureRequestRecipients.signatureRequestId, request.id));
+
+      const allSigned = allRecipients.every(r => r.signedAt !== null);
+      const someSigned = allRecipients.some(r => r.signedAt !== null);
+
+      // Update request status
+      let newStatus = request.status;
+      if (allSigned) {
+        newStatus = "completed";
+        await db
+          .update(signatureRequests)
+          .set({ 
+            status: "completed",
+            completedAt: now,
+            updatedAt: now 
+          })
+          .where(eq(signatureRequests.id, request.id));
+      } else if (someSigned && request.status === "pending") {
+        newStatus = "partially_signed";
+        await db
+          .update(signatureRequests)
+          .set({ 
+            status: "partially_signed",
+            updatedAt: now 
+          })
+          .where(eq(signatureRequests.id, request.id));
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Your signature has been recorded successfully",
+        allSigned,
+        status: newStatus
       });
     } catch (error: any) {
       console.error("Error submitting signatures:", error);
@@ -475,4 +624,44 @@ export function registerSignatureRoutes(
       });
     }
   });
+
+  /**
+   * GET /api/signature-requests/:id/audit-trail
+   * Get audit trail for a signature request (staff only)
+   */
+  app.get(
+    "/api/signature-requests/:id/audit-trail",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+
+        // Get all recipients for this request
+        const recipients = await db
+          .select()
+          .from(signatureRequestRecipients)
+          .where(eq(signatureRequestRecipients.signatureRequestId, id));
+
+        // Get audit logs for all recipients
+        const auditLogs = await db
+          .select()
+          .from(signatureAuditLogs)
+          .where(
+            eq(
+              signatureAuditLogs.signatureRequestRecipientId,
+              recipients.map(r => r.id).join(',') as any // Will need to use IN clause
+            )
+          );
+
+        res.json(auditLogs);
+      } catch (error: any) {
+        console.error("Error fetching audit trail:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch audit trail",
+          message: error.message 
+        });
+      }
+    }
+  );
 }

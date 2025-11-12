@@ -45,6 +45,7 @@ import { ClientNotificationsView } from "@/components/ClientNotificationsView";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { EmailThreadViewer } from "@/components/EmailThreadViewer";
 import { CommunicationCard } from "@/components/communication-card";
+import { CreateSignatureRequestDialog } from "@/components/CreateSignatureRequestDialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8635,10 +8636,17 @@ export default function ClientDetail() {
           <TabsContent value="documents" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Documents
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Documents
+                  </CardTitle>
+                  <CreateSignatureRequestDialog
+                    clientId={id}
+                    documents={clientDocuments || []}
+                    people={clientPeople?.map((cp: any) => cp.person).filter(Boolean) || []}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
                 <DocumentFolderView 

@@ -64,6 +64,7 @@ import InternalChat from "@/pages/internal-chat";
 import ClientRequests from "@/pages/client-requests";
 import InternalTasks from "@/pages/internal-tasks";
 import InternalTaskDetail from "@/pages/internal-task-detail";
+import SignPage from "@/pages/sign";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 function Router() {
@@ -106,6 +107,7 @@ function Router() {
       {/* Public routes - always available */}
       <Route path="/magic-link-verify" component={MagicLinkVerify} />
       <Route path="/login" component={() => <Landing />} />
+      <Route path="/sign" component={SignPage} />
       
       {/* Home route - conditional based on auth */}
       <Route path="/" component={isAuthenticated ? Dashboard : Landing} />
