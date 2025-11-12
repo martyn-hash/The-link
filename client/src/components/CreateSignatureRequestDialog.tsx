@@ -120,19 +120,30 @@ export function CreateSignatureRequestDialog({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Default field dimensions
-    const width = selectedFieldType === "signature" ? 200 : 150;
-    const height = selectedFieldType === "signature" ? 60 : 40;
+    // Default field dimensions in pixels
+    const widthPx = selectedFieldType === "signature" ? 200 : 150;
+    const heightPx = selectedFieldType === "signature" ? 60 : 40;
+
+    // CRITICAL FIX: Convert pixel coordinates to percentages (0-100)
+    // Backend expects percentages, not raw pixels
+    // Use precise decimal values and clamp to valid range [0, 100]
+    const canvasWidth = rect.width;
+    const canvasHeight = rect.height;
+    
+    const xPercent = Math.min(Math.max((x / canvasWidth) * 100, 0), 100);
+    const yPercent = Math.min(Math.max((y / canvasHeight) * 100, 0), 100);
+    const widthPercent = Math.min(Math.max((widthPx / canvasWidth) * 100, 0), 100);
+    const heightPercent = Math.min(Math.max((heightPx / canvasHeight) * 100, 0), 100);
 
     const newField: SignatureField = {
       id: `field-${Date.now()}`,
       recipientPersonId: selectedRecipientForField,
       fieldType: selectedFieldType,
-      pageNumber: 0, // For now, assuming single page
-      xPosition: Math.floor(x),
-      yPosition: Math.floor(y),
-      width,
-      height,
+      pageNumber: 0, // LIMITATION: Currently only supports single-page PDFs
+      xPosition: Math.round(xPercent * 100) / 100, // Round to 2 decimal places
+      yPosition: Math.round(yPercent * 100) / 100,
+      width: Math.round(widthPercent * 100) / 100,
+      height: Math.round(heightPercent * 100) / 100,
       label: selectedFieldType === "signature" ? "Sign here" : "Type your name",
       orderIndex: fields.length,
     };

@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   alias,
   AnyPgColumn,
+  real,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -2304,10 +2305,10 @@ export const signatureFields = pgTable("signature_fields", {
   recipientPersonId: text("recipient_person_id").notNull().references(() => people.id, { onDelete: "cascade" }), // Who should sign this field
   fieldType: signatureFieldTypeEnum("field_type").notNull(),
   pageNumber: integer("page_number").notNull(), // PDF page (0-indexed)
-  xPosition: integer("x_position").notNull(), // X coordinate on page
-  yPosition: integer("y_position").notNull(), // Y coordinate on page
-  width: integer("width").notNull(), // Field width in pixels
-  height: integer("height").notNull(), // Field height in pixels
+  xPosition: real("x_position").notNull(), // X coordinate as percentage (0-100) with decimals
+  yPosition: real("y_position").notNull(), // Y coordinate as percentage (0-100) with decimals
+  width: real("width").notNull(), // Field width as percentage (0-100) with decimals
+  height: real("height").notNull(), // Field height as percentage (0-100) with decimals
   label: varchar("label"), // Optional label (e.g., "Sign here", "Type your name")
   orderIndex: integer("order_index").notNull().default(0), // Order for signing flow
   createdAt: timestamp("created_at").defaultNow(),
