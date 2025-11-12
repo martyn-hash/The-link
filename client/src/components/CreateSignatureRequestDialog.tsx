@@ -90,6 +90,18 @@ export function CreateSignatureRequestDialog({
     }
   }, [selectedDocumentId, pdfDocuments]);
 
+  // Set canvas dimensions for proper click detection
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas && pdfPreviewUrl) {
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+      }
+    }
+  }, [pdfPreviewUrl]);
+
   // Handle adding a field by clicking on the PDF preview
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!selectedRecipientForField) {

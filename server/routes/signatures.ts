@@ -22,6 +22,7 @@ import crypto from "crypto";
 import { PDFDocument, rgb } from "pdf-lib";
 import { Storage } from "@google-cloud/storage";
 import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/sendgrid";
+import { UAParser } from "ua-parser-js";
 
 // Initialize GCS storage
 const storage = new Storage();
@@ -773,7 +774,6 @@ export function registerSignatureRoutes(
       const userAgent = req.headers["user-agent"] || "unknown";
       
       // Parse user agent for device/browser/os info
-      const UAParser = require('ua-parser-js');
       const parser = new UAParser(userAgent);
       const uaResult = parser.getResult();
       
