@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare, FileSignature, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,6 +46,7 @@ import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { EmailThreadViewer } from "@/components/EmailThreadViewer";
 import { CommunicationCard } from "@/components/communication-card";
 import { CreateSignatureRequestDialog } from "@/components/CreateSignatureRequestDialog";
+import { SignatureRequestsPanel } from "@/components/SignatureRequestsPanel";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8658,6 +8659,19 @@ export default function ClientDetail() {
                     </>
                   )}
                 />
+              </CardContent>
+            </Card>
+
+            {/* Signature Requests Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileSignature className="w-5 h-5" />
+                  E-Signature Requests
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SignatureRequestsPanel clientId={id} />
               </CardContent>
             </Card>
           </TabsContent>

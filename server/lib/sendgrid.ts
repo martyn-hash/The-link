@@ -1,0 +1,246 @@
+import sgMail from '@sendgrid/mail';
+
+let connectionSettings: any;
+
+async function getCredentials() {
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
+
+  if (!xReplitToken) {
+    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  }
+
+  connectionSettings = await fetch(
+    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=sendgrid',
+    {
+      headers: {
+        'Accept': 'application/json',
+        'X_REPLIT_TOKEN': xReplitToken
+      }
+    }
+  ).then(res => res.json()).then(data => data.items?.[0]);
+
+  if (!connectionSettings || (!connectionSettings.settings.api_key || !connectionSettings.settings.from_email)) {
+    throw new Error('SendGrid not connected');
+  }
+  return {apiKey: connectionSettings.settings.api_key, email: connectionSettings.settings.from_email};
+}
+
+// WARNING: Never cache this client.
+// Access tokens expire, so a new client must be created each time.
+// Always call this function again to get a fresh client.
+export async function getUncachableSendGridClient() {
+  const {apiKey, email} = await getCredentials();
+  sgMail.setApiKey(apiKey);
+  return {
+    client: sgMail,
+    fromEmail: email
+  };
+}
+
+/**
+ * Send signature request email to a recipient
+ */
+export async function sendSignatureRequestEmail(
+  recipientEmail: string,
+  recipientName: string,
+  clientName: string,
+  documentName: string,
+  customMessage: string,
+  signLink: string
+) {
+  try {
+    const { client, fromEmail } = await getUncachableSendGridClient();
+
+    const subject = `Signature Request: ${documentName}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #0A7BBF; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; }
+          .button { 
+            display: inline-block; 
+            padding: 15px 30px; 
+            background-color: #76CA23; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+          }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .message-box { background-color: white; padding: 15px; border-left: 4px solid #0A7BBF; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Document Signature Request</h1>
+          </div>
+          <div class="content">
+            <p>Dear ${recipientName},</p>
+            
+            <p><strong>${clientName}</strong> has requested your signature on the following document:</p>
+            
+            <p><strong>Document:</strong> ${documentName}</p>
+            
+            ${customMessage ? `
+              <div class="message-box">
+                <p><strong>Message from ${clientName}:</strong></p>
+                <p>${customMessage.replace(/\n/g, '<br>')}</p>
+              </div>
+            ` : ''}
+            
+            <p>To review and sign this document, please click the button below:</p>
+            
+            <div style="text-align: center;">
+              <a href="${signLink}" class="button">Review & Sign Document</a>
+            </div>
+            
+            <p style="font-size: 12px; color: #666;">
+              Or copy and paste this link into your browser:<br>
+              <a href="${signLink}">${signLink}</a>
+            </p>
+            
+            <p><strong>Important Information:</strong></p>
+            <ul>
+              <li>This document requires an electronic signature</li>
+              <li>Your signature will be legally binding under UK eIDAS regulations</li>
+              <li>You will need to review and accept the electronic signature disclosure</li>
+              <li>This link is unique to you and should not be shared</li>
+            </ul>
+            
+            <p>If you have any questions about this document, please contact ${clientName} directly.</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; ${new Date().getFullYear()} ${clientName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const msg = {
+      to: recipientEmail,
+      from: fromEmail,
+      subject,
+      html,
+    };
+
+    await client.send(msg);
+    console.log(`[Email] Signature request sent to ${recipientEmail}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Email] Error sending signature request:', error);
+    throw error;
+  }
+}
+
+/**
+ * Send completed document email with signed PDF
+ */
+export async function sendCompletedDocumentEmail(
+  recipientEmail: string,
+  recipientName: string,
+  clientName: string,
+  documentName: string,
+  signedPdfUrl: string
+) {
+  try {
+    const { client, fromEmail } = await getUncachableSendGridClient();
+
+    const subject = `Signed Document: ${documentName}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #76CA23; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; }
+          .button { 
+            display: inline-block; 
+            padding: 15px 30px; 
+            background-color: #0A7BBF; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+          }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .success-icon { font-size: 48px; text-align: center; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✓ Document Signed Successfully</h1>
+          </div>
+          <div class="content">
+            <div class="success-icon">✅</div>
+            
+            <p>Dear ${recipientName},</p>
+            
+            <p>Thank you for signing the document. All required signatures have been collected, and the document is now complete.</p>
+            
+            <p><strong>Document:</strong> ${documentName}</p>
+            <p><strong>Client:</strong> ${clientName}</p>
+            <p><strong>Completed:</strong> ${new Date().toLocaleString('en-GB', { 
+              dateStyle: 'full', 
+              timeStyle: 'short',
+              timeZone: 'Europe/London'
+            })}</p>
+            
+            <p>You can download your signed copy of the document using the button below:</p>
+            
+            <div style="text-align: center;">
+              <a href="${signedPdfUrl}" class="button">Download Signed Document</a>
+            </div>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+              <li>This document includes all required signatures</li>
+              <li>A complete audit trail has been recorded</li>
+              <li>This signed document is legally binding</li>
+              <li>Please save this document for your records</li>
+            </ul>
+            
+            <p>If you have any questions, please contact ${clientName}.</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; ${new Date().getFullYear()} ${clientName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const msg = {
+      to: recipientEmail,
+      from: fromEmail,
+      subject,
+      html,
+    };
+
+    await client.send(msg);
+    console.log(`[Email] Completed document sent to ${recipientEmail}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Email] Error sending completed document:', error);
+    throw error;
+  }
+}

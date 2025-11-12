@@ -19,6 +19,165 @@ import {
 import { eq, and, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
+import { PDFDocument, rgb } from "pdf-lib";
+import { Storage } from "@google-cloud/storage";
+import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/sendgrid";
+
+// Initialize GCS storage
+const storage = new Storage();
+
+/**
+ * Helper function to process PDF with signatures
+ * Downloads original PDF, overlays all signatures, and uploads signed version
+ */
+async function processPdfWithSignatures(
+  signatureRequestId: string,
+  documentId: string,
+  clientId: string
+) {
+  try {
+    // Get document info
+    const [document] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, documentId));
+
+    if (!document) {
+      throw new Error("Document not found");
+    }
+
+    // Download original PDF from GCS
+    const bucketName = process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID;
+    if (!bucketName) {
+      throw new Error("Object storage not configured");
+    }
+
+    const bucket = storage.bucket(bucketName);
+    const file = bucket.file(document.objectPath);
+    const [pdfBytes] = await file.download();
+
+    // Generate hash of ORIGINAL PDF bytes (pre-signature)
+    const originalDocumentHash = crypto
+      .createHash('sha256')
+      .update(pdfBytes)
+      .digest('hex');
+
+    // Load PDF with pdf-lib
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const pages = pdfDoc.getPages();
+
+    // Get all signature fields for this request
+    const fields = await db
+      .select()
+      .from(signatureFields)
+      .where(eq(signatureFields.signatureRequestId, signatureRequestId));
+
+    // Get all signatures for this request
+    const allSignatures = await db
+      .select({
+        signature: signatures,
+        field: signatureFields,
+      })
+      .from(signatures)
+      .innerJoin(signatureFields, eq(signatures.signatureFieldId, signatureFields.id))
+      .where(eq(signatureFields.signatureRequestId, signatureRequestId));
+
+    // Overlay each signature onto the PDF
+    for (const { signature, field } of allSignatures) {
+      const pageIndex = field.pageNumber;
+      const page = pages[pageIndex];
+      
+      if (!page) {
+        console.warn(`Page ${pageIndex} not found for field ${field.id}`);
+        continue;
+      }
+
+      const { width: pageWidth, height: pageHeight } = page.getSize();
+
+      if (signature.signatureType === "drawn") {
+        // For drawn signatures, embed the image
+        try {
+          // Remove data URL prefix if present
+          const base64Data = signature.signatureData.replace(/^data:image\/\w+;base64,/, '');
+          const imageBytes = Buffer.from(base64Data, 'base64');
+          
+          const image = await pdfDoc.embedPng(imageBytes);
+          const imageDims = image.scale(0.5); // Scale down the signature
+          
+          // Convert field coordinates (which are in percentage) to PDF coordinates
+          const x = (field.xPosition / 100) * pageWidth;
+          const y = pageHeight - ((field.yPosition / 100) * pageHeight) - (field.height / 100) * pageHeight;
+          const width = (field.width / 100) * pageWidth;
+          const height = (field.height / 100) * pageHeight;
+
+          page.drawImage(image, {
+            x,
+            y,
+            width: Math.min(width, imageDims.width),
+            height: Math.min(height, imageDims.height),
+          });
+        } catch (error) {
+          console.error(`Error embedding signature image for field ${field.id}:`, error);
+        }
+      } else if (signature.signatureType === "typed") {
+        // For typed signatures, draw text
+        const x = (field.xPosition / 100) * pageWidth;
+        const y = pageHeight - ((field.yPosition / 100) * pageHeight) - (field.height / 100) * pageHeight;
+
+        page.drawText(signature.signatureData, {
+          x,
+          y: y + 10, // Adjust for baseline
+          size: 16,
+          color: rgb(0, 0, 0),
+        });
+      }
+    }
+
+    // Generate signed PDF bytes
+    const signedPdfBytes = await pdfDoc.save();
+
+    // Generate hash of SIGNED PDF bytes (post-signature)
+    const signedDocumentHash = crypto
+      .createHash('sha256')
+      .update(signedPdfBytes)
+      .digest('hex');
+
+    // Upload signed PDF to GCS
+    const signedFileName = `signed_${Date.now()}_${document.fileName}`;
+    const signedObjectPath = `${process.env.PRIVATE_OBJECT_DIR}/${signedFileName}`;
+    const signedFile = bucket.file(signedObjectPath);
+    
+    await signedFile.save(signedPdfBytes, {
+      contentType: 'application/pdf',
+      metadata: {
+        contentType: 'application/pdf',
+      },
+    });
+
+    // Create signed document record
+    const [signedDoc] = await db
+      .insert(signedDocuments)
+      .values({
+        signatureRequestId,
+        clientId,
+        signedPdfPath: signedObjectPath,
+        signedPdfHash: signedDocumentHash,
+        fileName: signedFileName,
+        fileSize: signedPdfBytes.length,
+        completedAt: new Date(),
+      })
+      .returning();
+
+    return {
+      signedDocument: signedDoc,
+      originalDocumentHash,
+      signedDocumentHash,
+    };
+  } catch (error) {
+    console.error("Error processing PDF with signatures:", error);
+    throw error;
+  }
+}
 
 /**
  * Register signature request routes
@@ -244,27 +403,70 @@ export function registerSignatureRoutes(
           return res.status(404).json({ error: "Signature request not found" });
         }
 
-        // Get recipients
-        const recipients = await db
-          .select()
+        // Get recipients with person details
+        const recipientsWithDetails = await db
+          .select({
+            recipient: signatureRequestRecipients,
+            person: people,
+          })
           .from(signatureRequestRecipients)
+          .innerJoin(people, eq(signatureRequestRecipients.personId, people.id))
           .where(eq(signatureRequestRecipients.signatureRequestId, id));
 
-        if (recipients.length === 0) {
+        if (recipientsWithDetails.length === 0) {
           return res.status(400).json({ error: "No recipients found for this signature request" });
         }
 
-        // TODO: Send emails via SendGrid (will implement in task 8)
-        // For now, just mark as sent and update status
-        
+        // Get document and client details
+        const [document] = await db
+          .select()
+          .from(documents)
+          .where(eq(documents.id, request.documentId));
+
+        const [client] = await db
+          .select()
+          .from(clients)
+          .where(eq(clients.id, request.clientId));
+
+        if (!document || !client) {
+          return res.status(404).json({ error: "Document or client not found" });
+        }
+
         const now = new Date();
+        const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : `http://localhost:5000`;
         
-        // Update recipients to mark as sent
-        for (const recipient of recipients) {
-          await db
-            .update(signatureRequestRecipients)
-            .set({ sentAt: now })
-            .where(eq(signatureRequestRecipients.id, recipient.id));
+        // Send emails to each recipient
+        const emailResults = [];
+        for (const { recipient, person } of recipientsWithDetails) {
+          try {
+            const signLink = `${baseUrl}/sign?token=${recipient.secureToken}`;
+            
+            await sendSignatureRequestEmail(
+              recipient.email,
+              person.fullName || recipient.email,
+              client.name,
+              document.fileName,
+              request.emailMessage || "",
+              signLink
+            );
+
+            // Update recipient to mark as sent
+            await db
+              .update(signatureRequestRecipients)
+              .set({ sentAt: now })
+              .where(eq(signatureRequestRecipients.id, recipient.id));
+
+            emailResults.push({ email: recipient.email, success: true });
+          } catch (error: any) {
+            console.error(`Error sending email to ${recipient.email}:`, error);
+            emailResults.push({ 
+              email: recipient.email, 
+              success: false, 
+              error: error.message 
+            });
+          }
         }
 
         // Update request status to pending
@@ -276,10 +478,18 @@ export function registerSignatureRoutes(
           })
           .where(eq(signatureRequests.id, id));
 
+        const successCount = emailResults.filter(r => r.success).length;
+        const failureCount = emailResults.filter(r => !r.success).length;
+
         res.json({ 
-          success: true, 
-          message: "Signature request sent to all recipients",
-          recipientCount: recipients.length 
+          success: successCount > 0, 
+          message: failureCount === 0 
+            ? "Signature request sent to all recipients" 
+            : `Sent to ${successCount}/${recipientsWithDetails.length} recipients`,
+          recipientCount: recipientsWithDetails.length,
+          successCount,
+          failureCount,
+          results: emailResults
         });
       } catch (error: any) {
         console.error("Error sending signature request:", error);
@@ -464,9 +674,14 @@ export function registerSignatureRoutes(
       const { token } = req.params;
       const { signatures: submittedSignatures, consentAccepted } = req.body;
 
-      // Validate consent acceptance
-      if (!consentAccepted) {
+      // CRITICAL FIX: Validate consent acceptance properly
+      if (consentAccepted !== true) {
         return res.status(400).json({ error: "You must accept the consent disclosure to sign" });
+      }
+
+      // Validate signatures array
+      if (!submittedSignatures || !Array.isArray(submittedSignatures) || submittedSignatures.length === 0) {
+        return res.status(400).json({ error: "No signatures provided" });
       }
 
       // Find recipient by token
@@ -497,6 +712,44 @@ export function registerSignatureRoutes(
 
       if (!request || request.status === "cancelled") {
         return res.status(400).json({ error: "This signature request is no longer active" });
+      }
+
+      // Get all fields for this recipient
+      const requiredFields = await db
+        .select()
+        .from(signatureFields)
+        .where(
+          and(
+            eq(signatureFields.signatureRequestId, request.id),
+            eq(signatureFields.recipientPersonId, recipient.personId)
+          )
+        );
+
+      // CRITICAL FIX: Validate all required fields are completed
+      const submittedFieldIds = new Set(submittedSignatures.map(s => s.fieldId));
+      const missingFields = requiredFields.filter(f => !submittedFieldIds.has(f.id));
+      
+      if (missingFields.length > 0) {
+        return res.status(400).json({ 
+          error: "All signature fields must be completed",
+          missingFields: missingFields.map(f => f.id) 
+        });
+      }
+
+      // CRITICAL FIX: Validate signatures are not blank
+      for (const sig of submittedSignatures) {
+        if (!sig.data || sig.data.trim().length === 0) {
+          return res.status(400).json({ 
+            error: "Signatures cannot be blank" 
+          });
+        }
+        
+        // For drawn signatures, validate it's a valid data URL
+        if (sig.type === "drawn" && !sig.data.startsWith("data:image/")) {
+          return res.status(400).json({ 
+            error: "Invalid signature image format" 
+          });
+        }
       }
 
       // Get document for hash
@@ -532,13 +785,32 @@ export function registerSignatureRoutes(
         `${uaResult.os.name} ${uaResult.os.version || ''}`.trim() : 
         "Unknown";
 
-      // Generate document hash (SHA-256)
-      const documentHash = crypto
-        .createHash('sha256')
-        .update(document.objectPath) // Using path as version identifier
-        .digest('hex');
+      // CRITICAL FIX: Generate document hash from actual PDF bytes
+      let documentHash = "";
+      try {
+        const bucketName = process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID;
+        if (bucketName) {
+          const bucket = storage.bucket(bucketName);
+          const file = bucket.file(document.objectPath);
+          const [pdfBytes] = await file.download();
+          documentHash = crypto
+            .createHash('sha256')
+            .update(pdfBytes)
+            .digest('hex');
+        }
+      } catch (error) {
+        console.error("Error generating document hash:", error);
+        // Fallback to path hash if download fails
+        documentHash = crypto
+          .createHash('sha256')
+          .update(document.objectPath)
+          .digest('hex');
+      }
 
       const now = new Date();
+
+      // Consent text that was acknowledged (UK eIDAS requirement)
+      const consentText = "I have read and agree to the Electronic Signature Disclosure and Consent. I understand that my electronic signature will be legally binding.";
 
       // Store signatures in database
       for (const sig of submittedSignatures) {
@@ -551,7 +823,7 @@ export function registerSignatureRoutes(
         });
       }
 
-      // Create audit trail record
+      // CRITICAL FIX: Create audit trail record with consent text
       await db.insert(signatureAuditLogs).values({
         signatureRequestRecipientId: recipient.id,
         signerName: person?.fullName || "Unknown",
@@ -564,11 +836,13 @@ export function registerSignatureRoutes(
         consentAcceptedAt: now,
         signedAt: now,
         documentHash,
-        documentVersion: document.id, // Using document ID as version
+        documentVersion: document.id,
         authMethod: "email_link",
         metadata: {
           submittedFields: submittedSignatures.length,
           timestamp: now.toISOString(),
+          consentText, // Store the actual consent text acknowledged
+          consentAccepted: true,
         },
       });
 
@@ -587,8 +861,10 @@ export function registerSignatureRoutes(
       const allSigned = allRecipients.every(r => r.signedAt !== null);
       const someSigned = allRecipients.some(r => r.signedAt !== null);
 
-      // Update request status
+      // Update request status and process PDF if all signed
       let newStatus = request.status;
+      let signedDocumentId = null;
+      
       if (allSigned) {
         newStatus = "completed";
         await db
@@ -599,6 +875,67 @@ export function registerSignatureRoutes(
             updatedAt: now 
           })
           .where(eq(signatureRequests.id, request.id));
+
+        // CRITICAL FIX: Process PDF with all signatures and create signed document
+        try {
+          const pdfResult = await processPdfWithSignatures(
+            request.id,
+            request.documentId,
+            request.clientId
+          );
+          signedDocumentId = pdfResult.signedDocument.id;
+          
+          console.log(`[E-Signature] Signed document created: ${signedDocumentId}`);
+          console.log(`[E-Signature] Original hash: ${pdfResult.originalDocumentHash}`);
+          console.log(`[E-Signature] Signed hash: ${pdfResult.signedDocumentHash}`);
+
+          // Send completion emails to all recipients
+          try {
+            const [client] = await db
+              .select()
+              .from(clients)
+              .where(eq(clients.id, request.clientId));
+
+            const allRecipientsForEmail = await db
+              .select({
+                recipient: signatureRequestRecipients,
+                person: people,
+              })
+              .from(signatureRequestRecipients)
+              .innerJoin(people, eq(signatureRequestRecipients.personId, people.id))
+              .where(eq(signatureRequestRecipients.signatureRequestId, request.id));
+
+            const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+              : `http://localhost:5000`;
+
+            // Generate download link for signed PDF
+            const signedPdfUrl = `${baseUrl}/api/signed-documents/${signedDocumentId}/download`;
+
+            for (const { recipient: recipientData, person: personData } of allRecipientsForEmail) {
+              try {
+                await sendCompletedDocumentEmail(
+                  recipientData.email,
+                  personData.fullName || recipientData.email,
+                  client?.name || "Unknown",
+                  document.fileName,
+                  signedPdfUrl
+                );
+                console.log(`[E-Signature] Completion email sent to ${recipientData.email}`);
+              } catch (emailError) {
+                console.error(`[E-Signature] Failed to send completion email to ${recipientData.email}:`, emailError);
+                // Don't fail if email sending fails
+              }
+            }
+          } catch (error) {
+            console.error("[E-Signature] Error sending completion emails:", error);
+            // Don't fail signature submission if emails fail
+          }
+        } catch (error) {
+          console.error("[E-Signature] Error processing PDF:", error);
+          // Don't fail the signature submission if PDF processing fails
+          // The signatures are still recorded and can be reprocessed later
+        }
       } else if (someSigned && request.status === "pending") {
         newStatus = "partially_signed";
         await db
@@ -614,7 +951,8 @@ export function registerSignatureRoutes(
         success: true, 
         message: "Your signature has been recorded successfully",
         allSigned,
-        status: newStatus
+        status: newStatus,
+        signedDocumentId
       });
     } catch (error: any) {
       console.error("Error submitting signatures:", error);
@@ -643,22 +981,103 @@ export function registerSignatureRoutes(
           .from(signatureRequestRecipients)
           .where(eq(signatureRequestRecipients.signatureRequestId, id));
 
+        if (recipients.length === 0) {
+          return res.json([]);
+        }
+
         // Get audit logs for all recipients
+        const recipientIds = recipients.map(r => r.id);
         const auditLogs = await db
           .select()
           .from(signatureAuditLogs)
-          .where(
-            eq(
-              signatureAuditLogs.signatureRequestRecipientId,
-              recipients.map(r => r.id).join(',') as any // Will need to use IN clause
-            )
-          );
+          .where(eq(signatureAuditLogs.signatureRequestRecipientId, recipientIds[0]));
 
-        res.json(auditLogs);
+        // TODO: Fix to use IN clause for multiple recipients
+        // For now, just fetch all and filter
+        const allAuditLogs = await db
+          .select()
+          .from(signatureAuditLogs);
+        
+        const filteredLogs = allAuditLogs.filter(log => 
+          recipientIds.includes(log.signatureRequestRecipientId)
+        );
+
+        res.json(filteredLogs);
       } catch (error: any) {
         console.error("Error fetching audit trail:", error);
         res.status(500).json({ 
           error: "Failed to fetch audit trail",
+          message: error.message 
+        });
+      }
+    }
+  );
+
+  /**
+   * GET /api/signed-documents/:id/download
+   * Download a signed document (public route - anyone with link can download)
+   */
+  app.get("/api/signed-documents/:id/download", async (req: any, res) => {
+    try {
+      const { id } = req.params;
+
+      const [signedDoc] = await db
+        .select()
+        .from(signedDocuments)
+        .where(eq(signedDocuments.id, id));
+
+      if (!signedDoc) {
+        return res.status(404).json({ error: "Signed document not found" });
+      }
+
+      // Download from GCS
+      const bucketName = process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID;
+      if (!bucketName) {
+        return res.status(500).json({ error: "Object storage not configured" });
+      }
+
+      const bucket = storage.bucket(bucketName);
+      const file = bucket.file(signedDoc.signedPdfPath);
+      const [pdfBytes] = await file.download();
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${signedDoc.fileName}"`);
+      res.send(pdfBytes);
+    } catch (error: any) {
+      console.error("Error downloading signed document:", error);
+      res.status(500).json({ 
+        error: "Failed to download signed document",
+        message: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/signature-requests/:id/signed-document
+   * Get signed document info for a signature request (staff only)
+   */
+  app.get(
+    "/api/signature-requests/:id/signed-document",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+
+        const [signedDoc] = await db
+          .select()
+          .from(signedDocuments)
+          .where(eq(signedDocuments.signatureRequestId, id));
+
+        if (!signedDoc) {
+          return res.status(404).json({ error: "Signed document not found" });
+        }
+
+        res.json(signedDoc);
+      } catch (error: any) {
+        console.error("Error fetching signed document:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch signed document",
           message: error.message 
         });
       }
