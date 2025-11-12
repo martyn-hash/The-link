@@ -41,6 +41,7 @@ Staff authentication uses Replit Auth (OIDC) with session-based, role-based acce
 -   **Service Inactive Management**: Permission-controlled system for marking client services inactive with required reasons, audit trails, and automatic exclusion from scheduling.
 -   **Project Inactive Management**: Permission-controlled system for marking projects inactive with required reasons, audit trails, and automatic exclusion from scheduling, mirroring service inactive management.
 -   **Completed Projects Filtering**: Ensures completed projects are always visible in kanban view and properly managed across all project views, bypassing standard filters.
+-   **Hover-Activated Stage Information**: Desktop kanban view displays project stage change details via hover popover (300ms delay), while mobile maintains tap-to-view modal access. Popover shows latest status transition, change reason, assignee, and time in previous stage. Automatically dismisses on drag operations for seamless interaction.
 
 ## External Dependencies
 

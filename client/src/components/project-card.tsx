@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useMemo } from "react";
+import { useMemo, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ interface RoleAssigneeResponse {
   source: 'role_assignment' | 'fallback_user' | 'direct_assignment' | 'none';
 }
 
-interface ProjectCardProps {
+interface ProjectCardProps extends React.HTMLAttributes<HTMLDivElement> {
   project: ProjectWithRelations;
   stageConfig?: KanbanStage; // Fallback for display purposes from kanban board
   onOpenModal: () => void;
@@ -28,14 +28,15 @@ interface ProjectCardProps {
   onShowMessages?: (projectId: string) => void;
 }
 
-export default function ProjectCard({ 
+const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({ 
   project, 
   stageConfig,
   onOpenModal, 
   isDragging = false,
   onShowInfo,
-  onShowMessages
-}: ProjectCardProps) {
+  onShowMessages,
+  ...props
+}, forwardedRef) => {
   // Get authentication state
   const { isAuthenticated, user } = useAuth();
 
@@ -342,12 +343,23 @@ export default function ProjectCard({
 
   const hasQuickActions = onShowInfo || onShowMessages;
 
+  // Merge refs: combine forwardedRef from HoverCard and setNodeRef from useSortable
+  const mergedRef = (node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    if (typeof forwardedRef === 'function') {
+      forwardedRef(node);
+    } else if (forwardedRef) {
+      forwardedRef.current = node;
+    }
+  };
+
   return (
     <Card
-      ref={setNodeRef}
+      ref={mergedRef}
       style={style}
       {...attributes}
       {...listeners}
+      {...props}
       className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
         isSortableDragging ? "opacity-50" : ""
       } ${isDragging ? "rotate-5 shadow-lg" : ""} ${projectStatus.bgColor} relative`}
@@ -456,4 +468,8 @@ export default function ProjectCard({
       )}
     </Card>
   );
-}
+});
+
+ProjectCard.displayName = "ProjectCard";
+
+export default ProjectCard;
