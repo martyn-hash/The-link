@@ -3266,23 +3266,52 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
-    // Handle archived filtering: only apply one or the other, not both
+    // Handle archived filtering: always include completed projects regardless of archived status
+    // The archived filter only applies to active (non-completed) projects
     if (filters?.archived !== undefined) {
-      whereConditions.push(eq(projects.archived, filters.archived));
+      // Explicit archived filter: match archived status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, filters.archived),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     } else if (filters?.showArchived === true) {
-      // When showArchived is true, show ONLY archived projects
-      whereConditions.push(eq(projects.archived, true));
+      // When showArchived is true, show ONLY archived projects OR completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, true),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     } else {
-      // Default: exclude archived projects (when showArchived is false or undefined)
-      whereConditions.push(eq(projects.archived, false));
+      // Default: exclude archived projects BUT always include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, false),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
     
-    // Handle inactive filtering: default to excluding inactive projects unless explicitly requested
+    // Handle inactive filtering: always include completed projects regardless of inactive status
+    // The inactive filter only applies to active (non-completed) projects
     if (filters?.inactive !== undefined) {
-      whereConditions.push(eq(projects.inactive, filters.inactive));
+      // Explicit inactive filter: match inactive status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.inactive, filters.inactive),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     } else {
-      // Default: exclude inactive projects from active list
-      whereConditions.push(eq(projects.inactive, false));
+      // Default: exclude inactive projects BUT always include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.inactive, false),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
     
     if (filters?.assigneeId) {
@@ -3467,19 +3496,45 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
-    // Handle archived filtering: only apply one or the other, not both
+    // Handle archived filtering: always include completed projects regardless of archived status
+    // The archived filter only applies to active (non-completed) projects
     if (filters?.archived !== undefined) {
-      whereConditions.push(eq(projects.archived, filters.archived));
+      // Explicit archived filter: match archived status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, filters.archived),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     } else if (filters?.showArchived === true) {
-      // When showArchived is true, show ONLY archived projects
-      whereConditions.push(eq(projects.archived, true));
+      // When showArchived is true, show ONLY archived projects OR completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, true),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     } else if (filters?.showArchived === false) {
-      whereConditions.push(eq(projects.archived, false));
+      // Default: exclude archived projects BUT always include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, false),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
     // When showArchived is undefined, don't filter by archived status (include all)
     
+    // Handle inactive filtering: always include completed projects regardless of inactive status
+    // The inactive filter only applies to active (non-completed) projects
     if (filters?.inactive !== undefined) {
-      whereConditions.push(eq(projects.inactive, filters.inactive));
+      // Explicit inactive filter: match inactive status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.inactive, filters.inactive),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
     
     if (filters?.assigneeId) {
