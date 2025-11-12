@@ -2,148 +2,56 @@
 
 ## Overview
 
-The Link is a comprehensive full-stack CRM and project management application for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, manages client relationships, and provides a seamless client portal for communication and document exchange. Key capabilities include client, contact, service, project, and communication management, with a strong focus on automation, compliance, and a mobile-first user experience. The application supports automated project generation, integrates with Companies House for UK company data, and features a multi-tenant architecture with robust access controls.
+The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, manages client relationships, and provides a secure client portal for communication and document exchange. The application focuses on automation, compliance, and a mobile-first user experience, supporting automated project generation, integration with Companies House for UK company data, and features a multi-tenant architecture with robust access controls.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-### Testing Credentials
-
-For browser-based testing, use the following credentials:
-- Login via root page, password tab
-- Email: `admin@example.com`
-- Password: `admin123`
-
 ## System Architecture
 
 ### Frontend
 
-The frontend is built with React and TypeScript, utilizing Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for design. It adheres to a mobile-first philosophy, ensuring responsive layouts and touch-optimized interactions.
+The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for a mobile-first, responsive design.
 
 ### Backend
 
-The backend is an Express.js server in TypeScript, providing a modular RESTful API. It incorporates middleware for authentication, authorization, and data validation. Core logic includes service mapping, project creation, and sophisticated scheduling with UTC date normalization and comprehensive audit trails. A nightly scheduler automates project generation.
+The backend is an Express.js server in TypeScript, offering a modular RESTful API with middleware for authentication, authorization, and data validation. It includes core logic for service mapping, project creation, sophisticated scheduling with UTC date normalization, and comprehensive audit trails. A nightly scheduler automates project generation.
 
 ### Data Storage
 
-PostgreSQL (Neon) serves as the primary database, managed through Drizzle ORM. The schema utilizes UUIDs, soft deletes, and JSONB fields, with indexing for critical entities. Google Cloud Storage, facilitated by Replit App Storage, handles object storage, employing signed URLs for secure document access.
-
-### Automatic Schema Migrations
-
-An automatic schema migration system runs on server startup to synchronize database schemas between environments, preventing production failures from schema drift.
+PostgreSQL (Neon) is the primary database, managed via Drizzle ORM, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage, accessed through Replit App Storage, handles object storage with secure signed URLs for documents.
 
 ### Authentication & Authorization
 
-Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. The client portal uses passwordless email verification. Access controls enforce staff roles and isolate client portal users.
+Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. The client portal employs passwordless email verification.
 
-### Service Scheduling & Project Automation
+### Core Features
 
-An automated nightly scheduler generates projects from active client and people services based on predefined frequencies. This system includes advanced date logic and integrates with the Companies House API for UK company data, managing syncs and API keys, with duplicate prevention and an admin dashboard.
-
-### Client Service Role Assignment & Task Cascading
-
-The system manages role assignments for client services with automatic task synchronization. Changes in role assignments trigger updates to active projects, cascading corresponding role-based task assignments.
-
-### Push Notification Template Management
-
-A robust system allows for the management of customizable push notification templates, supporting seven types with multiple active templates. Notifications use dynamic variables for personalization and custom icons.
-
-### Internal Tasks System
-
-The internal tasks system provides comprehensive staff task management with a collapsible creation form, document attachments integrated with Google Cloud Storage, and enhanced data loading for assignee and creator details.
-
-### Standalone Staff-to-Staff Messaging
-
-A dedicated `/internal-chat` page facilitates independent staff-to-staff message threads with push notifications for new messages.
-
-### Mobile UI Improvements
-
-Extensive mobile optimizations convert desktop table layouts to mobile-friendly card layouts on small viewports, ensuring touch target compliance and responsive designs across key pages.
-
-### Project Timeline Color Coding
-
-The project timeline (chronology) displays stage changes with intelligent color coding to provide instant visual feedback on project status:
-- **Red (Late/Overdue)**: All stage changes show in red when the project is past its due date, providing immediate visibility of overdue work.
-- **Amber (Behind Schedule)**: Stage changes that exceed configured time limits (either maxInstanceTime for a single visit or cumulative maxTotalTime across multiple visits) are highlighted in amber.
-- **Green (On Track)**: All other stage changes display in green, indicating progress is within expected timeframes.
-- The system processes chronology in chronological order to accurately track cumulative time spent in each stage, ensuring only the transition that causes a limit breach is marked amber.
-- All stage changes receive color coding with no neutral/gray states, making project health immediately visible at a glance.
-
-### Email Threading & Deduplication System
-
-The email threading system integrates Microsoft Graph to ingest staff emails and link them to client timelines, featuring deduplication, thread grouping, multi-layered client association, delta sync, email sending, noise control, and attachment deduplication. It includes a complete UI for viewing and replying to email threads.
-
-### Client Notification & Reminder System
-
-A comprehensive automated multi-channel (email, SMS, push) notification system triggers communications based on project lifecycle events and client request reminders. It features:
-- Project Notifications: Date-based and stage-based notifications with configurable offsets.
-- Client Request Reminders: Automated sequences with configurable intervals.
-- Dynamic Variable System: 30+ personalization variables for templates across all channels.
-- Opt-In/Opt-Out Control: Two-layer system for granular management at project type and person levels.
-- Multi-Recipient Routing: Supports multiple recipients per notification type based on opt-in preferences.
-- Admin Management: UI for managing scheduled notifications with bulk actions.
-- Idempotent and Retroactive Scheduling: Ensures no duplicates and allows scheduling for existing services.
-- Multi-Channel Delivery: SendGrid for emails, VoodooSMS placeholder for SMS, and existing push infrastructure.
-- Character Limits: Enforced for SMS and push notifications.
-- SMS E.164 Validation: Phone numbers must be in international E.164 format (e.g., +447441392660) for SMS delivery. The preview system validates phone formats and marks non-compliant contacts as ineligible with actionable error messages.
-- Audit Trail: Comprehensive logging for all cancellation operations.
-- Automated Cleanup: Service deletion cancels associated notifications.
-- Hourly Cron: Background job processes due notifications.
-- Notification Management UI: Table-based display with edit functionality and a preview capability with real-time cache invalidation for fresh eligibility data.
-- Client-Specific Notifications View: Dedicated four-tab interface (Active, Do Not Send, Sent Notifications, Failed) for managing scheduled notifications for a specific client. Sent Notifications tab displays historical sent notifications ordered by sentAt timestamp.
-- Auto-Cancellation: Scheduled notifications are automatically cancelled when a project is completed (via Complete button) or moved to a final stage (canBeFinalStage=true). Cancelled notifications show in the Do Not Send tab with appropriate cancellation reasons. System-initiated cancellations use cancelledBy=null to avoid foreign key violations.
-- Pre-Validation System: Before making expensive API calls to SendGrid/VoodooSMS/push services, the system validates recipient contact information:
-  - Email: Validates format using regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
-  - SMS: Validates E.164 international format using regex `/^\+[1-9]\d{1,14}$/`
-  - Push: Verifies active push subscriptions exist for the client
-  - Invalid notifications are immediately marked as 'failed' with descriptive error messages, without making API calls (saves costs)
-  - Push subscription queries are optimized to avoid duplicate database calls
-- Failed Notifications Tracking: Failed notifications (from pre-validation or API errors) are:
-  - Marked with status='failed' and a descriptive failureReason field
-  - Displayed in the "Failed" tab with red badges showing the specific validation error
-  - Logged in notification_history with sentAt=NULL for audit trail
-  - Accessible via dedicated UI tab showing failure reasons for troubleshooting
-- **Contact Fields Flexibility (Nov 2025)**: The `people.primaryEmail` and `people.primaryPhone` fields allow duplicate values and accept any string format. All unique constraints and format validation have been removed to accommodate varied contact data scenarios. Applications should implement business logic to handle potential duplicates if needed.
-- Performance Optimization: Composite indexes on (client_id, status, scheduled_for) and (client_id, status, sent_at) ensure efficient querying for all notification tabs.
-
-### Service Inactive Management
-
-A permission-controlled system for marking client services as inactive, preventing them from being scheduled for future projects while maintaining full audit trails:
-- Three Required Inactive Reasons: Services can be marked inactive with mandatory reason selection: "Created in Error", "No Longer Required", or "Client Doing Work Themselves".
-- Permission Control: Only users with `canMakeServicesInactive` permission can deactivate services, providing role-based access control.
-- Automatic Metadata Population: Backend auto-populates `inactiveAt` timestamp and `inactiveByUserId` when a service is marked inactive.
-- Scheduling Date Clearing: `nextStartDate` and `nextDueDate` are automatically cleared to NULL when a service is deactivated.
-- Chronology Logging: Service status changes are logged to client chronology with formatted messages (e.g., "Service 'X' was marked inactive - Reason: Created In Error").
-- UI Status Display: Inactive services show a red-backgrounded status section with formatted reason and deactivation date.
-- Validation & Data Integrity: Backend validates that `inactiveReason` can only be set when `isActive` is false, and ensures all inactive metadata is cleared when reactivating services.
-- Scheduling Exclusion: The nightly project scheduler filters out inactive services (`isActive: false`), preventing automated project generation for deactivated services.
-- Schema Migration Support: Automatic migrations create the `inactive_reason` enum type and add `inactiveReason`, `inactiveAt`, and `inactiveByUserId` columns to `client_services` table.
-
-### Project Inactive Management
-
-A permission-controlled system for marking projects as inactive, preventing them from being included in automated scheduling and workflows while maintaining full audit trails. Implementation follows the same pattern as Service Inactive Management for consistency:
-- Three Required Inactive Reasons: Projects can be marked inactive with mandatory reason selection: "Created in Error", "No Longer Required", or "Client Doing Work Themselves".
-- Permission Control: Only users with `canMakeProjectsInactive` permission can deactivate projects, providing role-based access control.
-- Automatic Metadata Population: Backend auto-populates `inactiveAt` timestamp and `inactiveByUserId` when a project is marked inactive.
-- Due Date Clearing: `dueDate` is automatically cleared to NULL when a project is deactivated.
-- Chronology Logging: Project status changes are logged to project chronology with formatted messages (e.g., "Project was marked inactive - Reason: No Longer Required").
-- UI Status Display: Inactive projects show a red-backgrounded status section with formatted reason and deactivation date on the project detail page.
-- Validation & Data Integrity: Backend validates that `inactiveReason` can only be set when `inactive` is true, and ensures all inactive metadata is cleared when reactivating projects.
-- Scheduling Exclusion: The `getActiveProjectsByClientAndType` storage method filters out inactive projects (`inactive: false`), ensuring inactive projects are excluded from automated scheduling and single-project-per-client constraints.
-- Notification Cancellation: When a project is marked inactive, all associated scheduled notifications are automatically cancelled to prevent unnecessary communications.
-- Schema Migration Support: Automatic migrations create the `inactive_reason` enum type for projects and add `inactiveReason`, `inactiveAt`, and `inactiveByUserId` columns to `projects` table, plus `canMakeProjectsInactive` column to `users` table.
+-   **Automatic Schema Migrations**: Ensures database schema synchronization on server startup.
+-   **Service Scheduling & Project Automation**: Automated nightly scheduler generates projects from active client services, integrating with Companies House API.
+-   **Client Service Role Assignment & Task Cascading**: Manages role assignments for client services with automatic task synchronization to projects.
+-   **Push Notification Template Management**: Customizable push notification templates with dynamic variables.
+-   **Internal Tasks System**: Comprehensive staff task management with document attachments.
+-   **Standalone Staff-to-Staff Messaging**: Dedicated `/internal-chat` for direct staff communication.
+-   **Mobile UI Improvements**: Desktop tables convert to mobile-friendly card layouts.
+-   **Project Timeline Color Coding**: Intelligent color coding (Red, Amber, Green) for immediate visual feedback on project status.
+-   **Email Threading & Deduplication**: Integrates Microsoft Graph for email ingestion, linking to client timelines with deduplication, threading, and a full UI.
+-   **Client Notification & Reminder System**: Automated multi-channel (email, SMS, push) notifications based on project lifecycle events and client request reminders, with dynamic variables, opt-in/opt-out controls, and robust pre-validation.
+-   **Service Inactive Management**: Permission-controlled system for marking client services inactive with required reasons, audit trails, and automatic exclusion from scheduling.
+-   **Project Inactive Management**: Permission-controlled system for marking projects inactive with required reasons, audit trails, and automatic exclusion from scheduling, mirroring service inactive management.
+-   **Completed Projects Filtering**: Ensures completed projects are always visible in kanban view and properly managed across all project views, bypassing standard filters.
 
 ## External Dependencies
 
 ### Third-Party Services
 
--   **Companies House API**: UK company data integration.
--   **Microsoft Graph API**: Staff email integration and sending.
--   **RingCentral**: VoIP phone system integration.
+-   **Companies House API**: UK company data.
+-   **Microsoft Graph API**: Staff email integration.
+-   **RingCentral**: VoIP phone system.
 -   **SendGrid**: Transactional email delivery.
--   **VoodooSMS**: Planned for client SMS communications.
--   **Replit Platform Services**: Object storage (Google Cloud Storage backend), authentication (OIDC provider), and deployment environment.
+-   **VoodooSMS**: Planned for client SMS.
+-   **Replit Platform Services**: Object storage, authentication, and deployment.
 
 ### Frontend Libraries
 
