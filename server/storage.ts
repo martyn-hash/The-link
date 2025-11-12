@@ -3276,16 +3276,8 @@ export class DatabaseStorage implements IStorage {
           isNotNull(projects.completionStatus)
         )!
       );
-    } else if (filters?.showArchived === true) {
-      // When showArchived is true, show ONLY archived projects OR completed projects
-      whereConditions.push(
-        or(
-          eq(projects.archived, true),
-          isNotNull(projects.completionStatus)
-        )!
-      );
-    } else {
-      // Default: exclude archived projects BUT always include completed projects
+    } else if (filters?.showArchived !== true) {
+      // Default behavior (undefined or false): exclude archived projects BUT always include completed projects
       whereConditions.push(
         or(
           eq(projects.archived, false),
@@ -3293,6 +3285,7 @@ export class DatabaseStorage implements IStorage {
         )!
       );
     }
+    // When showArchived is explicitly true, don't filter by archived status (show all)
     
     // Handle inactive filtering: always include completed projects regardless of inactive status
     // The inactive filter only applies to active (non-completed) projects
@@ -3506,16 +3499,8 @@ export class DatabaseStorage implements IStorage {
           isNotNull(projects.completionStatus)
         )!
       );
-    } else if (filters?.showArchived === true) {
-      // When showArchived is true, show ONLY archived projects OR completed projects
-      whereConditions.push(
-        or(
-          eq(projects.archived, true),
-          isNotNull(projects.completionStatus)
-        )!
-      );
-    } else if (filters?.showArchived === false) {
-      // Default: exclude archived projects BUT always include completed projects
+    } else if (filters?.showArchived !== true) {
+      // Default behavior (undefined or false): exclude archived projects BUT always include completed projects
       whereConditions.push(
         or(
           eq(projects.archived, false),
@@ -3523,7 +3508,7 @@ export class DatabaseStorage implements IStorage {
         )!
       );
     }
-    // When showArchived is undefined, don't filter by archived status (include all)
+    // When showArchived is explicitly true, don't filter by archived status (show all)
     
     // Handle inactive filtering: always include completed projects regardless of inactive status
     // The inactive filter only applies to active (non-completed) projects
