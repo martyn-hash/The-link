@@ -7167,7 +7167,7 @@ export default function ClientDetail() {
   ) || [];
 
   // Documents query and mutation
-  const { data: documents, isLoading: documentsLoading } = useQuery<Document[]>({
+  const { data: clientDocuments, isLoading: documentsLoading } = useQuery<Document[]>({
     queryKey: ['/api/clients', id, 'documents'],
     enabled: !!id,
   });
@@ -8645,7 +8645,7 @@ export default function ClientDetail() {
                   <CreateSignatureRequestDialog
                     clientId={id}
                     documents={clientDocuments || []}
-                    people={clientPeople?.map((cp: any) => cp.person).filter(Boolean) || []}
+                    people={relatedPeople?.map((cp: any) => cp.person).filter(Boolean) || []}
                   />
                 </div>
               </CardHeader>
