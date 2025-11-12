@@ -20,12 +20,9 @@ import { eq, and, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
 import { PDFDocument, rgb } from "pdf-lib";
-import { Storage } from "@google-cloud/storage";
+import { ObjectStorageService } from "../objectStorage";
 import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/sendgrid";
 import { UAParser } from "ua-parser-js";
-
-// Initialize GCS storage
-const storage = new Storage();
 
 /**
  * Helper function to process PDF with signatures
@@ -34,9 +31,12 @@ const storage = new Storage();
 async function processPdfWithSignatures(
   signatureRequestId: string,
   documentId: string,
-  clientId: string
+  clientId: string,
+  uploadedBy?: string
 ) {
   try {
+    const objectStorageService = new ObjectStorageService();
+    
     // Get document info
     const [document] = await db
       .select()
@@ -47,15 +47,9 @@ async function processPdfWithSignatures(
       throw new Error("Document not found");
     }
 
-    // Download original PDF from GCS
-    const bucketName = process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID;
-    if (!bucketName) {
-      throw new Error("Object storage not configured");
-    }
-
-    const bucket = storage.bucket(bucketName);
-    const file = bucket.file(document.objectPath);
-    const [pdfBytes] = await file.download();
+    // Download original PDF using ObjectStorageService
+    const objectFile = await objectStorageService.getObjectEntityFile(document.objectPath);
+    const [pdfBytes] = await objectFile.download();
 
     // Generate hash of ORIGINAL PDF bytes (pre-signature)
     const originalDocumentHash = crypto
@@ -143,17 +137,14 @@ async function processPdfWithSignatures(
       .update(signedPdfBytes)
       .digest('hex');
 
-    // Upload signed PDF to GCS
-    const signedFileName = `signed_${Date.now()}_${document.fileName}`;
-    const signedObjectPath = `${process.env.PRIVATE_OBJECT_DIR}/${signedFileName}`;
-    const signedFile = bucket.file(signedObjectPath);
-    
-    await signedFile.save(signedPdfBytes, {
-      contentType: 'application/pdf',
-      metadata: {
-        contentType: 'application/pdf',
-      },
-    });
+    // Upload signed PDF using ObjectStorageService
+    const { objectPath: signedObjectPath, fileName: signedFileName } = 
+      await objectStorageService.uploadSignedDocument(
+        signatureRequestId,
+        document.fileName, // Pass original filename, uploadSignedDocument will add timestamp
+        Buffer.from(signedPdfBytes),
+        uploadedBy
+      );
 
     // Create signed document record
     const [signedDoc] = await db
@@ -163,7 +154,7 @@ async function processPdfWithSignatures(
         clientId,
         signedPdfPath: signedObjectPath,
         signedPdfHash: signedDocumentHash,
-        fileName: signedFileName,
+        fileName: signedFileName, // Use the actual filename returned from upload
         fileSize: signedPdfBytes.length,
         completedAt: new Date(),
       })
@@ -788,16 +779,13 @@ export function registerSignatureRoutes(
       // CRITICAL FIX: Generate document hash from actual PDF bytes
       let documentHash = "";
       try {
-        const bucketName = process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID;
-        if (bucketName) {
-          const bucket = storage.bucket(bucketName);
-          const file = bucket.file(document.objectPath);
-          const [pdfBytes] = await file.download();
-          documentHash = crypto
-            .createHash('sha256')
-            .update(pdfBytes)
-            .digest('hex');
-        }
+        const objectStorageService = new ObjectStorageService();
+        const objectFile = await objectStorageService.getObjectEntityFile(document.objectPath);
+        const [pdfBytes] = await objectFile.download();
+        documentHash = crypto
+          .createHash('sha256')
+          .update(pdfBytes)
+          .digest('hex');
       } catch (error) {
         console.error("Error generating document hash:", error);
         // Fallback to path hash if download fails
@@ -1031,19 +1019,15 @@ export function registerSignatureRoutes(
         return res.status(404).json({ error: "Signed document not found" });
       }
 
-      // Download from GCS
-      const bucketName = process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID;
-      if (!bucketName) {
-        return res.status(500).json({ error: "Object storage not configured" });
-      }
-
-      const bucket = storage.bucket(bucketName);
-      const file = bucket.file(signedDoc.signedPdfPath);
-      const [pdfBytes] = await file.download();
-
-      res.setHeader('Content-Type', 'application/pdf');
+      // Download using ObjectStorageService
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(signedDoc.signedPdfPath);
+      
+      // Set Content-Disposition header BEFORE calling downloadObject
+      // downloadObject sets Content-Type and Cache-Control but not Content-Disposition
       res.setHeader('Content-Disposition', `attachment; filename="${signedDoc.fileName}"`);
-      res.send(pdfBytes);
+      
+      await objectStorageService.downloadObject(objectFile, res);
     } catch (error: any) {
       console.error("Error downloading signed document:", error);
       res.status(500).json({ 

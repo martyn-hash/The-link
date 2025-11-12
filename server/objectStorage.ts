@@ -257,6 +257,54 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  // Creates a path for a signed document in the private directory
+  createSignedDocumentPath(signatureRequestId: string, fileName: string): string {
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return `/objects/signed-documents/${signatureRequestId}/${timestamp}-${sanitizedFileName}`;
+  }
+
+  // Uploads a signed document to object storage and returns the normalized path and filename
+  async uploadSignedDocument(
+    signatureRequestId: string,
+    originalFileName: string,
+    pdfBytes: Buffer,
+    ownerId?: string
+  ): Promise<{ objectPath: string; fileName: string }> {
+    // Create the object path (this will sanitize and add timestamp)
+    const objectPath = this.createSignedDocumentPath(signatureRequestId, originalFileName);
+    
+    // Extract the actual filename from the path (e.g., "timestamp-file.pdf" from "/objects/signed-documents/req-id/timestamp-file.pdf")
+    const fileName = objectPath.split('/').pop() || originalFileName;
+    
+    // Convert /objects/... path to full bucket path
+    const privateDir = this.getPrivateObjectDir();
+    const entityId = objectPath.slice('/objects/'.length); // e.g., "signed-documents/req-id/timestamp-file.pdf"
+    const fullPath = `${privateDir}/${entityId}`;
+    
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    
+    // Upload the PDF bytes
+    await file.save(pdfBytes, {
+      contentType: 'application/pdf',
+      metadata: {
+        contentType: 'application/pdf',
+      },
+    });
+    
+    // Set ACL policy if owner is provided
+    if (ownerId) {
+      await setObjectAclPolicy(file, {
+        owner: ownerId,
+        visibility: 'private',
+      });
+    }
+    
+    return { objectPath, fileName };
+  }
 }
 
 function parseObjectPath(path: string): {
