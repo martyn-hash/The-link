@@ -391,10 +391,10 @@ export default function ProjectCard({
         </div>
       </CardContent>
 
-      {/* Info button in top-right corner */}
+      {/* Info button in top-right corner - hidden on desktop (hover devices), visible on mobile */}
       {hasQuickActions && onShowInfo && (
         <div 
-          className="absolute top-2 right-2 z-10"
+          className="absolute top-2 right-2 z-10 [@media(hover:hover)]:hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}

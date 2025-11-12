@@ -6,6 +6,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import ProjectCard from "./project-card";
 import ChangeStatusModal from "./ChangeStatusModal";
 import { StageChangeModal } from "./stage-change-modal";
+import { StageChangePopover } from "./stage-change-popover";
 import { MessagesModal } from "./messages-modal";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,10 +60,13 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
   const [targetStatus, setTargetStatus] = useState<string | null>(null);
   const [overedColumn, setOveredColumn] = useState<string | null>(null);
   
-  // State for StageChangeModal and MessagesModal
+  // State for StageChangeModal (mobile fallback) and MessagesModal
   const [showStageChangeModal, setShowStageChangeModal] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
   const [modalProjectId, setModalProjectId] = useState<string | null>(null);
+  
+  // State for hover-based popover (desktop only)
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
@@ -208,6 +212,9 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
     if (draggedProject?.completionStatus) {
       return;
     }
+    
+    // Close any open hover popovers when drag starts
+    setHoveredProjectId(null);
     
     setActiveId(draggedProjectId);
   };
@@ -408,14 +415,26 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
                           const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
                           
                           return (
-                            <ProjectCard
+                            <StageChangePopover
                               key={project.id}
-                              project={project}
-                              stageConfig={currentStageConfig}
-                              onOpenModal={() => navigateToProject(project.id)}
-                              onShowInfo={handleShowInfo}
-                              onShowMessages={handleShowMessages}
-                            />
+                              projectId={project.id}
+                              open={hoveredProjectId === project.id}
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  setHoveredProjectId(project.id);
+                                } else if (hoveredProjectId === project.id) {
+                                  setHoveredProjectId(null);
+                                }
+                              }}
+                            >
+                              <ProjectCard
+                                project={project}
+                                stageConfig={currentStageConfig}
+                                onOpenModal={() => navigateToProject(project.id)}
+                                onShowInfo={handleShowInfo}
+                                onShowMessages={handleShowMessages}
+                              />
+                            </StageChangePopover>
                           );
                         })}
                       </SortableContext>
