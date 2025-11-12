@@ -854,6 +854,12 @@ export default function Projects() {
       }
     }
 
+    // Always include completed projects regardless of filter settings
+    // Filters only apply to active (non-completed) projects
+    if (project.completionStatus) {
+      return true;
+    }
+
     return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch && behindScheduleMatch;
   });
 
