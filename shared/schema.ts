@@ -2258,6 +2258,151 @@ export const documents = pgTable("documents", {
 ]);
 
 // ============================================================
+// E-SIGNATURE SYSTEM TABLES
+// ============================================================
+
+// Signature request status enum
+export const signatureRequestStatusEnum = pgEnum("signature_request_status", [
+  "draft",
+  "pending", // sent to recipients, waiting for signatures
+  "partially_signed", // some recipients have signed
+  "completed", // all recipients have signed
+  "cancelled"
+]);
+
+// Signature field type enum
+export const signatureFieldTypeEnum = pgEnum("signature_field_type", [
+  "signature", // drawn or uploaded signature
+  "typed_name" // typed name field
+]);
+
+// Signature requests - main table for document signing workflows
+export const signatureRequests = pgTable("signature_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }), // PDF to be signed
+  createdBy: varchar("created_by").notNull().references(() => users.id), // Staff user who created request
+  status: signatureRequestStatusEnum("status").notNull().default("draft"),
+  emailSubject: varchar("email_subject"), // Subject line for signature request email
+  emailMessage: text("email_message"), // Custom message from staff to recipients
+  completedAt: timestamp("completed_at"), // When all signatures collected
+  cancelledAt: timestamp("cancelled_at"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_requests_client_id").on(table.clientId),
+  index("idx_signature_requests_document_id").on(table.documentId),
+  index("idx_signature_requests_status").on(table.status),
+  index("idx_signature_requests_created_by").on(table.createdBy),
+]);
+
+// Signature fields - defines where signature fields are placed on PDF
+export const signatureFields = pgTable("signature_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }),
+  recipientPersonId: text("recipient_person_id").notNull().references(() => people.id, { onDelete: "cascade" }), // Who should sign this field
+  fieldType: signatureFieldTypeEnum("field_type").notNull(),
+  pageNumber: integer("page_number").notNull(), // PDF page (0-indexed)
+  xPosition: integer("x_position").notNull(), // X coordinate on page
+  yPosition: integer("y_position").notNull(), // Y coordinate on page
+  width: integer("width").notNull(), // Field width in pixels
+  height: integer("height").notNull(), // Field height in pixels
+  label: varchar("label"), // Optional label (e.g., "Sign here", "Type your name")
+  orderIndex: integer("order_index").notNull().default(0), // Order for signing flow
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_fields_request_id").on(table.signatureRequestId),
+  index("idx_signature_fields_recipient_id").on(table.recipientPersonId),
+]);
+
+// Signature request recipients - tracks who needs to sign
+export const signatureRequestRecipients = pgTable("signature_request_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }),
+  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull(), // Email where request was sent
+  secureToken: varchar("secure_token").notNull().unique(), // Unique token for signing link
+  tokenExpiresAt: timestamp("token_expires_at").notNull().default(sql`now() + interval '30 days'`), // Token valid for 30 days
+  sentAt: timestamp("sent_at"), // When email was sent
+  viewedAt: timestamp("viewed_at"), // When recipient first opened the link
+  signedAt: timestamp("signed_at"), // When recipient completed signing
+  reminderSentAt: timestamp("reminder_sent_at"), // Last reminder sent
+  orderIndex: integer("order_index").notNull().default(0), // Order for sequential signing
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_request_recipients_request_id").on(table.signatureRequestId),
+  index("idx_signature_request_recipients_person_id").on(table.personId),
+  index("idx_signature_request_recipients_token").on(table.secureToken),
+  unique("unique_request_recipient").on(table.signatureRequestId, table.personId),
+]);
+
+// Signatures - stores actual signature data for each field
+export const signatures = pgTable("signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureFieldId: varchar("signature_field_id").notNull().references(() => signatureFields.id, { onDelete: "cascade" }),
+  signatureRequestRecipientId: varchar("signature_request_recipient_id").notNull().references(() => signatureRequestRecipients.id, { onDelete: "cascade" }),
+  signatureType: varchar("signature_type").notNull(), // 'drawn', 'typed'
+  signatureData: text("signature_data").notNull(), // Base64 image data for drawn, text for typed
+  signedAt: timestamp("signed_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signatures_field_id").on(table.signatureFieldId),
+  index("idx_signatures_recipient_id").on(table.signatureRequestRecipientId),
+]);
+
+// Signature audit logs - UK eIDAS compliance audit trail
+export const signatureAuditLogs = pgTable("signature_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestRecipientId: varchar("signature_request_recipient_id").notNull().references(() => signatureRequestRecipients.id, { onDelete: "cascade" }),
+  // Signer identity
+  signerName: varchar("signer_name").notNull(),
+  signerEmail: varchar("signer_email").notNull(),
+  // Session information
+  ipAddress: varchar("ip_address").notNull(),
+  userAgent: text("user_agent").notNull(), // Full user agent string
+  deviceInfo: varchar("device_info"), // Parsed device type (Desktop, Mobile, Tablet)
+  browserInfo: varchar("browser_info"), // Parsed browser (Chrome 119, Safari 17, etc.)
+  osInfo: varchar("os_info"), // Parsed OS (Windows 10, iOS 17, etc.)
+  // Timestamps (UTC)
+  consentAcceptedAt: timestamp("consent_accepted_at").notNull(), // When UK eIDAS consent accepted
+  signedAt: timestamp("signed_at").notNull(), // When signing completed
+  // Document integrity
+  documentHash: varchar("document_hash").notNull(), // SHA-256 hash of original PDF
+  documentVersion: varchar("document_version").notNull(), // Version identifier
+  // Authentication method
+  authMethod: varchar("auth_method").notNull().default("email_link"), // email_link, sms_code, etc.
+  // Geolocation (optional)
+  city: varchar("city"),
+  country: varchar("country"),
+  // Additional metadata
+  metadata: jsonb("metadata"), // Store any additional audit data
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_audit_logs_recipient_id").on(table.signatureRequestRecipientId),
+  index("idx_signature_audit_logs_signed_at").on(table.signedAt),
+]);
+
+// Signed documents - stores final signed PDFs and audit reports
+export const signedDocuments = pgTable("signed_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }).unique(),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  signedPdfPath: text("signed_pdf_path").notNull(), // Path in object storage to signed PDF
+  signedPdfHash: varchar("signed_pdf_hash").notNull(), // SHA-256 hash of final signed PDF
+  auditTrailPdfPath: text("audit_trail_pdf_path"), // Path to audit trail PDF
+  fileName: varchar("file_name").notNull(), // Original filename
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  emailSentAt: timestamp("email_sent_at"), // When signed doc was emailed to recipients
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signed_documents_request_id").on(table.signatureRequestId),
+  index("idx_signed_documents_client_id").on(table.clientId),
+  index("idx_signed_documents_completed_at").on(table.completedAt),
+]);
+
+// ============================================================
 // EMAIL THREADING & DEDUPLICATION TABLES
 // ============================================================
 
@@ -2628,6 +2773,46 @@ export const insertDocumentFolderSchema = createInsertSchema(documentFolders).om
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   uploadedAt: true,
+});
+
+// Zod schemas for e-signature system
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  cancelledAt: true,
+});
+
+export const insertSignatureFieldSchema = createInsertSchema(signatureFields).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSignatureRequestRecipientSchema = createInsertSchema(signatureRequestRecipients).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  viewedAt: true,
+  signedAt: true,
+  reminderSentAt: true,
+});
+
+export const insertSignatureSchema = createInsertSchema(signatures).omit({
+  id: true,
+  createdAt: true,
+  signedAt: true,
+});
+
+export const insertSignatureAuditLogSchema = createInsertSchema(signatureAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSignedDocumentSchema = createInsertSchema(signedDocuments).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
 });
 
 // Zod schemas for email threading
@@ -3494,6 +3679,18 @@ export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
+export type SignatureField = typeof signatureFields.$inferSelect;
+export type InsertSignatureField = z.infer<typeof insertSignatureFieldSchema>;
+export type SignatureRequestRecipient = typeof signatureRequestRecipients.$inferSelect;
+export type InsertSignatureRequestRecipient = z.infer<typeof insertSignatureRequestRecipientSchema>;
+export type Signature = typeof signatures.$inferSelect;
+export type InsertSignature = z.infer<typeof insertSignatureSchema>;
+export type SignatureAuditLog = typeof signatureAuditLogs.$inferSelect;
+export type InsertSignatureAuditLog = z.infer<typeof insertSignatureAuditLogSchema>;
+export type SignedDocument = typeof signedDocuments.$inferSelect;
+export type InsertSignedDocument = z.infer<typeof insertSignedDocumentSchema>;
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
 export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
 export type UpdateRiskAssessment = z.infer<typeof updateRiskAssessmentSchema>;

@@ -28,6 +28,7 @@ import { registerInternalTaskRoutes } from "./routes/internalTasks";
 import { registerEmailRoutes } from "./routes/emails";
 import { registerSuperAdminRoutes } from "./routes/superAdmin";
 import { registerNotificationRoutes } from "./routes/notifications";
+import { registerSignatureRoutes } from "./routes/signatures";
 
 /**
  * Register all application routes
@@ -100,6 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerEmailRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerSuperAdminRoutes(app, isAuthenticated, resolveEffectiveUser, requireSuperAdmin);
   registerNotificationRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerSignatureRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;

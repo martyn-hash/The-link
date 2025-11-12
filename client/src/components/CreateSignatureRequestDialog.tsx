@@ -1,0 +1,641 @@
+import { useState, useRef, useEffect } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { FileText, Upload, MousePointer, Send, UserPlus, Trash2, PenTool, Type } from "lucide-react";
+import type { Document as DocumentType, Person } from "@shared/schema";
+
+interface CreateSignatureRequestDialogProps {
+  clientId: string;
+  documents: DocumentType[];
+  people: Person[];
+  onSuccess?: () => void;
+}
+
+interface SignatureField {
+  id: string;
+  recipientPersonId: string;
+  fieldType: "signature" | "typed_name";
+  pageNumber: number;
+  xPosition: number;
+  yPosition: number;
+  width: number;
+  height: number;
+  label: string;
+  orderIndex: number;
+}
+
+interface Recipient {
+  personId: string;
+  email: string;
+  name: string;
+  orderIndex: number;
+}
+
+export function CreateSignatureRequestDialog({
+  clientId,
+  documents,
+  people,
+  onSuccess
+}: CreateSignatureRequestDialogProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [currentTab, setCurrentTab] = useState("document");
+  
+  // Step 1: Document selection
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
+  const [selectedDocument, setSelectedDocument] = useState<DocumentType | null>(null);
+  
+  // Step 2: Field placement
+  const [fields, setFields] = useState<SignatureField[]>([]);
+  const [selectedFieldType, setSelectedFieldType] = useState<"signature" | "typed_name">("signature");
+  const [selectedRecipientForField, setSelectedRecipientForField] = useState<string>("");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Step 3: Recipients and message
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [emailSubject, setEmailSubject] = useState("Document Signature Request");
+  const [emailMessage, setEmailMessage] = useState("Please review and sign the attached document.");
+
+  // Filter for PDF documents only
+  const pdfDocuments = documents.filter(doc => 
+    doc.fileType.toLowerCase().includes('pdf')
+  );
+
+  // Filter people with emails
+  const peopleWithEmails = people.filter(person => 
+    person.email || person.primaryEmail
+  );
+
+  // Load PDF preview when document is selected
+  useEffect(() => {
+    if (selectedDocumentId) {
+      const doc = pdfDocuments.find(d => d.id === selectedDocumentId);
+      if (doc) {
+        setSelectedDocument(doc);
+        // Set preview URL - assuming object storage serves files at /objects/{path}
+        setPdfPreviewUrl(`/objects${doc.objectPath}`);
+      }
+    }
+  }, [selectedDocumentId, pdfDocuments]);
+
+  // Handle adding a field by clicking on the PDF preview
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!selectedRecipientForField) {
+      toast({
+        title: "Select a recipient",
+        description: "Please select a recipient before placing signature fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Default field dimensions
+    const width = selectedFieldType === "signature" ? 200 : 150;
+    const height = selectedFieldType === "signature" ? 60 : 40;
+
+    const newField: SignatureField = {
+      id: `field-${Date.now()}`,
+      recipientPersonId: selectedRecipientForField,
+      fieldType: selectedFieldType,
+      pageNumber: 0, // For now, assuming single page
+      xPosition: Math.floor(x),
+      yPosition: Math.floor(y),
+      width,
+      height,
+      label: selectedFieldType === "signature" ? "Sign here" : "Type your name",
+      orderIndex: fields.length,
+    };
+
+    setFields([...fields, newField]);
+    
+    toast({
+      title: "Field added",
+      description: `${selectedFieldType === "signature" ? "Signature" : "Name"} field placed`,
+    });
+  };
+
+  // Handle removing a field
+  const removeField = (fieldId: string) => {
+    setFields(fields.filter(f => f.id !== fieldId));
+  };
+
+  // Add recipient
+  const addRecipient = (personId: string) => {
+    const person = peopleWithEmails.find(p => p.id === personId);
+    if (!person) return;
+
+    const email = person.primaryEmail || person.email;
+    if (!email) {
+      toast({
+        title: "No email found",
+        description: "This person doesn't have an email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (recipients.some(r => r.personId === personId)) {
+      toast({
+        title: "Already added",
+        description: "This person is already a recipient",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRecipients([
+      ...recipients,
+      {
+        personId,
+        email,
+        name: person.fullName,
+        orderIndex: recipients.length,
+      },
+    ]);
+  };
+
+  // Remove recipient
+  const removeRecipient = (personId: string) => {
+    setRecipients(recipients.filter(r => r.personId !== personId));
+    // Also remove fields for this recipient
+    setFields(fields.filter(f => f.recipientPersonId !== personId));
+  };
+
+  // Create signature request mutation
+  const createRequestMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/signature-requests", {
+        clientId,
+        documentId: selectedDocumentId,
+        emailSubject,
+        emailMessage,
+        fields,
+        recipients: recipients.map(r => ({
+          personId: r.personId,
+          email: r.email,
+          orderIndex: r.orderIndex,
+        })),
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Signature request created",
+        description: "The signature request has been created successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/signature-requests/client/${clientId}`] });
+      if (onSuccess) onSuccess();
+      handleClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create signature request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Send signature request mutation
+  const sendRequestMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      return await apiRequest("POST", `/api/signature-requests/${requestId}/send`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Signature request sent",
+        description: "Emails have been sent to all recipients",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/signature-requests/client/${clientId}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send signature request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create and send in one action
+  const handleCreateAndSend = async () => {
+    try {
+      const result = await createRequestMutation.mutateAsync();
+      if (result && result.id) {
+        await sendRequestMutation.mutateAsync(result.id);
+      }
+    } catch (error) {
+      console.error("Error creating and sending signature request:", error);
+    }
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setCurrentTab("document");
+    setSelectedDocumentId("");
+    setSelectedDocument(null);
+    setFields([]);
+    setRecipients([]);
+    setEmailSubject("Document Signature Request");
+    setEmailMessage("Please review and sign the attached document.");
+    setSelectedFieldType("signature");
+    setSelectedRecipientForField("");
+  };
+
+  const canProceedToFields = selectedDocumentId && pdfDocuments.length > 0;
+  const canProceedToRecipients = canProceedToFields && fields.length > 0;
+  const canSend = canProceedToRecipients && recipients.length > 0 && emailSubject && emailMessage;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-create-signature-request" variant="outline" size="sm">
+          <PenTool className="w-4 h-4 mr-2" />
+          Create Signature Request
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create Signature Request</DialogTitle>
+          <DialogDescription>
+            Create a new document signature request for e-signing
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs value={currentTab} onValueChange={setCurrentTab}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="document" data-testid="tab-select-document">
+              <FileText className="w-4 h-4 mr-2" />
+              1. Select Document
+            </TabsTrigger>
+            <TabsTrigger 
+              value="fields" 
+              disabled={!canProceedToFields}
+              data-testid="tab-place-fields"
+            >
+              <MousePointer className="w-4 h-4 mr-2" />
+              2. Place Fields
+            </TabsTrigger>
+            <TabsTrigger 
+              value="send" 
+              disabled={!canProceedToRecipients}
+              data-testid="tab-send"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              3. Send
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab 1: Select Document */}
+          <TabsContent value="document" className="space-y-4">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="document-select">Select PDF Document</Label>
+                <Select
+                  value={selectedDocumentId}
+                  onValueChange={setSelectedDocumentId}
+                >
+                  <SelectTrigger id="document-select" data-testid="select-document">
+                    <SelectValue placeholder="Choose a PDF document..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pdfDocuments.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No PDF documents available
+                      </SelectItem>
+                    ) : (
+                      pdfDocuments.map((doc) => (
+                        <SelectItem key={doc.id} value={doc.id}>
+                          {doc.fileName}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {pdfDocuments.length === 0 && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Upload a PDF document first in the Documents tab
+                  </p>
+                )}
+              </div>
+
+              {selectedDocument && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Selected Document</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-8 h-8 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{selectedDocument.fileName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {(selectedDocument.fileSize / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => setCurrentTab("fields")}
+                disabled={!canProceedToFields}
+                data-testid="button-next-to-fields"
+              >
+                Next: Place Fields
+              </Button>
+            </DialogFooter>
+          </TabsContent>
+
+          {/* Tab 2: Place Fields */}
+          <TabsContent value="fields" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Left: Controls */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Field Type</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex gap-2">
+                      <Button
+                        variant={selectedFieldType === "signature" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedFieldType("signature")}
+                        data-testid="button-field-type-signature"
+                      >
+                        <PenTool className="w-4 h-4 mr-2" />
+                        Signature
+                      </Button>
+                      <Button
+                        variant={selectedFieldType === "typed_name" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedFieldType("typed_name")}
+                        data-testid="button-field-type-typed-name"
+                      >
+                        <Type className="w-4 h-4 mr-2" />
+                        Typed Name
+                      </Button>
+                    </div>
+
+                    <div>
+                      <Label>Recipient for this field</Label>
+                      <Select
+                        value={selectedRecipientForField}
+                        onValueChange={setSelectedRecipientForField}
+                      >
+                        <SelectTrigger data-testid="select-field-recipient">
+                          <SelectValue placeholder="Select recipient..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {peopleWithEmails.map((person) => (
+                            <SelectItem key={person.id} value={person.id}>
+                              {person.fullName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Placed Fields ({fields.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {fields.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Click on the PDF preview to place fields
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {fields.map((field) => {
+                          const person = peopleWithEmails.find(p => p.id === field.recipientPersonId);
+                          return (
+                            <div
+                              key={field.id}
+                              className="flex items-center justify-between p-2 border rounded"
+                            >
+                              <div className="flex items-center gap-2">
+                                {field.fieldType === "signature" ? (
+                                  <PenTool className="w-4 h-4" />
+                                ) : (
+                                  <Type className="w-4 h-4" />
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {field.fieldType === "signature" ? "Signature" : "Typed Name"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {person?.fullName}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeField(field.id)}
+                                data-testid={`button-remove-field-${field.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Right: PDF Preview */}
+              <div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">PDF Preview</CardTitle>
+                    <CardDescription>Click to place signature fields</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative border rounded bg-muted/20">
+                      {pdfPreviewUrl ? (
+                        <div className="relative">
+                          {/* Simplified preview - just show document info */}
+                          {/* In production, you'd use a proper PDF viewer like react-pdf */}
+                          <div className="aspect-[8.5/11] flex items-center justify-center bg-white">
+                            <div className="text-center p-8">
+                              <FileText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                              <p className="text-sm text-muted-foreground mb-2">
+                                Click to place {selectedFieldType === "signature" ? "signature" : "name"} fields
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Selected: {selectedDocument?.fileName}
+                              </p>
+                            </div>
+                          </div>
+                          {/* Overlay canvas for click handling */}
+                          <canvas
+                            ref={canvasRef}
+                            onClick={handleCanvasClick}
+                            className="absolute inset-0 w-full h-full cursor-crosshair"
+                            data-testid="canvas-pdf-preview"
+                          />
+                        </div>
+                      ) : (
+                        <div className="aspect-[8.5/11] flex items-center justify-center">
+                          <p className="text-sm text-muted-foreground">No document selected</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            <DialogFooter className="flex justify-between">
+              <Button variant="outline" onClick={() => setCurrentTab("document")}>
+                Back
+              </Button>
+              <Button
+                onClick={() => setCurrentTab("send")}
+                disabled={!canProceedToRecipients}
+                data-testid="button-next-to-send"
+              >
+                Next: Add Recipients
+              </Button>
+            </DialogFooter>
+          </TabsContent>
+
+          {/* Tab 3: Recipients and Send */}
+          <TabsContent value="send" className="space-y-4">
+            <div className="space-y-4">
+              {/* Recipients */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Recipients</CardTitle>
+                  <CardDescription>Select people who need to sign this document</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label>Add Recipient</Label>
+                    <Select onValueChange={addRecipient}>
+                      <SelectTrigger data-testid="select-add-recipient">
+                        <SelectValue placeholder="Select person to add..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {peopleWithEmails.map((person) => (
+                          <SelectItem key={person.id} value={person.id}>
+                            {person.fullName} ({person.primaryEmail || person.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {recipients.length > 0 && (
+                    <div className="space-y-2">
+                      {recipients.map((recipient) => (
+                        <div
+                          key={recipient.personId}
+                          className="flex items-center justify-between p-2 border rounded"
+                        >
+                          <div>
+                            <p className="font-medium text-sm">{recipient.name}</p>
+                            <p className="text-xs text-muted-foreground">{recipient.email}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRecipient(recipient.personId)}
+                            data-testid={`button-remove-recipient-${recipient.personId}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Email Message */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Email Message</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label htmlFor="email-subject">Subject</Label>
+                    <Input
+                      id="email-subject"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Document Signature Request"
+                      data-testid="input-email-subject"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email-message">Message</Label>
+                    <Textarea
+                      id="email-message"
+                      value={emailMessage}
+                      onChange={(e) => setEmailMessage(e.target.value)}
+                      placeholder="Please review and sign the attached document."
+                      rows={4}
+                      data-testid="textarea-email-message"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <DialogFooter className="flex justify-between">
+              <Button variant="outline" onClick={() => setCurrentTab("fields")}>
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => createRequestMutation.mutate()}
+                  disabled={!canSend || createRequestMutation.isPending}
+                  data-testid="button-save-draft"
+                >
+                  Save Draft
+                </Button>
+                <Button
+                  onClick={handleCreateAndSend}
+                  disabled={!canSend || createRequestMutation.isPending || sendRequestMutation.isPending}
+                  data-testid="button-create-and-send"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Create & Send
+                </Button>
+              </div>
+            </DialogFooter>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
