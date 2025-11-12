@@ -213,7 +213,7 @@ export function CreateSignatureRequestDialog({
         title: "Signature request created",
         description: "The signature request has been created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/signature-requests/client/${clientId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/signature-requests/client', clientId] });
       if (onSuccess) onSuccess();
       handleClose();
     },
@@ -236,7 +236,7 @@ export function CreateSignatureRequestDialog({
         title: "Signature request sent",
         description: "Emails have been sent to all recipients",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/signature-requests/client/${clientId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/signature-requests/client', clientId] });
     },
     onError: (error: any) => {
       toast({

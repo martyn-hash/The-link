@@ -826,6 +826,7 @@ export function registerSignatureRoutes(
       // CRITICAL FIX: Create audit trail record with consent text
       await db.insert(signatureAuditLogs).values({
         signatureRequestRecipientId: recipient.id,
+        eventType: "signature_completed",
         signerName: person?.fullName || "Unknown",
         signerEmail: recipient.email,
         ipAddress,
