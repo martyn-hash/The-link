@@ -478,7 +478,7 @@ export function CreateSignatureRequestDialog({
                         pdfUrl={pdfPreviewUrl}
                         onPageClick={handlePdfClick}
                         clickable={true}
-                        renderOverlay={(pageNumber, pageWidth, pageHeight) => (
+                        renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (
                           <>
                             {fields
                               .filter(f => f.pageNumber === pageNumber)

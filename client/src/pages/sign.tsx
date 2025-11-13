@@ -416,7 +416,7 @@ export default function SignPage() {
                 <PdfSignatureViewer
                   pdfUrl={`/objects${signData.document.objectPath}`}
                   clickable={false}
-                  renderOverlay={(pageNumber, pageWidth, pageHeight) => (
+                  renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (
                     <>
                       {signData.fields
                         .filter((f: any) => f.pageNumber === pageNumber)
