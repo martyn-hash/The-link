@@ -13,10 +13,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, Upload, ArrowLeft, ArrowRight, Send, UserPlus, Trash2, PenTool, Type, Loader2, X, AlertCircle } from "lucide-react";
+import { FileText, Upload, ArrowLeft, ArrowRight, Send, UserPlus, Trash2, PenTool, Type, Loader2, X, AlertCircle, GripVertical } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 import { FileUploadZone } from "@/components/attachments/FileUploadZone";
 import type { Document as DocumentType, Person } from "@shared/schema";
+import { 
+  DndContext, 
+  DragEndEvent,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  useDraggable
+} from '@dnd-kit/core';
 
 interface SignatureField {
   id: string;
@@ -36,6 +44,42 @@ interface Recipient {
   email: string;
   name: string;
   orderIndex: number;
+}
+
+// Draggable Field Component
+function DraggableField({ field, person, onRemove }: { 
+  field: SignatureField;
+  person?: Person;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: field.id,
+  });
+
+  const style = {
+    position: 'absolute' as const,
+    left: `${field.xPosition}%`,
+    top: `${field.yPosition}%`,
+    width: `${field.width}%`,
+    height: `${field.height}%`,
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="border-2 border-blue-500 bg-blue-100/50 rounded flex items-center justify-center text-xs font-medium group hover:bg-blue-200/50 cursor-move"
+      data-testid={`draggable-field-${field.id}`}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="h-3 w-3 mr-1 text-blue-600" />
+      <span className="flex-1 text-center">
+        {person?.fullName}: {field.fieldType === "signature" ? "Sign" : "Name"}
+      </span>
+    </div>
+  );
 }
 
 export default function SignatureRequestBuilder() {
@@ -61,6 +105,19 @@ export default function SignatureRequestBuilder() {
   const [selectedRecipientForField, setSelectedRecipientForField] = useState<string>("");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
+  
+  // Drag-and-drop state
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+  const [pdfDimensions, setPdfDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  
+  // Setup drag sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Require 5px movement before drag starts
+      },
+    })
+  );
   
   // Step 3: Recipients and message
   const [recipients, setRecipients] = useState<Recipient[]>([]);
@@ -234,6 +291,42 @@ export default function SignatureRequestBuilder() {
   // Remove field
   const removeField = (fieldId: string) => {
     setFields(fields.filter(f => f.id !== fieldId));
+    setHasUnsavedChanges(true);
+  };
+
+  // Handle drag end - update field position
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, delta } = event;
+    
+    if (!delta || (delta.x === 0 && delta.y === 0)) return;
+    
+    const fieldId = active.id as string;
+    setActiveFieldId(null);
+    
+    setFields(prev => prev.map(field => {
+      if (field.id !== fieldId) return field;
+      
+      // Convert pixel delta to percentage delta using stored PDF dimensions
+      if (pdfDimensions.width === 0 || pdfDimensions.height === 0) return field;
+      
+      const deltaXPercent = (delta.x / pdfDimensions.width) * 100;
+      const deltaYPercent = (delta.y / pdfDimensions.height) * 100;
+      
+      // Calculate new position and clamp to 0-100%
+      const newX = Math.min(Math.max(field.xPosition + deltaXPercent, 0), 100 - field.width);
+      const newY = Math.min(Math.max(field.yPosition + deltaYPercent, 0), 100 - field.height);
+      
+      // Round to 2 decimal places
+      const roundedX = Math.round(newX * 100) / 100;
+      const roundedY = Math.round(newY * 100) / 100;
+      
+      return {
+        ...field,
+        xPosition: roundedX,
+        yPosition: roundedY,
+      };
+    }));
+    
     setHasUnsavedChanges(true);
   };
 
@@ -575,30 +668,32 @@ export default function SignatureRequestBuilder() {
                       pdfUrl={pdfPreviewUrl}
                       onPageClick={handlePdfClick}
                       clickable={true}
-                      renderOverlay={(pageNumber, renderedWidth, renderedHeight) => (
-                        <div className="absolute inset-0">
-                          {fields
-                            .filter(f => f.pageNumber === pageNumber)
-                            .map(field => {
-                              const person = peopleWithEmails.find(p => p.id === field.recipientPersonId);
-                              return (
-                                <div
-                                  key={field.id}
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${field.xPosition}%`,
-                                    top: `${field.yPosition}%`,
-                                    width: `${field.width}%`,
-                                    height: `${field.height}%`,
-                                  }}
-                                  className="border-2 border-blue-500 bg-blue-100/50 rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:bg-blue-200/50"
-                                >
-                                  {person?.fullName}: {field.fieldType === "signature" ? "Sign" : "Name"}
-                                </div>
-                              );
-                            })}
-                        </div>
-                      )}
+                      renderOverlay={(pageNumber, renderedWidth, renderedHeight) => {
+                        // Safely update PDF dimensions only when they change
+                        if (renderedWidth !== pdfDimensions.width || renderedHeight !== pdfDimensions.height) {
+                          setPdfDimensions({ width: renderedWidth, height: renderedHeight });
+                        }
+                        
+                        return (
+                          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                            <div className="absolute inset-0">
+                              {fields
+                                .filter(f => f.pageNumber === pageNumber)
+                                .map(field => {
+                                  const person = peopleWithEmails.find(p => p.id === field.recipientPersonId);
+                                  return (
+                                    <DraggableField
+                                      key={field.id}
+                                      field={field}
+                                      person={person}
+                                      onRemove={removeField}
+                                    />
+                                  );
+                                })}
+                            </div>
+                          </DndContext>
+                        );
+                      }}
                     />
                   </CardContent>
                 </Card>
