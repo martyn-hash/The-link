@@ -191,6 +191,17 @@ async function processPdfWithSignatures(
       throw new Error("Cannot process signed document: No signature audit data available");
     }
 
+    // Get consent acceptance timestamps for each recipient (UK eIDAS compliance)
+    const consentLogs = allAuditLogs.filter(log => 
+      recipientIds.includes(log.signatureRequestRecipientId) &&
+      log.eventType === "consent_accepted" &&
+      log.consentAcceptedAt !== null
+    );
+    const consentByRecipient = new Map<string, Date>();
+    for (const log of consentLogs) {
+      consentByRecipient.set(log.signatureRequestRecipientId, log.consentAcceptedAt!);
+    }
+
     // Get client information
     const [client] = await db
       .select()
@@ -208,16 +219,20 @@ async function processPdfWithSignatures(
           console.warn(`[E-Signature] Document hash missing for signer ${log.signerEmail}, using original document hash`);
         }
         
+        // Get consent acceptance timestamp for UK eIDAS compliance
+        const consentAcceptedAt = consentByRecipient.get(log.signatureRequestRecipientId);
+        
         return {
           signerName: log.signerName,
           signerEmail: log.signerEmail,
           signedAt: log.signedAt!.toISOString(), // Safe due to filter
+          consentAcceptedAt: consentAcceptedAt?.toISOString() || log.signedAt!.toISOString(), // Fallback to signedAt
           ipAddress: log.ipAddress,
           deviceInfo: log.deviceInfo || "Unknown",
           browserInfo: log.browserInfo || "Unknown",
           osInfo: log.osInfo || "Unknown",
           documentHash: log.documentHash || originalDocumentHash,
-          consentText: log.metadata?.consentText || undefined,
+          consentText: (log.metadata as any)?.consentText || undefined,
         };
       });
 

@@ -5,6 +5,7 @@ interface SignerInfo {
   signerName: string;
   signerEmail: string;
   signedAt: string;
+  consentAcceptedAt: string; // UK eIDAS compliance: timestamp of consent acceptance
   ipAddress: string;
   deviceInfo: string;
   browserInfo: string;
@@ -292,7 +293,10 @@ export async function generateCertificateOfCompletion(
       });
 
       // UK eIDAS Compliant Consent Confirmation with full audit details
-      const consentStatement = `Signer ${signer.signerName} accepted electronic signature consent on ${format(new Date(signer.consentAcceptedAt), 'MMMM d, yyyy \'at\' h:mm:ss a')} UTC.`;
+      // Format timestamp in UTC to ensure compliance accuracy
+      const consentDate = new Date(signer.consentAcceptedAt);
+      const utcFormatted = `${format(consentDate, 'MMMM d, yyyy \'at\' h:mm:ss a')} UTC (${consentDate.toISOString()})`;
+      const consentStatement = `Signer ${signer.signerName} accepted electronic signature consent on ${utcFormatted}.`;
       const consentStatementLines = wrapText(consentStatement, contentWidth - 50, 8, fontBold);
       let consentY = yPos + 20;
       for (const line of consentStatementLines) {
