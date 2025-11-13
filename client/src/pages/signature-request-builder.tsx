@@ -13,6 +13,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
 import { FileText, Upload, ArrowLeft, ArrowRight, Send, UserPlus, Trash2, PenTool, Type, Loader2, X, AlertCircle, GripVertical } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 import { FileUploadZone } from "@/components/attachments/FileUploadZone";
@@ -47,12 +57,14 @@ interface Recipient {
 }
 
 // Draggable Field Component
-function DraggableField({ field, person, onRemove }: { 
+function DraggableField({ field, person, onRemove, onPageChange, totalPages }: { 
   field: SignatureField;
   person?: Person;
   onRemove: (id: string) => void;
+  onPageChange: (fieldId: string, newPage: number) => void;
+  totalPages: number;
 }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: field.id,
   });
 
@@ -63,21 +75,47 @@ function DraggableField({ field, person, onRemove }: {
     width: `${field.width}%`,
     height: `${field.height}%`,
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="border-2 border-blue-500 bg-blue-100/50 rounded flex items-center justify-center text-xs font-medium group hover:bg-blue-200/50 cursor-move"
+      className="border-2 border-blue-500 bg-blue-100/50 rounded flex items-center justify-between px-2 text-xs font-medium group hover:bg-blue-200/50"
       data-testid={`draggable-field-${field.id}`}
-      {...attributes}
-      {...listeners}
     >
-      <GripVertical className="h-3 w-3 mr-1 text-blue-600" />
-      <span className="flex-1 text-center">
-        {person?.fullName}: {field.fieldType === "signature" ? "Sign" : "Name"}
-      </span>
+      <div {...listeners} {...attributes} className="flex items-center gap-1 flex-1 cursor-move min-w-0">
+        <GripVertical className="h-3 w-3 text-blue-600 flex-shrink-0" />
+        <span className="truncate">
+          {person?.fullName}: {field.fieldType === "signature" ? "Sign" : "Name"}
+        </span>
+      </div>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
+        {totalPages > 1 && (
+          <select
+            value={field.pageNumber}
+            onChange={(e) => onPageChange(field.id, parseInt(e.target.value))}
+            className="h-5 text-xs border rounded px-1 bg-white"
+            onClick={(e) => e.stopPropagation()}
+            data-testid={`select-page-field-${field.id}`}
+          >
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <option key={page} value={page}>P{page}</option>
+            ))}
+          </select>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-5 w-5 p-0"
+          onClick={() => onRemove(field.id)}
+          data-testid={`button-remove-field-${field.id}`}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -109,6 +147,7 @@ export default function SignatureRequestBuilder() {
   // Drag-and-drop state
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [pdfDimensionsByPage, setPdfDimensionsByPage] = useState<Map<number, { width: number; height: number }>>(new Map());
+  const [totalPages, setTotalPages] = useState<number>(0);
   
   // Setup drag sensors
   const sensors = useSensors(
@@ -126,6 +165,47 @@ export default function SignatureRequestBuilder() {
 
   // Track unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Warn before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Safe navigation function that checks for unsaved changes
+  const navigateWithWarning = (path: string) => {
+    if (hasUnsavedChanges) {
+      setPendingNavigation(path);
+      setShowUnsavedDialog(true);
+    } else {
+      navigate(path);
+    }
+  };
+
+  // Confirm navigation (discard changes)
+  const confirmNavigation = () => {
+    if (pendingNavigation) {
+      setHasUnsavedChanges(false);
+      navigate(pendingNavigation);
+      setPendingNavigation(null);
+    }
+    setShowUnsavedDialog(false);
+  };
+
+  // Cancel navigation (stay on page)
+  const cancelNavigation = () => {
+    setPendingNavigation(null);
+    setShowUnsavedDialog(false);
+  };
 
   // Fetch documents
   const { data: documents = [] } = useQuery<DocumentType[]>({
@@ -332,6 +412,23 @@ export default function SignatureRequestBuilder() {
     setHasUnsavedChanges(true);
   };
 
+  // Handle page change for a field - move field to different page
+  const handlePageChange = (fieldId: string, newPage: number) => {
+    setFields(prev => prev.map(field => {
+      if (field.id !== fieldId) return field;
+      return {
+        ...field,
+        pageNumber: newPage,
+      };
+    }));
+    setHasUnsavedChanges(true);
+    
+    toast({
+      title: "Field moved",
+      description: `Field moved to page ${newPage}`,
+    });
+  };
+
   // Add recipient
   const addRecipient = (personId: string) => {
     const person = peopleWithEmails.find(p => p.id === personId);
@@ -414,16 +511,32 @@ export default function SignatureRequestBuilder() {
 
   // Handle navigation away
   const handleBack = () => {
-    if (hasUnsavedChanges) {
-      if (confirm("You have unsaved changes. Are you sure you want to leave?")) {
-        navigate(`/clients/${clientId}/docs`);
-      }
-    } else {
-      navigate(`/clients/${clientId}/docs`);
-    }
+    navigateWithWarning(`/clients/${clientId}/docs`);
   };
 
   return (
+    <>
+      {/* Unsaved changes warning dialog */}
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent data-testid="dialog-unsaved-changes">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. If you leave now, your work will be lost. Are you sure you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelNavigation} data-testid="button-cancel-navigation">
+              Stay on Page
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmNavigation} data-testid="button-confirm-navigation">
+              Leave and Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Main builder UI */}
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b bg-card">
@@ -671,6 +784,7 @@ export default function SignatureRequestBuilder() {
                         pdfUrl={pdfPreviewUrl}
                         onPageClick={handlePdfClick}
                         clickable={true}
+                        onDocumentLoad={setTotalPages}
                         onPageDimensionsChange={(pageNumber, width, height) => {
                           // Update dimensions for this specific page (outside render cycle)
                           setPdfDimensionsByPage(prev => {
@@ -696,6 +810,8 @@ export default function SignatureRequestBuilder() {
                                       field={field}
                                       person={person}
                                       onRemove={removeField}
+                                      onPageChange={handlePageChange}
+                                      totalPages={totalPages}
                                     />
                                   );
                                 })}
@@ -848,5 +964,6 @@ export default function SignatureRequestBuilder() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -12,6 +12,7 @@ interface PdfSignatureViewerProps {
   onPageClick?: (pageNumber: number, xPercent: number, yPercent: number) => void;
   renderOverlay?: (pageNumber: number, renderedWidth: number, renderedHeight: number) => React.ReactNode;
   onPageDimensionsChange?: (pageNumber: number, width: number, height: number) => void;
+  onDocumentLoad?: (numPages: number) => void;
   className?: string;
   clickable?: boolean;
 }
@@ -21,6 +22,7 @@ export function PdfSignatureViewer({
   onPageClick,
   renderOverlay,
   onPageDimensionsChange,
+  onDocumentLoad,
   className = "",
   clickable = false,
 }: PdfSignatureViewerProps) {
@@ -34,6 +36,9 @@ export function PdfSignatureViewer({
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
+    if (onDocumentLoad) {
+      onDocumentLoad(numPages);
+    }
   }
 
   function onPageRenderSuccess(page: any) {
