@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Button } from '@/components/ui/button';
 import { Bell } from 'lucide-react';
@@ -6,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import logoPath from '@assets/full_logo_transparent_600_1759655632382.png';
 
 export function PortalPushNotificationPrompt() {
+  const [location] = useLocation();
   const [isDismissed, setIsDismissed] = useState(false);
   const { isSupported, isSubscribed, permission, isLoading, subscribe } = usePushNotifications();
   const { toast } = useToast();
@@ -39,8 +41,11 @@ export function PortalPushNotificationPrompt() {
     }
   };
 
-  // Don't show if not supported, already dismissed, loading, or already subscribed
-  if (!isSupported || isDismissed || isLoading || isSubscribed || permission === 'denied') {
+  // Don't show on signature request builder pages (interferes with PDF interaction)
+  const isSignatureBuilderPage = location.includes('/signature-requests/new');
+  
+  // Don't show if not supported, already dismissed, loading, already subscribed, or on signature builder
+  if (!isSupported || isDismissed || isLoading || isSubscribed || permission === 'denied' || isSignatureBuilderPage) {
     return null;
   }
 

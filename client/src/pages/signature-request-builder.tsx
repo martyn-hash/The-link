@@ -320,7 +320,10 @@ export default function SignatureRequestBuilder() {
 
   // Handle placing field on PDF
   const handlePdfClick = (pageNumber: number, xPercent: number, yPercent: number) => {
+    console.log('[SignatureBuilder] handlePdfClick called', { pageNumber, xPercent, yPercent, selectedRecipientForField, selectedFieldType });
+    
     if (!selectedRecipientForField) {
+      console.log('[SignatureBuilder] No recipient selected');
       toast({
         title: "Select a recipient",
         description: "Please select a recipient before placing signature fields",
@@ -335,6 +338,7 @@ export default function SignatureRequestBuilder() {
     );
 
     if (existingField) {
+      console.log('[SignatureBuilder] Duplicate field detected');
       toast({
         title: "Duplicate field",
         description: `${peopleWithEmails.find(p => p.id === selectedRecipientForField)?.fullName} already has a ${selectedFieldType === "signature" ? "signature" : "typed name"} field. Move the existing field instead.`,
@@ -359,6 +363,7 @@ export default function SignatureRequestBuilder() {
       orderIndex: fields.length,
     };
 
+    console.log('[SignatureBuilder] Adding new field', newField);
     setFields([...fields, newField]);
     setHasUnsavedChanges(true);
     

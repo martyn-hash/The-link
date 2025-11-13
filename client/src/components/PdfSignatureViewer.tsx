@@ -46,28 +46,25 @@ export function PdfSignatureViewer({
     setPageWidth(width);
     setPageHeight(height);
     
-    // Capture the actual rendered dimensions
-    if (pageContainerRef.current) {
-      const canvas = pageContainerRef.current.querySelector('canvas');
-      if (canvas) {
-        const renderedWidth = canvas.clientWidth;
-        const renderedHeight = canvas.clientHeight;
-        
-        setRenderedPageDimensions({
-          width: renderedWidth,
-          height: renderedHeight,
-        });
-        
-        // Notify parent of dimension changes (outside render cycle)
-        if (onPageDimensionsChange) {
-          onPageDimensionsChange(currentPage, renderedWidth, renderedHeight);
-        }
-      }
+    // Use page viewport dimensions directly (more reliable than querySelector)
+    setRenderedPageDimensions({
+      width: width,
+      height: height,
+    });
+    
+    // Notify parent of dimension changes (outside render cycle)
+    if (onPageDimensionsChange) {
+      onPageDimensionsChange(currentPage, width, height);
     }
   }
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!clickable || !onPageClick || !overlayRef.current) return;
+    console.log('[PdfSignatureViewer] Overlay clicked', { clickable, hasOnPageClick: !!onPageClick, hasOverlayRef: !!overlayRef.current });
+    
+    if (!clickable || !onPageClick || !overlayRef.current) {
+      console.log('[PdfSignatureViewer] Click blocked:', { clickable, hasOnPageClick: !!onPageClick, hasOverlayRef: !!overlayRef.current });
+      return;
+    }
 
     const rect = overlayRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -79,6 +76,7 @@ export function PdfSignatureViewer({
     const xPercentRounded = Math.round(xPercent * 100) / 100;
     const yPercentRounded = Math.round(yPercent * 100) / 100;
 
+    console.log('[PdfSignatureViewer] Calling onPageClick', { currentPage, xPercentRounded, yPercentRounded });
     onPageClick(currentPage, xPercentRounded, yPercentRounded);
   };
 
