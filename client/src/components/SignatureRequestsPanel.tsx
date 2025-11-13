@@ -6,6 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Download, Shield, FileSignature } from "lucide-react";
 import { format } from "date-fns";
+import { AuditTrailDialog } from "@/components/AuditTrailDialog";
+import { useState } from "react";
 
 interface SignatureRequestsPanelProps {
   clientId: string;
@@ -13,6 +15,9 @@ interface SignatureRequestsPanelProps {
 
 export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps) {
   const { toast } = useToast();
+  const [auditDialogOpen, setAuditDialogOpen] = useState(false);
+  const [currentAuditTrail, setCurrentAuditTrail] = useState<any[]>([]);
+  const [currentDocumentName, setCurrentDocumentName] = useState("");
 
   const { data: signatureRequests, isLoading } = useQuery<any[]>({
     queryKey: ['/api/signature-requests/client', clientId],
@@ -121,12 +126,9 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
                   onClick={async () => {
                     try {
                       const auditTrail = await fetch(`/api/signature-requests/${request.id}/audit-trail`).then(r => r.json());
-                      // TODO: Show audit trail in a dialog
-                      console.log('Audit trail:', auditTrail);
-                      toast({
-                        title: "Audit Trail",
-                        description: `${auditTrail.length} audit log entries found (see console for details)`,
-                      });
+                      setCurrentAuditTrail(auditTrail);
+                      setCurrentDocumentName(request.documentName || "Untitled Document");
+                      setAuditDialogOpen(true);
                     } catch (error) {
                       toast({
                         title: "Error",
@@ -145,6 +147,13 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
           </div>
         </div>
       ))}
+      
+      <AuditTrailDialog
+        open={auditDialogOpen}
+        onOpenChange={setAuditDialogOpen}
+        auditLogs={currentAuditTrail}
+        documentName={currentDocumentName}
+      />
     </div>
   );
 }

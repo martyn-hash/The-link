@@ -23,6 +23,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import { ObjectStorageService } from "../objectStorage";
 import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/sendgrid";
 import { UAParser } from "ua-parser-js";
+import { generateCertificateOfCompletion } from "../lib/certificateGenerator";
 
 /**
  * Helper function to process PDF with signatures
