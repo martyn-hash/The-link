@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare, FileSignature, Shield } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare, FileSignature, Shield, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,7 +45,6 @@ import { ClientNotificationsView } from "@/components/ClientNotificationsView";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { EmailThreadViewer } from "@/components/EmailThreadViewer";
 import { CommunicationCard } from "@/components/communication-card";
-import { CreateSignatureRequestDialog } from "@/components/CreateSignatureRequestDialog";
 import { SignatureRequestsPanel } from "@/components/SignatureRequestsPanel";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6711,7 +6710,7 @@ function ClientServiceRow({
 
 export default function ClientDetail() {
   const { id } = useParams();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -8642,11 +8641,15 @@ export default function ClientDetail() {
                     <FileText className="w-5 h-5" />
                     Documents
                   </CardTitle>
-                  <CreateSignatureRequestDialog
-                    clientId={id}
-                    documents={clientDocuments || []}
-                    people={relatedPeople?.map((cp: any) => cp.person).filter(Boolean) || []}
-                  />
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => navigate(`/clients/${id}/signature-requests/new`)}
+                    data-testid="button-create-signature-request"
+                  >
+                    <PenLine className="w-4 h-4 mr-2" />
+                    Create Signature Request
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>

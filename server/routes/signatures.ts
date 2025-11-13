@@ -541,6 +541,19 @@ export function registerSignatureRoutes(
 
         // Create signature fields
         if (fields && fields.length > 0) {
+          // Validate no duplicate fields per recipient + field type
+          const fieldCombinations = new Map<string, any>();
+          for (const field of fields) {
+            const key = `${field.recipientPersonId}-${field.fieldType}`;
+            if (fieldCombinations.has(key)) {
+              return res.status(422).json({
+                error: "Duplicate field detected",
+                message: `A ${field.fieldType} field already exists for this recipient. Each recipient can have only one field per type.`
+              });
+            }
+            fieldCombinations.set(key, field);
+          }
+
           await db.insert(signatureFields).values(
             fields.map((field: any, index: number) => ({
               signatureRequestId: request.id,

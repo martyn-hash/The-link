@@ -66,6 +66,7 @@ import InternalTasks from "@/pages/internal-tasks";
 import InternalTaskDetail from "@/pages/internal-task-detail";
 import SignPage from "@/pages/sign";
 import SignatureRequestsPage from "@/pages/signature-requests";
+import SignatureRequestBuilder from "@/pages/signature-request-builder";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 function Router() {
@@ -130,6 +131,7 @@ function Router() {
       </Route>
       <Route path="/clients" component={Clients} />
       <Route path="/clients/:id" component={ClientDetail} />
+      <Route path="/clients/:clientId/signature-requests/new" component={SignatureRequestBuilder} />
       <Route path="/client-service/:id" component={ClientServiceDetail} />
       <Route path="/signature-requests" component={SignatureRequestsPage} />
       <Route path="/people" component={People} />
