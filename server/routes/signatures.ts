@@ -155,7 +155,109 @@ async function processPdfWithSignatures(
         uploadedBy
       );
 
-    // Create signed document record
+    // Get audit trail data for certificate generation
+    // CRITICAL: Only get signature_completed events with valid signedAt timestamps
+    const allAuditLogs = await db
+      .select()
+      .from(signatureAuditLogs);
+    
+    const recipients = await db
+      .select()
+      .from(signatureRequestRecipients)
+      .where(eq(signatureRequestRecipients.signatureRequestId, signatureRequestId));
+    
+    const recipientIds = recipients.map(r => r.id);
+    
+    // Filter to only completed signature events for this request
+    let completedSignatureLogs = allAuditLogs.filter(log => 
+      recipientIds.includes(log.signatureRequestRecipientId) &&
+      log.eventType === "signature_completed" &&
+      log.signedAt !== null
+    );
+
+    // CRITICAL: Deduplicate by recipient (take latest signature per recipient)
+    const latestLogsByRecipient = new Map<string, typeof completedSignatureLogs[0]>();
+    for (const log of completedSignatureLogs) {
+      const existing = latestLogsByRecipient.get(log.signatureRequestRecipientId);
+      if (!existing || log.signedAt! > existing.signedAt!) {
+        latestLogsByRecipient.set(log.signatureRequestRecipientId, log);
+      }
+    }
+    completedSignatureLogs = Array.from(latestLogsByRecipient.values());
+
+    // CRITICAL: Fail early if no signer logs - cannot create valid signed document
+    if (completedSignatureLogs.length === 0) {
+      console.error("[E-Signature] FATAL: No completed signature logs found, cannot process signed document");
+      throw new Error("Cannot process signed document: No signature audit data available");
+    }
+
+    // Get client information
+    const [client] = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.id, clientId));
+
+    // Generate Certificate of Completion PDF
+    let certificatePath: string | null = null;
+    try {
+
+      // CRITICAL: Never fabricate timestamps - only use real data
+      const signerInfos = completedSignatureLogs.map(log => {
+        // Log warning if document hash is missing
+        if (!log.documentHash) {
+          console.warn(`[E-Signature] Document hash missing for signer ${log.signerEmail}, using original document hash`);
+        }
+        
+        return {
+          signerName: log.signerName,
+          signerEmail: log.signerEmail,
+          signedAt: log.signedAt!.toISOString(), // Safe due to filter
+          ipAddress: log.ipAddress,
+          deviceInfo: log.deviceInfo || "Unknown",
+          browserInfo: log.browserInfo || "Unknown",
+          osInfo: log.osInfo || "Unknown",
+          documentHash: log.documentHash || originalDocumentHash,
+          consentText: log.metadata?.consentText || undefined,
+        };
+      });
+
+      // CRITICAL: Use actual completion time (latest signature) not fabricated "now"
+      const actualCompletionTime = new Date(
+        Math.max(...completedSignatureLogs.map(log => log.signedAt!.getTime()))
+      );
+
+      const certificateBytes = await generateCertificateOfCompletion({
+        documentName: document.fileName,
+        clientName: client?.name || "Unknown",
+        completedAt: actualCompletionTime,
+        signers: signerInfos,
+        originalDocumentHash,
+        signedDocumentHash,
+      });
+
+      // Upload certificate PDF
+      const certificateFileName = `${document.fileName.replace('.pdf', '')}_Certificate.pdf`;
+      const { objectPath: certObjectPath } = await objectStorageService.uploadSignedDocument(
+        signatureRequestId,
+        certificateFileName,
+        Buffer.from(certificateBytes),
+        uploadedBy
+      );
+      
+      certificatePath = certObjectPath;
+      console.log(`[E-Signature] Certificate generated and stored: ${certObjectPath}`);
+    } catch (error) {
+      console.error("[E-Signature] Error generating certificate:", error);
+      // Don't fail if certificate generation fails
+    }
+
+    // CRITICAL: Use actual completion time (from audit logs) - no fabrication allowed
+    // We already verified completedSignatureLogs.length > 0 above, so this is always valid
+    const documentCompletionTime = new Date(
+      Math.max(...completedSignatureLogs.map(log => log.signedAt!.getTime()))
+    );
+
+    // Create signed document record with certificate path
     const [signedDoc] = await db
       .insert(signedDocuments)
       .values({
@@ -163,9 +265,10 @@ async function processPdfWithSignatures(
         clientId,
         signedPdfPath: signedObjectPath,
         signedPdfHash: signedDocumentHash,
+        auditTrailPdfPath: certificatePath,
         fileName: signedFileName, // Use the actual filename returned from upload
         fileSize: signedPdfBytes.length,
-        completedAt: new Date(),
+        completedAt: documentCompletionTime,
       })
       .returning();
 
@@ -1157,4 +1260,44 @@ export function registerSignatureRoutes(
       }
     }
   );
+
+  /**
+   * GET /api/signed-documents/:id/certificate
+   * Download certificate of completion (public route - anyone with link can download)
+   */
+  app.get("/api/signed-documents/:id/certificate", async (req: any, res) => {
+    try {
+      const { id } = req.params;
+
+      const [signedDoc] = await db
+        .select()
+        .from(signedDocuments)
+        .where(eq(signedDocuments.id, id));
+
+      if (!signedDoc) {
+        return res.status(404).json({ error: "Signed document not found" });
+      }
+
+      if (!signedDoc.auditTrailPdfPath) {
+        return res.status(404).json({ error: "Certificate not available for this document" });
+      }
+
+      // Download using ObjectStorageService
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(signedDoc.auditTrailPdfPath);
+      
+      // Extract certificate filename from signed document filename
+      const certificateFileName = signedDoc.fileName.replace('.pdf', '_Certificate.pdf');
+      
+      res.setHeader('Content-Disposition', `attachment; filename="${certificateFileName}"`);
+      
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error: any) {
+      console.error("Error downloading certificate:", error);
+      res.status(500).json({ 
+        error: "Failed to download certificate",
+        message: error.message 
+        });
+    }
+  });
 }

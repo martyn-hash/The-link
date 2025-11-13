@@ -147,14 +147,15 @@ export async function sendSignatureRequestEmail(
 }
 
 /**
- * Send completed document email with signed PDF
+ * Send completed document email with signed PDF and certificate
  */
 export async function sendCompletedDocumentEmail(
   recipientEmail: string,
   recipientName: string,
   clientName: string,
   documentName: string,
-  signedPdfUrl: string
+  signedPdfUrl: string,
+  certificateUrl?: string
 ) {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
@@ -204,18 +205,23 @@ export async function sendCompletedDocumentEmail(
               timeZone: 'Europe/London'
             })}</p>
             
-            <p>You can download your signed copy of the document using the button below:</p>
+            <p>You can download your signed copy of the document and certificate of completion using the buttons below:</p>
             
             <div style="text-align: center;">
               <a href="${signedPdfUrl}" class="button">Download Signed Document</a>
+              ${certificateUrl ? `
+                <br/><br/>
+                <a href="${certificateUrl}" class="button" style="background-color: #76CA23;">Download Certificate of Completion</a>
+              ` : ''}
             </div>
             
-            <p><strong>Important:</strong></p>
+            <p><strong>What You're Receiving:</strong></p>
             <ul>
-              <li>This document includes all required signatures</li>
-              <li>A complete audit trail has been recorded</li>
-              <li>This signed document is legally binding</li>
-              <li>Please save this document for your records</li>
+              <li><strong>Signed Document:</strong> The original document with all signatures applied</li>
+              ${certificateUrl ? '<li><strong>Certificate of Completion:</strong> A detailed audit trail showing who signed, when, and from where</li>' : ''}
+              <li>Both documents are legally binding and verifiable</li>
+              <li>The certificate provides cryptographic proof of document integrity</li>
+              <li>Please save both documents for your records</li>
             </ul>
             
             <p>If you have any questions, please contact ${clientName}.</p>
