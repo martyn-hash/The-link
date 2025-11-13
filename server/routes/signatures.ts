@@ -79,11 +79,12 @@ async function processPdfWithSignatures(
 
     // Overlay each signature onto the PDF
     for (const { signature, field } of allSignatures) {
-      const pageIndex = field.pageNumber;
+      // Convert from 1-indexed page number (from frontend) to 0-indexed array (pdf-lib)
+      const pageIndex = field.pageNumber - 1;
       const page = pages[pageIndex];
       
       if (!page) {
-        console.warn(`Page ${pageIndex} not found for field ${field.id}`);
+        console.warn(`Page ${field.pageNumber} (index ${pageIndex}) not found for field ${field.id}`);
         continue;
       }
 

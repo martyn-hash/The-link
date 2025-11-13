@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { FileText, Upload, MousePointer, Send, UserPlus, Trash2, PenTool, Type } from "lucide-react";
 import type { Document as DocumentType, Person } from "@shared/schema";
+import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 
 interface CreateSignatureRequestDialogProps {
   clientId: string;
@@ -61,7 +62,7 @@ export function CreateSignatureRequestDialog({
   const [selectedFieldType, setSelectedFieldType] = useState<"signature" | "typed_name">("signature");
   const [selectedRecipientForField, setSelectedRecipientForField] = useState<string>("");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   
   // Step 3: Recipients and message
   const [recipients, setRecipients] = useState<Recipient[]>([]);
@@ -86,24 +87,13 @@ export function CreateSignatureRequestDialog({
         setSelectedDocument(doc);
         // Set preview URL - assuming object storage serves files at /objects/{path}
         setPdfPreviewUrl(`/objects${doc.objectPath}`);
+        setCurrentPage(1); // Reset to page 1 when document changes
       }
     }
   }, [selectedDocumentId, pdfDocuments]);
 
-  // Set canvas dimensions for proper click detection
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas && pdfPreviewUrl) {
-      const parent = canvas.parentElement;
-      if (parent) {
-        canvas.width = parent.clientWidth;
-        canvas.height = parent.clientHeight;
-      }
-    }
-  }, [pdfPreviewUrl]);
-
   // Handle adding a field by clicking on the PDF preview
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePdfClick = (pageNumber: number, xPercent: number, yPercent: number) => {
     if (!selectedRecipientForField) {
       toast({
         title: "Select a recipient",
@@ -113,37 +103,19 @@ export function CreateSignatureRequestDialog({
       return;
     }
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Default field dimensions in pixels
-    const widthPx = selectedFieldType === "signature" ? 200 : 150;
-    const heightPx = selectedFieldType === "signature" ? 60 : 40;
-
-    // CRITICAL FIX: Convert pixel coordinates to percentages (0-100)
-    // Backend expects percentages, not raw pixels
-    // Use precise decimal values and clamp to valid range [0, 100]
-    const canvasWidth = rect.width;
-    const canvasHeight = rect.height;
-    
-    const xPercent = Math.min(Math.max((x / canvasWidth) * 100, 0), 100);
-    const yPercent = Math.min(Math.max((y / canvasHeight) * 100, 0), 100);
-    const widthPercent = Math.min(Math.max((widthPx / canvasWidth) * 100, 0), 100);
-    const heightPercent = Math.min(Math.max((heightPx / canvasHeight) * 100, 0), 100);
+    // Default field dimensions as percentage
+    const widthPercent = selectedFieldType === "signature" ? 20 : 15;
+    const heightPercent = selectedFieldType === "signature" ? 5 : 3;
 
     const newField: SignatureField = {
       id: `field-${Date.now()}`,
       recipientPersonId: selectedRecipientForField,
       fieldType: selectedFieldType,
-      pageNumber: 0, // LIMITATION: Currently only supports single-page PDFs
-      xPosition: Math.round(xPercent * 100) / 100, // Round to 2 decimal places
-      yPosition: Math.round(yPercent * 100) / 100,
-      width: Math.round(widthPercent * 100) / 100,
-      height: Math.round(heightPercent * 100) / 100,
+      pageNumber: pageNumber, // Track the actual page number (1-indexed)
+      xPosition: xPercent,
+      yPosition: yPercent,
+      width: widthPercent,
+      height: heightPercent,
       label: selectedFieldType === "signature" ? "Sign here" : "Type your name",
       orderIndex: fields.length,
     };
@@ -152,7 +124,7 @@ export function CreateSignatureRequestDialog({
     
     toast({
       title: "Field added",
-      description: `${selectedFieldType === "signature" ? "Signature" : "Name"} field placed`,
+      description: `${selectedFieldType === "signature" ? "Signature" : "Name"} field placed on page ${pageNumber}`,
     });
   };
 
@@ -472,7 +444,7 @@ export function CreateSignatureRequestDialog({
                                     {field.fieldType === "signature" ? "Signature" : "Typed Name"}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    {person?.fullName}
+                                    {person?.fullName} · Page {field.pageNumber}
                                   </p>
                                 </div>
                               </div>
@@ -498,39 +470,46 @@ export function CreateSignatureRequestDialog({
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm">PDF Preview</CardTitle>
-                    <CardDescription>Click to place signature fields</CardDescription>
+                    <CardDescription>Click to place signature fields (navigate pages using buttons below)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="relative border rounded bg-muted/20">
-                      {pdfPreviewUrl ? (
-                        <div className="relative">
-                          {/* Simplified preview - just show document info */}
-                          {/* In production, you'd use a proper PDF viewer like react-pdf */}
-                          <div className="aspect-[8.5/11] flex items-center justify-center bg-white">
-                            <div className="text-center p-8">
-                              <FileText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                              <p className="text-sm text-muted-foreground mb-2">
-                                Click to place {selectedFieldType === "signature" ? "signature" : "name"} fields
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Selected: {selectedDocument?.fileName}
-                              </p>
-                            </div>
-                          </div>
-                          {/* Overlay canvas for click handling */}
-                          <canvas
-                            ref={canvasRef}
-                            onClick={handleCanvasClick}
-                            className="absolute inset-0 w-full h-full cursor-crosshair"
-                            data-testid="canvas-pdf-preview"
-                          />
-                        </div>
-                      ) : (
-                        <div className="aspect-[8.5/11] flex items-center justify-center">
-                          <p className="text-sm text-muted-foreground">No document selected</p>
-                        </div>
-                      )}
-                    </div>
+                    {pdfPreviewUrl ? (
+                      <PdfSignatureViewer
+                        pdfUrl={pdfPreviewUrl}
+                        onPageClick={handlePdfClick}
+                        clickable={true}
+                        renderOverlay={(pageNumber, pageWidth, pageHeight) => (
+                          <>
+                            {fields
+                              .filter(f => f.pageNumber === pageNumber)
+                              .map(field => {
+                                const person = peopleWithEmails.find(p => p.id === field.recipientPersonId);
+                                return (
+                                  <div
+                                    key={field.id}
+                                    className="absolute border-2 border-primary bg-primary/10 pointer-events-none"
+                                    style={{
+                                      left: `${field.xPosition}%`,
+                                      top: `${field.yPosition}%`,
+                                      width: `${field.width}%`,
+                                      height: `${field.height}%`,
+                                    }}
+                                    data-testid={`field-overlay-${field.id}`}
+                                  >
+                                    <div className="text-xs font-medium text-primary p-1 truncate">
+                                      {field.fieldType === "signature" ? "✍️" : "✏️"} {person?.fullName}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </>
+                        )}
+                      />
+                    ) : (
+                      <div className="aspect-[8.5/11] flex items-center justify-center border rounded bg-muted/20">
+                        <p className="text-sm text-muted-foreground">No document selected</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
