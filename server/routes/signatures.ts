@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { db } from "../db";
+import { storage } from "../storage";
 import { 
   signatureRequests, 
   signatureFields, 
@@ -486,6 +487,40 @@ export function registerSignatureRoutes(
         console.error("Error fetching signature request:", error);
         res.status(500).json({ 
           error: "Failed to fetch signature request",
+          message: error.message 
+        });
+      }
+    }
+  );
+
+  /**
+   * GET /api/documents/:id/view-url
+   * Get a signed URL for viewing a document (for signature request builder)
+   */
+  app.get(
+    "/api/documents/:id/view-url",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+
+        const [document] = await db
+          .select()
+          .from(documents)
+          .where(eq(documents.id, id));
+
+        if (!document) {
+          return res.status(404).json({ error: "Document not found" });
+        }
+
+        // Generate signed URL for viewing
+        const signedUrl = await storage.getSignedUrl(document.objectPath);
+
+        res.json({ url: signedUrl });
+      } catch (error: any) {
+        console.error("Error generating view URL:", error);
+        res.status(500).json({ 
+          error: "Failed to generate view URL",
           message: error.message 
         });
       }

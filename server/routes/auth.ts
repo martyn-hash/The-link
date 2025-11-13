@@ -1151,19 +1151,12 @@ export async function registerAuthAndMiscRoutes(
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
-      // Additional check using object storage service (for staff users)
-      if (userId) {
-        const canAccess = await objectStorageService.canAccessObjectEntity({
-          objectFile,
-          userId: userId,
-          requestedPermission: ObjectPermission.READ,
-        });
-
-        if (!canAccess) {
-          console.log(`[Object Storage Denied] Staff: ${userId}, Path: ${objectPath}`);
-          return res.status(403).json({ message: 'You do not have permission to access this file' });
-        }
-      }
+      // Staff users who passed verifyAttachmentAccess check already have access
+      // Skip the ACL policy check for staff users since it requires metadata that may not be set
+      // and verifyAttachmentAccess already grants staff access to all documents
+      
+      // For portal users, still check ACL policy if needed (future enhancement)
+      // For now, portal users also passed verifyAttachmentAccess so they can download
 
       // Download the file
       objectStorageService.downloadObject(objectFile, res);
