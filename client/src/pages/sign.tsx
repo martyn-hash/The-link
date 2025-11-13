@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest } from "@/lib/queryClient";
 import { FileText, Check, AlertCircle, PenTool, Type, Send, Shield } from "lucide-react";
+import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 
 export default function SignPage() {
   const [location, navigate] = useLocation();
@@ -402,6 +403,51 @@ export default function SignPage() {
                     </Badge>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* PDF Preview with Field Indicators */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Document Preview</CardTitle>
+                <CardDescription>Review the document and see where you need to sign</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PdfSignatureViewer
+                  pdfUrl={`/objects${signData.document.objectPath}`}
+                  clickable={false}
+                  renderOverlay={(pageNumber, pageWidth, pageHeight) => (
+                    <>
+                      {signData.fields
+                        .filter((f: any) => f.pageNumber === pageNumber)
+                        .map((field: any) => {
+                          const isSigned = fieldSignatures.has(field.id);
+                          return (
+                            <div
+                              key={field.id}
+                              className={`absolute border-2 pointer-events-none ${
+                                isSigned
+                                  ? "border-green-500 bg-green-100/30"
+                                  : "border-yellow-500 bg-yellow-100/30"
+                              }`}
+                              style={{
+                                left: `${field.xPosition}%`,
+                                top: `${field.yPosition}%`,
+                                width: `${field.width}%`,
+                                height: `${field.height}%`,
+                              }}
+                            >
+                              <div className={`text-xs font-medium p-1 truncate ${
+                                isSigned ? "text-green-700" : "text-yellow-700"
+                              }`}>
+                                {isSigned ? "✓ Signed" : "⚠ Sign here"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </>
+                  )}
+                />
               </CardContent>
             </Card>
 

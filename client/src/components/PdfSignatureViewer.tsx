@@ -10,7 +10,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 interface PdfSignatureViewerProps {
   pdfUrl: string;
   onPageClick?: (pageNumber: number, xPercent: number, yPercent: number) => void;
-  renderOverlay?: (pageNumber: number, pageWidth: number, pageHeight: number) => React.ReactNode;
+  renderOverlay?: (pageNumber: number, renderedWidth: number, renderedHeight: number) => React.ReactNode;
   className?: string;
   clickable?: boolean;
 }
@@ -26,16 +26,29 @@ export function PdfSignatureViewer({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageWidth, setPageWidth] = useState<number>(0);
   const [pageHeight, setPageHeight] = useState<number>(0);
+  const [renderedPageDimensions, setRenderedPageDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const overlayRef = useRef<HTMLDivElement>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
   }
 
-  function onPageLoadSuccess(page: any) {
+  function onPageRenderSuccess(page: any) {
     const { width, height } = page;
     setPageWidth(width);
     setPageHeight(height);
+    
+    // Capture the actual rendered dimensions
+    if (pageContainerRef.current) {
+      const canvas = pageContainerRef.current.querySelector('canvas');
+      if (canvas) {
+        setRenderedPageDimensions({
+          width: canvas.clientWidth,
+          height: canvas.clientHeight,
+        });
+      }
+    }
   }
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -64,29 +77,29 @@ export function PdfSignatureViewer({
 
   return (
     <div className={`flex flex-col ${className}`}>
-      <div className="relative border border-border rounded-lg overflow-hidden bg-white">
+      <div ref={pageContainerRef} className="relative border border-border rounded-lg overflow-hidden bg-white inline-block">
         <Document
           file={pdfUrl}
           onLoadSuccess={onDocumentLoadSuccess}
-          className="flex items-center justify-center"
         >
-          <Page
-            pageNumber={currentPage}
-            onRenderSuccess={onPageLoadSuccess}
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
-            className="max-w-full"
-          />
+          <div className="relative inline-block">
+            <Page
+              pageNumber={currentPage}
+              onRenderSuccess={onPageRenderSuccess}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              className="max-w-full"
+            />
+            <div
+              ref={overlayRef}
+              onClick={handleOverlayClick}
+              className={`absolute inset-0 ${clickable ? "cursor-crosshair" : ""}`}
+              data-testid="pdf-overlay"
+            >
+              {renderOverlay && renderedPageDimensions.width > 0 && renderOverlay(currentPage, renderedPageDimensions.width, renderedPageDimensions.height)}
+            </div>
+          </div>
         </Document>
-
-        <div
-          ref={overlayRef}
-          onClick={handleOverlayClick}
-          className={`absolute inset-0 ${clickable ? "cursor-crosshair" : ""}`}
-          data-testid="pdf-overlay"
-        >
-          {renderOverlay && renderOverlay(currentPage, pageWidth, pageHeight)}
-        </div>
       </div>
 
       {numPages > 1 && (

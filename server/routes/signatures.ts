@@ -100,11 +100,15 @@ async function processPdfWithSignatures(
           const image = await pdfDoc.embedPng(imageBytes);
           const imageDims = image.scale(0.5); // Scale down the signature
           
-          // Convert field coordinates (which are in percentage) to PDF coordinates
+          // Convert field coordinates from percentage to PDF coordinates
+          // Frontend stores top-left corner as percentage; PDF uses bottom-left origin
+          // Y conversion: pageHeight - (topY% * pageHeight) - (height% * pageHeight)
           const x = (field.xPosition / 100) * pageWidth;
-          const y = pageHeight - ((field.yPosition / 100) * pageHeight) - (field.height / 100) * pageHeight;
+          const topYInPdfCoords = (field.yPosition / 100) * pageHeight; // Distance from top
+          const fieldHeightInPdfCoords = (field.height / 100) * pageHeight;
+          const y = pageHeight - topYInPdfCoords - fieldHeightInPdfCoords; // Bottom-left corner
           const width = (field.width / 100) * pageWidth;
-          const height = (field.height / 100) * pageHeight;
+          const height = fieldHeightInPdfCoords;
 
           page.drawImage(image, {
             x,
@@ -117,12 +121,15 @@ async function processPdfWithSignatures(
         }
       } else if (signature.signatureType === "typed") {
         // For typed signatures, draw text
+        // Convert from top-left percentage to PDF bottom-left coordinates
         const x = (field.xPosition / 100) * pageWidth;
-        const y = pageHeight - ((field.yPosition / 100) * pageHeight) - (field.height / 100) * pageHeight;
+        const topYInPdfCoords = (field.yPosition / 100) * pageHeight;
+        const fieldHeightInPdfCoords = (field.height / 100) * pageHeight;
+        const y = pageHeight - topYInPdfCoords - fieldHeightInPdfCoords;
 
         page.drawText(signature.signatureData, {
           x,
-          y: y + 10, // Adjust for baseline
+          y: y + 10, // Adjust for text baseline
           size: 16,
           color: rgb(0, 0, 0),
         });
