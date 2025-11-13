@@ -59,10 +59,7 @@ export function PdfSignatureViewer({
   }
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    console.log('[PdfSignatureViewer] Overlay clicked', { clickable, hasOnPageClick: !!onPageClick, hasOverlayRef: !!overlayRef.current });
-    
     if (!clickable || !onPageClick || !overlayRef.current) {
-      console.log('[PdfSignatureViewer] Click blocked:', { clickable, hasOnPageClick: !!onPageClick, hasOverlayRef: !!overlayRef.current });
       return;
     }
 
@@ -76,7 +73,6 @@ export function PdfSignatureViewer({
     const xPercentRounded = Math.round(xPercent * 100) / 100;
     const yPercentRounded = Math.round(yPercent * 100) / 100;
 
-    console.log('[PdfSignatureViewer] Calling onPageClick', { currentPage, xPercentRounded, yPercentRounded });
     onPageClick(currentPage, xPercentRounded, yPercentRounded);
   };
 
