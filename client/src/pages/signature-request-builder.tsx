@@ -671,17 +671,19 @@ export default function SignatureRequestBuilder() {
                         pdfUrl={pdfPreviewUrl}
                         onPageClick={handlePdfClick}
                         clickable={true}
-                        renderOverlay={(pageNumber, renderedWidth, renderedHeight) => {
-                          // Update dimensions for this specific page when they change
-                          const currentDims = pdfDimensionsByPage.get(pageNumber);
-                          if (!currentDims || currentDims.width !== renderedWidth || currentDims.height !== renderedHeight) {
-                            setPdfDimensionsByPage(prev => {
+                        onPageDimensionsChange={(pageNumber, width, height) => {
+                          // Update dimensions for this specific page (outside render cycle)
+                          setPdfDimensionsByPage(prev => {
+                            const currentDims = prev.get(pageNumber);
+                            if (!currentDims || currentDims.width !== width || currentDims.height !== height) {
                               const next = new Map(prev);
-                              next.set(pageNumber, { width: renderedWidth, height: renderedHeight });
+                              next.set(pageNumber, { width, height });
                               return next;
-                            });
-                          }
-                          
+                            }
+                            return prev;
+                          });
+                        }}
+                        renderOverlay={(pageNumber, renderedWidth, renderedHeight) => {
                           return (
                             <div className="absolute inset-0">
                               {fields

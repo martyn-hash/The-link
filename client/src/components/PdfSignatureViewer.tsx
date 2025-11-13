@@ -11,6 +11,7 @@ interface PdfSignatureViewerProps {
   pdfUrl: string;
   onPageClick?: (pageNumber: number, xPercent: number, yPercent: number) => void;
   renderOverlay?: (pageNumber: number, renderedWidth: number, renderedHeight: number) => React.ReactNode;
+  onPageDimensionsChange?: (pageNumber: number, width: number, height: number) => void;
   className?: string;
   clickable?: boolean;
 }
@@ -19,6 +20,7 @@ export function PdfSignatureViewer({
   pdfUrl,
   onPageClick,
   renderOverlay,
+  onPageDimensionsChange,
   className = "",
   clickable = false,
 }: PdfSignatureViewerProps) {
@@ -43,10 +45,18 @@ export function PdfSignatureViewer({
     if (pageContainerRef.current) {
       const canvas = pageContainerRef.current.querySelector('canvas');
       if (canvas) {
+        const renderedWidth = canvas.clientWidth;
+        const renderedHeight = canvas.clientHeight;
+        
         setRenderedPageDimensions({
-          width: canvas.clientWidth,
-          height: canvas.clientHeight,
+          width: renderedWidth,
+          height: renderedHeight,
         });
+        
+        // Notify parent of dimension changes (outside render cycle)
+        if (onPageDimensionsChange) {
+          onPageDimensionsChange(currentPage, renderedWidth, renderedHeight);
+        }
       }
     }
   }
