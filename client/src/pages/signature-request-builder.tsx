@@ -83,38 +83,45 @@ function DraggableField({ field, person, onRemove, onPageChange, totalPages }: {
     <div
       ref={setNodeRef}
       style={style}
-      className="border-2 border-blue-500 bg-blue-100/50 rounded flex items-center justify-between px-2 text-xs font-medium group hover:bg-blue-200/50"
+      className="border-2 border-blue-500 bg-blue-100/50 rounded flex items-center justify-between px-2 py-1 text-xs font-medium group hover:bg-blue-200/50"
       data-testid={`draggable-field-${field.id}`}
     >
-      <div {...listeners} {...attributes} className="flex items-center gap-1 flex-1 cursor-move min-w-0">
-        <GripVertical className="h-3 w-3 text-blue-600 flex-shrink-0" />
+      <div {...listeners} {...attributes} className="flex items-center gap-2 flex-1 cursor-move min-w-0">
+        <GripVertical className="h-5 w-5 text-blue-600 flex-shrink-0" />
         <span className="truncate">
           {person?.fullName}: {field.fieldType === "signature" ? "Sign" : "Name"}
         </span>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
+      <div className="flex items-center gap-1 flex-shrink-0">
         {totalPages > 1 && (
-          <select
-            value={field.pageNumber}
-            onChange={(e) => onPageChange(field.id, parseInt(e.target.value))}
-            className="h-5 text-xs border rounded px-1 bg-white"
-            onClick={(e) => e.stopPropagation()}
-            data-testid={`select-page-field-${field.id}`}
-          >
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <option key={page} value={page}>P{page}</option>
-            ))}
-          </select>
+          <span className="text-xs text-blue-700 bg-blue-200 px-1 rounded group-hover:hidden">
+            P{field.pageNumber}
+          </span>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-5 w-5 p-0"
-          onClick={() => onRemove(field.id)}
-          data-testid={`button-remove-field-${field.id}`}
-        >
-          <X className="h-3 w-3" />
-        </Button>
+        <div className="hidden group-hover:flex items-center gap-1">
+          {totalPages > 1 && (
+            <select
+              value={field.pageNumber}
+              onChange={(e) => onPageChange(field.id, parseInt(e.target.value))}
+              className="h-6 text-xs border rounded px-1 bg-white"
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`select-page-field-${field.id}`}
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <option key={page} value={page}>P{page}</option>
+              ))}
+            </select>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => onRemove(field.id)}
+            data-testid={`button-remove-field-${field.id}`}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -127,7 +134,7 @@ export default function SignatureRequestBuilder() {
   const queryClient = useQueryClient();
 
   // Wizard state
-  const [currentStep, setCurrentStep] = useState<"document" | "fields" | "recipients" | "send">("document");
+  const [currentStep, setCurrentStep] = useState<"document" | "fields" | "send">("document");
   
   // Step 1: Document selection and upload
   const [documentMode, setDocumentMode] = useState<"upload" | "select">("upload");
@@ -158,8 +165,7 @@ export default function SignatureRequestBuilder() {
     })
   );
   
-  // Step 3: Recipients and message
-  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  // Step 3: Email customization
   const [emailSubject, setEmailSubject] = useState("Document Signature Request");
   const [emailMessage, setEmailMessage] = useState("Please review and sign the attached document.");
 
@@ -221,6 +227,19 @@ export default function SignatureRequestBuilder() {
   const peopleWithEmails = clientPeople
     .map((cp: any) => cp.person)
     .filter((person: Person) => person && (person.email || person.primaryEmail));
+
+  // Auto-derive recipients from placed fields (after peopleWithEmails is declared)
+  const recipients: Recipient[] = Array.from(
+    new Set(fields.map(f => f.recipientPersonId))
+  ).map((personId, index) => {
+    const person = peopleWithEmails.find(p => p.id === personId);
+    return {
+      personId,
+      email: person?.email || person?.primaryEmail || '',
+      name: person?.fullName || '',
+      orderIndex: index
+    };
+  });
 
   // Filter for PDF documents
   const propPdfDocuments = documents.filter(doc => 
@@ -429,36 +448,6 @@ export default function SignatureRequestBuilder() {
     });
   };
 
-  // Add recipient
-  const addRecipient = (personId: string) => {
-    const person = peopleWithEmails.find(p => p.id === personId);
-    if (!person) return;
-
-    if (recipients.find(r => r.personId === personId)) {
-      toast({
-        title: "Recipient already added",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newRecipient: Recipient = {
-      personId: person.id,
-      email: person.email || person.primaryEmail || "",
-      name: person.fullName,
-      orderIndex: recipients.length,
-    };
-
-    setRecipients([...recipients, newRecipient]);
-    setHasUnsavedChanges(true);
-  };
-
-  // Remove recipient
-  const removeRecipient = (personId: string) => {
-    setRecipients(recipients.filter(r => r.personId !== personId));
-    setFields(fields.filter(f => f.recipientPersonId !== personId));
-    setHasUnsavedChanges(true);
-  };
 
   // Send signature request
   const sendMutation = useMutation({
@@ -506,8 +495,7 @@ export default function SignatureRequestBuilder() {
 
   // Navigation guards
   const canProceedToFields = selectedDocumentId && selectedDocument !== null;
-  const canProceedToRecipients = canProceedToFields && fields.length > 0;
-  const canSend = canProceedToRecipients && recipients.length > 0 && emailSubject && emailMessage;
+  const canSend = canProceedToFields && fields.length > 0 && recipients.length > 0 && emailSubject && emailMessage;
 
   // Handle navigation away
   const handleBack = () => {
@@ -589,17 +577,6 @@ export default function SignatureRequestBuilder() {
                   {fields.length > 0 && <Badge variant="secondary" className="ml-auto">{fields.length}</Badge>}
                 </Button>
                 <Button
-                  variant={currentStep === "recipients" ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => canProceedToRecipients && setCurrentStep("recipients")}
-                  disabled={!canProceedToRecipients}
-                  data-testid="step-recipients"
-                >
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  3. Add Recipients
-                  {recipients.length > 0 && <Badge variant="secondary" className="ml-auto">{recipients.length}</Badge>}
-                </Button>
-                <Button
                   variant={currentStep === "send" ? "default" : "ghost"}
                   className="w-full justify-start"
                   onClick={() => canSend && setCurrentStep("send")}
@@ -607,7 +584,8 @@ export default function SignatureRequestBuilder() {
                   data-testid="step-send"
                 >
                   <Send className="h-4 w-4 mr-2" />
-                  4. Send
+                  3. Review & Send
+                  {recipients.length > 0 && <Badge variant="secondary" className="ml-auto">{recipients.length} recipients</Badge>}
                 </Button>
               </CardContent>
             </Card>
@@ -828,77 +806,15 @@ export default function SignatureRequestBuilder() {
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Back
                   </Button>
-                  <Button onClick={() => setCurrentStep("recipients")} disabled={fields.length === 0} data-testid="button-next-to-recipients">
-                    Next: Add Recipients
+                  <Button onClick={() => setCurrentStep("send")} disabled={fields.length === 0} data-testid="button-next-to-send">
+                    Next: Review & Send
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Recipients */}
-            {currentStep === "recipients" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Add Recipients</CardTitle>
-                  <CardDescription>Select people who need to sign the document</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Add Recipient</Label>
-                    <Select onValueChange={addRecipient}>
-                      <SelectTrigger data-testid="select-add-recipient">
-                        <SelectValue placeholder="Select a person to add" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {peopleWithEmails
-                          .filter(p => !recipients.find(r => r.personId === p.id))
-                          .map((person) => (
-                            <SelectItem key={person.id} value={person.id}>
-                              {person.fullName} ({person.email || person.primaryEmail})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {recipients.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>Recipients ({recipients.length})</Label>
-                      {recipients.map((recipient) => (
-                        <div key={recipient.personId} className="flex items-center justify-between p-3 border rounded">
-                          <div>
-                            <p className="font-medium">{recipient.name}</p>
-                            <p className="text-sm text-muted-foreground">{recipient.email}</p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeRecipient(recipient.personId)}
-                            data-testid={`button-remove-recipient-${recipient.personId}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex justify-between mt-6">
-                    <Button variant="outline" onClick={() => setCurrentStep("fields")}>
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Back
-                    </Button>
-                    <Button onClick={() => setCurrentStep("send")} disabled={recipients.length === 0} data-testid="button-next-to-send">
-                      Next: Send
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 4: Send */}
+            {/* Step 3: Review & Send */}
             {currentStep === "send" && (
               <Card>
                 <CardHeader>
@@ -935,7 +851,7 @@ export default function SignatureRequestBuilder() {
                   </Alert>
 
                   <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setCurrentStep("recipients")}>
+                    <Button variant="outline" onClick={() => setCurrentStep("fields")}>
                       <ArrowLeft className="h-4 w-4 mr-2" />
                       Back
                     </Button>
