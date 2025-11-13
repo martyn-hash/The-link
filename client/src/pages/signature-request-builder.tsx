@@ -108,7 +108,7 @@ export default function SignatureRequestBuilder() {
   
   // Drag-and-drop state
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
-  const [pdfDimensions, setPdfDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [pdfDimensionsByPage, setPdfDimensionsByPage] = useState<Map<number, { width: number; height: number }>>(new Map());
   
   // Setup drag sensors
   const sensors = useSensors(
@@ -306,11 +306,13 @@ export default function SignatureRequestBuilder() {
     setFields(prev => prev.map(field => {
       if (field.id !== fieldId) return field;
       
-      // Convert pixel delta to percentage delta using stored PDF dimensions
-      if (pdfDimensions.width === 0 || pdfDimensions.height === 0) return field;
+      // Get dimensions for the specific page this field is on
+      const pageDimensions = pdfDimensionsByPage.get(field.pageNumber);
+      if (!pageDimensions || pageDimensions.width === 0 || pageDimensions.height === 0) return field;
       
-      const deltaXPercent = (delta.x / pdfDimensions.width) * 100;
-      const deltaYPercent = (delta.y / pdfDimensions.height) * 100;
+      // Convert pixel delta to percentage delta using the correct page's dimensions
+      const deltaXPercent = (delta.x / pageDimensions.width) * 100;
+      const deltaYPercent = (delta.y / pageDimensions.height) * 100;
       
       // Calculate new position and clamp to 0-100%
       const newX = Math.min(Math.max(field.xPosition + deltaXPercent, 0), 100 - field.width);
@@ -664,18 +666,23 @@ export default function SignatureRequestBuilder() {
                 {/* PDF Preview - Scrollable full height */}
                 <Card className="h-[600px]">
                   <CardContent className="p-4 h-full overflow-auto">
-                    <PdfSignatureViewer
-                      pdfUrl={pdfPreviewUrl}
-                      onPageClick={handlePdfClick}
-                      clickable={true}
-                      renderOverlay={(pageNumber, renderedWidth, renderedHeight) => {
-                        // Safely update PDF dimensions only when they change
-                        if (renderedWidth !== pdfDimensions.width || renderedHeight !== pdfDimensions.height) {
-                          setPdfDimensions({ width: renderedWidth, height: renderedHeight });
-                        }
-                        
-                        return (
-                          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                      <PdfSignatureViewer
+                        pdfUrl={pdfPreviewUrl}
+                        onPageClick={handlePdfClick}
+                        clickable={true}
+                        renderOverlay={(pageNumber, renderedWidth, renderedHeight) => {
+                          // Update dimensions for this specific page when they change
+                          const currentDims = pdfDimensionsByPage.get(pageNumber);
+                          if (!currentDims || currentDims.width !== renderedWidth || currentDims.height !== renderedHeight) {
+                            setPdfDimensionsByPage(prev => {
+                              const next = new Map(prev);
+                              next.set(pageNumber, { width: renderedWidth, height: renderedHeight });
+                              return next;
+                            });
+                          }
+                          
+                          return (
                             <div className="absolute inset-0">
                               {fields
                                 .filter(f => f.pageNumber === pageNumber)
@@ -691,10 +698,10 @@ export default function SignatureRequestBuilder() {
                                   );
                                 })}
                             </div>
-                          </DndContext>
-                        );
-                      }}
-                    />
+                          );
+                        }}
+                      />
+                    </DndContext>
                   </CardContent>
                 </Card>
 
