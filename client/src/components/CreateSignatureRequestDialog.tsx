@@ -11,9 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { FileText, Upload, MousePointer, Send, UserPlus, Trash2, PenTool, Type } from "lucide-react";
+import { FileText, Upload, MousePointer, Send, UserPlus, Trash2, PenTool, Type, Loader2 } from "lucide-react";
 import type { Document as DocumentType, Person } from "@shared/schema";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
+import { FileUploadZone } from "@/components/attachments/FileUploadZone";
 
 interface CreateSignatureRequestDialogProps {
   clientId: string;
@@ -53,9 +54,13 @@ export function CreateSignatureRequestDialog({
   const [open, setOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState("document");
   
-  // Step 1: Document selection
+  // Step 1: Document selection and upload
+  const [documentMode, setDocumentMode] = useState<"upload" | "select">("upload");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [selectedDocument, setSelectedDocument] = useState<DocumentType | null>(null);
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [localUploadedDocs, setLocalUploadedDocs] = useState<DocumentType[]>([]); // Track locally uploaded docs
   
   // Step 2: Field placement
   const [fields, setFields] = useState<SignatureField[]>([]);
@@ -69,10 +74,93 @@ export function CreateSignatureRequestDialog({
   const [emailSubject, setEmailSubject] = useState("Document Signature Request");
   const [emailMessage, setEmailMessage] = useState("Please review and sign the attached document.");
 
-  // Filter for PDF documents only
-  const pdfDocuments = documents.filter(doc => 
+  // PDF upload handler
+  const handlePdfUpload = async (files: File[]) => {
+    const file = files[0];
+    if (!file) return;
+
+    // Validate PDF
+    if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select a PDF file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingFile(file);
+    setIsUploading(true);
+
+    try {
+      // Step 1: Get upload URL
+      const uploadUrlResponse = await apiRequest('POST', '/api/objects/upload', {});
+      const { uploadURL, objectPath } = uploadUrlResponse as any;
+
+      // Step 2: Upload to object storage
+      await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      // Step 3: Save document metadata
+      const document = await apiRequest('POST', `/api/clients/${clientId}/documents`, {
+        folderId: null,
+        uploadName: 'Signature Request',
+        source: 'signature_request',
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        objectPath,
+      });
+
+      // Step 4: Immediately set document and preview URL for instant usability
+      const typedDocument = document as DocumentType;
+      setSelectedDocumentId(typedDocument.id);
+      setSelectedDocument(typedDocument);
+      
+      // Add to local uploaded docs so dropdown shows it immediately
+      setLocalUploadedDocs(prev => [...prev, typedDocument]);
+      
+      // Normalize path to avoid duplication
+      const normalizedPath = objectPath.startsWith('/objects') 
+        ? objectPath 
+        : `/objects${objectPath}`;
+      setPdfPreviewUrl(normalizedPath);
+      
+      setDocumentMode("select"); // Switch to select mode to show the selected document
+      
+      // Invalidate queries to refresh document list
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'documents'] });
+
+      toast({
+        title: "PDF uploaded",
+        description: "Document uploaded successfully. You can now place signature fields.",
+      });
+    } catch (error) {
+      console.error('Error uploading PDF:', error);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      setUploadingFile(null);
+    }
+  };
+
+  // Filter for PDF documents only - combine prop documents with locally uploaded ones
+  const propPdfDocuments = documents.filter(doc => 
     doc.fileType.toLowerCase().includes('pdf')
   );
+  const pdfDocuments = [
+    ...propPdfDocuments,
+    ...localUploadedDocs.filter(doc => !propPdfDocuments.some(pd => pd.id === doc.id))
+  ];
 
   // Filter people with emails
   const peopleWithEmails = people.filter(person => 
@@ -85,8 +173,11 @@ export function CreateSignatureRequestDialog({
       const doc = pdfDocuments.find(d => d.id === selectedDocumentId);
       if (doc) {
         setSelectedDocument(doc);
-        // Set preview URL - assuming object storage serves files at /objects/{path}
-        setPdfPreviewUrl(`/objects${doc.objectPath}`);
+        // Normalize object path - remove leading /objects if present to avoid duplication
+        const normalizedPath = doc.objectPath.startsWith('/objects') 
+          ? doc.objectPath 
+          : `/objects${doc.objectPath}`;
+        setPdfPreviewUrl(normalizedPath);
         setCurrentPage(1); // Reset to page 1 when document changes
       }
     }
@@ -245,8 +336,12 @@ export function CreateSignatureRequestDialog({
   const handleClose = () => {
     setOpen(false);
     setCurrentTab("document");
+    setDocumentMode("upload");
     setSelectedDocumentId("");
     setSelectedDocument(null);
+    setUploadingFile(null);
+    setIsUploading(false);
+    setLocalUploadedDocs([]); // Reset local uploads
     setFields([]);
     setRecipients([]);
     setEmailSubject("Document Signature Request");
@@ -255,7 +350,8 @@ export function CreateSignatureRequestDialog({
     setSelectedRecipientForField("");
   };
 
-  const canProceedToFields = selectedDocumentId && pdfDocuments.length > 0;
+  // Can proceed if we have a selected document (either from upload or selection)
+  const canProceedToFields = selectedDocumentId && selectedDocument !== null;
   const canProceedToRecipients = canProceedToFields && fields.length > 0;
   const canSend = canProceedToRecipients && recipients.length > 0 && emailSubject && emailMessage;
 
@@ -299,63 +395,110 @@ export function CreateSignatureRequestDialog({
             </TabsTrigger>
           </TabsList>
 
-          {/* Tab 1: Select Document */}
+          {/* Tab 1: Upload or Select Document */}
           <TabsContent value="document" className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="document-select">Select PDF Document</Label>
-                <Select
-                  value={selectedDocumentId}
-                  onValueChange={setSelectedDocumentId}
-                >
-                  <SelectTrigger id="document-select" data-testid="select-document">
-                    <SelectValue placeholder="Choose a PDF document..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pdfDocuments.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        No PDF documents available
-                      </SelectItem>
-                    ) : (
-                      pdfDocuments.map((doc) => (
-                        <SelectItem key={doc.id} value={doc.id}>
-                          {doc.fileName}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                {pdfDocuments.length === 0 && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Upload a PDF document first in the Documents tab
-                  </p>
-                )}
-              </div>
+            {/* Upload/Select Mode Tabs */}
+            <Tabs value={documentMode} onValueChange={(v) => setDocumentMode(v as "upload" | "select")}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="upload" data-testid="tab-upload-pdf">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload New PDF
+                </TabsTrigger>
+                <TabsTrigger value="select" data-testid="tab-select-existing">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Select Existing
+                </TabsTrigger>
+              </TabsList>
 
-              {selectedDocument && (
+              {/* Upload Tab */}
+              <TabsContent value="upload" className="space-y-4 mt-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-sm">Selected Document</CardTitle>
+                    <CardTitle className="text-sm">Upload PDF Document</CardTitle>
+                    <CardDescription>
+                      Upload a PDF file for signature request
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-8 h-8 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">{selectedDocument.fileName}</p>
+                    {isUploading ? (
+                      <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         <p className="text-sm text-muted-foreground">
-                          {(selectedDocument.fileSize / 1024).toFixed(2)} KB
+                          Uploading {uploadingFile?.name}...
                         </p>
                       </div>
-                    </div>
+                    ) : (
+                      <FileUploadZone
+                        onFilesSelected={handlePdfUpload}
+                        maxFiles={1}
+                        maxSize={10 * 1024 * 1024} // 10MB
+                        acceptedTypes={['application/pdf', '.pdf']}
+                        disabled={isUploading}
+                      />
+                    )}
                   </CardContent>
                 </Card>
-              )}
-            </div>
+              </TabsContent>
+
+              {/* Select Existing Tab */}
+              <TabsContent value="select" className="space-y-4 mt-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="document-select">Select PDF Document</Label>
+                    <Select
+                      value={selectedDocumentId}
+                      onValueChange={setSelectedDocumentId}
+                    >
+                      <SelectTrigger id="document-select" data-testid="select-document">
+                        <SelectValue placeholder="Choose a PDF document..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pdfDocuments.length === 0 ? (
+                          <SelectItem value="none" disabled>
+                            No PDF documents available
+                          </SelectItem>
+                        ) : (
+                          pdfDocuments.map((doc) => (
+                            <SelectItem key={doc.id} value={doc.id}>
+                              {doc.fileName}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {pdfDocuments.length === 0 && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        No PDF documents available. Upload one using the "Upload New PDF" tab.
+                      </p>
+                    )}
+                  </div>
+
+                  {selectedDocument && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Selected Document</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-8 h-8 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">{selectedDocument.fileName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {(selectedDocument.fileSize / 1024).toFixed(2)} KB
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
 
             <DialogFooter>
               <Button
                 onClick={() => setCurrentTab("fields")}
-                disabled={!canProceedToFields}
+                disabled={!canProceedToFields || isUploading}
                 data-testid="button-next-to-fields"
               >
                 Next: Place Fields
