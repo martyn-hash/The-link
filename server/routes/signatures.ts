@@ -191,6 +191,72 @@ export function registerSignatureRoutes(
   // Staff routes - require authentication
   
   /**
+   * GET /api/signature-requests
+   * Get all signature requests (for staff)
+   */
+  app.get(
+    "/api/signature-requests",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res) => {
+      try {
+        const requests = await db
+          .select({
+            signatureRequest: signatureRequests,
+            client: clients,
+            createdByPerson: people,
+          })
+          .from(signatureRequests)
+          .leftJoin(clients, eq(signatureRequests.clientId, clients.id))
+          .leftJoin(people, eq(signatureRequests.createdBy, people.id))
+          .orderBy(desc(signatureRequests.createdAt));
+
+        // Convert bigint timestamps to ISO strings for JSON serialization
+        const serializedRequests = requests.map(item => ({
+          signatureRequest: {
+            ...item.signatureRequest,
+            createdAt: item.signatureRequest.createdAt 
+              ? new Date(Number(item.signatureRequest.createdAt)).toISOString()
+              : null,
+            updatedAt: item.signatureRequest.updatedAt
+              ? new Date(Number(item.signatureRequest.updatedAt)).toISOString()
+              : null,
+            completedAt: item.signatureRequest.completedAt
+              ? new Date(Number(item.signatureRequest.completedAt)).toISOString()
+              : null,
+          },
+          client: item.client ? {
+            ...item.client,
+            createdAt: item.client.createdAt
+              ? new Date(Number(item.client.createdAt)).toISOString()
+              : null,
+            updatedAt: item.client.updatedAt
+              ? new Date(Number(item.client.updatedAt)).toISOString()
+              : null,
+          } : null,
+          createdByPerson: item.createdByPerson ? {
+            ...item.createdByPerson,
+            createdAt: item.createdByPerson.createdAt
+              ? new Date(Number(item.createdByPerson.createdAt)).toISOString()
+              : null,
+            updatedAt: item.createdByPerson.updatedAt
+              ? new Date(Number(item.createdByPerson.updatedAt)).toISOString()
+              : null,
+          } : null,
+        }));
+
+        res.json(serializedRequests);
+      } catch (error: any) {
+        console.error("Error fetching all signature requests:", error);
+        res.status(500).json({ 
+          error: "Failed to fetch signature requests",
+          message: error.message 
+        });
+      }
+    }
+  );
+
+  /**
    * GET /api/signature-requests/client/:clientId
    * Get all signature requests for a client
    */
@@ -208,7 +274,21 @@ export function registerSignatureRoutes(
           .where(eq(signatureRequests.clientId, clientId))
           .orderBy(desc(signatureRequests.createdAt));
 
-        res.json(requests);
+        // Convert bigint timestamps to ISO strings for JSON serialization
+        const serializedRequests = requests.map(request => ({
+          ...request,
+          createdAt: request.createdAt 
+            ? new Date(Number(request.createdAt)).toISOString()
+            : null,
+          updatedAt: request.updatedAt
+            ? new Date(Number(request.updatedAt)).toISOString()
+            : null,
+          completedAt: request.completedAt
+            ? new Date(Number(request.completedAt)).toISOString()
+            : null,
+        }));
+
+        res.json(serializedRequests);
       } catch (error: any) {
         console.error("Error fetching signature requests:", error);
         res.status(500).json({ 

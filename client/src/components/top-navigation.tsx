@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList, FileSignature } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
@@ -229,6 +229,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Client Requests</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/signature-requests" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-signature-requests-menu">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center shrink-0">
+                              <FileSignature className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">E-Signatures</div>
                             </div>
                           </div>
                         </Link>

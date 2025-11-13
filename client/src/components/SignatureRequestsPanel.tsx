@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Download, Shield, FileSignature } from "lucide-react";
+import { format } from "date-fns";
 
 interface SignatureRequestsPanelProps {
   clientId: string;
@@ -75,8 +76,14 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Created {new Date(request.createdAt).toLocaleDateString()}
-                  {request.completedAt && ` • Completed ${new Date(request.completedAt).toLocaleDateString()}`}
+                  {request.createdAt ? (
+                    <>Created {format(new Date(request.createdAt), 'MMM d, yyyy')}</>
+                  ) : (
+                    <>Created recently</>
+                  )}
+                  {request.completedAt && (
+                    <> • Completed {format(new Date(request.completedAt), 'MMM d, yyyy')}</>
+                  )}
                 </p>
                 {request.emailMessage && (
                   <p className="text-sm italic text-muted-foreground border-l-2 pl-3">
