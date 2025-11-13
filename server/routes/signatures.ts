@@ -264,7 +264,8 @@ async function processPdfWithSignatures(
         signatureRequestId,
         clientId,
         signedPdfPath: signedObjectPath,
-        signedPdfHash: signedDocumentHash,
+        originalPdfHash: originalDocumentHash, // Hash of original PDF (pre-signature)
+        signedPdfHash: signedDocumentHash, // Hash of final signed PDF (post-signature)
         auditTrailPdfPath: certificatePath,
         fileName: signedFileName, // Use the actual filename returned from upload
         fileSize: signedPdfBytes.length,
@@ -1003,7 +1004,7 @@ export function registerSignatureRoutes(
         });
       }
 
-      // CRITICAL FIX: Create audit trail record with consent text
+      // CRITICAL FIX: Create audit trail record with explicit consent tracking
       await db.insert(signatureAuditLogs).values({
         signatureRequestRecipientId: recipient.id,
         eventType: "signature_completed",
@@ -1014,6 +1015,7 @@ export function registerSignatureRoutes(
         deviceInfo,
         browserInfo,
         osInfo,
+        consentAccepted: true, // Explicitly store validated consent (UK eIDAS requirement)
         consentAcceptedAt: now,
         signedAt: now,
         documentHash,
@@ -1022,8 +1024,7 @@ export function registerSignatureRoutes(
         metadata: {
           submittedFields: submittedSignatures.length,
           timestamp: now.toISOString(),
-          consentText, // Store the actual consent text acknowledged
-          consentAccepted: true,
+          consentText, // Store the actual consent text for audit context
         },
       });
 

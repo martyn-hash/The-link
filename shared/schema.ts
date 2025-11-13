@@ -2368,8 +2368,10 @@ export const signatureAuditLogs = pgTable("signature_audit_logs", {
   deviceInfo: varchar("device_info"), // Parsed device type (Desktop, Mobile, Tablet)
   browserInfo: varchar("browser_info"), // Parsed browser (Chrome 119, Safari 17, etc.)
   osInfo: varchar("os_info"), // Parsed OS (Windows 10, iOS 17, etc.)
+  // Consent tracking
+  consentAccepted: boolean("consent_accepted").notNull().default(true), // UK eIDAS consent accepted
+  consentAcceptedAt: timestamp("consent_accepted_at").notNull(), // When consent was accepted
   // Timestamps (UTC)
-  consentAcceptedAt: timestamp("consent_accepted_at").notNull(), // When UK eIDAS consent accepted
   signedAt: timestamp("signed_at").notNull(), // When signing completed
   // Document integrity
   documentHash: varchar("document_hash").notNull(), // SHA-256 hash of original PDF
@@ -2393,8 +2395,9 @@ export const signedDocuments = pgTable("signed_documents", {
   signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }).unique(),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   signedPdfPath: text("signed_pdf_path").notNull(), // Path in object storage to signed PDF
-  signedPdfHash: varchar("signed_pdf_hash").notNull(), // SHA-256 hash of final signed PDF
-  auditTrailPdfPath: text("audit_trail_pdf_path"), // Path to audit trail PDF
+  originalPdfHash: varchar("original_pdf_hash").notNull(), // SHA-256 hash of original PDF (pre-signature)
+  signedPdfHash: varchar("signed_pdf_hash").notNull(), // SHA-256 hash of final signed PDF (post-signature)
+  auditTrailPdfPath: text("audit_trail_pdf_path"), // Path to audit trail PDF (certificate)
   fileName: varchar("file_name").notNull(), // Original filename
   fileSize: integer("file_size").notNull(), // Size in bytes
   completedAt: timestamp("completed_at").notNull().defaultNow(),

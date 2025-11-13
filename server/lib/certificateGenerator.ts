@@ -59,11 +59,12 @@ export async function generateCertificateOfCompletion(
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPos = pageHeight - margin;
 
-  // Header with success checkmark
-  page.drawText('✓', {
-    x: pageWidth / 2 - 20,
+  // Header with success indicator (UK eIDAS compliant)
+  // Use "CONFIRMED" text which is legally recognized for electronic signatures
+  page.drawText('CONFIRMED', {
+    x: pageWidth / 2 - 65,
     y: yPos,
-    size: 48,
+    size: 32,
     font: fontBold,
     color: successColor,
   });
@@ -290,18 +291,25 @@ export async function generateCertificateOfCompletion(
         borderWidth: 1,
       });
 
-      page.drawText('✓ Electronic Signature Consent Accepted', {
-        x: margin + 20,
-        y: yPos + 20,
-        size: 8,
-        font: fontBold,
-        color: successColor,
-      });
+      // UK eIDAS Compliant Consent Confirmation with full audit details
+      const consentStatement = `Signer ${signer.signerName} accepted electronic signature consent on ${format(new Date(signer.consentAcceptedAt), 'MMMM d, yyyy \'at\' h:mm:ss a')} UTC.`;
+      const consentStatementLines = wrapText(consentStatement, contentWidth - 50, 8, fontBold);
+      let consentY = yPos + 20;
+      for (const line of consentStatementLines) {
+        page.drawText(line, {
+          x: margin + 20,
+          y: consentY,
+          size: 8,
+          font: fontBold,
+          color: successColor,
+        });
+        consentY -= 10;
+      }
 
       yPos -= 10;
 
-      const consentLines = wrapText(signer.consentText, contentWidth - 50, 7, font);
-      for (const line of consentLines) {
+      const consentTextLines = wrapText(signer.consentText, contentWidth - 50, 7, font);
+      for (const line of consentTextLines) {
         page.drawText(line, {
           x: margin + 20,
           y: yPos,
