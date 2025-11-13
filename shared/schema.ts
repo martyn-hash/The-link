@@ -2236,7 +2236,7 @@ export const documents = pgTable("documents", {
   clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }), // for portal uploads
   uploadName: varchar("upload_name"), // kept temporarily for migration
   source: varchar("source", {
-    enum: ['direct_upload', 'message_attachment', 'task_upload', 'portal_upload']
+    enum: ['direct_upload', 'message_attachment', 'task_upload', 'portal_upload', 'signature_request']
   }).notNull().default('direct_upload'), // source of the document
   messageId: varchar("message_id").references(() => messages.id, { onDelete: "cascade" }), // link to source message if from message attachment
   threadId: varchar("thread_id").references(() => messageThreads.id, { onDelete: "cascade" }), // link to thread if from message attachment
