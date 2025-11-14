@@ -726,6 +726,7 @@ export function registerSignatureRoutes(
 
         // Create recipients with secure tokens
         const createdRecipients = [];
+        console.log('[Signature Request] Recipients received from frontend:', recipients);
         if (recipients && recipients.length > 0) {
           const recipientsWithTokens = recipients.map((recipient: any, index: number) => ({
             signatureRequestId: request.id,
@@ -735,7 +736,9 @@ export function registerSignatureRoutes(
             orderIndex: recipient.orderIndex || index,
           }));
 
+          console.log('[Signature Request] Prepared recipients for insert:', recipientsWithTokens);
           const insertedRecipients = await db.insert(signatureRequestRecipients).values(recipientsWithTokens).returning();
+          console.log('[Signature Request] Inserted recipients:', insertedRecipients);
           createdRecipients.push(...insertedRecipients);
         }
 
