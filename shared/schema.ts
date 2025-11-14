@@ -2372,9 +2372,9 @@ export const signatureAuditLogs = pgTable("signature_audit_logs", {
   osInfo: varchar("os_info"), // Parsed OS (Windows 10, iOS 17, etc.)
   // Consent tracking
   consentAccepted: boolean("consent_accepted").notNull().default(true), // UK eIDAS consent accepted
-  consentAcceptedAt: timestamp("consent_accepted_at").notNull(), // When consent was accepted
+  consentAcceptedAt: timestamp("consent_accepted_at"), // When consent was accepted (null for non-consent events)
   // Timestamps (UTC)
-  signedAt: timestamp("signed_at").notNull(), // When signing completed
+  signedAt: timestamp("signed_at"), // When signing completed (null for non-signature events)
   // Document integrity
   documentHash: varchar("document_hash").notNull(), // SHA-256 hash of original PDF
   documentVersion: varchar("document_version").notNull(), // Version identifier

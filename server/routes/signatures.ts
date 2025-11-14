@@ -26,6 +26,130 @@ import { ObjectStorageService } from "../objectStorage";
 import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/sendgrid";
 import { UAParser } from "ua-parser-js";
 import { generateCertificateOfCompletion } from "../lib/certificateGenerator";
+import geoip from "geoip-lite";
+
+/**
+ * Helper function to extract IP address from request
+ */
+function getClientIp(req: any): string {
+  return (
+    req.ip ||
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress ||
+    "unknown"
+  );
+}
+
+/**
+ * Helper function to perform geo-lookup on IP address
+ * Returns city and country information
+ */
+function getGeoLocation(ipAddress: string): { city: string | null; country: string | null } {
+  if (ipAddress === "unknown" || ipAddress.startsWith("127.") || ipAddress.startsWith("::")) {
+    return { city: null, country: null };
+  }
+
+  try {
+    const geo = geoip.lookup(ipAddress);
+    if (geo) {
+      return {
+        city: geo.city || null,
+        country: geo.country || null,
+      };
+    }
+  } catch (error) {
+    console.error(`[Geo] Error looking up IP ${ipAddress}:`, error);
+  }
+
+  return { city: null, country: null };
+}
+
+/**
+ * Helper function to create audit log entry with full device/geo tracking
+ * CRITICAL: Only pass consentAcceptedAt/signedAt for actual consent/signature events
+ */
+async function createAuditLog(params: {
+  recipientId: string;
+  eventType: string;
+  signerName: string;
+  signerEmail: string;
+  req: any;
+  documentHash?: string;
+  eventDetails?: string;
+  metadata?: any;
+  consentAcceptedAt?: Date | null;
+  signedAt?: Date | null;
+  consentText?: string;
+}) {
+  const { 
+    recipientId, 
+    eventType, 
+    signerName, 
+    signerEmail, 
+    req, 
+    documentHash, 
+    eventDetails, 
+    metadata,
+    consentAcceptedAt,
+    signedAt,
+    consentText
+  } = params;
+
+  // Extract IP and user agent
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers["user-agent"] || "unknown";
+
+  // Parse user agent for device/browser/OS info
+  const parser = new UAParser(userAgent);
+  const uaResult = parser.getResult();
+
+  const deviceInfo = uaResult.device.type || "Desktop";
+  const browserInfo = uaResult.browser.name
+    ? `${uaResult.browser.name} ${uaResult.browser.version || ''}`.trim()
+    : "Unknown";
+  const osInfo = uaResult.os.name
+    ? `${uaResult.os.name} ${uaResult.os.version || ''}`.trim()
+    : "Unknown";
+
+  // Perform geo-lookup
+  const { city, country } = getGeoLocation(ipAddress);
+
+  // Prepare metadata with consent text if provided
+  const fullMetadata = metadata ? { ...metadata } : {};
+  if (consentText) {
+    fullMetadata.consentText = consentText;
+  }
+
+  const [auditLog] = await db
+    .insert(signatureAuditLogs)
+    .values({
+      signatureRequestRecipientId: recipientId,
+      eventType,
+      eventDetails: eventDetails || null,
+      signerName,
+      signerEmail,
+      ipAddress,
+      userAgent,
+      deviceInfo,
+      browserInfo,
+      osInfo,
+      city,
+      country,
+      // CRITICAL: Only set these if explicitly provided (actual consent/signature events)
+      // For document_opened, consent_viewed, email_delivered, these will be null
+      consentAcceptedAt: consentAcceptedAt !== undefined ? consentAcceptedAt : null,
+      signedAt: signedAt !== undefined ? signedAt : null,
+      documentHash: documentHash || "unknown",
+      documentVersion: "1.0",
+      authMethod: "email_link",
+      metadata: Object.keys(fullMetadata).length > 0 ? fullMetadata : null,
+    })
+    .returning();
+
+  console.log(`[Audit] ${eventType} logged for ${signerEmail} from ${ipAddress} (${city || 'Unknown'}, ${country || 'Unknown'})`);
+  return auditLog;
+}
 
 /**
  * Helper function to process PDF with signatures
@@ -902,6 +1026,96 @@ export function registerSignatureRoutes(
   // Public routes for signing (no authentication required)
 
   /**
+   * POST /api/sign/:token/consent-viewed
+   * Track when user views consent disclosure (public route)
+   */
+  app.post("/api/sign/:token/consent-viewed", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      // Find recipient by token
+      const [recipient] = await db
+        .select()
+        .from(signatureRequestRecipients)
+        .where(eq(signatureRequestRecipients.secureToken, token));
+
+      if (!recipient) {
+        return res.status(404).json({ error: "Invalid or expired signature link" });
+      }
+
+      // Get person and document info for audit log
+      const [person] = await db
+        .select()
+        .from(people)
+        .where(eq(people.id, recipient.personId));
+
+      const [request] = await db
+        .select()
+        .from(signatureRequests)
+        .where(eq(signatureRequests.id, recipient.signatureRequestId));
+
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.id, request?.documentId));
+
+      // Fetch firm name from company settings for consent disclosure
+      const [settings] = await db.select().from(companySettings).limit(1);
+      const firmName = settings?.firmName || "The Link";
+
+      // Log consent view event with full consent disclosure text
+      const consentDisclosureText = `
+By proceeding, you consent to electronically sign this document under UK eIDAS Regulation.
+
+Your Rights:
+- Withdraw consent anytime by contacting ${firmName}
+- Request a paper copy at any time
+- No penalty for withdrawal or requesting paper copy
+
+Requirements:
+- Compatible device with internet access
+- Ability to view PDF documents
+- Valid email address for authentication
+
+You agree that:
+- Electronic signatures have the same legal effect as handwritten
+- This consent applies only to this specific document
+- Completed documents will be provided electronically
+- You consent to UK eIDAS electronic signature standards
+      `.trim();
+
+      try {
+        await createAuditLog({
+          recipientId: recipient.id,
+          eventType: "consent_viewed",
+          signerName: person?.fullName || recipient.email,
+          signerEmail: recipient.email,
+          req,
+          documentHash: document?.hash || "unknown",
+          eventDetails: "User viewed consent disclosure",
+          consentText: consentDisclosureText,
+          metadata: {
+            documentId: document?.id,
+            requestId: request?.id,
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        res.json({ success: true, message: "Consent view logged" });
+      } catch (error) {
+        console.error("[Audit] Failed to log consent view:", error);
+        res.status(500).json({ error: "Failed to log consent view" });
+      }
+    } catch (error: any) {
+      console.error("Error logging consent view:", error);
+      res.status(500).json({
+        error: "Failed to log consent view",
+        message: error.message,
+      });
+    }
+  });
+
+  /**
    * GET /api/sign/:token
    * Get signature request details for a recipient (public route)
    */
@@ -990,12 +1204,47 @@ export function registerSignatureRoutes(
         )
         .orderBy(signatureFields.orderIndex);
 
-      // Update viewedAt if first time viewing
+      // Update viewedAt and create audit log for document open (only once)
       if (!recipient.viewedAt) {
+        // Check if document_opened event already logged (dedupe multiple GETs)
+        const [existingOpenLog] = await db
+          .select()
+          .from(signatureAuditLogs)
+          .where(
+            and(
+              eq(signatureAuditLogs.signatureRequestRecipientId, recipient.id),
+              eq(signatureAuditLogs.eventType, "document_opened")
+            )
+          )
+          .limit(1);
+
         await db
           .update(signatureRequestRecipients)
           .set({ viewedAt: new Date() })
           .where(eq(signatureRequestRecipients.id, recipient.id));
+
+        // Only log if not already logged (prevent duplicate audit entries from repeated GETs)
+        if (!existingOpenLog) {
+          try {
+            await createAuditLog({
+              recipientId: recipient.id,
+              eventType: "document_opened",
+              signerName: person.fullName || recipient.email,
+              signerEmail: recipient.email,
+              req,
+              documentHash: document.hash || "unknown",
+              eventDetails: `Document accessed: ${document.fileName}`,
+              metadata: {
+                documentId: document.id,
+                requestId: request.id,
+                firstView: true,
+              },
+            });
+          } catch (error) {
+            console.error("[Audit] Failed to log document open:", error);
+            // Don't fail request if audit logging fails
+          }
+        }
       }
 
       // Get firm name from company settings
@@ -1323,6 +1572,7 @@ export function registerSignatureRoutes(
               }
             }
 
+            let emailsSentCount = 0;
             for (const { recipient: recipientData, person: personData } of allRecipientsForEmail) {
               try {
                 await sendCompletedDocumentEmail(
@@ -1337,9 +1587,47 @@ export function registerSignatureRoutes(
                   certificateBuffer
                 );
                 console.log(`[E-Signature] Completion email sent to ${recipientData.email}`);
+                emailsSentCount++;
+
+                // Log email delivery in audit trail
+                try {
+                  await createAuditLog({
+                    recipientId: recipientData.id,
+                    eventType: "email_delivered",
+                    signerName: personData.fullName || recipientData.email,
+                    signerEmail: recipientData.email,
+                    req: { ip: "system", headers: {} }, // System-generated, no real IP
+                    documentHash: document.hash || "unknown",
+                    eventDetails: `Completion email sent with signed document`,
+                    metadata: {
+                      documentId: document.id,
+                      requestId: request.id,
+                      signedDocumentId,
+                      emailType: "completion",
+                      attachmentsIncluded: !!(signedPdfBuffer && certificateBuffer),
+                    },
+                  });
+                } catch (auditError) {
+                  console.error(`[Audit] Failed to log email delivery:`, auditError);
+                  // Don't fail email sending if audit logging fails
+                }
               } catch (emailError) {
                 console.error(`[E-Signature] Failed to send completion email to ${recipientData.email}:`, emailError);
                 // Don't fail if email sending fails
+              }
+            }
+
+            // Update signed document with email sent timestamp if any emails were sent
+            if (emailsSentCount > 0 && signedDoc) {
+              try {
+                await db
+                  .update(signedDocuments)
+                  .set({ emailSentAt: new Date() })
+                  .where(eq(signedDocuments.id, signedDocumentId));
+                console.log(`[E-Signature] Updated signed document with email sent timestamp`);
+              } catch (error) {
+                console.error(`[E-Signature] Failed to update emailSentAt:`, error);
+                // Don't fail if update fails
               }
             }
           } catch (error) {

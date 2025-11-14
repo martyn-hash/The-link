@@ -131,6 +131,17 @@ export default function SignPage() {
     }
   };
 
+  // Track consent view
+  useEffect(() => {
+    if (signData && currentStep === "consent") {
+      // Log consent view for audit trail
+      apiRequest("POST", `/api/sign/${token}/consent-viewed`, {}).catch(error => {
+        console.error("Failed to log consent view:", error);
+        // Don't show error to user - this is just for audit tracking
+      });
+    }
+  }, [signData, currentStep, token]);
+
   // Auto-select first field on load
   useEffect(() => {
     if (signData && currentStep === "sign" && !currentFieldId) {
