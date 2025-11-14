@@ -56,7 +56,7 @@ export async function sendSignatureRequestEmail(
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
 
-    const subject = `Signature Request: ${documentName}`;
+    const subject = `Please sign: ${documentName}`;
     
     const html = `
       <!DOCTYPE html>
@@ -79,6 +79,7 @@ export async function sendSignatureRequestEmail(
           }
           .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
           .message-box { background-color: white; padding: 15px; border-left: 4px solid #0A7BBF; margin: 20px 0; }
+          .document-title { font-size: 18px; font-weight: bold; color: #0A7BBF; margin: 15px 0; }
         </style>
       </head>
       <body>
@@ -89,9 +90,9 @@ export async function sendSignatureRequestEmail(
           <div class="content">
             <p>Dear ${recipientName},</p>
             
-            <p><strong>${firmName}</strong> has requested your signature on the following document:</p>
+            <p>Please sign <strong class="document-title">${documentName}</strong></p>
             
-            <p><strong>Document:</strong> ${documentName}</p>
+            <p><strong>${firmName}</strong> has requested your electronic signature on this document.</p>
             
             ${customMessage ? `
               <div class="message-box">
