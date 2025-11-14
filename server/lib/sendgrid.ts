@@ -48,7 +48,7 @@ export async function getUncachableSendGridClient() {
 export async function sendSignatureRequestEmail(
   recipientEmail: string,
   recipientName: string,
-  clientName: string,
+  firmName: string,
   documentName: string,
   customMessage: string,
   signLink: string
@@ -89,13 +89,13 @@ export async function sendSignatureRequestEmail(
           <div class="content">
             <p>Dear ${recipientName},</p>
             
-            <p><strong>${clientName}</strong> has requested your signature on the following document:</p>
+            <p><strong>${firmName}</strong> has requested your signature on the following document:</p>
             
             <p><strong>Document:</strong> ${documentName}</p>
             
             ${customMessage ? `
               <div class="message-box">
-                <p><strong>Message from ${clientName}:</strong></p>
+                <p><strong>Message from ${firmName}:</strong></p>
                 <p>${customMessage.replace(/\n/g, '<br>')}</p>
               </div>
             ` : ''}
@@ -119,11 +119,11 @@ export async function sendSignatureRequestEmail(
               <li>This link is unique to you and should not be shared</li>
             </ul>
             
-            <p>If you have any questions about this document, please contact ${clientName} directly.</p>
+            <p>If you have any questions about this document, please contact ${firmName} directly.</p>
           </div>
           <div class="footer">
             <p>This is an automated message. Please do not reply to this email.</p>
-            <p>&copy; ${new Date().getFullYear()} ${clientName}. All rights reserved.</p>
+            <p>&copy; ${new Date().getFullYear()} ${firmName}. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -152,6 +152,7 @@ export async function sendSignatureRequestEmail(
 export async function sendCompletedDocumentEmail(
   recipientEmail: string,
   recipientName: string,
+  firmName: string,
   clientName: string,
   documentName: string,
   signedPdfUrl: string,
@@ -224,11 +225,11 @@ export async function sendCompletedDocumentEmail(
               <li>Please save both documents for your records</li>
             </ul>
             
-            <p>If you have any questions, please contact ${clientName}.</p>
+            <p>If you have any questions, please contact ${firmName}.</p>
           </div>
           <div class="footer">
             <p>This is an automated message. Please do not reply to this email.</p>
-            <p>&copy; ${new Date().getFullYear()} ${clientName}. All rights reserved.</p>
+            <p>&copy; ${new Date().getFullYear()} ${firmName}. All rights reserved.</p>
           </div>
         </div>
       </body>

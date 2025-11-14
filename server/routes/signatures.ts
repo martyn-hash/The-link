@@ -641,6 +641,10 @@ export function registerSignatureRoutes(
 
           const peopleMap = new Map(peopleList.map(p => [p.id, p]));
 
+          // Get firm name from company settings for email
+          const [settings] = await db.select().from(companySettings).limit(1);
+          const firmName = settings?.firmName || "The Link";
+
           // Send emails to all recipients using Promise.allSettled (don't fail entire request if one email fails)
           const emailPromises = createdRecipients.map(async (recipient) => {
             const person = peopleMap.get(recipient.personId);
@@ -658,7 +662,7 @@ export function registerSignatureRoutes(
               await sendSignatureRequestEmail(
                 recipient.email,
                 person.fullName || recipient.email,
-                client.name,
+                firmName,
                 document.fileName,
                 request.emailMessage || "",
                 signLink
@@ -780,6 +784,10 @@ export function registerSignatureRoutes(
           ? `https://${process.env.REPLIT_DEV_DOMAIN}`
           : `http://localhost:5000`;
         
+        // Get firm name from company settings for email
+        const [settings] = await db.select().from(companySettings).limit(1);
+        const firmName = settings?.firmName || "The Link";
+        
         // Send emails to each recipient
         const emailResults = [];
         for (const { recipient, person } of recipientsWithDetails) {
@@ -789,7 +797,7 @@ export function registerSignatureRoutes(
             await sendSignatureRequestEmail(
               recipient.email,
               person.fullName || recipient.email,
-              client.name,
+              firmName,
               document.fileName,
               request.emailMessage || "",
               signLink
@@ -1258,6 +1266,10 @@ export function registerSignatureRoutes(
               .from(clients)
               .where(eq(clients.id, request.clientId));
 
+            // Get firm name from company settings for email
+            const [settings] = await db.select().from(companySettings).limit(1);
+            const firmName = settings?.firmName || "The Link";
+
             const allRecipientsForEmail = await db
               .select({
                 recipient: signatureRequestRecipients,
@@ -1279,6 +1291,7 @@ export function registerSignatureRoutes(
                 await sendCompletedDocumentEmail(
                   recipientData.email,
                   personData.fullName || recipientData.email,
+                  firmName,
                   client?.name || "Unknown",
                   document.fileName,
                   signedPdfUrl
