@@ -2326,6 +2326,8 @@ export const signatureRequestRecipients = pgTable("signature_request_recipients"
   secureToken: varchar("secure_token").notNull().unique(), // Unique token for signing link
   tokenExpiresAt: timestamp("token_expires_at").notNull().default(sql`now() + interval '30 days'`), // Token valid for 30 days
   sentAt: timestamp("sent_at"), // When email was sent
+  sendStatus: varchar("send_status").default('pending'), // 'pending', 'sent', 'failed'
+  sendError: text("send_error"), // Error message if send failed
   viewedAt: timestamp("viewed_at"), // When recipient first opened the link
   signedAt: timestamp("signed_at"), // When recipient completed signing
   reminderSentAt: timestamp("reminder_sent_at"), // Last reminder sent

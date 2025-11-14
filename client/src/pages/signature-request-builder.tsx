@@ -482,7 +482,7 @@ export default function SignatureRequestBuilder() {
       });
       setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: ['/api/signature-requests'] });
-      navigate(`/clients/${clientId}/docs`);
+      navigate(`/clients/${clientId}`);
     },
     onError: (error) => {
       toast({
@@ -499,7 +499,7 @@ export default function SignatureRequestBuilder() {
 
   // Handle navigation away
   const handleBack = () => {
-    navigateWithWarning(`/clients/${clientId}/docs`);
+    navigateWithWarning(`/clients/${clientId}`);
   };
 
   return (

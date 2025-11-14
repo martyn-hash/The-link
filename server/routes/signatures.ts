@@ -17,7 +17,7 @@ import {
   insertSignatureFieldSchema,
   insertSignatureRequestRecipientSchema 
 } from "../../shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
 import { PDFDocument, rgb } from "pdf-lib";
@@ -606,6 +606,7 @@ export function registerSignatureRoutes(
         }
 
         // Create recipients with secure tokens
+        const createdRecipients = [];
         if (recipients && recipients.length > 0) {
           const recipientsWithTokens = recipients.map((recipient: any, index: number) => ({
             signatureRequestId: request.id,
@@ -615,7 +616,106 @@ export function registerSignatureRoutes(
             orderIndex: recipient.orderIndex || index,
           }));
 
-          await db.insert(signatureRequestRecipients).values(recipientsWithTokens);
+          const insertedRecipients = await db.insert(signatureRequestRecipients).values(recipientsWithTokens).returning();
+          createdRecipients.push(...insertedRecipients);
+        }
+
+        // Send emails immediately after creation
+        if (createdRecipients.length > 0) {
+          // Get client details for email
+          const [client] = await db
+            .select()
+            .from(clients)
+            .where(eq(clients.id, clientId));
+
+          if (!client) {
+            return res.status(404).json({ error: "Client not found" });
+          }
+
+          const now = new Date();
+          const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+            : `http://localhost:5000`;
+
+          // Get person details for all recipients in one query
+          const personIds = createdRecipients.map(r => r.personId);
+          const peopleList = await db
+            .select()
+            .from(people)
+            .where(inArray(people.id, personIds));
+
+          const peopleMap = new Map(peopleList.map(p => [p.id, p]));
+
+          // Send emails to all recipients using Promise.allSettled (don't fail entire request if one email fails)
+          const emailPromises = createdRecipients.map(async (recipient) => {
+            const person = peopleMap.get(recipient.personId);
+            if (!person) {
+              return { 
+                recipientId: recipient.id, 
+                success: false, 
+                error: 'Person not found' 
+              };
+            }
+
+            try {
+              const signLink = `${baseUrl}/sign?token=${recipient.secureToken}`;
+              
+              await sendSignatureRequestEmail(
+                recipient.email,
+                person.fullName || recipient.email,
+                client.name,
+                document.fileName,
+                request.emailMessage || "",
+                signLink
+              );
+
+              // Update recipient to mark as sent with success status
+              await db
+                .update(signatureRequestRecipients)
+                .set({ 
+                  sentAt: now,
+                  sendStatus: 'sent',
+                  sendError: null
+                })
+                .where(eq(signatureRequestRecipients.id, recipient.id));
+
+              console.log(`[E-Signature] Email sent successfully to ${recipient.email}`);
+              return { recipientId: recipient.id, success: true };
+            } catch (error: any) {
+              console.error(`[E-Signature] Failed to send email to ${recipient.email}:`, error);
+              
+              // Update recipient with failed status
+              await db
+                .update(signatureRequestRecipients)
+                .set({ 
+                  sendStatus: 'failed',
+                  sendError: error.message || 'Unknown error'
+                })
+                .where(eq(signatureRequestRecipients.id, recipient.id));
+
+              return { 
+                recipientId: recipient.id, 
+                success: false, 
+                error: error.message 
+              };
+            }
+          });
+
+          // Wait for all email sends to complete (don't fail the request)
+          const emailResults = await Promise.allSettled(emailPromises);
+          const successfulSends = emailResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
+          const failedSends = emailResults.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
+
+          console.log(`[E-Signature] Email results: ${successfulSends} sent, ${failedSends} failed`);
+
+          // Update request status to pending (emails sent or attempted)
+          await db
+            .update(signatureRequests)
+            .set({ 
+              status: "pending",
+              updatedAt: now 
+            })
+            .where(eq(signatureRequests.id, request.id));
         }
 
         res.status(201).json(request);
