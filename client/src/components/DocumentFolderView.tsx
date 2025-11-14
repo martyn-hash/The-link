@@ -240,8 +240,7 @@ export default function DocumentFolderView({
                     </div>
                     <div className="flex gap-2">
                       <DocumentPreviewDialog 
-                        documentId={doc.id}
-                        fileName={doc.fileName}
+                        document={doc}
                         trigger={
                           <Button
                             variant="outline"
@@ -308,8 +307,7 @@ export default function DocumentFolderView({
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <DocumentPreviewDialog 
-                          documentId={doc.id}
-                          fileName={doc.fileName}
+                          document={doc}
                           trigger={
                             <Button
                               variant="ghost"

@@ -29,12 +29,23 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
 
   const handleDownload = async (requestId: string) => {
     try {
-      const signedDoc = await fetch(`/api/signature-requests/${requestId}/signed-document`).then(r => r.json());
+      const response = await fetch(`/api/signature-requests/${requestId}/signed-document`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch signed document');
+      }
+      
+      const signedDoc = await response.json();
+      
+      if (!signedDoc || !signedDoc.id) {
+        throw new Error('Signed document not found');
+      }
+      
       window.open(`/api/signed-documents/${signedDoc.id}/download`, '_blank');
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Could not download signed document",
+        description: error.message || "Could not download signed document",
         variant: "destructive",
       });
     }
