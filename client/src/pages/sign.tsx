@@ -63,6 +63,7 @@ export default function SignPage() {
   const [currentStep, setCurrentStep] = useState<"consent" | "sign" | "complete">("consent");
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [canAccessDocument, setCanAccessDocument] = useState<boolean | null>(null);
+  const [postSubmitState, setPostSubmitState] = useState<"success" | "redirecting" | null>(null);
   
   // Signature state
   const [fieldSignatures, setFieldSignatures] = useState<Map<string, { type: string; data: string }>>(new Map());
@@ -98,25 +99,23 @@ export default function SignPage() {
       });
     },
     onSuccess: (data) => {
-      // Check if there's a redirect URL configured
-      if (signData?.redirectUrl) {
-        // Show brief success toast before redirect
-        toast({
-          title: "Signature submitted",
-          description: "Redirecting...",
-        });
-        // Redirect after a brief delay to let toast appear
-        setTimeout(() => {
-          window.location.href = signData.redirectUrl!;
-        }, 1500);
-      } else {
-        // No redirect - show success page
-        setCurrentStep("complete");
-        toast({
-          title: "Signature submitted",
-          description: "Your signature has been recorded successfully",
-        });
-      }
+      // Always show success screen first
+      setPostSubmitState("success");
+      
+      // After 2 seconds, either redirect or show completion
+      setTimeout(() => {
+        if (signData?.redirectUrl) {
+          setPostSubmitState("redirecting");
+          // Redirect after showing redirecting message
+          setTimeout(() => {
+            window.location.href = signData.redirectUrl!;
+          }, 500);
+        } else {
+          // No redirect - show final completion page
+          setCurrentStep("complete");
+          setPostSubmitState(null);
+        }
+      }, 2000);
     },
     onError: (error: any) => {
       toast({
@@ -124,6 +123,7 @@ export default function SignPage() {
         description: error.message || "Failed to submit signature",
         variant: "destructive",
       });
+      setPostSubmitState(null);
     },
   });
 
@@ -297,6 +297,40 @@ export default function SignPage() {
       setCurrentFieldId(signData.fields[0]!.id);
     }
   }, [currentStep, signData, currentFieldId]);
+
+  // Success screen - show after submission for 2 seconds
+  if (postSubmitState) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950 dark:to-emerald-900 p-4">
+        <Card className="w-full max-w-md border-green-200 dark:border-green-800 shadow-2xl">
+          <CardContent className="pt-8 pb-8">
+            <div className="text-center">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-600 shadow-lg">
+                <Check className="h-12 w-12 text-white" strokeWidth={3} />
+              </div>
+              <h2 className="text-2xl font-bold text-green-900 dark:text-green-100 mb-3">
+                ✓ Document Signed Successfully!
+              </h2>
+              <p className="text-green-700 dark:text-green-300 mb-6">
+                Your signature has been recorded and securely stored.
+              </p>
+              {postSubmitState === "redirecting" ? (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  <span>Redirecting you now...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                  <span>Processing...</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!token) {
     return (
@@ -560,13 +594,27 @@ export default function SignPage() {
 
   // All fields signed?
   const allFieldsSigned = signData.fields.every((field: any) => fieldSignatures.has(field.id));
+  
+  // Compute banner state for clear visual feedback
+  const bannerState: "start" | "progress" | "complete" = 
+    !signingStarted ? "start" :
+    allFieldsSigned ? "complete" :
+    "progress";
 
   return (
     <div className="min-h-screen flex flex-col bg-muted/20">
-      {/* Guided Banner - Fixed at top */}
-      <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b shadow-sm">
+      {/* Guided Banner - Fixed at top with dynamic state */}
+      <div 
+        className={`sticky top-0 z-50 border-b shadow-sm transition-colors ${
+          bannerState === "complete" 
+            ? "bg-green-600 dark:bg-green-700" 
+            : "bg-white dark:bg-gray-900"
+        }`}
+        role="banner"
+        aria-live="polite"
+      >
         <div className="max-w-7xl mx-auto px-4 py-3">
-          {!signingStarted ? (
+          {bannerState === "start" && (
             // Start state
             <div className="flex flex-col md:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -585,7 +633,9 @@ export default function SignPage() {
                 Start Signing
               </Button>
             </div>
-          ) : (
+          )}
+          
+          {bannerState === "progress" && (
             // Active signing state
             <div className="flex flex-col md:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3 w-full md:w-auto">
@@ -627,44 +677,34 @@ export default function SignPage() {
                 >
                   Next →
                 </Button>
-                {allFieldsSigned && (
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={submitMutation.isPending}
-                    data-testid="button-submit-signature"
-                    size="sm"
-                    className="flex-1 md:flex-none"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    {submitMutation.isPending ? "Submitting..." : "Submit"}
-                  </Button>
-                )}
               </div>
+            </div>
+          )}
+          
+          {bannerState === "complete" && (
+            // Completion state - prominent green banner
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1">
+                <Check className="w-6 h-6 text-white flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-base text-white">✓ All fields complete - Ready to submit!</p>
+                  <p className="text-xs text-green-100">Review the document and click Submit to finalize your signature</p>
+                </div>
+              </div>
+              <Button
+                onClick={handleSubmit}
+                disabled={submitMutation.isPending}
+                data-testid="button-submit-signature"
+                size="lg"
+                className="w-full md:w-auto bg-white text-green-700 hover:bg-green-50 font-bold shadow-lg"
+              >
+                <Send className="w-5 h-5 mr-2" />
+                {submitMutation.isPending ? "Submitting..." : "Submit Signature"}
+              </Button>
             </div>
           )}
         </div>
       </div>
-
-      {/* Completion Guidance Alert */}
-      {allFieldsSigned && (
-        <div className="bg-green-50 dark:bg-green-950 border-y border-green-200 dark:border-green-800 py-3">
-          <div className="max-w-7xl mx-auto px-4">
-            <Alert className="bg-transparent border-0 p-0">
-              <div className="flex items-center gap-3">
-                <Check className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                <div className="flex-1">
-                  <AlertTitle className="text-green-900 dark:text-green-100 font-semibold mb-0">
-                    All fields completed!
-                  </AlertTitle>
-                  <AlertDescription className="text-green-700 dark:text-green-300 text-sm">
-                    Click the Submit button in the top banner to finalize your signature.
-                  </AlertDescription>
-                </div>
-              </div>
-            </Alert>
-          </div>
-        </div>
-      )}
 
       {/* PDF Viewer - Full width, takes center stage */}
       <div className="flex-1 overflow-y-auto p-4">
