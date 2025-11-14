@@ -10,7 +10,8 @@ import {
   signedDocuments,
   documents,
   people,
-  clients
+  clients,
+  companySettings
 } from "../../shared/schema";
 import { 
   insertSignatureRequestSchema,
@@ -351,17 +352,11 @@ export function registerSignatureRoutes(
             createdAt: item.client.createdAt
               ? new Date(Number(item.client.createdAt)).toISOString()
               : null,
-            updatedAt: item.client.updatedAt
-              ? new Date(Number(item.client.updatedAt)).toISOString()
-              : null,
           } : null,
           createdByPerson: item.createdByPerson ? {
             ...item.createdByPerson,
             createdAt: item.createdByPerson.createdAt
               ? new Date(Number(item.createdByPerson.createdAt)).toISOString()
-              : null,
-            updatedAt: item.createdByPerson.updatedAt
-              ? new Date(Number(item.createdByPerson.updatedAt)).toISOString()
               : null,
           } : null,
         }));
@@ -983,6 +978,10 @@ export function registerSignatureRoutes(
           .where(eq(signatureRequestRecipients.id, recipient.id));
       }
 
+      // Get firm name from company settings
+      const [settings] = await db.select().from(companySettings).limit(1);
+      const firmName = settings?.firmName || "The Link";
+
       res.json({
         request: {
           id: request.id,
@@ -1002,6 +1001,7 @@ export function registerSignatureRoutes(
           name: person.fullName,
           email: recipient.email,
         },
+        firmName,
         fields,
       });
     } catch (error: any) {

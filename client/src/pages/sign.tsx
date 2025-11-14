@@ -14,6 +14,39 @@ import { getQueryFn, apiRequest } from "@/lib/queryClient";
 import { FileText, Check, AlertCircle, PenTool, Type, Send, Shield } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 
+// Type for the sign data response from backend
+interface SignData {
+  request: {
+    id: string;
+    emailSubject: string;
+    emailMessage: string;
+  };
+  document: {
+    id: string;
+    fileName: string;
+    fileType: string;
+    objectPath: string;
+  };
+  client: {
+    name: string;
+  };
+  recipient: {
+    name: string;
+    email: string;
+  };
+  firmName: string;
+  fields: Array<{
+    id: string;
+    fieldType: string;
+    pageNumber: number;
+    xPosition: number;
+    yPosition: number;
+    width: number;
+    height: number;
+    orderIndex: number;
+  }>;
+}
+
 export default function SignPage() {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
@@ -37,7 +70,7 @@ export default function SignPage() {
   const [typedName, setTypedName] = useState("");
 
   // Fetch signature request data
-  const { data: signData, isLoading, error } = useQuery({
+  const { data: signData, isLoading, error } = useQuery<SignData>({
     queryKey: [`/api/sign/${token}`],
     enabled: !!token,
   });
@@ -157,11 +190,13 @@ export default function SignPage() {
     });
 
     // Move to next field or finish
-    const currentIndex = signData?.fields.findIndex((f: any) => f.id === currentFieldId) || 0;
-    if (currentIndex < signData?.fields.length - 1) {
-      setCurrentFieldId(signData.fields[currentIndex + 1].id);
-      clearCanvas();
-      setTypedName("");
+    if (signData?.fields) {
+      const currentIndex = signData.fields.findIndex((f) => f.id === currentFieldId);
+      if (currentIndex >= 0 && currentIndex < signData.fields.length - 1) {
+        setCurrentFieldId(signData.fields[currentIndex + 1].id);
+        clearCanvas();
+        setTypedName("");
+      }
     }
   };
 
@@ -186,7 +221,7 @@ export default function SignPage() {
   // Initialize first field when moving to sign step
   useEffect(() => {
     if (currentStep === "sign" && signData?.fields && signData.fields.length > 0 && !currentFieldId) {
-      setCurrentFieldId(signData.fields[0].id);
+      setCurrentFieldId(signData.fields[0]!.id);
     }
   }, [currentStep, signData, currentFieldId]);
 
@@ -242,113 +277,76 @@ export default function SignPage() {
     );
   }
 
+  // Show PDF with consent overlay when user hasn't consented yet
+  const showConsentOverlay = currentStep === "consent";
+
   return (
-    <div className="min-h-screen bg-muted/20 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen flex">
+      {/* Left Sidebar - Consent & Signing Controls */}
+      <div className={`${showConsentOverlay ? 'w-full md:w-96' : 'w-full md:w-80'} bg-white dark:bg-gray-900 border-r flex flex-col overflow-y-auto`}>
         {/* Header */}
-        <div className="mb-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <FileText className="w-8 h-8 text-primary" />
-            <h1 className="text-2xl font-bold">Document Signature Request</h1>
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText className="w-6 h-6 text-primary" />
+            <h1 className="text-lg font-bold">Document Signature</h1>
           </div>
-          <p className="text-muted-foreground">
-            From: {signData.client.name}
-          </p>
+          <p className="text-sm text-muted-foreground">From: {signData.firmName}</p>
+          <p className="text-xs text-muted-foreground mt-1">{signData.document.fileName}</p>
         </div>
 
-        {/* Consent Step */}
-        {currentStep === "consent" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                Electronic Signature Disclosure and Consent
-              </CardTitle>
-              <CardDescription>
-                Please review and accept before signing
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* UK eIDAS Compliance Disclosure */}
-              <div className="bg-muted p-4 rounded-lg max-h-96 overflow-y-auto text-sm space-y-3">
-                <h3 className="font-semibold">Important Information About Electronic Signatures</h3>
+        {/* Consent Step - Scrollable Content */}
+        {showConsentOverlay && (
+          <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                <h2 className="font-semibold">Electronic Signature Consent</h2>
+              </div>
+              
+              {/* Compact Disclosure */}
+              <div className="bg-muted p-3 rounded text-xs space-y-2 max-h-64 overflow-y-auto">
+                <p className="font-medium">
+                  By proceeding, you consent to electronically sign this document under UK eIDAS Regulation.
+                </p>
                 
-                <p>
-                  By clicking "I Agree" below, you consent to electronically sign this document. 
-                  Your electronic signature will be legally valid and binding under UK law (UK eIDAS Regulation).
-                </p>
+                <p><strong>Your Rights:</strong></p>
+                <ul className="list-disc list-inside space-y-0.5 ml-2 text-xs">
+                  <li>Withdraw consent anytime by contacting {signData.firmName}</li>
+                  <li>Request a paper copy at any time</li>
+                  <li>No penalty for withdrawal or requesting paper copy</li>
+                </ul>
 
-                <h4 className="font-semibold mt-4">What You're Agreeing To:</h4>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>You agree to sign this document electronically rather than using a handwritten signature</li>
-                  <li>Your electronic signature will have the same legal effect as a handwritten signature</li>
+                <p><strong>You agree that:</strong></p>
+                <ul className="list-disc list-inside space-y-0.5 ml-2 text-xs">
+                  <li>Electronic signatures have the same legal effect as handwritten</li>
                   <li>This consent applies only to this specific document</li>
+                  <li>Your signature will be recorded with date, time, and identity</li>
                 </ul>
-
-                <h4 className="font-semibold mt-4">Your Rights:</h4>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li><strong>Right to withdraw:</strong> You may withdraw your consent to use electronic signatures at any time by contacting {signData.client.name}</li>
-                  <li><strong>Right to paper copy:</strong> You have the right to request a paper copy of this document at any time</li>
-                  <li><strong>No penalty:</strong> There is no fee or penalty for withdrawing consent or requesting a paper copy</li>
-                </ul>
-
-                <h4 className="font-semibold mt-4">System Requirements:</h4>
-                <p>To view and sign electronic documents, you need:</p>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>A device with internet access (computer, tablet, or mobile phone)</li>
-                  <li>A modern web browser (Chrome, Firefox, Safari, or Edge)</li>
-                  <li>The ability to view PDF documents</li>
-                  <li>An email address to receive the signed document</li>
-                </ul>
-
-                <h4 className="font-semibold mt-4">How It Works:</h4>
-                <ol className="list-decimal list-inside space-y-1 ml-4">
-                  <li>Accept this consent disclosure</li>
-                  <li>Review the document</li>
-                  <li>Provide your signature(s) where indicated</li>
-                  <li>Your signature will be recorded with date, time, and your identity</li>
-                  <li>A signed copy will be sent to your email address</li>
-                </ol>
-
-                <h4 className="font-semibold mt-4">Contact Information:</h4>
-                <p>
-                  If you have questions about electronic signatures or need assistance, 
-                  please contact {signData.client.name}.
-                </p>
-
-                <div className="bg-yellow-50 dark:bg-yellow-950 p-3 rounded mt-4 border border-yellow-200 dark:border-yellow-800">
-                  <p className="text-sm font-medium">
-                    <strong>Note:</strong> If you cannot access or view electronic documents, 
-                    please request a paper copy before proceeding.
-                  </p>
-                </div>
               </div>
 
               {/* Consent Checkboxes */}
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
+              <div className="space-y-3">
+                <div className="flex items-start gap-2">
                   <Checkbox
                     id="consent-agree"
                     checked={consentAccepted}
                     onCheckedChange={(checked) => setConsentAccepted(checked as boolean)}
                     data-testid="checkbox-consent"
                   />
-                  <Label htmlFor="consent-agree" className="text-sm leading-relaxed cursor-pointer">
-                    I have read and agree to the Electronic Signature Disclosure and Consent above. 
-                    I understand that my electronic signature will be legally binding.
+                  <Label htmlFor="consent-agree" className="text-xs leading-relaxed cursor-pointer">
+                    I agree to the Electronic Signature Disclosure and understand my signature will be legally binding.
                   </Label>
                 </div>
 
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-2">
                   <Checkbox
                     id="can-access"
                     checked={canAccessDocument === true}
                     onCheckedChange={(checked) => setCanAccessDocument(checked as boolean)}
                     data-testid="checkbox-can-access"
                   />
-                  <Label htmlFor="can-access" className="text-sm leading-relaxed cursor-pointer">
-                    I can view and access this electronic document clearly on my device.
-                    (If not, please request a paper copy)
+                  <Label htmlFor="can-access" className="text-xs leading-relaxed cursor-pointer">
+                    I can clearly view the document on the right →
                   </Label>
                 </div>
               </div>
@@ -356,250 +354,184 @@ export default function SignPage() {
               {canAccessDocument === false && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Cannot access document?</AlertTitle>
-                  <AlertDescription>
-                    Please contact {signData.client.name} to request a paper copy of this document.
+                  <AlertTitle className="text-sm">Cannot access document?</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    Please contact {signData.firmName} to request a paper copy.
                   </AlertDescription>
                 </Alert>
               )}
 
-              <div className="flex justify-end gap-3">
-                <Button
-                  onClick={() => setCurrentStep("sign")}
-                  disabled={!consentAccepted || canAccessDocument !== true}
-                  data-testid="button-proceed-to-sign"
-                >
-                  I Agree - Proceed to Sign
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              <Button
+                onClick={() => setCurrentStep("sign")}
+                disabled={!consentAccepted || canAccessDocument !== true}
+                data-testid="button-proceed-to-sign"
+                className="w-full"
+              >
+                I Agree - Start Signing
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* Signing Step */}
         {currentStep === "sign" && (
-          <div className="space-y-6">
-            {/* Document Info */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  {signData.document.fileName}
-                </CardTitle>
-                <CardDescription>
-                  {signData.request.emailMessage}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Signed as:</p>
-                    <p className="font-medium">{signData.recipient.name}</p>
-                    <p className="text-sm text-muted-foreground">{signData.recipient.email}</p>
-                  </div>
-                  <div className="ml-auto">
-                    <Badge variant="secondary">
-                      {fieldSignatures.size} / {signData.fields.length} fields completed
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex-1 flex flex-col overflow-y-auto">
+            {/* Signer Info */}
+            <div className="p-4 border-b bg-muted/30">
+              <div className="text-xs text-muted-foreground mb-1">Signing as:</div>
+              <div className="font-medium text-sm">{signData.recipient.name}</div>
+              <div className="text-xs text-muted-foreground">{signData.recipient.email}</div>
+              <Badge variant="secondary" className="mt-2">
+                {fieldSignatures.size} / {signData.fields.length} fields completed
+              </Badge>
+            </div>
 
-            {/* PDF Preview with Field Indicators */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Document Preview</CardTitle>
-                <CardDescription>Review the document and see where you need to sign</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PdfSignatureViewer
-                  pdfUrl={`/objects${signData.document.objectPath}`}
-                  clickable={false}
-                  renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (
-                    <>
-                      {signData.fields
-                        .filter((f: any) => f.pageNumber === pageNumber)
-                        .map((field: any) => {
-                          const isSigned = fieldSignatures.has(field.id);
-                          return (
-                            <div
-                              key={field.id}
-                              className={`absolute border-2 pointer-events-none ${
-                                isSigned
-                                  ? "border-green-500 bg-green-100/30"
-                                  : "border-yellow-500 bg-yellow-100/30"
-                              }`}
-                              style={{
-                                left: `${field.xPosition}%`,
-                                top: `${field.yPosition}%`,
-                                width: `${field.width}%`,
-                                height: `${field.height}%`,
-                              }}
-                            >
-                              <div className={`text-xs font-medium p-1 truncate ${
-                                isSigned ? "text-green-700" : "text-yellow-700"
-                              }`}>
-                                {isSigned ? "✓ Signed" : "⚠ Sign here"}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Signature Fields */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Signature Fields</CardTitle>
-                <CardDescription>Complete all required signature fields</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {signData.fields.map((field: any, index: number) => {
-                  const isCurrentField = field.id === currentFieldId;
-                  const isSigned = fieldSignatures.has(field.id);
-                  
-                  return (
-                    <div
-                      key={field.id}
-                      className={`p-4 border rounded-lg ${
-                        isCurrentField ? "border-primary bg-primary/5" : ""
-                      } ${isSigned ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" : ""}`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          {field.fieldType === "signature" ? (
-                            <PenTool className="w-4 h-4" />
-                          ) : (
-                            <Type className="w-4 h-4" />
-                          )}
-                          <span className="font-medium">
-                            {index + 1}. {field.fieldType === "signature" ? "Signature" : "Type Name"}
-                          </span>
-                        </div>
-                        {isSigned && (
-                          <Badge variant="outline" className="bg-green-100 dark:bg-green-900">
-                            <Check className="w-3 h-3 mr-1" />
-                            Completed
-                          </Badge>
+            {/* Signature Fields - Scrollable */}
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+              <div className="text-sm font-semibold mb-2">Signature Fields</div>
+              {signData.fields.map((field: any, index: number) => {
+                const isCurrentField = field.id === currentFieldId;
+                const isSigned = fieldSignatures.has(field.id);
+                
+                return (
+                  <div
+                    key={field.id}
+                    className={`p-3 border rounded-lg text-sm ${
+                      isCurrentField ? "border-primary bg-primary/5" : ""
+                    } ${isSigned ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" : ""}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {field.fieldType === "signature" ? (
+                          <PenTool className="w-3 h-3" />
+                        ) : (
+                          <Type className="w-3 h-3" />
                         )}
+                        <span className="font-medium text-xs">
+                          Field {index + 1}
+                        </span>
                       </div>
+                      {isSigned && (
+                        <Badge variant="outline" className="text-xs bg-green-100 dark:bg-green-900">
+                          <Check className="w-3 h-3 mr-1" />
+                          Done
+                        </Badge>
+                      )}
+                    </div>
 
-                      {isCurrentField && !isSigned && (
-                        <Tabs defaultValue={field.fieldType === "signature" ? "draw" : "type"}>
-                          <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="draw">Draw Signature</TabsTrigger>
-                            <TabsTrigger value="type">Type Name</TabsTrigger>
-                          </TabsList>
+                    {isCurrentField && !isSigned && (
+                      <Tabs defaultValue={field.fieldType === "signature" ? "draw" : "type"} className="mt-2">
+                        <TabsList className="grid w-full grid-cols-2 h-8">
+                          <TabsTrigger value="draw" className="text-xs">Draw</TabsTrigger>
+                          <TabsTrigger value="type" className="text-xs">Type</TabsTrigger>
+                        </TabsList>
 
-                          <TabsContent value="draw" className="space-y-3">
-                            <div className="border rounded bg-white dark:bg-gray-900">
-                              <canvas
-                                ref={canvasRef}
-                                width={500}
-                                height={150}
-                                onMouseDown={startDrawing}
-                                onMouseMove={draw}
-                                onMouseUp={stopDrawing}
-                                onMouseLeave={stopDrawing}
-                                className="w-full cursor-crosshair"
-                                data-testid="canvas-signature"
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={clearCanvas}
-                                data-testid="button-clear-signature"
-                              >
-                                Clear
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => saveSignature("drawn")}
-                                data-testid="button-save-drawn-signature"
-                              >
-                                Save Signature
-                              </Button>
-                            </div>
-                          </TabsContent>
-
-                          <TabsContent value="type" className="space-y-3">
-                            <div>
-                              <Label htmlFor="typed-name">Type your full name</Label>
-                              <Input
-                                id="typed-name"
-                                value={typedName}
-                                onChange={(e) => setTypedName(e.target.value)}
-                                placeholder="Enter your full name"
-                                className="font-serif text-2xl"
-                                data-testid="input-typed-name"
-                              />
-                            </div>
+                        <TabsContent value="draw" className="space-y-2 mt-2">
+                          <div className="border rounded bg-white dark:bg-gray-900">
+                            <canvas
+                              ref={canvasRef}
+                              width={300}
+                              height={100}
+                              onMouseDown={startDrawing}
+                              onMouseMove={draw}
+                              onMouseUp={stopDrawing}
+                              onMouseLeave={stopDrawing}
+                              className="w-full cursor-crosshair"
+                              data-testid="canvas-signature"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={clearCanvas}
+                              data-testid="button-clear-signature"
+                              className="text-xs"
+                            >
+                              Clear
+                            </Button>
                             <Button
                               size="sm"
-                              onClick={() => saveSignature("typed")}
-                              disabled={!typedName.trim()}
-                              data-testid="button-save-typed-name"
+                              onClick={() => saveSignature("drawn")}
+                              data-testid="button-save-drawn-signature"
+                              className="text-xs"
                             >
-                              Save Name
+                              Save
                             </Button>
-                          </TabsContent>
-                        </Tabs>
-                      )}
+                          </div>
+                        </TabsContent>
 
-                      {isSigned && (
-                        <div className="mt-2">
+                        <TabsContent value="type" className="space-y-2 mt-2">
+                          <Input
+                            id="typed-name"
+                            value={typedName}
+                            onChange={(e) => setTypedName(e.target.value)}
+                            placeholder="Enter full name"
+                            className="font-serif text-lg"
+                            data-testid="input-typed-name"
+                          />
                           <Button
-                            variant="outline"
                             size="sm"
-                            onClick={() => {
-                              setCurrentFieldId(field.id);
-                              const sig = fieldSignatures.get(field.id);
-                              if (sig?.type === "typed") {
-                                setTypedName(sig.data);
-                              }
-                              setFieldSignatures(new Map(
-                                Array.from(fieldSignatures.entries()).filter(([id]) => id !== field.id)
-                              ));
-                            }}
-                            data-testid={`button-edit-field-${field.id}`}
+                            onClick={() => saveSignature("typed")}
+                            disabled={!typedName.trim()}
+                            data-testid="button-save-typed-name"
+                            className="w-full text-xs"
                           >
-                            Edit
+                            Save Name
                           </Button>
-                        </div>
-                      )}
+                        </TabsContent>
+                      </Tabs>
+                    )}
 
-                      {!isCurrentField && !isSigned && (
+                    {isSigned && (
+                      <div className="mt-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setCurrentFieldId(field.id)}
-                          data-testid={`button-select-field-${field.id}`}
+                          onClick={() => {
+                            setCurrentFieldId(field.id);
+                            const sig = fieldSignatures.get(field.id);
+                            if (sig?.type === "typed") {
+                              setTypedName(sig.data);
+                            }
+                            setFieldSignatures(new Map(
+                              Array.from(fieldSignatures.entries()).filter(([id]) => id !== field.id)
+                            ));
+                          }}
+                          data-testid={`button-edit-field-${field.id}`}
+                          className="text-xs"
                         >
-                          Complete this field
+                          Edit
                         </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
+                      </div>
+                    )}
+
+                    {!isCurrentField && !isSigned && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentFieldId(field.id)}
+                        data-testid={`button-select-field-${field.id}`}
+                        className="w-full text-xs mt-2"
+                      >
+                        Sign this field
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Submit Button */}
-            <div className="flex justify-end">
+            <div className="p-4 border-t">
               <Button
                 onClick={handleSubmit}
                 disabled={submitMutation.isPending || fieldSignatures.size < signData.fields.length}
-                size="lg"
+                className="w-full"
                 data-testid="button-submit-signature"
               >
                 <Send className="w-4 h-4 mr-2" />
-                Submit Signature
+                {submitMutation.isPending ? "Submitting..." : "Submit Signature"}
               </Button>
             </div>
           </div>
@@ -607,36 +539,72 @@ export default function SignPage() {
 
         {/* Complete Step */}
         {currentStep === "complete" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-600 dark:text-green-400">
+          <div className="flex-1 p-4">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                 <Check className="w-6 h-6" />
-                Signature Complete
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+                <h2 className="text-lg font-semibold">Signature Complete</h2>
+              </div>
+              
               <Alert>
                 <Check className="h-4 w-4" />
                 <AlertTitle>Success!</AlertTitle>
-                <AlertDescription>
-                  Your signature has been recorded and saved. A copy of the signed document 
-                  will be sent to your email address shortly.
+                <AlertDescription className="text-xs">
+                  Your signature has been recorded. A copy will be sent to your email.
                 </AlertDescription>
               </Alert>
 
-              <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
+              <div className="bg-muted p-3 rounded text-xs space-y-1">
                 <p><strong>Document:</strong> {signData.document.fileName}</p>
                 <p><strong>Signed by:</strong> {signData.recipient.name}</p>
                 <p><strong>Email:</strong> {signData.recipient.email}</p>
-                <p><strong>Date:</strong> {new Date().toLocaleString()}</p>
               </div>
-
-              <p className="text-sm text-muted-foreground">
-                You can now close this window. Thank you for completing this signature request.
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
+      </div>
+
+      {/* Right Side - PDF Viewer (Full Screen) */}
+      <div className="flex-1 bg-gray-100 dark:bg-gray-800 overflow-hidden">
+        <PdfSignatureViewer
+          pdfUrl={signData.document.objectPath}
+          clickable={false}
+          className="h-full"
+          renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (
+            <>
+              {signData.fields
+                .filter((f: any) => f.pageNumber === pageNumber)
+                .map((field: any) => {
+                  const isSigned = fieldSignatures.has(field.id);
+                  const isActive = field.id === currentFieldId && currentStep === "sign";
+                  return (
+                    <div
+                      key={field.id}
+                      className={`absolute border-2 pointer-events-none transition-all ${
+                        isActive
+                          ? "border-blue-500 bg-blue-100/40 animate-pulse"
+                          : isSigned
+                          ? "border-green-500 bg-green-100/30"
+                          : "border-yellow-500 bg-yellow-100/30"
+                      }`}
+                      style={{
+                        left: `${field.xPosition}%`,
+                        top: `${field.yPosition}%`,
+                        width: `${field.width}%`,
+                        height: `${field.height}%`,
+                      }}
+                    >
+                      <div className={`text-xs font-medium p-1 truncate ${
+                        isActive ? "text-blue-700" : isSigned ? "text-green-700" : "text-yellow-700"
+                      }`}>
+                        {isActive ? "← Sign here" : isSigned ? "✓ Signed" : "⚠ Sign"}
+                      </div>
+                    </div>
+                  );
+                })}
+            </>
+          )}
+        />
       </div>
     </div>
   );

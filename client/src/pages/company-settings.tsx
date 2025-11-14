@@ -19,6 +19,7 @@ export default function CompanySettingsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [emailSenderName, setEmailSenderName] = useState("");
+  const [firmName, setFirmName] = useState("");
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
 
   // Redirect if not super admin
@@ -38,6 +39,7 @@ export default function CompanySettingsPage() {
   useEffect(() => {
     if (settings) {
       setEmailSenderName(settings.emailSenderName || "The Link Team");
+      setFirmName(settings.firmName || "The Link");
       setPushNotificationsEnabled(settings.pushNotificationsEnabled || false);
     }
   }, [settings]);
@@ -66,6 +68,7 @@ export default function CompanySettingsPage() {
   const handleSave = () => {
     updateSettingsMutation.mutate({
       emailSenderName,
+      firmName,
       pushNotificationsEnabled,
     });
   };
@@ -115,6 +118,22 @@ export default function CompanySettingsPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
+              <Label htmlFor="firm-name">Firm Name</Label>
+              <Input
+                id="firm-name"
+                data-testid="input-firm-name"
+                type="text"
+                value={firmName}
+                onChange={(e) => setFirmName(e.target.value)}
+                placeholder="The Link"
+                disabled={settingsLoading || updateSettingsMutation.isPending}
+              />
+              <p className="text-sm text-muted-foreground">
+                Your firm's name used in legal consent text and document signatures
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="email-sender-name">Email Sender Name</Label>
               <Input
                 id="email-sender-name"
@@ -133,7 +152,7 @@ export default function CompanySettingsPage() {
             <div className="flex justify-end">
               <Button
                 onClick={handleSave}
-                disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim() || !firmName.trim()}
                 data-testid="button-save-company-settings"
               >
                 <Save className="w-4 h-4 mr-2" />
