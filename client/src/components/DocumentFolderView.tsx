@@ -21,9 +21,16 @@ import { DocumentPreviewDialog } from "./DocumentPreviewDialog";
 interface DocumentFolderViewProps {
   clientId: string;
   renderActions?: (currentFolderId: string | null) => React.ReactNode;
+  filterOutSignatureRequests?: boolean;
+  showOnlySignatureRequests?: boolean;
 }
 
-export default function DocumentFolderView({ clientId, renderActions }: DocumentFolderViewProps) {
+export default function DocumentFolderView({ 
+  clientId, 
+  renderActions,
+  filterOutSignatureRequests = false,
+  showOnlySignatureRequests = false
+}: DocumentFolderViewProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [currentFolderName, setCurrentFolderName] = useState<string>("");
   const { toast } = useToast();
@@ -163,7 +170,161 @@ export default function DocumentFolderView({ clientId, renderActions }: Document
   );
 
   // Filter ungrouped documents (legacy or documents without folders)
-  const ungroupedDocuments = allDocuments?.filter(doc => !doc.folderId) || [];
+  let ungroupedDocuments = allDocuments?.filter(doc => !doc.folderId) || [];
+  
+  // Apply signature request filtering
+  if (filterOutSignatureRequests) {
+    ungroupedDocuments = ungroupedDocuments.filter(doc => doc.uploadName !== 'Signature Request');
+  } else if (showOnlySignatureRequests) {
+    ungroupedDocuments = ungroupedDocuments.filter(doc => doc.uploadName === 'Signature Request');
+  }
+
+  // When showing only signature requests, also filter ALL documents (including those in folders)
+  let allSignatureRequestDocs = [];
+  if (showOnlySignatureRequests && allDocuments) {
+    allSignatureRequestDocs = allDocuments.filter(doc => doc.uploadName === 'Signature Request');
+  }
+
+  // When showing only signature requests, bypass folder navigation and show direct list
+  if (showOnlySignatureRequests) {
+    if (allDocumentsLoading) {
+      return (
+        <div className="space-y-3">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      );
+    }
+
+    if (allSignatureRequestDocs.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+          <p className="text-muted-foreground">No signature documents yet.</p>
+        </div>
+      );
+    }
+
+    // Render signature request documents as a simple list (no folders)
+    return (
+      <div className="space-y-3">
+        {isMobile ? (
+          /* Mobile Card View */
+          <div className="space-y-3">
+            {allSignatureRequestDocs.map((doc: any) => (
+              <Card key={doc.id} data-testid={`document-card-${doc.id}`}>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium" data-testid={`text-filename-${doc.id}`}>{doc.fileName}</p>
+                        <p className="text-sm text-muted-foreground">{formatFileSize(doc.fileSize)}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <DocumentPreviewDialog 
+                        documentId={doc.id}
+                        fileName={doc.fileName}
+                        trigger={
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            data-testid={`button-view-${doc.id}`}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View
+                          </Button>
+                        }
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownload(doc)}
+                        className="flex-1"
+                        data-testid={`button-download-${doc.id}`}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          /* Desktop Table View */
+          <div className="border rounded-lg">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>File Name</TableHead>
+                  <TableHead>Date Uploaded</TableHead>
+                  <TableHead>Uploaded By</TableHead>
+                  <TableHead>File Size</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allSignatureRequestDocs.map((doc: any) => (
+                  <TableRow key={doc.id} data-testid={`row-${doc.id}`}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span data-testid={`text-filename-${doc.id}`}>{doc.fileName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm" data-testid={`text-date-${doc.id}`}>
+                        {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">
+                        {doc.uploadedBy || '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">{formatFileSize(doc.fileSize)}</span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <DocumentPreviewDialog 
+                          documentId={doc.id}
+                          fileName={doc.fileName}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-testid={`button-view-${doc.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDownload(doc)}
+                          data-testid={`button-download-${doc.id}`}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Folder list view
   if (currentFolderId === null) {

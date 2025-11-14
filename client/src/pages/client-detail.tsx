@@ -8636,45 +8636,71 @@ export default function ClientDetail() {
           <TabsContent value="documents" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Documents
-                  </CardTitle>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => navigate(`/clients/${id}/signature-requests/new`)}
-                    data-testid="button-create-signature-request"
-                  >
-                    <PenLine className="w-4 h-4 mr-2" />
-                    Create Signature Request
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <DocumentFolderView 
-                  clientId={id} 
-                  renderActions={(currentFolderId) => (
-                    <>
-                      <CreateFolderDialog clientId={id} />
-                      <DocumentUploadDialog clientId={id} source="direct upload" folderId={currentFolderId} />
-                    </>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Signature Requests Section */}
-            <Card>
-              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <FileSignature className="w-5 h-5" />
-                  E-Signature Requests
+                  <FileText className="w-5 h-5" />
+                  Documents
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <SignatureRequestsPanel clientId={id} />
+                {/* Nested Tabs for Client Docs vs Signed Docs */}
+                <Tabs defaultValue="client-docs" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="client-docs" data-testid="tab-client-docs">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Client Docs
+                    </TabsTrigger>
+                    <TabsTrigger value="signed-docs" data-testid="tab-signed-docs">
+                      <FileSignature className="w-4 h-4 mr-2" />
+                      Signed Docs
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Client Docs Tab - Regular documents */}
+                  <TabsContent value="client-docs" className="space-y-4">
+                    <DocumentFolderView 
+                      clientId={id}
+                      filterOutSignatureRequests={true}
+                      renderActions={(currentFolderId) => (
+                        <>
+                          <CreateFolderDialog clientId={id} />
+                          <DocumentUploadDialog clientId={id} source="direct upload" folderId={currentFolderId} />
+                        </>
+                      )}
+                    />
+                  </TabsContent>
+
+                  {/* Signed Docs Tab - Signature request documents + E-Signatures section */}
+                  <TabsContent value="signed-docs" className="space-y-6">
+                    {/* Create Signature Request Button */}
+                    <div className="flex justify-end">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => navigate(`/clients/${id}/signature-requests/new`)}
+                        data-testid="button-create-signature-request"
+                      >
+                        <PenLine className="w-4 h-4 mr-2" />
+                        Create Signature Request
+                      </Button>
+                    </div>
+
+                    {/* Signature Request Documents */}
+                    <div>
+                      <h3 className="text-sm font-medium mb-3 text-muted-foreground">Signature Documents</h3>
+                      <DocumentFolderView 
+                        clientId={id}
+                        showOnlySignatureRequests={true}
+                        renderActions={() => null}
+                      />
+                    </div>
+
+                    {/* E-Signature Requests Section */}
+                    <div>
+                      <h3 className="text-sm font-medium mb-3 text-muted-foreground">E-Signature Requests</h3>
+                      <SignatureRequestsPanel clientId={id} />
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </TabsContent>
