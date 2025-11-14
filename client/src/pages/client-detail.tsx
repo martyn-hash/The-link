@@ -8684,16 +8684,6 @@ export default function ClientDetail() {
                       </Button>
                     </div>
 
-                    {/* Signature Request Documents */}
-                    <div>
-                      <h3 className="text-sm font-medium mb-3 text-muted-foreground">Signature Documents</h3>
-                      <DocumentFolderView 
-                        clientId={id}
-                        showOnlySignatureRequests={true}
-                        renderActions={() => null}
-                      />
-                    </div>
-
                     {/* E-Signature Requests Section */}
                     <div>
                       <h3 className="text-sm font-medium mb-3 text-muted-foreground">E-Signature Requests</h3>
