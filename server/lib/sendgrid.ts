@@ -148,6 +148,120 @@ export async function sendSignatureRequestEmail(
 }
 
 /**
+ * Send reminder email for pending signature
+ */
+export async function sendReminderEmail(
+  recipientEmail: string,
+  recipientName: string,
+  firmName: string,
+  documentName: string,
+  daysSinceSent: number,
+  reminderNumber: number,
+  signLink: string
+) {
+  try {
+    const { client, fromEmail } = await getUncachableSendGridClient();
+
+    const subject = `Reminder: Please sign ${documentName}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; }
+          .button { 
+            display: inline-block; 
+            padding: 15px 30px; 
+            background-color: #76CA23; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+          }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .reminder-badge { 
+            background-color: #FF9800; 
+            color: white; 
+            padding: 5px 15px; 
+            border-radius: 20px; 
+            display: inline-block;
+            font-weight: bold;
+            margin: 10px 0;
+          }
+          .document-title { font-size: 18px; font-weight: bold; color: #0A7BBF; margin: 15px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Signature Reminder</h1>
+          </div>
+          <div class="content">
+            <div class="reminder-badge">Reminder ${reminderNumber} • ${daysSinceSent} day${daysSinceSent !== 1 ? 's' : ''} ago</div>
+            
+            <p>Dear ${recipientName},</p>
+            
+            <p>This is a friendly reminder that <strong>${firmName}</strong> is waiting for your signature on the following document:</p>
+            
+            <p class="document-title">${documentName}</p>
+            
+            <p>This document was sent to you ${daysSinceSent} day${daysSinceSent !== 1 ? 's' : ''} ago and still requires your electronic signature to proceed.</p>
+            
+            <p><strong>Why this matters:</strong></p>
+            <ul>
+              <li>Your signature is needed to complete this important document</li>
+              <li>The signing process takes just a few minutes</li>
+              <li>This helps us keep your matters moving forward</li>
+            </ul>
+            
+            <p>To review and sign the document, please click the button below:</p>
+            
+            <div style="text-align: center;">
+              <a href="${signLink}" class="button">Review & Sign Document</a>
+            </div>
+            
+            <p style="font-size: 12px; color: #666;">
+              Or copy and paste this link into your browser:<br>
+              <a href="${signLink}">${signLink}</a>
+            </p>
+            
+            <p>If you have any questions or concerns about this document, please don't hesitate to contact ${firmName} directly.</p>
+            
+            <p style="font-style: italic; color: #666; font-size: 14px; margin-top: 30px;">
+              This is an automated reminder. You're receiving this because you have a pending signature request.
+            </p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; ${new Date().getFullYear()} ${firmName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const msg = {
+      to: recipientEmail,
+      from: fromEmail,
+      subject,
+      html,
+    };
+
+    await client.send(msg);
+    console.log(`[Email] Reminder email sent to ${recipientEmail} (reminder #${reminderNumber})`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Email] Error sending reminder email:', error);
+    throw error;
+  }
+}
+
+/**
  * Send completed document email with signed PDF and certificate as attachments
  */
 export async function sendCompletedDocumentEmail(

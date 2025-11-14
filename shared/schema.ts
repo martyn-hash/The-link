@@ -2288,9 +2288,15 @@ export const signatureRequests = pgTable("signature_requests", {
   emailSubject: varchar("email_subject"), // Subject line for signature request email
   emailMessage: text("email_message"), // Custom message from staff to recipients
   redirectUrl: varchar("redirect_url"), // Optional URL to redirect signer after completion
+  reminderEnabled: boolean("reminder_enabled").notNull().default(true), // Whether to send reminders
+  reminderIntervalDays: integer("reminder_interval_days").notNull().default(3), // Days between reminders
+  remindersSentCount: integer("reminders_sent_count").notNull().default(0), // How many reminders sent
+  lastReminderSentAt: timestamp("last_reminder_sent_at"), // When last reminder was sent
+  nextReminderDate: timestamp("next_reminder_date"), // When next reminder should be sent
   completedAt: timestamp("completed_at"), // When all signatures collected
   cancelledAt: timestamp("cancelled_at"),
   cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancellationReason: text("cancellation_reason"), // Why request was cancelled
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

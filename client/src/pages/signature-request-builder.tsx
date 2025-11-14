@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -170,6 +171,10 @@ export default function SignatureRequestBuilder() {
   const [emailSubject, setEmailSubject] = useState("Document Signature Request");
   const [emailMessage, setEmailMessage] = useState("Please review and sign the attached document.");
   const [selectedRedirectUrl, setSelectedRedirectUrl] = useState<string>("");
+  
+  // Reminder settings
+  const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [reminderIntervalDays, setReminderIntervalDays] = useState(3);
 
   // Track unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -484,6 +489,8 @@ export default function SignatureRequestBuilder() {
         emailSubject,
         emailMessage,
         redirectUrl: selectedRedirectUrl === "__none__" ? null : selectedRedirectUrl || null,
+        reminderEnabled,
+        reminderIntervalDays,
       });
     },
     onSuccess: () => {
@@ -902,6 +909,45 @@ export default function SignatureRequestBuilder() {
                     <p className="text-sm text-muted-foreground">
                       Choose where signers will be redirected after completing the signature. Leave as default to show a success message.
                     </p>
+                  </div>
+
+                  <Separator />
+
+                  {/* Reminder Settings */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="reminder-enabled">Send Reminders</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically remind unsigned recipients
+                        </p>
+                      </div>
+                      <Switch
+                        id="reminder-enabled"
+                        checked={reminderEnabled}
+                        onCheckedChange={setReminderEnabled}
+                        data-testid="switch-reminder-enabled"
+                      />
+                    </div>
+
+                    {reminderEnabled && (
+                      <div className="space-y-2 pl-4 border-l-2 border-muted">
+                        <Label htmlFor="reminder-interval">Reminder Interval (days)</Label>
+                        <Input
+                          id="reminder-interval"
+                          type="number"
+                          min="1"
+                          max="30"
+                          value={reminderIntervalDays}
+                          onChange={(e) => setReminderIntervalDays(Math.max(1, Math.min(30, parseInt(e.target.value) || 3)))}
+                          data-testid="input-reminder-interval"
+                          className="w-32"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          Reminders will be sent every {reminderIntervalDays} day{reminderIntervalDays !== 1 ? 's' : ''} to unsigned recipients (max 5 reminders total)
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <Alert>

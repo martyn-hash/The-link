@@ -665,7 +665,9 @@ export function registerSignatureRoutes(
           emailMessage,
           fields,
           recipients,
-          redirectUrl
+          redirectUrl,
+          reminderEnabled = true,
+          reminderIntervalDays = 3
         } = req.body;
 
         // Validate friendlyName is provided
@@ -687,6 +689,12 @@ export function registerSignatureRoutes(
           return res.status(400).json({ error: "Only PDF documents can be used for e-signatures" });
         }
 
+        // Calculate next reminder date if reminders enabled
+        const now = new Date();
+        const nextReminderDate = reminderEnabled 
+          ? new Date(now.getTime() + reminderIntervalDays * 24 * 60 * 60 * 1000)
+          : null;
+
         // Create signature request
         const [request] = await db
           .insert(signatureRequests)
@@ -699,6 +707,10 @@ export function registerSignatureRoutes(
             emailSubject: emailSubject || "Document Signature Request",
             emailMessage,
             redirectUrl: redirectUrl || null,
+            reminderEnabled,
+            reminderIntervalDays,
+            remindersSentCount: 0,
+            nextReminderDate,
           })
           .returning();
 
