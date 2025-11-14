@@ -1221,7 +1221,7 @@ You agree that:
           signerName: person?.fullName || recipient.email,
           signerEmail: recipient.email,
           req,
-          documentHash: document?.hash || "unknown",
+          documentHash: "not_applicable",
           eventDetails: "User viewed consent disclosure",
           consentText: consentDisclosureText,
           metadata: {
@@ -1362,7 +1362,7 @@ You agree that:
               signerName: person.fullName || recipient.email,
               signerEmail: recipient.email,
               req,
-              documentHash: document.hash || "unknown",
+              documentHash: document.fileName || "unknown",
               eventDetails: `Document accessed: ${document.fileName}`,
               metadata: {
                 documentId: document.id,
@@ -2032,7 +2032,7 @@ You agree that:
                     signerName: personData.fullName || recipientData.email,
                     signerEmail: recipientData.email,
                     req: { ip: "system", headers: {} }, // System-generated, no real IP
-                    documentHash: document.hash || "unknown",
+                    documentHash: document.fileName || "unknown",
                     eventDetails: `Completion email sent with signed document`,
                     metadata: {
                       documentId: document.id,
