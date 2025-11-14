@@ -11,8 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Settings, Save, Bell } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
+
+interface RedirectUrl {
+  name: string;
+  url: string;
+}
 
 export default function CompanySettingsPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -21,6 +27,11 @@ export default function CompanySettingsPage() {
   const [emailSenderName, setEmailSenderName] = useState("");
   const [firmName, setFirmName] = useState("");
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
+  
+  // Post-signature redirect URLs
+  const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
+  const [newRedirectName, setNewRedirectName] = useState("");
+  const [newRedirectUrl, setNewRedirectUrl] = useState("");
 
   // Redirect if not super admin
   useEffect(() => {
@@ -41,6 +52,7 @@ export default function CompanySettingsPage() {
       setEmailSenderName(settings.emailSenderName || "The Link Team");
       setFirmName(settings.firmName || "The Link");
       setPushNotificationsEnabled(settings.pushNotificationsEnabled || false);
+      setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
     }
   }, [settings]);
 
@@ -65,11 +77,43 @@ export default function CompanySettingsPage() {
     },
   });
 
+  const handleAddRedirectUrl = () => {
+    if (!newRedirectName.trim() || !newRedirectUrl.trim()) {
+      toast({
+        title: "Invalid input",
+        description: "Please provide both a name and URL",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Basic URL validation
+    try {
+      new URL(newRedirectUrl);
+    } catch {
+      toast({
+        title: "Invalid URL",
+        description: "Please provide a valid URL (e.g., https://example.com)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRedirectUrls([...redirectUrls, { name: newRedirectName.trim(), url: newRedirectUrl.trim() }]);
+    setNewRedirectName("");
+    setNewRedirectUrl("");
+  };
+
+  const handleDeleteRedirectUrl = (index: number) => {
+    setRedirectUrls(redirectUrls.filter((_, i) => i !== index));
+  };
+
   const handleSave = () => {
     updateSettingsMutation.mutate({
       emailSenderName,
       firmName,
       pushNotificationsEnabled,
+      postSignatureRedirectUrls: redirectUrls,
     });
   };
 
@@ -195,6 +239,122 @@ export default function CompanySettingsPage() {
                 onClick={handleSave}
                 disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
                 data-testid="button-save-push-settings"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Post-Signature Redirect URLs Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="w-5 h-5" />
+              Post-Signature Redirect URLs
+            </CardTitle>
+            <CardDescription>
+              Configure redirect URLs for after clients sign documents. When creating a signature request, you can choose which URL to redirect signers to after completion.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Add New Redirect URL Form */}
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+              <h3 className="font-semibold text-sm">Add New Redirect URL</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="redirect-name">Name</Label>
+                  <Input
+                    id="redirect-name"
+                    data-testid="input-redirect-name"
+                    type="text"
+                    value={newRedirectName}
+                    onChange={(e) => setNewRedirectName(e.target.value)}
+                    placeholder="e.g., Google Reviews, Company Website"
+                    disabled={settingsLoading || updateSettingsMutation.isPending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="redirect-url">URL</Label>
+                  <Input
+                    id="redirect-url"
+                    data-testid="input-redirect-url"
+                    type="url"
+                    value={newRedirectUrl}
+                    onChange={(e) => setNewRedirectUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    disabled={settingsLoading || updateSettingsMutation.isPending}
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={handleAddRedirectUrl}
+                disabled={settingsLoading || updateSettingsMutation.isPending || !newRedirectName.trim() || !newRedirectUrl.trim()}
+                data-testid="button-add-redirect-url"
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Redirect URL
+              </Button>
+            </div>
+
+            {/* Existing Redirect URLs Table */}
+            {redirectUrls.length > 0 ? (
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm">Configured Redirect URLs</h3>
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>URL</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {redirectUrls.map((redirect, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{redirect.name}</TableCell>
+                          <TableCell>
+                            <a 
+                              href={redirect.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline flex items-center gap-1"
+                            >
+                              {redirect.url}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteRedirectUrl(index)}
+                              disabled={settingsLoading || updateSettingsMutation.isPending}
+                              data-testid={`button-delete-redirect-${index}`}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No redirect URLs configured. Add one above to get started.
+              </p>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSave}
+                disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                data-testid="button-save-redirect-settings"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
