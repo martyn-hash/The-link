@@ -14,6 +14,17 @@ import { getQueryFn, apiRequest } from "@/lib/queryClient";
 import { FileText, Check, AlertCircle, PenTool, Type, Send, Shield } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 import { Progress } from "@/components/ui/progress";
+import { nanoid } from "nanoid";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Type for the sign data response from backend
 interface SignData {
@@ -78,6 +89,133 @@ export default function SignPage() {
   const [signingStarted, setSigningStarted] = useState(false);
   const [showFieldModal, setShowFieldModal] = useState(false);
 
+  // Session protection state
+  const [sessionToken, setSessionToken] = useState<string>("");
+  const [showTakeoverDialog, setShowTakeoverDialog] = useState(false);
+  const [conflictDevice, setConflictDevice] = useState<{browser: string; os: string; device: string} | null>(null);
+  const [sessionLost, setSessionLost] = useState(false); // Blocks all interactions when session is lost
+
+  // Get or create session token (persisted in localStorage)
+  useEffect(() => {
+    if (!token) return;
+    
+    const storageKey = `sign_session_${token}`;
+    let storedToken = localStorage.getItem(storageKey);
+    
+    if (!storedToken) {
+      storedToken = nanoid();
+      localStorage.setItem(storageKey, storedToken);
+    }
+    
+    setSessionToken(storedToken);
+  }, [token]);
+
+  // Claim session mutation
+  const claimSessionMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/sign/${token}/session`, {
+        sessionToken
+      });
+    },
+    onSuccess: () => {
+      // Session claimed successfully
+    },
+    onError: (error: any) => {
+      // Handle 409 conflict - another session is active
+      if (error.message?.includes("active_session") || error.message?.includes("409")) {
+        // Parse device info from error if available
+        try {
+          const errorData = JSON.parse(error.message.split("Response body: ")[1] || "{}");
+          if (errorData.deviceInfo) {
+            setConflictDevice(errorData.deviceInfo);
+          }
+        } catch {}
+        setShowTakeoverDialog(true);
+      } else {
+        toast({
+          title: "Session Error",
+          description: error.message || "Failed to claim signing session",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  // Force session takeover mutation
+  const forceSessionMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/sign/${token}/session/force`, {
+        sessionToken
+      });
+    },
+    onSuccess: () => {
+      setShowTakeoverDialog(false);
+      setConflictDevice(null);
+      
+      // CRITICAL: Force page reload to get fresh recipient data
+      // Prevents using stale redirect URLs or other outdated information
+      toast({
+        title: "Session Claimed",
+        description: "Reloading to get fresh data...",
+        duration: 2000,
+      });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to take over session",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Heartbeat mutation (runs every 60 seconds)
+  const heartbeatMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("PATCH", `/api/sign/${token}/session/heartbeat`, {
+        sessionToken
+      });
+    },
+    onError: (error: any) => {
+      // Session was taken over or expired - CRITICAL: disable all interactions IMMEDIATELY
+      if (error.message?.includes("session_taken_over") || error.message?.includes("session_expired")) {
+        // IMMEDIATELY set session lost flag to block ALL UI interactions
+        setSessionLost(true);
+        
+        // Clear session token and localStorage
+        setSessionToken("");
+        localStorage.removeItem(`sign_session_${token}`);
+        
+        // Force page reload after 3 seconds to get fresh state
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      }
+    },
+  });
+
+  // Claim session on load (once sessionToken is ready)
+  useEffect(() => {
+    if (sessionToken && token) {
+      claimSessionMutation.mutate();
+    }
+  }, [sessionToken, token]);
+
+  // Start heartbeat interval (every 60 seconds)
+  useEffect(() => {
+    if (!sessionToken || !token) return;
+
+    const interval = setInterval(() => {
+      heartbeatMutation.mutate();
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(interval);
+  }, [sessionToken, token]);
+
   // Fetch signature request data
   const { data: signData, isLoading, error } = useQuery<SignData>({
     queryKey: [`/api/sign/${token}`],
@@ -96,6 +234,7 @@ export default function SignPage() {
       return await apiRequest("POST", `/api/sign/${token}`, {
         signatures,
         consentAccepted: true,
+        sessionToken, // Session protection - prevent duplicate submissions
       });
     },
     onSuccess: (data) => {
@@ -693,7 +832,7 @@ export default function SignPage() {
               </div>
               <Button
                 onClick={handleSubmit}
-                disabled={submitMutation.isPending}
+                disabled={submitMutation.isPending || sessionLost}
                 data-testid="button-submit-signature"
                 size="lg"
                 className="w-full md:w-auto bg-white text-green-700 hover:bg-green-50 font-bold shadow-lg"
@@ -996,6 +1135,47 @@ export default function SignPage() {
           </div>
         </>
       )}
+
+      {/* Session Takeover Dialog */}
+      <AlertDialog open={showTakeoverDialog} onOpenChange={setShowTakeoverDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Document Open in Another Browser</AlertDialogTitle>
+            <AlertDialogDescription>
+              This document is currently being signed in another browser{conflictDevice && (
+                <span>
+                  {" "}on <strong>{conflictDevice.browser}</strong> ({conflictDevice.os}, {conflictDevice.device})
+                </span>
+              )}.
+              <br /><br />
+              Do you want to take control and sign here instead? The other browser will lose access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => forceSessionMutation.mutate()}
+              disabled={forceSessionMutation.isPending}
+            >
+              {forceSessionMutation.isPending ? "Taking over..." : "Take Control"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Session Lost Blocking Dialog */}
+      <AlertDialog open={sessionLost} onOpenChange={() => {}}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Session Lost</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your signing session was taken over by another browser or expired due to inactivity.
+              <br /><br />
+              The page will reload in a moment to restore access...
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
