@@ -290,6 +290,9 @@ export default function SignPage() {
 
   // Navigate to next field
   const goToNextField = () => {
+    // CRITICAL: Block navigation if session is lost (prevents queued callbacks from running)
+    if (sessionLost) return;
+    
     const nextField = getNextUnsignedField();
     if (nextField) {
       setCurrentFieldId(nextField.id);
@@ -320,6 +323,9 @@ export default function SignPage() {
 
   // Canvas drawing functions
   const startDrawing = (e: MouseEvent<HTMLCanvasElement>) => {
+    // CRITICAL: Block drawing if session is lost
+    if (sessionLost) return;
+    
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -336,6 +342,9 @@ export default function SignPage() {
   };
 
   const draw = (e: MouseEvent<HTMLCanvasElement>) => {
+    // CRITICAL: Block drawing if session is lost
+    if (sessionLost) return;
+    
     if (!isDrawing) return;
     
     const canvas = canvasRef.current;
@@ -356,6 +365,9 @@ export default function SignPage() {
   };
 
   const stopDrawing = () => {
+    // CRITICAL: Block drawing if session is lost
+    if (sessionLost) return;
+    
     setIsDrawing(false);
   };
 
@@ -370,6 +382,9 @@ export default function SignPage() {
   };
 
   const saveSignature = (type: "drawn" | "typed") => {
+    // CRITICAL: Block all interactions if session is lost
+    if (sessionLost) return;
+    
     if (!currentFieldId) return;
 
     if (type === "drawn") {
@@ -413,6 +428,9 @@ export default function SignPage() {
   };
 
   const handleSubmit = () => {
+    // CRITICAL: Block submission if session is lost
+    if (sessionLost) return;
+
     // Validate all fields are signed
     const allFieldsSigned = signData?.fields.every((field: any) => 
       fieldSignatures.has(field.id)
@@ -669,6 +687,9 @@ export default function SignPage() {
 
   // Navigation functions
   const handleStart = () => {
+    // CRITICAL: Block all interactions if session is lost
+    if (sessionLost) return;
+    
     setSigningStarted(true);
     const firstField = getNextUnsignedField();
     if (firstField) {
@@ -679,6 +700,9 @@ export default function SignPage() {
   };
 
   const handlePrevious = () => {
+    // CRITICAL: Block all interactions if session is lost
+    if (sessionLost) return;
+    
     if (currentFieldIndex > 0) {
       const prevField = sortedFields[currentFieldIndex - 1];
       if (prevField) {
@@ -690,6 +714,9 @@ export default function SignPage() {
   };
 
   const handleNext = () => {
+    // CRITICAL: Block all interactions if session is lost
+    if (sessionLost) return;
+    
     if (currentFieldIndex < sortedFields.length - 1) {
       const nextField = sortedFields[currentFieldIndex + 1];
       if (nextField) {
@@ -701,6 +728,9 @@ export default function SignPage() {
   };
 
   const handleFieldClick = (fieldId: string) => {
+    // CRITICAL: Block all interactions if session is lost
+    if (sessionLost) return;
+    
     setCurrentFieldId(fieldId);
     setSigningStarted(true);
     setShowFieldModal(true);
@@ -715,6 +745,9 @@ export default function SignPage() {
   const saveAndClose = (type: "drawn" | "typed") => {
     saveSignature(type);
     setTimeout(() => {
+      // CRITICAL: Block queued state updates if session lost during timeout
+      if (sessionLost) return;
+      
       // Check if there's a next unsigned field
       const nextField = getNextUnsignedField();
       if (nextField) {
