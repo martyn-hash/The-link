@@ -866,61 +866,60 @@ export default function SignPage() {
             </div>
           </div>
 
-          {/* Mobile: Bottom Sheet */}
+          {/* Mobile: Bottom Sheet - Compact & Form-Like */}
           <div className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-end" onClick={closeModal}>
             <div 
-              className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-y-auto"
+              className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[60vh] overflow-y-auto shadow-2xl"
               onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Sign field"
             >
-              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b p-4">
+              {/* Compact Header */}
+              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {currentField.fieldType === "signature" ? (
-                      <PenTool className="w-5 h-5" />
+                      <PenTool className="w-4 h-4 text-primary" />
                     ) : (
-                      <Type className="w-5 h-5" />
+                      <Type className="w-4 h-4 text-primary" />
                     )}
-                    <h3 className="font-semibold">
-                      {currentField.fieldType === "signature" ? "Sign Here" : "Type Your Name"}
-                    </h3>
+                    <span className="text-sm font-medium">
+                      Field {currentFieldIndex + 1} of {sortedFields.length}
+                    </span>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={closeModal}>
+                  <Button variant="ghost" size="sm" onClick={closeModal} className="h-8 w-8 p-0">
                     ✕
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Field {currentFieldIndex + 1} of {sortedFields.length}
-                </p>
               </div>
 
-              <div className="p-4">
+              {/* Compact Content - Focus on input */}
+              <div className="p-3">
                 {fieldSignatures.has(currentField.id) ? (
-                  <div className="text-center py-8">
-                    <Check className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                    <p className="font-medium">Field already signed</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Use Previous/Next to navigate
-                    </p>
+                  <div className="text-center py-6">
+                    <Check className="w-10 h-10 text-green-500 mx-auto mb-2" />
+                    <p className="text-sm font-medium">Already signed</p>
                     <Button
                       onClick={closeModal}
-                      className="mt-4 w-full"
+                      className="mt-3 w-full"
+                      size="sm"
                     >
                       Close
                     </Button>
                   </div>
                 ) : (
-                  <Tabs defaultValue={currentField.fieldType === "signature" ? "draw" : "type"}>
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="draw">Draw</TabsTrigger>
-                      <TabsTrigger value="type">Type</TabsTrigger>
+                  <Tabs defaultValue={currentField.fieldType === "signature" ? "draw" : "type"} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 h-9 mb-3">
+                      <TabsTrigger value="draw" className="text-xs">Draw</TabsTrigger>
+                      <TabsTrigger value="type" className="text-xs">Type</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="draw" className="space-y-3 mt-4">
-                      <div className="border-2 border-dashed rounded-lg bg-white dark:bg-gray-900 p-2">
+                    <TabsContent value="draw" className="space-y-2 mt-0">
+                      <div className="border-2 border-dashed rounded-md bg-white dark:bg-gray-950 p-1">
                         <canvas
                           ref={canvasRef}
                           width={300}
-                          height={150}
+                          height={120}
                           onTouchStart={(e) => {
                             const touch = e.touches[0];
                             if (touch && canvasRef.current) {
@@ -951,39 +950,43 @@ export default function SignPage() {
                           className="w-full touch-none"
                         />
                       </div>
-                      <div className="flex gap-2">
+                      {/* Stacked buttons for vertical space efficiency */}
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          onClick={() => saveAndClose("drawn")}
+                          className="w-full"
+                          size="sm"
+                        >
+                          <Check className="w-4 h-4 mr-2" />
+                          Save Signature
+                        </Button>
                         <Button
                           variant="outline"
                           onClick={clearCanvas}
-                          className="flex-1"
+                          className="w-full"
+                          size="sm"
                         >
                           Clear
-                        </Button>
-                        <Button
-                          onClick={() => saveAndClose("drawn")}
-                          className="flex-1"
-                        >
-                          <Check className="w-4 h-4 mr-2" />
-                          Save
                         </Button>
                       </div>
                     </TabsContent>
 
-                    <TabsContent value="type" className="space-y-3 mt-4">
+                    <TabsContent value="type" className="space-y-2 mt-0">
                       <Input
                         value={typedName}
                         onChange={(e) => setTypedName(e.target.value)}
-                        placeholder="Enter your full name"
-                        className="font-serif text-xl h-12"
+                        placeholder="Your full name"
+                        className="font-serif text-lg h-10"
                         autoFocus
                       />
                       <Button
                         onClick={() => saveAndClose("typed")}
                         disabled={!typedName.trim()}
                         className="w-full"
+                        size="sm"
                       >
                         <Check className="w-4 h-4 mr-2" />
-                        Save
+                        Save Name
                       </Button>
                     </TabsContent>
                   </Tabs>
