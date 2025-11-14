@@ -344,6 +344,7 @@ export function CreateSignatureRequestDialog({
   const handleClose = () => {
     setOpen(false);
     setCurrentTab("document");
+    setFriendlyName(""); // Reset friendly name
     setDocumentMode("upload");
     setSelectedDocumentId("");
     setSelectedDocument(null);
