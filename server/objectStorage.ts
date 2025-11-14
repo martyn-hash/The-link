@@ -174,6 +174,53 @@ export class ObjectStorageService {
     return uploadURL;
   }
 
+  // Gets a signed download URL for viewing/downloading an object (e.g., PDF)
+  // Accepts normalized objectPath format (e.g., /objects/uploads/<id>)
+  async getSignedDownloadURL(objectPath: string, ttlSec: number = 900): Promise<string> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+
+    // Extract the entity ID from normalized path
+    const parts = objectPath.slice(1).split("/");
+    if (parts.length < 2) {
+      throw new ObjectNotFoundError();
+    }
+
+    const entityId = parts.slice(1).join("/");
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir) {
+      throw new Error(
+        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' tool."
+      );
+    }
+    if (!entityDir.endsWith("/")) {
+      entityDir = `${entityDir}/`;
+    }
+    
+    // Expand to full object path in private directory
+    const fullObjectPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(fullObjectPath);
+
+    // Verify object exists before signing
+    const bucket = objectStorageClient.bucket(bucketName);
+    const objectFile = bucket.file(objectName);
+    const [exists] = await objectFile.exists();
+    if (!exists) {
+      throw new ObjectNotFoundError();
+    }
+
+    // Sign URL for GET method with TTL (15 minutes default)
+    const downloadURL = await signObjectURL({
+      bucketName,
+      objectName,
+      method: "GET",
+      ttlSec,
+    });
+
+    return downloadURL;
+  }
+
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {

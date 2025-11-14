@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type MouseEvent } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ interface SignData {
     fileName: string;
     fileType: string;
     objectPath: string;
+    signedUrl: string;
   };
   client: {
     name: string;
@@ -106,7 +107,7 @@ export default function SignPage() {
   });
 
   // Canvas drawing functions
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const startDrawing = (e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -122,7 +123,7 @@ export default function SignPage() {
     ctx.moveTo(x, y);
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const draw = (e: MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
     
     const canvas = canvasRef.current;
@@ -277,51 +278,52 @@ export default function SignPage() {
     );
   }
 
-  // Show PDF with consent overlay when user hasn't consented yet
-  const showConsentOverlay = currentStep === "consent";
-
-  return (
-    <div className="min-h-screen flex">
-      {/* Left Sidebar - Consent & Signing Controls */}
-      <div className={`${showConsentOverlay ? 'w-full md:w-96' : 'w-full md:w-80'} bg-white dark:bg-gray-900 border-r flex flex-col overflow-y-auto`}>
-        {/* Header */}
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText className="w-6 h-6 text-primary" />
-            <h1 className="text-lg font-bold">Document Signature</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">From: {signData.firmName}</p>
-          <p className="text-xs text-muted-foreground mt-1">{signData.document.fileName}</p>
-        </div>
-
-        {/* Consent Step - Scrollable Content */}
-        {showConsentOverlay && (
-          <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+  // Consent step - full page
+  if (currentStep === "consent") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="w-6 h-6 text-primary" />
+              <CardTitle>Document Signature</CardTitle>
+            </div>
+            <CardDescription>
+              From: {signData.firmName}
+              <br />
+              <span className="text-xs">{signData.document.fileName}</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-primary" />
                 <h2 className="font-semibold">Electronic Signature Consent</h2>
               </div>
               
-              {/* Compact Disclosure */}
-              <div className="bg-muted p-3 rounded text-xs space-y-2 max-h-64 overflow-y-auto">
+              {/* Disclosure */}
+              <div className="bg-muted p-4 rounded text-sm space-y-3 max-h-80 overflow-y-auto">
                 <p className="font-medium">
                   By proceeding, you consent to electronically sign this document under UK eIDAS Regulation.
                 </p>
                 
-                <p><strong>Your Rights:</strong></p>
-                <ul className="list-disc list-inside space-y-0.5 ml-2 text-xs">
-                  <li>Withdraw consent anytime by contacting {signData.firmName}</li>
-                  <li>Request a paper copy at any time</li>
-                  <li>No penalty for withdrawal or requesting paper copy</li>
-                </ul>
+                <div>
+                  <p className="font-medium">Your Rights:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2 text-sm">
+                    <li>Withdraw consent anytime by contacting {signData.firmName}</li>
+                    <li>Request a paper copy at any time</li>
+                    <li>No penalty for withdrawal or requesting paper copy</li>
+                  </ul>
+                </div>
 
-                <p><strong>You agree that:</strong></p>
-                <ul className="list-disc list-inside space-y-0.5 ml-2 text-xs">
-                  <li>Electronic signatures have the same legal effect as handwritten</li>
-                  <li>This consent applies only to this specific document</li>
-                  <li>Your signature will be recorded with date, time, and identity</li>
-                </ul>
+                <div>
+                  <p className="font-medium">You agree that:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2 text-sm">
+                    <li>Electronic signatures have the same legal effect as handwritten</li>
+                    <li>This consent applies only to this specific document</li>
+                    <li>Your signature will be recorded with date, time, and identity</li>
+                  </ul>
+                </div>
               </div>
 
               {/* Consent Checkboxes */}
@@ -333,7 +335,7 @@ export default function SignPage() {
                     onCheckedChange={(checked) => setConsentAccepted(checked as boolean)}
                     data-testid="checkbox-consent"
                   />
-                  <Label htmlFor="consent-agree" className="text-xs leading-relaxed cursor-pointer">
+                  <Label htmlFor="consent-agree" className="text-sm leading-relaxed cursor-pointer">
                     I agree to the Electronic Signature Disclosure and understand my signature will be legally binding.
                   </Label>
                 </div>
@@ -345,8 +347,8 @@ export default function SignPage() {
                     onCheckedChange={(checked) => setCanAccessDocument(checked as boolean)}
                     data-testid="checkbox-can-access"
                   />
-                  <Label htmlFor="can-access" className="text-xs leading-relaxed cursor-pointer">
-                    I can clearly view the document on the right →
+                  <Label htmlFor="can-access" className="text-sm leading-relaxed cursor-pointer">
+                    I can access and view electronic documents
                   </Label>
                 </div>
               </div>
@@ -354,7 +356,7 @@ export default function SignPage() {
               {canAccessDocument === false && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle className="text-sm">Cannot access document?</AlertTitle>
+                  <AlertTitle className="text-sm">Cannot access documents?</AlertTitle>
                   <AlertDescription className="text-xs">
                     Please contact {signData.firmName} to request a paper copy.
                   </AlertDescription>
@@ -370,8 +372,57 @@ export default function SignPage() {
                 I Agree - Start Signing
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Complete step - full page
+  if (currentStep === "complete") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+              <Check className="w-6 h-6" />
+              <CardTitle>Signature Complete</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <Check className="h-4 w-4" />
+              <AlertTitle>Success!</AlertTitle>
+              <AlertDescription>
+                Your signature has been recorded. A copy will be sent to your email.
+              </AlertDescription>
+            </Alert>
+
+            <div className="bg-muted p-4 rounded text-sm space-y-2">
+              <p><strong>Document:</strong> {signData.document.fileName}</p>
+              <p><strong>Signed by:</strong> {signData.recipient.name}</p>
+              <p><strong>Email:</strong> {signData.recipient.email}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Signing step - split layout with PDF
+  return (
+    <div className="min-h-screen flex">
+      {/* Left Sidebar - Signing Controls */}
+      <div className="w-full md:w-80 bg-white dark:bg-gray-900 border-r flex flex-col overflow-y-auto">
+        {/* Header */}
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText className="w-6 h-6 text-primary" />
+            <h1 className="text-lg font-bold">Document Signature</h1>
           </div>
-        )}
+          <p className="text-sm text-muted-foreground">From: {signData.firmName}</p>
+          <p className="text-xs text-muted-foreground mt-1">{signData.document.fileName}</p>
+        </div>
 
         {/* Signing Step */}
         {currentStep === "sign" && (
@@ -536,38 +587,12 @@ export default function SignPage() {
             </div>
           </div>
         )}
-
-        {/* Complete Step */}
-        {currentStep === "complete" && (
-          <div className="flex-1 p-4">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="w-6 h-6" />
-                <h2 className="text-lg font-semibold">Signature Complete</h2>
-              </div>
-              
-              <Alert>
-                <Check className="h-4 w-4" />
-                <AlertTitle>Success!</AlertTitle>
-                <AlertDescription className="text-xs">
-                  Your signature has been recorded. A copy will be sent to your email.
-                </AlertDescription>
-              </Alert>
-
-              <div className="bg-muted p-3 rounded text-xs space-y-1">
-                <p><strong>Document:</strong> {signData.document.fileName}</p>
-                <p><strong>Signed by:</strong> {signData.recipient.name}</p>
-                <p><strong>Email:</strong> {signData.recipient.email}</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Right Side - PDF Viewer (Full Screen) */}
       <div className="flex-1 bg-gray-100 dark:bg-gray-800 overflow-hidden">
         <PdfSignatureViewer
-          pdfUrl={signData.document.objectPath}
+          pdfUrl={signData.document.signedUrl}
           clickable={false}
           className="h-full"
           renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (

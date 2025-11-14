@@ -946,17 +946,29 @@ export function registerSignatureRoutes(
         .from(documents)
         .where(eq(documents.id, request.documentId));
 
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
       // Get client
       const [client] = await db
         .select()
         .from(clients)
         .where(eq(clients.id, request.clientId));
 
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
       // Get person
       const [person] = await db
         .select()
         .from(people)
         .where(eq(people.id, recipient.personId));
+
+      if (!person) {
+        return res.status(404).json({ error: "Recipient not found" });
+      }
 
       // Get signature fields for this recipient
       const fields = await db
@@ -982,6 +994,10 @@ export function registerSignatureRoutes(
       const [settings] = await db.select().from(companySettings).limit(1);
       const firmName = settings?.firmName || "The Link";
 
+      // Generate signed URL for PDF viewing (15 minute expiry)
+      const objectStorageService = new ObjectStorageService();
+      const signedPdfUrl = await objectStorageService.getSignedDownloadURL(document.objectPath, 900);
+
       res.json({
         request: {
           id: request.id,
@@ -993,6 +1009,7 @@ export function registerSignatureRoutes(
           fileName: document.fileName,
           fileType: document.fileType,
           objectPath: document.objectPath,
+          signedUrl: signedPdfUrl,
         },
         client: {
           name: client.name,
