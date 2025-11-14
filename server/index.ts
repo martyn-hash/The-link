@@ -11,6 +11,7 @@ import { storage, initializeDefaultNotificationTemplates } from "./storage";
 import { seedTaskTypes } from "./seedData";
 import { runSchemaMigrations } from "./utils/schemaMigrations";
 import { startNotificationCron } from "./notification-cron";
+import { startSignatureReminderCron } from "./signature-reminder-cron";
 import fs from "fs";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -250,6 +251,10 @@ app.use((req, res, next) => {
     // Setup notification sender cron job
     // Runs every minute to check for and send due notifications
     startNotificationCron();
+    
+    // Setup signature reminder cron job
+    // Runs daily at 9:00 AM UK time to send signature request reminders
+    startSignatureReminderCron();
     
     // Setup dashboard cache updates
     // Overnight update: Runs at 03:00 UK time (3:00 AM GMT/BST) - Europe/London timezone

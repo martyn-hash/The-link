@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Redirect } from "wouter";
@@ -6,19 +6,89 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSignature, Check, Clock, Eye } from "lucide-react";
+import { FileSignature, Check, Clock, Eye, X } from "lucide-react";
 import { format } from "date-fns";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
+import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SignatureRequestsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [_location, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [requestToCancel, setRequestToCancel] = useState<string | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
 
   const { data: requests, isLoading } = useQuery<any[]>({
     queryKey: ['/api/signature-requests'],
     enabled: isAuthenticated,
   });
+
+  const cancelMutation = useMutation({
+    mutationFn: async ({ requestId, reason }: { requestId: string; reason: string }) => {
+      const response = await fetch(`/api/signature-requests/${requestId}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ cancellation_reason: reason }),
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to cancel signature request");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/signature-requests'] });
+      toast({
+        title: "Success",
+        description: "Signature request cancelled successfully",
+      });
+      setCancelDialogOpen(false);
+      setRequestToCancel(null);
+      setCancellationReason("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel signature request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCancelClick = (requestId: string) => {
+    setRequestToCancel(requestId);
+    setCancellationReason("");
+    setCancelDialogOpen(true);
+  };
+
+  const handleCancelConfirm = () => {
+    if (!requestToCancel || !cancellationReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a cancellation reason",
+        variant: "destructive",
+      });
+      return;
+    }
+    cancelMutation.mutate({ requestId: requestToCancel, reason: cancellationReason.trim() });
+  };
 
   if (authLoading) {
     return (
@@ -132,20 +202,37 @@ export default function SignatureRequestsPage() {
                         </div>
                       </div>
 
-                      {client?.id && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLocation(`/clients/${client.id}`);
-                          }}
-                          data-testid={`button-view-${request.id}`}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          View
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {/* Show Cancel button for non-completed, non-cancelled requests */}
+                        {(request.status === 'draft' || request.status === 'pending' || request.status === 'partially_signed') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelClick(request.id);
+                            }}
+                            data-testid={`button-cancel-${request.id}`}
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        )}
+                        {client?.id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocation(`/clients/${client.id}`);
+                            }}
+                            data-testid={`button-view-${request.id}`}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -156,6 +243,50 @@ export default function SignatureRequestsPage() {
       </main>
 
       <BottomNav onSearchClick={() => setLocation("/search")} />
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent data-testid="dialog-cancel-signature-request">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Signature Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this signature request? This action cannot be undone.
+              Please provide a reason for cancellation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-4">
+            <Label htmlFor="cancellation-reason">Cancellation Reason</Label>
+            <Textarea
+              id="cancellation-reason"
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              placeholder="Please explain why this signature request is being cancelled..."
+              className="min-h-[100px]"
+              data-testid="input-cancellation-reason"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setCancelDialogOpen(false);
+                setCancellationReason("");
+                setRequestToCancel(null);
+              }}
+              data-testid="button-cancel-dialog-close"
+            >
+              Keep Request
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelConfirm}
+              disabled={!cancellationReason.trim() || cancelMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-cancel-dialog-confirm"
+            >
+              {cancelMutation.isPending ? "Cancelling..." : "Cancel Request"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

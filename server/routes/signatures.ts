@@ -1001,8 +1001,90 @@ export function registerSignatureRoutes(
   );
 
   /**
+   * POST /api/signature-requests/:id/cancel
+   * Cancel a signature request with reason and disable reminders
+   */
+  app.post(
+    "/api/signature-requests/:id/cancel",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { cancellation_reason } = req.body;
+        const userId = req.user.id;
+
+        // Validate cancellation reason is provided
+        if (!cancellation_reason || cancellation_reason.trim().length === 0) {
+          return res.status(400).json({ error: "Cancellation reason is required" });
+        }
+
+        const [request] = await db
+          .select()
+          .from(signatureRequests)
+          .where(eq(signatureRequests.id, id));
+
+        if (!request) {
+          return res.status(404).json({ error: "Signature request not found" });
+        }
+
+        if (request.status === "completed") {
+          return res.status(400).json({ error: "Cannot cancel a completed signature request" });
+        }
+
+        if (request.status === "cancelled") {
+          return res.status(400).json({ error: "This signature request is already cancelled" });
+        }
+
+        const now = new Date();
+
+        // CRITICAL FIX: Update with concurrency guard - only update if status hasn't changed
+        // This prevents race conditions where simultaneous completion could re-enable reminders
+        const updateResult = await db
+          .update(signatureRequests)
+          .set({ 
+            status: "cancelled",
+            cancellationReason: cancellation_reason.trim(),
+            cancelledAt: now,
+            cancelledBy: userId,
+            reminderEnabled: false, // Disable reminders when cancelled
+            nextReminderDate: null, // Clear next reminder date
+            updatedAt: now
+          })
+          .where(
+            and(
+              eq(signatureRequests.id, id),
+              // Concurrency guard: only update if status is still cancellable
+              sql`${signatureRequests.status} IN ('draft', 'pending', 'partially_signed')`
+            )
+          );
+
+        // Check if update actually happened (row was still in cancellable state)
+        if (!updateResult || updateResult.rowCount === 0) {
+          return res.status(409).json({ 
+            error: "Signature request status has changed and can no longer be cancelled" 
+          });
+        }
+
+        console.log(`[E-Signature] Request ${id} cancelled by user ${userId}. Reason: ${cancellation_reason.trim()}`);
+
+        res.json({ 
+          success: true,
+          message: "Signature request cancelled successfully" 
+        });
+      } catch (error: any) {
+        console.error("Error cancelling signature request:", error);
+        res.status(500).json({ 
+          error: "Failed to cancel signature request",
+          message: error.message 
+        });
+      }
+    }
+  );
+
+  /**
    * DELETE /api/signature-requests/:id
-   * Cancel a signature request
+   * Cancel a signature request (legacy endpoint - use POST /cancel instead)
    */
   app.delete(
     "/api/signature-requests/:id",
@@ -1512,14 +1594,32 @@ You agree that:
       
       if (allSigned) {
         newStatus = "completed";
-        await db
+        
+        // CRITICAL FIX: Update with concurrency guard - only update if status hasn't been cancelled
+        // This prevents race conditions where simultaneous cancellation could be overwritten
+        const completionUpdateResult = await db
           .update(signatureRequests)
           .set({ 
             status: "completed",
             completedAt: now,
+            reminderEnabled: false, // Disable reminders when document is fully signed
+            nextReminderDate: null, // Clear next reminder date
             updatedAt: now 
           })
-          .where(eq(signatureRequests.id, request.id));
+          .where(
+            and(
+              eq(signatureRequests.id, request.id),
+              // Concurrency guard: only update if status is still in progress
+              sql`${signatureRequests.status} IN ('pending', 'partially_signed')`
+            )
+          );
+
+        // Check if update actually happened (wasn't cancelled concurrently)
+        if (!completionUpdateResult || completionUpdateResult.rowCount === 0) {
+          return res.status(409).json({ 
+            error: "Signature request has been cancelled or status has changed" 
+          });
+        }
 
         // CRITICAL FIX: Process PDF with all signatures and create signed document
         try {
