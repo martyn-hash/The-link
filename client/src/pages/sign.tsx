@@ -38,6 +38,7 @@ interface SignData {
     email: string;
   };
   firmName: string;
+  redirectUrl: string | null;
   fields: Array<{
     id: string;
     fieldType: string;
@@ -97,11 +98,25 @@ export default function SignPage() {
       });
     },
     onSuccess: (data) => {
-      setCurrentStep("complete");
-      toast({
-        title: "Signature submitted",
-        description: "Your signature has been recorded successfully",
-      });
+      // Check if there's a redirect URL configured
+      if (signData?.redirectUrl) {
+        // Show brief success toast before redirect
+        toast({
+          title: "Signature submitted",
+          description: "Redirecting...",
+        });
+        // Redirect after a brief delay to let toast appear
+        setTimeout(() => {
+          window.location.href = signData.redirectUrl!;
+        }, 1500);
+      } else {
+        // No redirect - show success page
+        setCurrentStep("complete");
+        toast({
+          title: "Signature submitted",
+          description: "Your signature has been recorded successfully",
+        });
+      }
     },
     onError: (error: any) => {
       toast({

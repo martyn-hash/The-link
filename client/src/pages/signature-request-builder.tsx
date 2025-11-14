@@ -169,6 +169,7 @@ export default function SignatureRequestBuilder() {
   const [friendlyName, setFriendlyName] = useState("");
   const [emailSubject, setEmailSubject] = useState("Document Signature Request");
   const [emailMessage, setEmailMessage] = useState("Please review and sign the attached document.");
+  const [selectedRedirectUrl, setSelectedRedirectUrl] = useState<string>("");
 
   // Track unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -223,6 +224,13 @@ export default function SignatureRequestBuilder() {
   const { data: clientPeople = [] } = useQuery<any[]>({
     queryKey: ['/api/clients', clientId, 'people'],
   });
+
+  // Fetch company settings for redirect URLs
+  const { data: companySettings } = useQuery<any>({
+    queryKey: ['/api/super-admin/company-settings'],
+  });
+
+  const redirectUrlOptions = (companySettings?.postSignatureRedirectUrls as Array<{ name: string; url: string }>) || [];
 
   // Extract people from clientPeople and filter for those with emails
   const peopleWithEmails = clientPeople
@@ -475,6 +483,7 @@ export default function SignatureRequestBuilder() {
         friendlyName,
         emailSubject,
         emailMessage,
+        redirectUrl: selectedRedirectUrl || null,
       });
     },
     onSuccess: () => {
@@ -866,6 +875,33 @@ export default function SignatureRequestBuilder() {
                       rows={4}
                       data-testid="textarea-email-message"
                     />
+                  </div>
+
+                  <Separator />
+
+                  {/* Post-Signature Redirect URL */}
+                  <div className="space-y-2">
+                    <Label htmlFor="redirect-url">Post-Signature Redirect (Optional)</Label>
+                    <Select value={selectedRedirectUrl} onValueChange={setSelectedRedirectUrl}>
+                      <SelectTrigger id="redirect-url" data-testid="select-redirect-url">
+                        <SelectValue placeholder="No redirect (show success message)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="" data-testid="select-redirect-none">No redirect (show success message)</SelectItem>
+                        {redirectUrlOptions.map((option, index) => (
+                          <SelectItem 
+                            key={index} 
+                            value={option.url}
+                            data-testid={`select-redirect-${index}`}
+                          >
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Choose where signers will be redirected after completing the signature. Leave as default to show a success message.
+                    </p>
                   </div>
 
                   <Alert>

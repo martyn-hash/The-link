@@ -664,7 +664,8 @@ export function registerSignatureRoutes(
           emailSubject, 
           emailMessage,
           fields,
-          recipients 
+          recipients,
+          redirectUrl
         } = req.body;
 
         // Validate friendlyName is provided
@@ -697,6 +698,7 @@ export function registerSignatureRoutes(
             status: "draft",
             emailSubject: emailSubject || "Document Signature Request",
             emailMessage,
+            redirectUrl: redirectUrl || null,
           })
           .returning();
 
@@ -1287,6 +1289,7 @@ You agree that:
           email: recipient.email,
         },
         firmName,
+        redirectUrl: request.redirectUrl || null,
         fields,
       });
     } catch (error: any) {
