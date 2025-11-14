@@ -2287,6 +2287,7 @@ export const signatureRequests = pgTable("signature_requests", {
   status: signatureRequestStatusEnum("status").notNull().default("draft"),
   emailSubject: varchar("email_subject"), // Subject line for signature request email
   emailMessage: text("email_message"), // Custom message from staff to recipients
+  redirectUrl: varchar("redirect_url"), // Optional URL to redirect signer after completion
   completedAt: timestamp("completed_at"), // When all signatures collected
   cancelledAt: timestamp("cancelled_at"),
   cancelledBy: varchar("cancelled_by").references(() => users.id),
@@ -3239,6 +3240,7 @@ export const companySettings = pgTable("company_settings", {
   firmEmail: varchar("firm_email"), // Firm email for notification templates
   portalUrl: varchar("portal_url"), // Base URL for client portal links (e.g., https://example.replit.app)
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(false).notNull(), // Global toggle for push notifications
+  postSignatureRedirectUrls: jsonb("post_signature_redirect_urls").default(sql`'[]'::jsonb`), // Array of {name: string, url: string} for post-signature redirects
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
