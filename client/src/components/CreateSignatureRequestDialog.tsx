@@ -125,11 +125,8 @@ export function CreateSignatureRequestDialog({
       // Add to local uploaded docs so dropdown shows it immediately
       setLocalUploadedDocs(prev => [...prev, typedDocument]);
       
-      // Normalize path to avoid duplication
-      const normalizedPath = objectPath.startsWith('/objects') 
-        ? objectPath 
-        : `/objects${objectPath}`;
-      setPdfPreviewUrl(normalizedPath);
+      // Use the new client-scoped document file endpoint
+      setPdfPreviewUrl(`/api/clients/${clientId}/documents/${typedDocument.id}/file`);
       
       setDocumentMode("select"); // Switch to select mode to show the selected document
       
@@ -173,15 +170,24 @@ export function CreateSignatureRequestDialog({
       const doc = pdfDocuments.find(d => d.id === selectedDocumentId);
       if (doc) {
         setSelectedDocument(doc);
-        // Normalize object path - remove leading /objects if present to avoid duplication
-        const normalizedPath = doc.objectPath.startsWith('/objects') 
-          ? doc.objectPath 
-          : `/objects${doc.objectPath}`;
-        setPdfPreviewUrl(normalizedPath);
+        
+        // Check if document has object storage path
+        if (!doc.objectPath) {
+          toast({
+            title: "Document unavailable",
+            description: "This document file is not available in storage. Please upload a new document.",
+            variant: "destructive",
+          });
+          setPdfPreviewUrl("");
+          return;
+        }
+        
+        // Use the new client-scoped document file endpoint
+        setPdfPreviewUrl(`/api/clients/${clientId}/documents/${doc.id}/file`);
         setCurrentPage(1); // Reset to page 1 when document changes
       }
     }
-  }, [selectedDocumentId, pdfDocuments]);
+  }, [selectedDocumentId, pdfDocuments, clientId, toast]);
 
   // Handle adding a field by clicking on the PDF preview
   const handlePdfClick = (pageNumber: number, xPercent: number, yPercent: number) => {

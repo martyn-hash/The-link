@@ -952,6 +952,49 @@ export function registerClientRoutes(
     }
   });
 
+  // GET /api/clients/:clientId/documents/:documentId/file - Serve document file with client ownership verification
+  app.get("/api/clients/:clientId/documents/:documentId/file", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const paramSchema = z.object({ 
+        clientId: z.string(), 
+        documentId: z.string() 
+      });
+      const paramValidation = validateParams(paramSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { clientId, documentId } = paramValidation.data;
+
+      const document = await storage.getDocumentById(documentId);
+      
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      if (document.clientId !== clientId) {
+        return res.status(403).json({ message: "Document does not belong to this client" });
+      }
+
+      if (!document.objectPath) {
+        return res.status(404).json({ message: "Document file path not available" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(document.objectPath);
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error serving document file:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ message: "Document file not found in storage" });
+      }
+      res.status(500).json({ message: "Failed to serve document file" });
+    }
+  });
+
   // POST /api/clients/:clientId/folders - Create folder for client
   app.post("/api/clients/:clientId/folders", isAuthenticated, async (req: any, res: any) => {
     try {
