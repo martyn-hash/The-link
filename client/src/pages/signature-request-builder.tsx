@@ -483,7 +483,7 @@ export default function SignatureRequestBuilder() {
         friendlyName,
         emailSubject,
         emailMessage,
-        redirectUrl: selectedRedirectUrl || null,
+        redirectUrl: selectedRedirectUrl === "__none__" ? null : selectedRedirectUrl || null,
       });
     },
     onSuccess: () => {
@@ -882,12 +882,12 @@ export default function SignatureRequestBuilder() {
                   {/* Post-Signature Redirect URL */}
                   <div className="space-y-2">
                     <Label htmlFor="redirect-url">Post-Signature Redirect (Optional)</Label>
-                    <Select value={selectedRedirectUrl} onValueChange={setSelectedRedirectUrl}>
+                    <Select value={selectedRedirectUrl || "__none__"} onValueChange={setSelectedRedirectUrl}>
                       <SelectTrigger id="redirect-url" data-testid="select-redirect-url">
                         <SelectValue placeholder="No redirect (show success message)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="" data-testid="select-redirect-none">No redirect (show success message)</SelectItem>
+                        <SelectItem value="__none__" data-testid="select-redirect-none">No redirect (show success message)</SelectItem>
                         {redirectUrlOptions.map((option, index) => (
                           <SelectItem 
                             key={index} 
