@@ -2340,6 +2340,9 @@ export const signatureRequestRecipients = pgTable("signature_request_recipients"
   signedAt: timestamp("signed_at"), // When recipient completed signing
   reminderSentAt: timestamp("reminder_sent_at"), // Last reminder sent
   orderIndex: integer("order_index").notNull().default(0), // Order for sequential signing
+  // Single-session protection (prevent concurrent signing, duplicate submissions)
+  activeSessionToken: varchar("active_session_token"), // Current browser session UUID
+  sessionLastActive: timestamp("session_last_active"), // Last activity for 30-min timeout
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_signature_request_recipients_request_id").on(table.signatureRequestId),
