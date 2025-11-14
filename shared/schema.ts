@@ -2281,6 +2281,7 @@ export const signatureFieldTypeEnum = pgEnum("signature_field_type", [
 export const signatureRequests = pgTable("signature_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  friendlyName: varchar("friendly_name").notNull().default("Untitled Document"), // User-provided document name for display
   documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }), // PDF to be signed
   createdBy: varchar("created_by").notNull().references(() => users.id), // Staff user who created request
   status: signatureRequestStatusEnum("status").notNull().default("draft"),
