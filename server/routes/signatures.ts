@@ -35,7 +35,7 @@ import { z } from "zod";
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 const sessionTokenSchema = z.object({
-  sessionToken: z.string().uuid("Invalid session token")
+  sessionToken: z.string().min(20, "Invalid session token")
 });
 
 /**
