@@ -799,7 +799,7 @@ export function registerSignatureRoutes(
                 recipient.email,
                 person.fullName || recipient.email,
                 firmName,
-                document.fileName,
+                request.friendlyName || document.fileName,
                 request.emailMessage || "",
                 signLink
               );
@@ -934,7 +934,7 @@ export function registerSignatureRoutes(
               recipient.email,
               person.fullName || recipient.email,
               firmName,
-              document.fileName,
+              request.friendlyName || document.fileName,
               request.emailMessage || "",
               signLink
             );
@@ -1595,7 +1595,7 @@ You agree that:
                   personData.fullName || recipientData.email,
                   firmName,
                   client?.name || "Unknown",
-                  document.fileName,
+                  request.friendlyName || document.fileName,
                   signedPdfUrl,
                   certificateUrl, // CRITICAL: Keep download link for graceful fallback
                   signedPdfBuffer,
