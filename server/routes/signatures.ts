@@ -658,13 +658,19 @@ export function registerSignatureRoutes(
       try {
         const userId = req.user.id;
         const { 
-          clientId, 
+          clientId,
+          friendlyName,
           documentId, 
           emailSubject, 
           emailMessage,
           fields,
           recipients 
         } = req.body;
+
+        // Validate friendlyName is provided
+        if (!friendlyName || friendlyName.trim() === '') {
+          return res.status(400).json({ error: "Friendly name is required" });
+        }
 
         // Validate document exists and is a PDF
         const [document] = await db
@@ -685,6 +691,7 @@ export function registerSignatureRoutes(
           .insert(signatureRequests)
           .values({
             clientId,
+            friendlyName: friendlyName.trim(),
             documentId,
             createdBy: userId,
             status: "draft",

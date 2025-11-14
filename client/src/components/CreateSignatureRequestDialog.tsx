@@ -55,6 +55,7 @@ export function CreateSignatureRequestDialog({
   const [currentTab, setCurrentTab] = useState("document");
   
   // Step 1: Document selection and upload
+  const [friendlyName, setFriendlyName] = useState<string>("");
   const [documentMode, setDocumentMode] = useState<"upload" | "select">("upload");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [selectedDocument, setSelectedDocument] = useState<DocumentType | null>(null);
@@ -277,6 +278,7 @@ export function CreateSignatureRequestDialog({
     mutationFn: async () => {
       return await apiRequest("POST", "/api/signature-requests", {
         clientId,
+        friendlyName,
         documentId: selectedDocumentId,
         emailSubject,
         emailMessage,
@@ -356,8 +358,8 @@ export function CreateSignatureRequestDialog({
     setSelectedRecipientForField("");
   };
 
-  // Can proceed if we have a selected document (either from upload or selection)
-  const canProceedToFields = selectedDocumentId && selectedDocument !== null;
+  // Can proceed if we have a friendly name and selected document (either from upload or selection)
+  const canProceedToFields = friendlyName.trim() && selectedDocumentId && selectedDocument !== null;
   const canProceedToRecipients = canProceedToFields && fields.length > 0;
   const canSend = canProceedToRecipients && recipients.length > 0 && emailSubject && emailMessage;
 
@@ -403,6 +405,24 @@ export function CreateSignatureRequestDialog({
 
           {/* Tab 1: Upload or Select Document */}
           <TabsContent value="document" className="space-y-4">
+            {/* Friendly Name Field - Required */}
+            <div className="space-y-2">
+              <Label htmlFor="friendly-name" className="text-sm font-medium">
+                Document Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="friendly-name"
+                value={friendlyName}
+                onChange={(e) => setFriendlyName(e.target.value)}
+                placeholder="e.g., Client Agreement, Service Contract, NDA"
+                data-testid="input-friendly-name"
+                className="w-full"
+              />
+              <p className="text-sm text-muted-foreground">
+                Give this signature request a friendly name for easy identification
+              </p>
+            </div>
+
             {/* Upload/Select Mode Tabs */}
             <Tabs value={documentMode} onValueChange={(v) => setDocumentMode(v as "upload" | "select")}>
               <TabsList className="grid w-full grid-cols-2">
