@@ -1554,6 +1554,7 @@ You agree that:
             let certificateBuffer: Buffer | undefined;
 
             if (signedDoc) {
+              const objectStorageService = new ObjectStorageService();
               // Download signed PDF for attachment
               try {
                 signedPdfBuffer = await objectStorageService.downloadObjectToBuffer(signedDoc.signedPdfPath);
