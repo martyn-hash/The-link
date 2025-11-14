@@ -358,10 +358,10 @@ export function CreateSignatureRequestDialog({
     setSelectedRecipientForField("");
   };
 
-  // Can proceed if we have a friendly name and selected document (either from upload or selection)
-  const canProceedToFields = friendlyName.trim() && selectedDocumentId && selectedDocument !== null;
+  // Can proceed if we have a selected document (either from upload or selection)
+  const canProceedToFields = selectedDocumentId && selectedDocument !== null;
   const canProceedToRecipients = canProceedToFields && fields.length > 0;
-  const canSend = canProceedToRecipients && recipients.length > 0 && emailSubject && emailMessage;
+  const canSend = canProceedToRecipients && recipients.length > 0 && friendlyName.trim() && emailSubject && emailMessage;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -405,24 +405,6 @@ export function CreateSignatureRequestDialog({
 
           {/* Tab 1: Upload or Select Document */}
           <TabsContent value="document" className="space-y-4">
-            {/* Friendly Name Field - Required */}
-            <div className="space-y-2">
-              <Label htmlFor="friendly-name" className="text-sm font-medium">
-                Document Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="friendly-name"
-                value={friendlyName}
-                onChange={(e) => setFriendlyName(e.target.value)}
-                placeholder="e.g., Client Agreement, Service Contract, NDA"
-                data-testid="input-friendly-name"
-                className="w-full"
-              />
-              <p className="text-sm text-muted-foreground">
-                Give this signature request a friendly name for easy identification
-              </p>
-            </div>
-
             {/* Upload/Select Mode Tabs */}
             <Tabs value={documentMode} onValueChange={(v) => setDocumentMode(v as "upload" | "select")}>
               <TabsList className="grid w-full grid-cols-2">
@@ -701,6 +683,32 @@ export function CreateSignatureRequestDialog({
           {/* Tab 3: Recipients and Send */}
           <TabsContent value="send" className="space-y-4">
             <div className="space-y-4">
+              {/* Friendly Name - Required */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Document Name</CardTitle>
+                  <CardDescription>Give this signature request a friendly name for easy identification</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="friendly-name-send" className="text-sm font-medium">
+                      Friendly Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="friendly-name-send"
+                      value={friendlyName}
+                      onChange={(e) => setFriendlyName(e.target.value)}
+                      placeholder="e.g., Annual Accounts 2024, Tax Return, Service Agreement"
+                      data-testid="input-friendly-name"
+                      className="w-full"
+                    />
+                    {!friendlyName.trim() && (
+                      <p className="text-sm text-destructive">Friendly name is required to send the signature request</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Recipients */}
               <Card>
                 <CardHeader>
