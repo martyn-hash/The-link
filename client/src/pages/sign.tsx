@@ -19,6 +19,7 @@ import { Progress } from "@/components/ui/progress";
 interface SignData {
   request: {
     id: string;
+    friendlyName: string;
     emailSubject: string;
     emailMessage: string;
   };
@@ -347,7 +348,7 @@ export default function SignPage() {
             <CardDescription>
               From: {signData.firmName}
               <br />
-              <span className="text-xs">{signData.document.fileName}</span>
+              <span className="text-xs">{signData.request.friendlyName}</span>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -455,7 +456,7 @@ export default function SignPage() {
             </Alert>
 
             <div className="bg-muted p-4 rounded text-sm space-y-2">
-              <p><strong>Document:</strong> {signData.document.fileName}</p>
+              <p><strong>Document:</strong> {signData.request.friendlyName}</p>
               <p><strong>Signed by:</strong> {signData.recipient.name}</p>
               <p><strong>Email:</strong> {signData.recipient.email}</p>
             </div>
@@ -556,7 +557,7 @@ export default function SignPage() {
               <div className="flex items-center gap-3">
                 <FileText className="w-5 h-5 text-primary flex-shrink-0" />
                 <div>
-                  <p className="font-semibold text-sm">Ready to sign {signData.document.fileName}?</p>
+                  <p className="font-semibold text-sm">Ready to sign {signData.request.friendlyName}?</p>
                   <p className="text-xs text-muted-foreground">Click Start to begin signing</p>
                 </div>
               </div>

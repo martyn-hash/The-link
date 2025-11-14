@@ -1268,6 +1268,7 @@ You agree that:
       res.json({
         request: {
           id: request.id,
+          friendlyName: request.friendlyName,
           emailSubject: request.emailSubject,
           emailMessage: request.emailMessage,
         },
