@@ -1283,8 +1283,45 @@ export function registerSignatureRoutes(
               ? `https://${process.env.REPLIT_DEV_DOMAIN}`
               : `http://localhost:5000`;
 
-            // Generate download link for signed PDF
+            // Generate download links for signed PDF and certificate
             const signedPdfUrl = `${baseUrl}/api/signed-documents/${signedDocumentId}/download`;
+            
+            // Get signed document record to access paths and generate certificate URL
+            const [signedDoc] = await db
+              .select()
+              .from(signedDocuments)
+              .where(eq(signedDocuments.id, signedDocumentId));
+
+            // Generate certificate download URL if certificate exists
+            const certificateUrl = signedDoc?.auditTrailPdfPath 
+              ? `${baseUrl}/api/signed-documents/${signedDocumentId}/certificate`
+              : undefined;
+
+            // Download signed PDF and certificate from object storage for attachments
+            let signedPdfBuffer: Buffer | undefined;
+            let certificateBuffer: Buffer | undefined;
+
+            if (signedDoc) {
+              // Download signed PDF for attachment
+              try {
+                signedPdfBuffer = await objectStorageService.downloadObjectToBuffer(signedDoc.signedPdfPath);
+                console.log(`[E-Signature] Downloaded signed PDF for email attachment`);
+              } catch (error) {
+                console.error(`[E-Signature] Failed to download signed PDF for attachment:`, error);
+                // Continue - email will still send with download link
+              }
+
+              // Download certificate for attachment if available
+              if (signedDoc.auditTrailPdfPath) {
+                try {
+                  certificateBuffer = await objectStorageService.downloadObjectToBuffer(signedDoc.auditTrailPdfPath);
+                  console.log(`[E-Signature] Downloaded certificate for email attachment`);
+                } catch (error) {
+                  console.error(`[E-Signature] Failed to download certificate for attachment:`, error);
+                  // Continue - email will still send with download link
+                }
+              }
+            }
 
             for (const { recipient: recipientData, person: personData } of allRecipientsForEmail) {
               try {
@@ -1294,7 +1331,10 @@ export function registerSignatureRoutes(
                   firmName,
                   client?.name || "Unknown",
                   document.fileName,
-                  signedPdfUrl
+                  signedPdfUrl,
+                  certificateUrl, // CRITICAL: Keep download link for graceful fallback
+                  signedPdfBuffer,
+                  certificateBuffer
                 );
                 console.log(`[E-Signature] Completion email sent to ${recipientData.email}`);
               } catch (emailError) {

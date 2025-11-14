@@ -147,7 +147,7 @@ export async function sendSignatureRequestEmail(
 }
 
 /**
- * Send completed document email with signed PDF and certificate
+ * Send completed document email with signed PDF and certificate as attachments
  */
 export async function sendCompletedDocumentEmail(
   recipientEmail: string,
@@ -156,7 +156,9 @@ export async function sendCompletedDocumentEmail(
   clientName: string,
   documentName: string,
   signedPdfUrl: string,
-  certificateUrl?: string
+  certificateUrl?: string,
+  signedPdfBuffer?: Buffer,
+  certificateBuffer?: Buffer
 ) {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
@@ -236,12 +238,58 @@ export async function sendCompletedDocumentEmail(
       </html>
     `;
 
-    const msg = {
+    // Build attachments array if buffers provided
+    const attachments: any[] = [];
+    const MAX_ATTACHMENT_SIZE = 30 * 1024 * 1024; // 30MB SendGrid limit
+    let totalAttachmentSize = 0;
+
+    // Add signed PDF attachment if buffer provided
+    if (signedPdfBuffer) {
+      const pdfSize = signedPdfBuffer.length;
+      if (totalAttachmentSize + pdfSize <= MAX_ATTACHMENT_SIZE) {
+        attachments.push({
+          content: signedPdfBuffer.toString('base64'),
+          filename: documentName.endsWith('.pdf') ? documentName : `${documentName}.pdf`,
+          type: 'application/pdf',
+          disposition: 'attachment'
+        });
+        totalAttachmentSize += pdfSize;
+        console.log(`[Email] Added signed PDF attachment (${(pdfSize / 1024).toFixed(1)} KB)`);
+      } else {
+        console.warn(`[Email] Skipping signed PDF attachment - would exceed 30MB limit`);
+      }
+    }
+
+    // Add certificate attachment if buffer provided
+    if (certificateBuffer) {
+      const certSize = certificateBuffer.length;
+      if (totalAttachmentSize + certSize <= MAX_ATTACHMENT_SIZE) {
+        const certificateFilename = documentName.replace('.pdf', '_Certificate.pdf');
+        attachments.push({
+          content: certificateBuffer.toString('base64'),
+          filename: certificateFilename,
+          type: 'application/pdf',
+          disposition: 'attachment'
+        });
+        totalAttachmentSize += certSize;
+        console.log(`[Email] Added certificate attachment (${(certSize / 1024).toFixed(1)} KB)`);
+      } else {
+        console.warn(`[Email] Skipping certificate attachment - would exceed 30MB limit`);
+      }
+    }
+
+    const msg: any = {
       to: recipientEmail,
       from: fromEmail,
       subject,
       html,
     };
+
+    // Only add attachments array if we have attachments
+    if (attachments.length > 0) {
+      msg.attachments = attachments;
+      console.log(`[Email] Sending ${attachments.length} attachment(s), total ${(totalAttachmentSize / 1024).toFixed(1)} KB`);
+    }
 
     await client.send(msg);
     console.log(`[Email] Completed document sent to ${recipientEmail}`);

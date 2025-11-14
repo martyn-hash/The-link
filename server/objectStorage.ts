@@ -352,6 +352,32 @@ export class ObjectStorageService {
     
     return { objectPath, fileName };
   }
+
+  /**
+   * Downloads an object from storage into a Buffer
+   * Enforces ACL checks via getObjectEntityFile
+   * @param objectPath Normalized object path (e.g., /objects/signed-documents/...)
+   * @returns Buffer containing the file data
+   * @throws ObjectNotFoundError if object doesn't exist
+   */
+  async downloadObjectToBuffer(objectPath: string): Promise<Buffer> {
+    try {
+      // Get file object (enforces ACL checks)
+      const file = await this.getObjectEntityFile(objectPath);
+      
+      // Download file to buffer
+      const [buffer] = await file.download();
+      
+      console.log(`[ObjectStorage] Downloaded ${objectPath} (${(buffer.length / 1024).toFixed(1)} KB)`);
+      return buffer;
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        throw error;
+      }
+      console.error(`[ObjectStorage] Error downloading ${objectPath}:`, error);
+      throw new Error(`Failed to download object: ${objectPath}`);
+    }
+  }
 }
 
 function parseObjectPath(path: string): {
