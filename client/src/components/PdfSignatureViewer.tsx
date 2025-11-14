@@ -29,6 +29,22 @@ export function PdfSignatureViewer({
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDimensions, setPageDimensions] = useState<Map<number, { width: number; height: number }>>(new Map());
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(800);
+
+  // Measure container width for responsive PDF scaling
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth - 32; // Subtract padding
+        setContainerWidth(width > 0 ? width : 800);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -84,20 +100,21 @@ export function PdfSignatureViewer({
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      <div className="flex-1 overflow-auto border border-border rounded-lg bg-white">
+      <div ref={containerRef} className="flex-1 overflow-auto border border-border rounded-lg bg-white">
         <Document
           file={pdfUrl}
           onLoadSuccess={onDocumentLoadSuccess}
         >
-          <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col gap-4 p-4 items-center">
             {pageNumbers.map((pageNumber) => (
-              <div key={pageNumber} className="relative inline-block" id={`page-${pageNumber}`}>
+              <div key={pageNumber} className="relative" id={`page-${pageNumber}`}>
                 <Page
                   pageNumber={pageNumber}
+                  width={containerWidth}
                   onRenderSuccess={createPageRenderHandler(pageNumber)}
                   renderTextLayer={false}
                   renderAnnotationLayer={false}
-                  className="max-w-full shadow-lg"
+                  className="shadow-lg"
                 />
                 <div
                   ref={(el) => {

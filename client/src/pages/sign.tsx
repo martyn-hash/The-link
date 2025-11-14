@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest } from "@/lib/queryClient";
 import { FileText, Check, AlertCircle, PenTool, Type, Send, Shield } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
+import { Progress } from "@/components/ui/progress";
 
 // Type for the sign data response from backend
 interface SignData {
@@ -106,6 +107,40 @@ export default function SignPage() {
     },
   });
 
+  // Helper function to get next unsigned field
+  const getNextUnsignedField = () => {
+    if (!signData) return null;
+    const sortedFields = [...signData.fields].sort((a, b) => a.orderIndex - b.orderIndex);
+    return sortedFields.find(field => !fieldSignatures.has(field.id)) || null;
+  };
+
+  // Helper function to scroll to a field on the PDF
+  const scrollToField = (field: any) => {
+    const pageElement = document.getElementById(`page-${field.pageNumber}`);
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Navigate to next field
+  const goToNextField = () => {
+    const nextField = getNextUnsignedField();
+    if (nextField) {
+      setCurrentFieldId(nextField.id);
+      scrollToField(nextField);
+    }
+  };
+
+  // Auto-select first field on load
+  useEffect(() => {
+    if (signData && currentStep === "sign" && !currentFieldId) {
+      const firstField = getNextUnsignedField();
+      if (firstField) {
+        setCurrentFieldId(firstField.id);
+      }
+    }
+  }, [signData, currentStep]);
+
   // Canvas drawing functions
   const startDrawing = (e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -190,15 +225,14 @@ export default function SignPage() {
       description: "Signature has been added to this field",
     });
 
-    // Move to next field or finish
-    if (signData?.fields) {
-      const currentIndex = signData.fields.findIndex((f) => f.id === currentFieldId);
-      if (currentIndex >= 0 && currentIndex < signData.fields.length - 1) {
-        setCurrentFieldId(signData.fields[currentIndex + 1].id);
-        clearCanvas();
-        setTypedName("");
-      }
-    }
+    // Clear inputs and move to next unsigned field
+    clearCanvas();
+    setTypedName("");
+    
+    // Auto-advance to next field after a short delay for UX
+    setTimeout(() => {
+      goToNextField();
+    }, 300);
   };
 
   const handleSubmit = () => {
@@ -426,15 +460,62 @@ export default function SignPage() {
 
         {/* Signing Step */}
         {currentStep === "sign" && (
-          <div className="flex-1 flex flex-col overflow-y-auto">
+          <div className="flex-1 flex flex-col overflow-hidden">
             {/* Signer Info */}
             <div className="p-4 border-b bg-muted/30">
               <div className="text-xs text-muted-foreground mb-1">Signing as:</div>
               <div className="font-medium text-sm">{signData.recipient.name}</div>
               <div className="text-xs text-muted-foreground">{signData.recipient.email}</div>
-              <Badge variant="secondary" className="mt-2">
-                {fieldSignatures.size} / {signData.fields.length} fields completed
-              </Badge>
+            </div>
+
+            {/* Combined Progress Bar + Guidance + Submit - Sticky position */}
+            <div className="p-4 border-b bg-white dark:bg-gray-900 sticky top-0 z-10 space-y-3">
+              {/* Visual Progress Bar */}
+              <div>
+                <div className="flex items-center justify-between text-xs mb-2">
+                  <span className="font-medium">Progress</span>
+                  <Badge variant="secondary">
+                    {fieldSignatures.size} / {signData.fields.length} fields
+                  </Badge>
+                </div>
+                <Progress 
+                  value={(fieldSignatures.size / signData.fields.length) * 100} 
+                  className="h-2"
+                />
+              </div>
+
+              {/* Guidance Message */}
+              {getNextUnsignedField() ? (
+                <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                  <div className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-2">
+                    📝 Complete the field below, then click Next
+                  </div>
+                  <Button
+                    onClick={goToNextField}
+                    variant="outline"
+                    size="sm"
+                    className="w-full bg-white dark:bg-gray-900"
+                    data-testid="button-next-field"
+                  >
+                    Next Field →
+                  </Button>
+                </div>
+              ) : (
+                <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg text-xs font-medium text-green-900 dark:text-green-100">
+                  ✓ All fields complete! Submit your signature below.
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <Button
+                onClick={handleSubmit}
+                disabled={submitMutation.isPending || fieldSignatures.size < signData.fields.length}
+                className="w-full"
+                data-testid="button-submit-signature"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {submitMutation.isPending ? "Submitting..." : "Submit Signature"}
+              </Button>
             </div>
 
             {/* Signature Fields - Scrollable */}
@@ -571,19 +652,6 @@ export default function SignPage() {
                   </div>
                 );
               })}
-            </div>
-
-            {/* Submit Button */}
-            <div className="p-4 border-t">
-              <Button
-                onClick={handleSubmit}
-                disabled={submitMutation.isPending || fieldSignatures.size < signData.fields.length}
-                className="w-full"
-                data-testid="button-submit-signature"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                {submitMutation.isPending ? "Submitting..." : "Submit Signature"}
-              </Button>
             </div>
           </div>
         )}
