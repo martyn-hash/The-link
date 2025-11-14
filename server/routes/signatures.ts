@@ -27,6 +27,30 @@ import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/se
 import { UAParser } from "ua-parser-js";
 import { generateCertificateOfCompletion } from "../lib/certificateGenerator";
 import geoip from "geoip-lite";
+import { z } from "zod";
+
+/**
+ * Session management constants and helpers
+ */
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+const sessionTokenSchema = z.object({
+  sessionToken: z.string().uuid("Invalid session token")
+});
+
+/**
+ * Check if a session has expired (30-minute timeout)
+ * Treats missing, null, or invalid timestamps as expired
+ */
+function isSessionExpired(sessionLastActive: Date | string | null): boolean {
+  if (!sessionLastActive) return true;
+  const lastActiveDate = typeof sessionLastActive === 'string' 
+    ? new Date(sessionLastActive) 
+    : sessionLastActive;
+  // Treat invalid dates (NaN) as expired to prevent stuck sessions
+  if (isNaN(lastActiveDate.getTime())) return true;
+  return (Date.now() - lastActiveDate.getTime()) >= SESSION_TIMEOUT_MS;
+}
 
 /**
  * Helper function to extract IP address from request
@@ -1396,6 +1420,264 @@ You agree that:
   });
 
   /**
+   * POST /api/sign/:token/session
+   * Claim or refresh signing session (public route)
+   * Single-session protection: prevents concurrent signing in multiple browsers
+   */
+  app.post("/api/sign/:token/session", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Validate session token payload
+      const validation = sessionTokenSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Invalid session token",
+          details: validation.error.errors 
+        });
+      }
+
+      const { sessionToken } = validation.data;
+
+      // Find recipient by token
+      const [recipient] = await db
+        .select()
+        .from(signatureRequestRecipients)
+        .where(eq(signatureRequestRecipients.secureToken, token));
+
+      if (!recipient) {
+        return res.status(404).json({ error: "Invalid or expired signature link" });
+      }
+
+      // Check if signing token expired
+      if (recipient.tokenExpiresAt && new Date(recipient.tokenExpiresAt) < new Date()) {
+        return res.status(403).json({ error: "This signature link has expired" });
+      }
+
+      // Check if already signed
+      if (recipient.signedAt) {
+        return res.status(400).json({ error: "This document has already been signed" });
+      }
+
+      const now = new Date();
+
+      // If this session already owns the token, just refresh timestamp (heartbeat-style update)
+      if (recipient.activeSessionToken === sessionToken) {
+        await db
+          .update(signatureRequestRecipients)
+          .set({ sessionLastActive: now })
+          .where(eq(signatureRequestRecipients.id, recipient.id));
+        
+        return res.json({ success: true, message: "Session refreshed" });
+      }
+
+      // Check for active session from another browser
+      if (recipient.activeSessionToken && !isSessionExpired(recipient.sessionLastActive)) {
+        // Another session is active - return conflict with STORED device info
+        return res.status(409).json({
+          error: "active_session",
+          message: "This document is being signed in another browser",
+          sessionLastActive: recipient.sessionLastActive,
+          deviceInfo: {
+            browser: recipient.sessionBrowserInfo || "Unknown",
+            os: recipient.sessionOsInfo || "Unknown",
+            device: recipient.sessionDeviceInfo || "Desktop"
+          }
+        });
+      }
+
+      // Session expired or no active session - claim it with device info
+      const parser = new UAParser(req.headers["user-agent"] || "");
+      const uaResult = parser.getResult();
+      
+      const deviceInfo = uaResult.device.type || "Desktop";
+      const browserInfo = uaResult.browser.name ? 
+        `${uaResult.browser.name} ${uaResult.browser.version || ''}`.trim() : 
+        "Unknown";
+      const osInfo = uaResult.os.name ? 
+        `${uaResult.os.name} ${uaResult.os.version || ''}`.trim() : 
+        "Unknown";
+
+      await db
+        .update(signatureRequestRecipients)
+        .set({ 
+          activeSessionToken: sessionToken,
+          sessionLastActive: now,
+          sessionDeviceInfo: deviceInfo,
+          sessionBrowserInfo: browserInfo,
+          sessionOsInfo: osInfo
+        })
+        .where(eq(signatureRequestRecipients.id, recipient.id));
+
+      res.json({ success: true, message: "Session claimed" });
+    } catch (error: any) {
+      console.error("Error claiming session:", error);
+      res.status(500).json({ 
+        error: "Failed to claim session",
+        message: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/sign/:token/session/force
+   * Force takeover of signing session (public route)
+   * Allows user to take control from another browser/tab
+   */
+  app.post("/api/sign/:token/session/force", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Validate session token payload
+      const validation = sessionTokenSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Invalid session token",
+          details: validation.error.errors 
+        });
+      }
+
+      const { sessionToken } = validation.data;
+
+      // Find recipient by token
+      const [recipient] = await db
+        .select()
+        .from(signatureRequestRecipients)
+        .where(eq(signatureRequestRecipients.secureToken, token));
+
+      if (!recipient) {
+        return res.status(404).json({ error: "Invalid or expired signature link" });
+      }
+
+      // Check if signing token expired
+      if (recipient.tokenExpiresAt && new Date(recipient.tokenExpiresAt) < new Date()) {
+        return res.status(403).json({ error: "This signature link has expired" });
+      }
+
+      // Check if already signed
+      if (recipient.signedAt) {
+        return res.status(400).json({ error: "This document has already been signed" });
+      }
+
+      const now = new Date();
+
+      // Get person details for audit log
+      const [person] = await db
+        .select()
+        .from(people)
+        .where(eq(people.id, recipient.personId));
+
+      // Parse device info for new session
+      const parser = new UAParser(req.headers["user-agent"] || "");
+      const uaResult = parser.getResult();
+      
+      const deviceInfo = uaResult.device.type || "Desktop";
+      const browserInfo = uaResult.browser.name ? 
+        `${uaResult.browser.name} ${uaResult.browser.version || ''}`.trim() : 
+        "Unknown";
+      const osInfo = uaResult.os.name ? 
+        `${uaResult.os.name} ${uaResult.os.version || ''}`.trim() : 
+        "Unknown";
+
+      // Force takeover - overwrite session with device info
+      await db
+        .update(signatureRequestRecipients)
+        .set({ 
+          activeSessionToken: sessionToken,
+          sessionLastActive: now,
+          sessionDeviceInfo: deviceInfo,
+          sessionBrowserInfo: browserInfo,
+          sessionOsInfo: osInfo
+        })
+        .where(eq(signatureRequestRecipients.id, recipient.id));
+
+      // Log session force takeover for forensics
+      await createAuditLog({
+        recipientId: recipient.id,
+        eventType: "session_forced",
+        signerName: person?.fullName || "Unknown",
+        signerEmail: recipient.email,
+        req,
+        eventDetails: `Session forcefully taken over from another browser`,
+        metadata: {
+          previousSessionToken: recipient.activeSessionToken,
+          newSessionToken: sessionToken
+        }
+      });
+
+      res.json({ success: true, message: "Session taken over" });
+    } catch (error: any) {
+      console.error("Error forcing session takeover:", error);
+      res.status(500).json({ 
+        error: "Failed to take over session",
+        message: error.message 
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/sign/:token/session/heartbeat
+   * Update session last active timestamp (public route)
+   * Called every 60s to maintain session freshness
+   */
+  app.patch("/api/sign/:token/session/heartbeat", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Validate session token payload
+      const validation = sessionTokenSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Invalid session token",
+          details: validation.error.errors 
+        });
+      }
+
+      const { sessionToken } = validation.data;
+
+      // Find recipient by token
+      const [recipient] = await db
+        .select()
+        .from(signatureRequestRecipients)
+        .where(eq(signatureRequestRecipients.secureToken, token));
+
+      if (!recipient) {
+        return res.status(404).json({ error: "Invalid or expired signature link" });
+      }
+
+      // Check session ownership
+      if (recipient.activeSessionToken !== sessionToken) {
+        return res.status(409).json({ 
+          error: "session_taken_over",
+          message: "Your session was taken over by another browser" 
+        });
+      }
+
+      // Check if session expired
+      if (isSessionExpired(recipient.sessionLastActive)) {
+        return res.status(409).json({ 
+          error: "session_expired",
+          message: "Session expired due to inactivity (30 minutes)" 
+        });
+      }
+
+      // Update last active timestamp
+      await db
+        .update(signatureRequestRecipients)
+        .set({ sessionLastActive: new Date() })
+        .where(eq(signatureRequestRecipients.id, recipient.id));
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error updating heartbeat:", error);
+      res.status(500).json({ 
+        error: "Failed to update heartbeat",
+        message: error.message 
+      });
+    }
+  });
+
+  /**
    * POST /api/sign/:token
    * Submit signatures (public route)
    */
@@ -1442,6 +1724,32 @@ You agree that:
 
       if (!request || request.status === "cancelled") {
         return res.status(400).json({ error: "This signature request is no longer active" });
+      }
+
+      // CRITICAL: Session ownership validation (single-session protection)
+      // Validate session token exists in request
+      const { sessionToken } = req.body;
+      if (!sessionToken) {
+        return res.status(400).json({ 
+          error: "Session token required",
+          message: "Please refresh the page and try again" 
+        });
+      }
+
+      // Verify session ownership - prevent stale submissions after takeover
+      if (recipient.activeSessionToken !== sessionToken) {
+        return res.status(409).json({ 
+          error: "session_lost", 
+          message: "Your session was taken over by another browser. Please refresh and try again." 
+        });
+      }
+
+      // Verify session hasn't expired
+      if (isSessionExpired(recipient.sessionLastActive)) {
+        return res.status(409).json({ 
+          error: "session_expired",
+          message: "Session expired due to inactivity (30 minutes). Please refresh and try again." 
+        });
       }
 
       // Get all fields for this recipient

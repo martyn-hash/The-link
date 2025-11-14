@@ -2343,6 +2343,9 @@ export const signatureRequestRecipients = pgTable("signature_request_recipients"
   // Single-session protection (prevent concurrent signing, duplicate submissions)
   activeSessionToken: varchar("active_session_token"), // Current browser session UUID
   sessionLastActive: timestamp("session_last_active"), // Last activity for 30-min timeout
+  sessionDeviceInfo: varchar("session_device_info"), // Active session device type (Desktop, Mobile, Tablet)
+  sessionBrowserInfo: varchar("session_browser_info"), // Active session browser (Chrome 119, Safari 17, etc.)
+  sessionOsInfo: varchar("session_os_info"), // Active session OS (Windows 10, macOS 14, etc.)
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_signature_request_recipients_request_id").on(table.signatureRequestId),
