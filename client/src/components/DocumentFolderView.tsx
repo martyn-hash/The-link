@@ -25,6 +25,24 @@ interface DocumentFolderViewProps {
   showOnlySignatureRequests?: boolean;
 }
 
+// Helper function to filter documents based on signature request flags
+function filterVisibleDocuments(
+  docs: any[] | undefined,
+  options: { excludeSignatureRequests?: boolean; onlySignatureRequests?: boolean }
+): any[] {
+  if (!docs) return [];
+  
+  const { excludeSignatureRequests, onlySignatureRequests } = options;
+  
+  if (excludeSignatureRequests) {
+    return docs.filter(doc => doc.uploadName !== 'Signature Request');
+  } else if (onlySignatureRequests) {
+    return docs.filter(doc => doc.uploadName === 'Signature Request');
+  }
+  
+  return docs;
+}
+
 export default function DocumentFolderView({ 
   clientId, 
   renderActions,
@@ -170,20 +188,16 @@ export default function DocumentFolderView({
   );
 
   // Filter ungrouped documents (legacy or documents without folders)
-  let ungroupedDocuments = allDocuments?.filter(doc => !doc.folderId) || [];
-  
-  // Apply signature request filtering
-  if (filterOutSignatureRequests) {
-    ungroupedDocuments = ungroupedDocuments.filter(doc => doc.uploadName !== 'Signature Request');
-  } else if (showOnlySignatureRequests) {
-    ungroupedDocuments = ungroupedDocuments.filter(doc => doc.uploadName === 'Signature Request');
-  }
+  const rawUngroupedDocuments = allDocuments?.filter(doc => !doc.folderId) || [];
+  const ungroupedDocuments = filterVisibleDocuments(rawUngroupedDocuments, {
+    excludeSignatureRequests: filterOutSignatureRequests,
+    onlySignatureRequests: showOnlySignatureRequests
+  });
 
   // When showing only signature requests, also filter ALL documents (including those in folders)
-  let allSignatureRequestDocs = [];
-  if (showOnlySignatureRequests && allDocuments) {
-    allSignatureRequestDocs = allDocuments.filter(doc => doc.uploadName === 'Signature Request');
-  }
+  const allSignatureRequestDocs = filterVisibleDocuments(allDocuments, {
+    onlySignatureRequests: showOnlySignatureRequests
+  });
 
   // When showing only signature requests, bypass folder navigation and show direct list
   if (showOnlySignatureRequests) {
@@ -709,6 +723,12 @@ export default function DocumentFolderView({
     );
   }
 
+  // Apply filtering to folder documents
+  const filteredDocuments = filterVisibleDocuments(documents, {
+    excludeSignatureRequests: filterOutSignatureRequests,
+    onlySignatureRequests: showOnlySignatureRequests
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -716,7 +736,7 @@ export default function DocumentFolderView({
         {renderActions && <div className="flex gap-2 w-full md:w-auto flex-wrap md:flex-nowrap">{renderActions(currentFolderId)}</div>}
       </div>
       
-      {!documents || documents.length === 0 ? (
+      {!filteredDocuments || filteredDocuments.length === 0 ? (
         <div className="text-center py-8">
           <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
           <p className="text-muted-foreground">No documents in this folder.</p>
@@ -724,7 +744,7 @@ export default function DocumentFolderView({
       ) : isMobile ? (
         /* Mobile Card View */
         <div className="space-y-3">
-          {documents.map((doc: any) => (
+          {filteredDocuments.map((doc: any) => (
             <Card key={doc.id} data-testid={`document-card-${doc.id}`}>
               <CardContent className="p-4">
                 <div className="space-y-3">
@@ -815,7 +835,7 @@ export default function DocumentFolderView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {documents.map((doc: any) => (
+            {filteredDocuments.map((doc: any) => (
               <TableRow key={doc.id} data-testid={`document-row-${doc.id}`}>
                 <TableCell>
                   <div className="flex items-center gap-2">

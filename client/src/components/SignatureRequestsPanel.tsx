@@ -80,7 +80,19 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
       <>
         <div className="space-y-3">
           {signatureRequests.map((request: any) => (
-            <Card key={request.id} data-testid={`card-signature-request-${request.id}`}>
+            <Card 
+              key={request.id} 
+              className="border-l-4"
+              style={{
+                borderLeftColor:
+                  request.status === 'completed' ? '#76CA23' :
+                  request.status === 'partially_signed' ? '#FFA500' :
+                  request.status === 'pending' ? '#0A7BBF' :
+                  request.status === 'cancelled' ? '#999' :
+                  '#ccc'
+              }}
+              data-testid={`card-signature-request-${request.id}`}
+            >
               <CardContent className="p-4">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 justify-between">
