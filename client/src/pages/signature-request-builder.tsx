@@ -165,7 +165,8 @@ export default function SignatureRequestBuilder() {
     })
   );
   
-  // Step 3: Email customization
+  // Step 3: Email customization and friendly name
+  const [friendlyName, setFriendlyName] = useState("");
   const [emailSubject, setEmailSubject] = useState("Document Signature Request");
   const [emailMessage, setEmailMessage] = useState("Please review and sign the attached document.");
 
@@ -471,6 +472,7 @@ export default function SignatureRequestBuilder() {
           email: r.email,
           orderIndex: idx,
         })),
+        friendlyName,
         emailSubject,
         emailMessage,
       });
@@ -495,7 +497,7 @@ export default function SignatureRequestBuilder() {
 
   // Navigation guards
   const canProceedToFields = selectedDocumentId && selectedDocument !== null;
-  const canSend = canProceedToFields && fields.length > 0 && recipients.length > 0 && emailSubject && emailMessage;
+  const canSend = canProceedToFields && fields.length > 0 && recipients.length > 0 && friendlyName.trim() && emailSubject && emailMessage;
 
   // Handle navigation away
   const handleBack = () => {
@@ -822,6 +824,29 @@ export default function SignatureRequestBuilder() {
                   <CardDescription>Customize the email message and send</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Friendly Name - Required */}
+                  <div className="space-y-2">
+                    <Label htmlFor="friendly-name" className="text-sm font-medium">
+                      Friendly Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="friendly-name"
+                      value={friendlyName}
+                      onChange={(e) => setFriendlyName(e.target.value)}
+                      placeholder="e.g., Annual Accounts 2024, Tax Return, Service Agreement"
+                      data-testid="input-friendly-name"
+                      className="w-full"
+                    />
+                    {!friendlyName.trim() && (
+                      <p className="text-sm text-destructive">Friendly name is required to send the signature request</p>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      Give this signature request a friendly name for easy identification
+                    </p>
+                  </div>
+
+                  <Separator />
+
                   <div className="space-y-2">
                     <Label>Email Subject</Label>
                     <Input
