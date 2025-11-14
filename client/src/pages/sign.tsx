@@ -70,6 +70,10 @@ export default function SignPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [typedName, setTypedName] = useState("");
+  
+  // Document-centric signing state
+  const [signingStarted, setSigningStarted] = useState(false);
+  const [showFieldModal, setShowFieldModal] = useState(false);
 
   // Fetch signature request data
   const { data: signData, isLoading, error } = useQuery<SignData>({
@@ -116,6 +120,13 @@ export default function SignPage() {
 
   // Helper function to scroll to a field on the PDF
   const scrollToField = (field: any) => {
+    // Try to scroll to the specific field overlay first
+    const fieldElement = document.getElementById(`field-${field.id}`);
+    if (fieldElement) {
+      fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    // Fallback to scrolling to the page
     const pageElement = document.getElementById(`page-${field.pageNumber}`);
     if (pageElement) {
       pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -454,262 +465,451 @@ export default function SignPage() {
     );
   }
 
-  // Signing step - split layout with PDF
+  // Signing step - document-centric layout with banner and modal
+  // Get all fields sorted by order
+  const sortedFields = [...signData.fields].sort((a, b) => a.orderIndex - b.orderIndex);
+  
+  // Get current field index
+  const currentFieldIndex = currentFieldId 
+    ? sortedFields.findIndex(f => f.id === currentFieldId) 
+    : -1;
+  
+  const currentField = currentFieldId 
+    ? sortedFields.find(f => f.id === currentFieldId) 
+    : null;
+
+  // Navigation functions
+  const handleStart = () => {
+    setSigningStarted(true);
+    const firstField = getNextUnsignedField();
+    if (firstField) {
+      setCurrentFieldId(firstField.id);
+      scrollToField(firstField);
+      setShowFieldModal(true);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentFieldIndex > 0) {
+      const prevField = sortedFields[currentFieldIndex - 1];
+      if (prevField) {
+        setCurrentFieldId(prevField.id);
+        scrollToField(prevField);
+        setShowFieldModal(true);
+      }
+    }
+  };
+
+  const handleNext = () => {
+    if (currentFieldIndex < sortedFields.length - 1) {
+      const nextField = sortedFields[currentFieldIndex + 1];
+      if (nextField) {
+        setCurrentFieldId(nextField.id);
+        scrollToField(nextField);
+        setShowFieldModal(true);
+      }
+    }
+  };
+
+  const handleFieldClick = (fieldId: string) => {
+    setCurrentFieldId(fieldId);
+    setSigningStarted(true);
+    setShowFieldModal(true);
+  };
+
+  const closeModal = () => {
+    setShowFieldModal(false);
+    clearCanvas();
+    setTypedName("");
+  };
+
+  const saveAndClose = (type: "drawn" | "typed") => {
+    saveSignature(type);
+    setTimeout(() => {
+      // Check if there's a next unsigned field
+      const nextField = getNextUnsignedField();
+      if (nextField) {
+        // Auto-advance to next field - keep modal open
+        setCurrentFieldId(nextField.id);
+        scrollToField(nextField);
+        // Modal stays open for next field
+      } else {
+        // All fields signed - close modal
+        setShowFieldModal(false);
+      }
+      clearCanvas();
+      setTypedName("");
+    }, 300);
+  };
+
+  // All fields signed?
+  const allFieldsSigned = signData.fields.every((field: any) => fieldSignatures.has(field.id));
+
   return (
-    <div className="min-h-screen flex">
-      {/* Left Sidebar - Signing Controls */}
-      <div className="w-full md:w-80 bg-white dark:bg-gray-900 border-r flex flex-col overflow-y-auto">
-        {/* Header */}
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText className="w-6 h-6 text-primary" />
-            <h1 className="text-lg font-bold">Document Signature</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">From: {signData.firmName}</p>
-          <p className="text-xs text-muted-foreground mt-1">{signData.document.fileName}</p>
-        </div>
-
-        {/* Signing Step */}
-        {currentStep === "sign" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Signer Info */}
-            <div className="p-4 border-b bg-muted/30">
-              <div className="text-xs text-muted-foreground mb-1">Signing as:</div>
-              <div className="font-medium text-sm">{signData.recipient.name}</div>
-              <div className="text-xs text-muted-foreground">{signData.recipient.email}</div>
-            </div>
-
-            {/* Combined Progress Bar + Guidance + Submit - Sticky position */}
-            <div className="p-4 border-b bg-white dark:bg-gray-900 sticky top-0 z-10 space-y-3">
-              {/* Visual Progress Bar */}
-              <div>
-                <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="font-medium">Progress</span>
-                  <Badge variant="secondary">
-                    {fieldSignatures.size} / {signData.fields.length} fields
-                  </Badge>
+    <div className="min-h-screen flex flex-col bg-muted/20">
+      {/* Guided Banner - Fixed at top */}
+      <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          {!signingStarted ? (
+            // Start state
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-primary flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-sm">Ready to sign {signData.document.fileName}?</p>
+                  <p className="text-xs text-muted-foreground">Click Start to begin signing</p>
                 </div>
-                <Progress 
-                  value={(fieldSignatures.size / signData.fields.length) * 100} 
-                  className="h-2"
-                />
               </div>
-
-              {/* Guidance Message */}
-              {getNextUnsignedField() ? (
-                <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
-                  <div className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-2">
-                    📝 Complete the field below, then click Next
-                  </div>
-                  <Button
-                    onClick={goToNextField}
-                    variant="outline"
-                    size="sm"
-                    className="w-full bg-white dark:bg-gray-900"
-                    data-testid="button-next-field"
-                  >
-                    Next Field →
-                  </Button>
-                </div>
-              ) : (
-                <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg text-xs font-medium text-green-900 dark:text-green-100">
-                  ✓ All fields complete! Submit your signature below.
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <Button
-                onClick={handleSubmit}
-                disabled={submitMutation.isPending || fieldSignatures.size < signData.fields.length}
-                className="w-full"
-                data-testid="button-submit-signature"
+              <Button 
+                onClick={handleStart}
+                data-testid="button-start-signing"
+                className="w-full md:w-auto"
               >
                 <Send className="w-4 h-4 mr-2" />
-                {submitMutation.isPending ? "Submitting..." : "Submit Signature"}
+                Start Signing
               </Button>
             </div>
-
-            {/* Signature Fields - Scrollable */}
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-              <div className="text-sm font-semibold mb-2">Signature Fields</div>
-              {signData.fields.map((field: any, index: number) => {
-                const isCurrentField = field.id === currentFieldId;
-                const isSigned = fieldSignatures.has(field.id);
-                
-                return (
-                  <div
-                    key={field.id}
-                    className={`p-3 border rounded-lg text-sm ${
-                      isCurrentField ? "border-primary bg-primary/5" : ""
-                    } ${isSigned ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" : ""}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {field.fieldType === "signature" ? (
-                          <PenTool className="w-3 h-3" />
-                        ) : (
-                          <Type className="w-3 h-3" />
-                        )}
-                        <span className="font-medium text-xs">
-                          Field {index + 1}
-                        </span>
-                      </div>
-                      {isSigned && (
-                        <Badge variant="outline" className="text-xs bg-green-100 dark:bg-green-900">
-                          <Check className="w-3 h-3 mr-1" />
-                          Done
-                        </Badge>
-                      )}
-                    </div>
-
-                    {isCurrentField && !isSigned && (
-                      <Tabs defaultValue={field.fieldType === "signature" ? "draw" : "type"} className="mt-2">
-                        <TabsList className="grid w-full grid-cols-2 h-8">
-                          <TabsTrigger value="draw" className="text-xs">Draw</TabsTrigger>
-                          <TabsTrigger value="type" className="text-xs">Type</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="draw" className="space-y-2 mt-2">
-                          <div className="border rounded bg-white dark:bg-gray-900">
-                            <canvas
-                              ref={canvasRef}
-                              width={300}
-                              height={100}
-                              onMouseDown={startDrawing}
-                              onMouseMove={draw}
-                              onMouseUp={stopDrawing}
-                              onMouseLeave={stopDrawing}
-                              className="w-full cursor-crosshair"
-                              data-testid="canvas-signature"
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={clearCanvas}
-                              data-testid="button-clear-signature"
-                              className="text-xs"
-                            >
-                              Clear
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => saveSignature("drawn")}
-                              data-testid="button-save-drawn-signature"
-                              className="text-xs"
-                            >
-                              Save
-                            </Button>
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="type" className="space-y-2 mt-2">
-                          <Input
-                            id="typed-name"
-                            value={typedName}
-                            onChange={(e) => setTypedName(e.target.value)}
-                            placeholder="Enter full name"
-                            className="font-serif text-lg"
-                            data-testid="input-typed-name"
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => saveSignature("typed")}
-                            disabled={!typedName.trim()}
-                            data-testid="button-save-typed-name"
-                            className="w-full text-xs"
-                          >
-                            Save Name
-                          </Button>
-                        </TabsContent>
-                      </Tabs>
-                    )}
-
-                    {isSigned && (
-                      <div className="mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setCurrentFieldId(field.id);
-                            const sig = fieldSignatures.get(field.id);
-                            if (sig?.type === "typed") {
-                              setTypedName(sig.data);
-                            }
-                            setFieldSignatures(new Map(
-                              Array.from(fieldSignatures.entries()).filter(([id]) => id !== field.id)
-                            ));
-                          }}
-                          data-testid={`button-edit-field-${field.id}`}
-                          className="text-xs"
-                        >
-                          Edit
-                        </Button>
-                      </div>
-                    )}
-
-                    {!isCurrentField && !isSigned && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentFieldId(field.id)}
-                        data-testid={`button-select-field-${field.id}`}
-                        className="w-full text-xs mt-2"
-                      >
-                        Sign this field
-                      </Button>
-                    )}
+          ) : (
+            // Active signing state
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <FileText className="w-5 h-5 text-primary flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-sm">
+                      Field {currentFieldIndex + 1} of {sortedFields.length}
+                    </p>
+                    <Badge variant="secondary" className="text-xs">
+                      {fieldSignatures.size} / {sortedFields.length} complete
+                    </Badge>
                   </div>
-                );
-              })}
+                  <Progress 
+                    value={(fieldSignatures.size / sortedFields.length) * 100} 
+                    className="h-1.5 mt-2 md:w-64"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevious}
+                  disabled={currentFieldIndex === 0}
+                  data-testid="button-previous-field"
+                  className="flex-1 md:flex-none"
+                >
+                  ← Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNext}
+                  disabled={currentFieldIndex === sortedFields.length - 1}
+                  data-testid="button-next-field"
+                  className="flex-1 md:flex-none"
+                >
+                  Next →
+                </Button>
+                {allFieldsSigned && (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={submitMutation.isPending}
+                    data-testid="button-submit-signature"
+                    size="sm"
+                    className="flex-1 md:flex-none"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    {submitMutation.isPending ? "Submitting..." : "Submit"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* PDF Viewer - Full width, takes center stage */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-5xl mx-auto">
+          <PdfSignatureViewer
+            pdfUrl={signData.document.signedUrl}
+            clickable={false}
+            className="h-full"
+            renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (
+              <>
+                {signData.fields
+                  .filter((f: any) => f.pageNumber === pageNumber)
+                  .map((field: any) => {
+                    const isSigned = fieldSignatures.has(field.id);
+                    const isActive = field.id === currentFieldId;
+                    return (
+                      <div
+                        key={field.id}
+                        id={`field-${field.id}`}
+                        className={`absolute border-2 cursor-pointer transition-all hover:shadow-lg ${
+                          isActive
+                            ? "border-blue-500 bg-blue-100/40 animate-pulse"
+                            : isSigned
+                            ? "border-green-500 bg-green-100/30"
+                            : "border-yellow-500 bg-yellow-100/30"
+                        }`}
+                        style={{
+                          left: `${field.xPosition}%`,
+                          top: `${field.yPosition}%`,
+                          width: `${field.width}%`,
+                          height: `${field.height}%`,
+                        }}
+                        onClick={() => handleFieldClick(field.id)}
+                        data-testid={`field-overlay-${field.id}`}
+                      >
+                        <div className={`text-xs font-medium p-1 truncate ${
+                          isActive ? "text-blue-700" : isSigned ? "text-green-700" : "text-yellow-700"
+                        }`}>
+                          {isActive ? "← Click to sign" : isSigned ? "✓ Signed" : "Click to sign"}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </>
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Field Interaction Modal/Overlay - Shows when user clicks a field */}
+      {showFieldModal && currentField && (
+        <>
+          {/* Desktop: Modal */}
+          <div className="hidden md:block fixed inset-0 bg-black/50 z-50" onClick={closeModal}>
+            <div className="flex items-center justify-center min-h-screen p-4">
+              <Card 
+                className="w-full max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    {currentField.fieldType === "signature" ? (
+                      <PenTool className="w-5 h-5" />
+                    ) : (
+                      <Type className="w-5 h-5" />
+                    )}
+                    {currentField.fieldType === "signature" ? "Sign Here" : "Type Your Name"}
+                  </CardTitle>
+                  <CardDescription>
+                    Field {currentFieldIndex + 1} of {sortedFields.length}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {fieldSignatures.has(currentField.id) ? (
+                    <div className="text-center py-8">
+                      <Check className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                      <p className="font-medium">Field already signed</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Use Previous/Next to navigate
+                      </p>
+                      <Button
+                        onClick={closeModal}
+                        className="mt-4"
+                        data-testid="button-close-modal"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  ) : (
+                    <Tabs defaultValue={currentField.fieldType === "signature" ? "draw" : "type"}>
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="draw">Draw</TabsTrigger>
+                        <TabsTrigger value="type">Type</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="draw" className="space-y-3 mt-4">
+                        <div className="border-2 border-dashed rounded-lg bg-white dark:bg-gray-900 p-2">
+                          <canvas
+                            ref={canvasRef}
+                            width={400}
+                            height={150}
+                            onMouseDown={startDrawing}
+                            onMouseMove={draw}
+                            onMouseUp={stopDrawing}
+                            onMouseLeave={stopDrawing}
+                            className="w-full cursor-crosshair"
+                            data-testid="canvas-signature"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={clearCanvas}
+                            data-testid="button-clear-signature"
+                            className="flex-1"
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            onClick={() => saveAndClose("drawn")}
+                            data-testid="button-save-drawn-signature"
+                            className="flex-1"
+                          >
+                            <Check className="w-4 h-4 mr-2" />
+                            Save
+                          </Button>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="type" className="space-y-3 mt-4">
+                        <Input
+                          value={typedName}
+                          onChange={(e) => setTypedName(e.target.value)}
+                          placeholder="Enter your full name"
+                          className="font-serif text-xl h-12"
+                          data-testid="input-typed-name"
+                          autoFocus
+                        />
+                        <Button
+                          onClick={() => saveAndClose("typed")}
+                          disabled={!typedName.trim()}
+                          data-testid="button-save-typed-name"
+                          className="w-full"
+                        >
+                          <Check className="w-4 h-4 mr-2" />
+                          Save
+                        </Button>
+                      </TabsContent>
+                    </Tabs>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Right Side - PDF Viewer (Full Screen) */}
-      <div className="flex-1 bg-gray-100 dark:bg-gray-800 overflow-hidden">
-        <PdfSignatureViewer
-          pdfUrl={signData.document.signedUrl}
-          clickable={false}
-          className="h-full"
-          renderOverlay={(pageNumber, _renderedWidth, _renderedHeight) => (
-            <>
-              {signData.fields
-                .filter((f: any) => f.pageNumber === pageNumber)
-                .map((field: any) => {
-                  const isSigned = fieldSignatures.has(field.id);
-                  const isActive = field.id === currentFieldId && currentStep === "sign";
-                  return (
-                    <div
-                      key={field.id}
-                      className={`absolute border-2 pointer-events-none transition-all ${
-                        isActive
-                          ? "border-blue-500 bg-blue-100/40 animate-pulse"
-                          : isSigned
-                          ? "border-green-500 bg-green-100/30"
-                          : "border-yellow-500 bg-yellow-100/30"
-                      }`}
-                      style={{
-                        left: `${field.xPosition}%`,
-                        top: `${field.yPosition}%`,
-                        width: `${field.width}%`,
-                        height: `${field.height}%`,
-                      }}
+          {/* Mobile: Bottom Sheet */}
+          <div className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-end" onClick={closeModal}>
+            <div 
+              className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {currentField.fieldType === "signature" ? (
+                      <PenTool className="w-5 h-5" />
+                    ) : (
+                      <Type className="w-5 h-5" />
+                    )}
+                    <h3 className="font-semibold">
+                      {currentField.fieldType === "signature" ? "Sign Here" : "Type Your Name"}
+                    </h3>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={closeModal}>
+                    ✕
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Field {currentFieldIndex + 1} of {sortedFields.length}
+                </p>
+              </div>
+
+              <div className="p-4">
+                {fieldSignatures.has(currentField.id) ? (
+                  <div className="text-center py-8">
+                    <Check className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                    <p className="font-medium">Field already signed</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Use Previous/Next to navigate
+                    </p>
+                    <Button
+                      onClick={closeModal}
+                      className="mt-4 w-full"
                     >
-                      <div className={`text-xs font-medium p-1 truncate ${
-                        isActive ? "text-blue-700" : isSigned ? "text-green-700" : "text-yellow-700"
-                      }`}>
-                        {isActive ? "← Sign here" : isSigned ? "✓ Signed" : "⚠ Sign"}
+                      Close
+                    </Button>
+                  </div>
+                ) : (
+                  <Tabs defaultValue={currentField.fieldType === "signature" ? "draw" : "type"}>
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="draw">Draw</TabsTrigger>
+                      <TabsTrigger value="type">Type</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="draw" className="space-y-3 mt-4">
+                      <div className="border-2 border-dashed rounded-lg bg-white dark:bg-gray-900 p-2">
+                        <canvas
+                          ref={canvasRef}
+                          width={300}
+                          height={150}
+                          onTouchStart={(e) => {
+                            const touch = e.touches[0];
+                            if (touch && canvasRef.current) {
+                              const rect = canvasRef.current.getBoundingClientRect();
+                              const mouseEvent = new MouseEvent('mousedown', {
+                                clientX: touch.clientX,
+                                clientY: touch.clientY
+                              });
+                              canvasRef.current.dispatchEvent(mouseEvent);
+                            }
+                          }}
+                          onTouchMove={(e) => {
+                            e.preventDefault();
+                            const touch = e.touches[0];
+                            if (touch && canvasRef.current) {
+                              const mouseEvent = new MouseEvent('mousemove', {
+                                clientX: touch.clientX,
+                                clientY: touch.clientY
+                              });
+                              canvasRef.current.dispatchEvent(mouseEvent);
+                            }
+                          }}
+                          onTouchEnd={() => {
+                            if (canvasRef.current) {
+                              canvasRef.current.dispatchEvent(new MouseEvent('mouseup'));
+                            }
+                          }}
+                          className="w-full touch-none"
+                        />
                       </div>
-                    </div>
-                  );
-                })}
-            </>
-          )}
-        />
-      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={clearCanvas}
+                          className="flex-1"
+                        >
+                          Clear
+                        </Button>
+                        <Button
+                          onClick={() => saveAndClose("drawn")}
+                          className="flex-1"
+                        >
+                          <Check className="w-4 h-4 mr-2" />
+                          Save
+                        </Button>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="type" className="space-y-3 mt-4">
+                      <Input
+                        value={typedName}
+                        onChange={(e) => setTypedName(e.target.value)}
+                        placeholder="Enter your full name"
+                        className="font-serif text-xl h-12"
+                        autoFocus
+                      />
+                      <Button
+                        onClick={() => saveAndClose("typed")}
+                        disabled={!typedName.trim()}
+                        className="w-full"
+                      >
+                        <Check className="w-4 h-4 mr-2" />
+                        Save
+                      </Button>
+                    </TabsContent>
+                  </Tabs>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
