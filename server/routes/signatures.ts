@@ -100,7 +100,7 @@ async function createAuditLog(params: {
   signerEmail: string;
   req: any;
   documentHash?: string;
-  eventDetails?: string;
+  eventDetails?: any; // JSON object for event context
   metadata?: any;
   consentAcceptedAt?: Date | null;
   signedAt?: Date | null;
@@ -1222,7 +1222,7 @@ You agree that:
           signerEmail: recipient.email,
           req,
           documentHash: "not_applicable",
-          eventDetails: "User viewed consent disclosure",
+          eventDetails: { message: "User viewed consent disclosure" },
           consentText: consentDisclosureText,
           metadata: {
             documentId: document?.id,
@@ -1363,7 +1363,7 @@ You agree that:
               signerEmail: recipient.email,
               req,
               documentHash: document.fileName || "unknown",
-              eventDetails: `Document accessed: ${document.fileName}`,
+              eventDetails: { message: `Document accessed: ${document.fileName}`, fileName: document.fileName },
               metadata: {
                 documentId: document.id,
                 requestId: request.id,
@@ -1598,7 +1598,7 @@ You agree that:
         signerName: person?.fullName || "Unknown",
         signerEmail: recipient.email,
         req,
-        eventDetails: `Session forcefully taken over from another browser`,
+        eventDetails: { message: "Session forcefully taken over from another browser" },
         metadata: {
           previousSessionToken: recipient.activeSessionToken,
           newSessionToken: sessionToken
@@ -2033,7 +2033,7 @@ You agree that:
                     signerEmail: recipientData.email,
                     req: { ip: "system", headers: {} }, // System-generated, no real IP
                     documentHash: document.fileName || "unknown",
-                    eventDetails: `Completion email sent with signed document`,
+                    eventDetails: { message: "Completion email sent with signed document" },
                     metadata: {
                       documentId: document.id,
                       requestId: request.id,

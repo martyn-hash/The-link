@@ -2374,7 +2374,7 @@ export const signatureAuditLogs = pgTable("signature_audit_logs", {
   signatureRequestRecipientId: varchar("signature_request_recipient_id").notNull().references(() => signatureRequestRecipients.id, { onDelete: "cascade" }),
   // Event tracking
   eventType: varchar("event_type").notNull(), // 'signature_completed', 'consent_accepted', etc.
-  eventDetails: text("event_details"), // Additional event context
+  eventDetails: jsonb("event_details"), // Additional event context (JSON object)
   // Signer identity
   signerName: varchar("signer_name").notNull(),
   signerEmail: varchar("signer_email").notNull(),
