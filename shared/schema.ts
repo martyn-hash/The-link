@@ -3253,6 +3253,7 @@ export const companySettings = pgTable("company_settings", {
   portalUrl: varchar("portal_url"), // Base URL for client portal links (e.g., https://example.replit.app)
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(false).notNull(), // Global toggle for push notifications
   postSignatureRedirectUrls: jsonb("post_signature_redirect_urls").default(sql`'[]'::jsonb`), // Array of {name: string, url: string} for post-signature redirects
+  logoObjectPath: varchar("logo_object_path"), // Path to company logo in object storage (for certificate header)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

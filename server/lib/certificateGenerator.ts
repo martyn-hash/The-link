@@ -21,6 +21,7 @@ interface CertificateOptions {
   signers: SignerInfo[];
   originalDocumentHash: string;
   signedDocumentHash: string;
+  logoBytes?: Buffer; // Optional company logo image bytes (PNG/JPEG)
 }
 
 /**
@@ -37,6 +38,7 @@ export async function generateCertificateOfCompletion(
     signers,
     originalDocumentHash,
     signedDocumentHash,
+    logoBytes,
   } = options;
 
   // Create a new PDF document
@@ -59,6 +61,49 @@ export async function generateCertificateOfCompletion(
   // Add first page
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let yPos = pageHeight - margin;
+
+  // Add company logo at the top if provided
+  if (logoBytes) {
+    try {
+      // Try to embed as PNG first
+      let logoImage;
+      try {
+        logoImage = await pdfDoc.embedPng(logoBytes);
+      } catch {
+        // If PNG fails, try JPEG
+        logoImage = await pdfDoc.embedJpg(logoBytes);
+      }
+      
+      // Scale logo to fit within reasonable bounds (max 150px wide, 80px tall)
+      const logoWidth = Math.min(logoImage.width, 150);
+      const logoHeight = Math.min(logoImage.height, 80);
+      const aspectRatio = logoImage.width / logoImage.height;
+      
+      let finalWidth = logoWidth;
+      let finalHeight = logoWidth / aspectRatio;
+      
+      // If height exceeds max, scale down
+      if (finalHeight > logoHeight) {
+        finalHeight = logoHeight;
+        finalWidth = logoHeight * aspectRatio;
+      }
+      
+      // Center logo horizontally
+      const logoX = (pageWidth - finalWidth) / 2;
+      
+      page.drawImage(logoImage, {
+        x: logoX,
+        y: yPos - finalHeight,
+        width: finalWidth,
+        height: finalHeight,
+      });
+      
+      yPos -= finalHeight + 30; // Move down past logo with spacing
+    } catch (error) {
+      console.error('Error embedding logo in certificate:', error);
+      // Continue without logo if embedding fails
+    }
+  }
 
   // Header with success indicator (UK eIDAS compliant)
   // Use "CONFIRMED" text which is legally recognized for electronic signatures

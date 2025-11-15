@@ -308,10 +308,6 @@ async function processPdfWithSignatures(
 
     // Get audit trail data for certificate generation
     // CRITICAL: Only get signature_completed events with valid signedAt timestamps
-    const allAuditLogs = await db
-      .select()
-      .from(signatureAuditLogs);
-    
     const recipients = await db
       .select()
       .from(signatureRequestRecipients)
@@ -319,9 +315,16 @@ async function processPdfWithSignatures(
     
     const recipientIds = recipients.map(r => r.id);
     
+    // Fetch ONLY audit logs for this signature request's recipients (scoped query)
+    const allAuditLogs = recipientIds.length > 0
+      ? await db
+          .select()
+          .from(signatureAuditLogs)
+          .where(inArray(signatureAuditLogs.signatureRequestRecipientId, recipientIds))
+      : [];
+    
     // Filter to only completed signature events for this request
     let completedSignatureLogs = allAuditLogs.filter(log => 
-      recipientIds.includes(log.signatureRequestRecipientId) &&
       log.eventType === "signature_completed" &&
       log.signedAt !== null
     );
@@ -358,6 +361,25 @@ async function processPdfWithSignatures(
       .select()
       .from(clients)
       .where(eq(clients.id, clientId));
+
+    // Fetch company logo from settings if available
+    let logoBytes: Buffer | undefined;
+    try {
+      const [settings] = await db
+        .select()
+        .from(companySettings)
+        .limit(1);
+      
+      if (settings?.logoObjectPath) {
+        const logoFile = await objectStorageService.getObjectEntityFile(settings.logoObjectPath);
+        const [logoBytesArray] = await logoFile.download();
+        logoBytes = Buffer.from(logoBytesArray);
+        console.log('[E-Signature] Company logo loaded for certificate');
+      }
+    } catch (error) {
+      console.error('[E-Signature] Error loading company logo:', error);
+      // Continue without logo if loading fails
+    }
 
     // Generate Certificate of Completion PDF
     let certificatePath: string | null = null;
@@ -399,6 +421,7 @@ async function processPdfWithSignatures(
         signers: signerInfos,
         originalDocumentHash,
         signedDocumentHash,
+        logoBytes, // Pass logo to certificate generator
       });
 
       // Upload certificate PDF
