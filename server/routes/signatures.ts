@@ -1821,7 +1821,7 @@ You agree that:
         .where(eq(people.id, recipient.personId));
 
       // Collect audit trail data
-      const ipAddress = req.ip || req.connection.remoteAddress || "unknown";
+      const ipAddress = getClientIp(req);
       const userAgent = req.headers["user-agent"] || "unknown";
       
       // Parse user agent for device/browser/os info
