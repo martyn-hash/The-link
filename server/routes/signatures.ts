@@ -423,18 +423,80 @@ async function processPdfWithSignatures(
       Math.max(...completedSignatureLogs.map(log => log.signedAt!.getTime()))
     );
 
+    // Merge signed PDF with certificate into a single combined document
+    let combinedPdfPath: string | null = null;
+    let combinedPdfSize = signedPdfBytes.length;
+    let finalFileName = signedFileName; // Default to signed-only filename
+    let finalPdfHash = signedDocumentHash; // Default to signed-only hash
+    
+    if (certificatePath) {
+      try {
+        // Load signed PDF
+        const signedPdfDoc = await PDFDocument.load(signedPdfBytes);
+        
+        // Download and load certificate PDF
+        const certFile = await objectStorageService.getObjectEntityFile(certificatePath);
+        const [certBytes] = await certFile.download();
+        const certPdfDoc = await PDFDocument.load(certBytes);
+        
+        // Create new combined PDF
+        const combinedPdfDoc = await PDFDocument.create();
+        
+        // Copy all pages from signed document
+        const signedPages = await combinedPdfDoc.copyPages(
+          signedPdfDoc,
+          signedPdfDoc.getPageIndices()
+        );
+        signedPages.forEach(page => combinedPdfDoc.addPage(page));
+        
+        // Copy all pages from certificate
+        const certPages = await combinedPdfDoc.copyPages(
+          certPdfDoc,
+          certPdfDoc.getPageIndices()
+        );
+        certPages.forEach(page => combinedPdfDoc.addPage(page));
+        
+        // Save combined PDF
+        const combinedPdfBytes = await combinedPdfDoc.save();
+        combinedPdfSize = combinedPdfBytes.length;
+        
+        // Generate hash of combined PDF (for integrity verification)
+        finalPdfHash = crypto
+          .createHash('sha256')
+          .update(combinedPdfBytes)
+          .digest('hex');
+        
+        // Upload combined PDF
+        const combinedFileName = `${document.fileName.replace('.pdf', '')}_Signed_with_Certificate.pdf`;
+        const { objectPath: combinedObjectPath, fileName: returnedFileName } = await objectStorageService.uploadSignedDocument(
+          signatureRequestId,
+          combinedFileName,
+          Buffer.from(combinedPdfBytes),
+          uploadedBy
+        );
+        
+        combinedPdfPath = combinedObjectPath;
+        finalFileName = returnedFileName; // Use actual filename from combined upload
+        console.log(`[E-Signature] Combined PDF (signed + certificate) created: ${combinedObjectPath}`);
+        console.log(`[E-Signature] Combined PDF hash: ${finalPdfHash}`);
+      } catch (error) {
+        console.error("[E-Signature] Error creating combined PDF:", error);
+        // Fall back to separate files if merge fails
+      }
+    }
+
     // Create signed document record with certificate path
     const [signedDoc] = await db
       .insert(signedDocuments)
       .values({
         signatureRequestId,
         clientId,
-        signedPdfPath: signedObjectPath,
+        signedPdfPath: combinedPdfPath || signedObjectPath, // Use combined if available, otherwise signed only
         originalPdfHash: originalDocumentHash, // Hash of original PDF (pre-signature)
-        signedPdfHash: signedDocumentHash, // Hash of final signed PDF (post-signature)
+        signedPdfHash: finalPdfHash, // Hash of combined PDF if merge succeeded, otherwise signed-only hash
         auditTrailPdfPath: certificatePath,
-        fileName: signedFileName, // Use the actual filename returned from upload
-        fileSize: signedPdfBytes.length,
+        fileName: finalFileName, // Use combined filename if merge succeeded, otherwise signed-only filename
+        fileSize: combinedPdfSize,
         completedAt: documentCompletionTime,
       })
       .returning();
