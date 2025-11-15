@@ -200,8 +200,8 @@ export default function Dashboard() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Main Dashboard Content */}
-        <main className="flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
-          <div className="space-y-6">
+        <main className="flex-1 overflow-auto page-container py-6 md:py-8 pb-20 md:pb-8">
+          <div className="space-y-8">
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
 
@@ -332,9 +332,9 @@ function DashboardSummaryCards({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Dashboard Overview</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Dashboard Overview</h2>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground" data-testid="text-last-updated">
             Updated {formatLastUpdated(cache.lastUpdated)}
@@ -361,7 +361,7 @@ function DashboardSummaryCards({
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (

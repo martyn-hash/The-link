@@ -7242,27 +7242,26 @@ export default function ClientDetail() {
       <div className="flex-1" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
         {/* Header */}
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center justify-between gap-2">
+        <div className="page-container py-6">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold text-foreground truncate" data-testid="text-client-name">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="text-client-name">
                 {client.name}
               </h1>
-              <p className="text-sm text-muted-foreground flex items-center mt-1 flex-wrap gap-x-2">
+              <div className="flex items-center mt-2 flex-wrap gap-x-3 text-meta">
                 {client.companyNumber && (
-                  <>
-                    <Building2 className="w-4 h-4 mr-1" />
+                  <span className="flex items-center gap-1">
+                    <Building2 className="w-4 h-4" />
                     Company #{client.companyNumber}
-                  </>
+                  </span>
                 )}
                 {client.dateOfCreation && (
-                  <>
-                    {client.companyNumber && <span className="mx-2">•</span>}
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Formed: {new Date(client.dateOfCreation).toLocaleDateString()}
-                  </>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    Formed {new Date(client.dateOfCreation).toLocaleDateString()}
+                  </span>
                 )}
-              </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {client.companyStatus && (
@@ -7279,11 +7278,11 @@ export default function ClientDetail() {
       </div>
 
         {/* Main Content */}
-        <div className="container mx-auto p-4 md:p-6">
+        <div className="page-container py-6 md:py-8">
         <Tabs 
           value={activeTab} 
           onValueChange={setActiveTab}
-          className="flex flex-col"
+          className="flex flex-col section-spacing"
           data-tab-content="true"
           data-client-tabs="main"
         >
@@ -7540,7 +7539,7 @@ export default function ClientDetail() {
             onTabChange={setActiveTab}
             enabled={isMobile}
           >
-          <TabsContent value="overview" className="space-y-6 mt-6">
+          <TabsContent value="overview" className="space-y-8 mt-6">
             {/* Company Details */}
             <Card>
               <CardHeader>
@@ -7846,7 +7845,7 @@ export default function ClientDetail() {
             )}
           </TabsContent>
 
-          <TabsContent value="services" className="space-y-6 mt-6">
+          <TabsContent value="services" className="space-y-8 mt-6">
             {/* Client Services Section - Show for company clients OR individual clients with company connections */}
             {(() => {
               // Handle legacy data where clientType might be null for companies
@@ -8615,11 +8614,11 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="communications" className="space-y-6 mt-6">
+          <TabsContent value="communications" className="space-y-8 mt-6">
             <CommunicationsTimeline clientId={id} user={user} />
           </TabsContent>
 
-          <TabsContent value="chronology" className="space-y-6 mt-6">
+          <TabsContent value="chronology" className="space-y-8 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -8633,7 +8632,7 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="documents" className="space-y-6 mt-6">
+          <TabsContent value="documents" className="space-y-8 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -8695,7 +8694,7 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="tasks" className="space-y-6 mt-6">
+          <TabsContent value="tasks" className="space-y-8 mt-6">
             {/* Internal Tasks Section */}
             <Card>
               <CardHeader>

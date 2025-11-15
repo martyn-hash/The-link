@@ -903,10 +903,10 @@ export default function Projects() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center justify-between gap-2">
+        <header className="bg-card border-b border-border page-container py-6">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl md:text-2xl font-semibold text-foreground truncate" data-testid="text-page-title">
+              <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="text-page-title">
                 {getPageTitle()}
               </h2>
             </div>
@@ -1127,7 +1127,7 @@ export default function Projects() {
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden pb-0 md:pb-0" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
+        <main className="flex-1 overflow-auto page-container py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
           {isMobile ? (
             <PullToRefresh
               onRefresh={handleRefresh}
