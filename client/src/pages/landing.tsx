@@ -62,7 +62,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-background dark:to-secondary">
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-screen">
           {/* Left Column - Branding */}
@@ -88,7 +88,7 @@ export default function Landing() {
           <div className="flex flex-col justify-center">
             <div className="w-full max-w-md mx-auto">
               <Tabs defaultValue="password" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-2 bg-white dark:bg-muted/30 shadow-sm">
                   <TabsTrigger value="password" data-testid="tab-password-login">
                     Password
                   </TabsTrigger>
