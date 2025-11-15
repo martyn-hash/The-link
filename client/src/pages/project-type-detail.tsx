@@ -2219,17 +2219,19 @@ export default function ProjectTypeDetail() {
       <div className="min-h-screen bg-background flex flex-col">
         <TopNavigation user={user} />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="border-b border-border bg-card p-6">
-            <div className="space-y-4">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-10 w-full max-w-md" />
+          <div className="border-b border-border bg-card">
+            <div className="page-container py-6 md:py-8">
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-10 w-full max-w-md" />
+              </div>
             </div>
           </div>
-          <div className="flex-1 p-6">
-            <div className="space-y-6">
+          <div className="flex-1 page-container py-6 md:py-8">
+            <div className="space-y-8">
               <Skeleton className="h-12 w-full" />
-              <div className="grid gap-4">
+              <div className="grid gap-6">
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-32 w-full" />
@@ -2371,7 +2373,7 @@ export default function ProjectTypeDetail() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with breadcrumbs */}
         <div className="border-b border-border bg-card">
-          <div className="p-6">
+          <div className="page-container py-6 md:py-8">
             {/* Breadcrumb */}
             <Breadcrumb className="mb-4">
               <BreadcrumbList>
@@ -2394,7 +2396,7 @@ export default function ProjectTypeDetail() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl font-semibold text-foreground flex items-center" data-testid="text-project-type-name">
+                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground flex items-center" data-testid="text-project-type-name">
                     <Settings className="w-6 h-6 mr-3 text-primary" />
                     {projectType.name}
                   </h1>
@@ -2492,7 +2494,7 @@ export default function ProjectTypeDetail() {
             </div>
 
             {/* Kanban Stages Tab */}
-            <TabsContent value="stages" className="p-6 space-y-6">
+            <TabsContent value="stages" className="page-container py-6 md:py-8 space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Kanban Stages</h2>
@@ -2861,7 +2863,7 @@ export default function ProjectTypeDetail() {
             </TabsContent>
 
             {/* Change Reasons Tab */}
-            <TabsContent value="reasons" className="p-6 space-y-6">
+            <TabsContent value="reasons" className="page-container py-6 md:py-8 space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Change Reasons</h2>
@@ -3165,7 +3167,7 @@ export default function ProjectTypeDetail() {
             </TabsContent>
 
             {/* Stage Approvals Tab */}
-            <TabsContent value="approvals" className="p-6 space-y-6">
+            <TabsContent value="approvals" className="page-container py-6 md:py-8 space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Stage Approvals</h2>
@@ -3633,7 +3635,7 @@ export default function ProjectTypeDetail() {
             </TabsContent>
 
             {/* Settings Tab */}
-            <TabsContent value="settings" className="p-6 space-y-6">
+            <TabsContent value="settings" className="page-container py-6 md:py-8 space-y-8">
               <div>
                 <h3 className="text-lg font-semibold mb-2">Project Type Settings</h3>
                 <p className="text-sm text-muted-foreground mb-6">

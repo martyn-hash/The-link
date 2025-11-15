@@ -247,9 +247,9 @@ export default function ClientServiceDetail() {
       
       {!isMobile && <SuperSearch />}
 
-      <div className="container mx-auto p-4 md:p-6">
+      <div className="page-container py-6 md:py-8 space-y-8">
         {/* Header */}
-        <div className="mb-6">
+        <div>
           <Button
             variant="ghost"
             onClick={() => setLocation(`/clients/${clientService.clientId}`)}
@@ -263,7 +263,7 @@ export default function ClientServiceDetail() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold" data-testid="text-service-name">
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-service-name">
                   {clientService.service.name}
                 </h1>
                 {clientService.service?.isStaticService && (

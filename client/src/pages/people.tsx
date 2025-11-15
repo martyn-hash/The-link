@@ -436,11 +436,11 @@ export default function People() {
       <TopNavigation user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="border-b border-border bg-card">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="page-container py-6 md:py-8">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">People</h1>
-                <p className="text-muted-foreground">Manage contacts and individuals</p>
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground" data-testid="text-page-title">People</h1>
+                <p className="text-meta mt-1">Manage contacts and individuals</p>
               </div>
               <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <DialogTrigger asChild>
@@ -518,7 +518,7 @@ export default function People() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto page-container py-6 md:py-8">
           {peopleLoading ? (
             <Card>
               <CardContent className="p-6">

@@ -247,12 +247,12 @@ export default function Companies() {
       <TopNavigation user={user} />
       
       {/* Page Header - Same style as Projects page */}
-      <div className="border-b bg-card">
-        <div className="px-8 py-4">
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Building className="w-6 h-6 text-primary" />
-              <h1 className="text-2xl font-bold" data-testid="text-page-title">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">
                 Companies House Clients
               </h1>
               <Badge variant="outline" data-testid="text-companies-count">
@@ -304,7 +304,7 @@ export default function Companies() {
       </div>
 
       {/* Main Content - Full Width */}
-      <main className="flex-1 px-8 py-6">
+      <main className="flex-1 page-container py-6 md:py-8">
         {companiesHouseClients.length === 0 ? (
           <div className="flex items-center justify-center h-96">
             <div className="text-center">

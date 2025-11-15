@@ -222,12 +222,12 @@ export default function ScheduledServices() {
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
       
-      <div className="container mx-auto px-4 md:px-6 py-6 md:py-8" style={{ paddingBottom: isMobile ? '5rem' : undefined }}>
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight" data-testid="heading-scheduled-services">
+      <div className="page-container py-6 md:py-8" style={{ paddingBottom: isMobile ? '5rem' : undefined }}>
+        <div className="mb-8">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="heading-scheduled-services">
             Scheduled Services
           </h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-2">
+          <p className="text-meta mt-2">
             Manage and monitor all scheduled services for clients and people
           </p>
         </div>

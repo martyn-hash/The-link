@@ -204,7 +204,7 @@ export default function TaskInstanceDetail() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation />
-      <main className="container mx-auto p-6 space-y-6">
+      <main className="page-container py-6 md:py-8 space-y-8">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href={`/clients/${instance.client.id}`}>
@@ -220,7 +220,7 @@ export default function TaskInstanceDetail() {
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-2xl">
+              <CardTitle className="text-2xl md:text-3xl font-semibold tracking-tight">
                 {instance.template?.name || instance.customRequest?.name || 'Untitled Request'}
               </CardTitle>
               <CardDescription>
@@ -280,11 +280,11 @@ export default function TaskInstanceDetail() {
               <CardDescription>{section.description}</CardDescription>
             )}
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8">
             {section.questions.map((question, idx) => (
               <div key={question.id}>
                 <QuestionResponse question={question} />
-                {idx < section.questions.length - 1 && <Separator className="mt-6" />}
+                {idx < section.questions.length - 1 && <Separator className="mt-8" />}
               </div>
             ))}
           </CardContent>

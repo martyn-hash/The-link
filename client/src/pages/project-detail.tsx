@@ -447,9 +447,9 @@ export default function ProjectDetail() {
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       
-      <div className="max-w-7xl mx-auto p-6 w-full">
+      <div className="page-container py-6 md:py-8">
         {/* Header with back navigation */}
-        <div className="mb-6">
+        <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
             <Button 
               variant="ghost" 
@@ -466,12 +466,12 @@ export default function ProjectDetail() {
             <div className="flex-1">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 <RouterLink to={`/clients/${project.clientId}`}>
-                  <h1 className="text-3xl font-bold text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
                     {project.client?.name || 'Unknown Client'}
                   </h1>
                 </RouterLink>
                 {project.projectType?.name && (
-                  <span className="text-xl sm:text-2xl font-semibold text-foreground" data-testid="text-project-type">
+                  <span className="text-lg md:text-xl font-medium text-meta" data-testid="text-project-type">
                     {project.projectType.name}
                   </span>
                 )}

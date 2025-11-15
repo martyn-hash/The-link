@@ -336,7 +336,7 @@ export default function PersonDetail() {
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
 
-      <main className="container mx-auto py-6 space-y-6">
+      <main className="page-container py-6 md:py-8 space-y-8">
         {/* Header Section */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -350,11 +350,11 @@ export default function PersonDetail() {
               Back
             </Button>
             <div>
-              <h1 className="text-3xl font-bold" data-testid="text-person-name">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-person-name">
                 {formatPersonName(person.fullName)}
               </h1>
               {person.title && (
-                <p className="text-muted-foreground mt-1" data-testid="text-person-title">{person.title}</p>
+                <p className="text-meta mt-1" data-testid="text-person-title">{person.title}</p>
               )}
             </div>
           </div>
