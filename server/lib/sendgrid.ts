@@ -51,7 +51,8 @@ export async function sendSignatureRequestEmail(
   firmName: string,
   documentName: string,
   customMessage: string,
-  signLink: string
+  signLink: string,
+  emailSenderName?: string  // Optional: Use company settings email sender name for client emails
 ) {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
@@ -133,7 +134,10 @@ export async function sendSignatureRequestEmail(
 
     const msg = {
       to: recipientEmail,
-      from: fromEmail,
+      from: {
+        email: fromEmail,
+        name: emailSenderName || firmName  // Use company settings email sender name for client emails
+      },
       subject,
       html,
     };

@@ -107,8 +107,10 @@ export async function generateCertificateOfCompletion(
 
   // Header with success indicator (UK eIDAS compliant)
   // Use "CONFIRMED" text which is legally recognized for electronic signatures
-  page.drawText('CONFIRMED', {
-    x: pageWidth / 2 - 65,
+  const confirmedText = 'CONFIRMED';
+  const confirmedWidth = fontBold.widthOfTextAtSize(confirmedText, 32);
+  page.drawText(confirmedText, {
+    x: (pageWidth - confirmedWidth) / 2,  // Properly center based on actual text width
     y: yPos,
     size: 32,
     font: fontBold,
@@ -116,9 +118,11 @@ export async function generateCertificateOfCompletion(
   });
   yPos -= 60;
 
-  // Title
-  page.drawText('Certificate of Completion', {
-    x: pageWidth / 2 - 140,
+  // Title - properly centered
+  const titleText = 'Certificate of Completion';
+  const titleWidth = fontBold.widthOfTextAtSize(titleText, 24);
+  page.drawText(titleText, {
+    x: (pageWidth - titleWidth) / 2,  // Properly center based on actual text width
     y: yPos,
     size: 24,
     font: fontBold,
@@ -126,9 +130,11 @@ export async function generateCertificateOfCompletion(
   });
   yPos -= 40;
 
-  // Subtitle
-  page.drawText('Electronic Signature Audit Trail', {
-    x: pageWidth / 2 - 90,
+  // Subtitle - properly centered
+  const subtitleText = 'Electronic Signature Audit Trail';
+  const subtitleWidth = font.widthOfTextAtSize(subtitleText, 12);
+  page.drawText(subtitleText, {
+    x: (pageWidth - subtitleWidth) / 2,  // Properly center based on actual text width
     y: yPos,
     size: 12,
     font: font,
@@ -320,44 +326,50 @@ export async function generateCertificateOfCompletion(
       yPos -= 18;
     }
 
-    // Consent section
+    // Consent section - fixed to prevent text overlap
     if (signer.consentText) {
-      if (yPos < 120) {
+      // Calculate total height needed for consent section
+      const consentDate = new Date(signer.consentAcceptedAt);
+      const utcFormatted = `${format(consentDate, 'MMMM d, yyyy \'at\' h:mm:ss a')} UTC (${consentDate.toISOString()})`;
+      const consentStatement = `Signer ${signer.signerName} accepted electronic signature consent on ${utcFormatted}.`;
+      const consentStatementLines = wrapText(consentStatement, contentWidth - 50, 8, fontBold);
+      const consentTextLines = wrapText(signer.consentText, contentWidth - 50, 7, font);
+      const totalHeight = (consentStatementLines.length * 10) + (consentTextLines.length * 10) + 60;
+      
+      // Check if we need a new page BEFORE drawing the consent box
+      if (yPos < totalHeight + 50) {
         page = pdfDoc.addPage([pageWidth, pageHeight]);
         yPos = pageHeight - margin;
       }
 
+      // Draw consent box background
       page.drawRectangle({
         x: margin + 15,
-        y: yPos - 5,
+        y: yPos - totalHeight + 25,
         width: contentWidth - 30,
-        height: 40,
+        height: totalHeight - 15,
         color: rgb(0.98, 0.98, 0.98),
         borderColor: primaryColor,
         borderWidth: 1,
       });
 
-      // UK eIDAS Compliant Consent Confirmation with full audit details
-      // Format timestamp in UTC to ensure compliance accuracy
-      const consentDate = new Date(signer.consentAcceptedAt);
-      const utcFormatted = `${format(consentDate, 'MMMM d, yyyy \'at\' h:mm:ss a')} UTC (${consentDate.toISOString()})`;
-      const consentStatement = `Signer ${signer.signerName} accepted electronic signature consent on ${utcFormatted}.`;
-      const consentStatementLines = wrapText(consentStatement, contentWidth - 50, 8, fontBold);
-      let consentY = yPos + 20;
+      yPos -= 10;
+
+      // UK eIDAS Compliant Consent Confirmation
       for (const line of consentStatementLines) {
         page.drawText(line, {
           x: margin + 20,
-          y: consentY,
+          y: yPos,
           size: 8,
           font: fontBold,
           color: successColor,
         });
-        consentY -= 10;
+        yPos -= 10;
       }
 
-      yPos -= 10;
+      yPos -= 5;
 
-      const consentTextLines = wrapText(signer.consentText, contentWidth - 50, 7, font);
+      // Consent text
       for (const line of consentTextLines) {
         page.drawText(line, {
           x: margin + 20,
@@ -369,7 +381,7 @@ export async function generateCertificateOfCompletion(
         yPos -= 10;
       }
 
-      yPos -= 25;
+      yPos -= 30;
     }
 
     yPos -= 10;

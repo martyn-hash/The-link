@@ -670,7 +670,7 @@ export function registerSignatureRoutes(
 
   /**
    * GET /api/signature-requests/client/:clientId
-   * Get all signature requests for a client
+   * Get all signature requests for a client with optional status filtering
    */
   app.get(
     "/api/signature-requests/client/:clientId",
@@ -679,14 +679,76 @@ export function registerSignatureRoutes(
     async (req: any, res) => {
       try {
         const { clientId } = req.params;
+        const statusFilter = req.query.status as string | undefined;
 
-        const requests = await db
+        // Narrow status filter to literal type using switch for type safety
+        type ValidStatus = 'pending' | 'partially_signed' | 'completed' | 'cancelled' | 'draft';
+        let narrowedStatus: ValidStatus | null = null;
+        
+        if (statusFilter && statusFilter !== "all") {
+          switch (statusFilter) {
+            case 'pending':
+            case 'partially_signed':
+            case 'completed':
+            case 'cancelled':
+            case 'draft':
+              narrowedStatus = statusFilter;
+              break;
+            default:
+              // Invalid status, ignore filter
+              break;
+          }
+        }
+
+        // Build base query with client filter
+        const baseQuery = db
           .select()
           .from(signatureRequests)
-          .where(eq(signatureRequests.clientId, clientId))
-          .orderBy(desc(signatureRequests.createdAt));
+          .$dynamic();
 
-        // Convert bigint timestamps to ISO strings for JSON serialization
+        // Apply filters
+        const requests = narrowedStatus
+          ? await baseQuery
+              .where(and(
+                eq(signatureRequests.clientId, clientId),
+                eq(signatureRequests.status, narrowedStatus)
+              ))
+              .orderBy(desc(signatureRequests.createdAt))
+          : await baseQuery
+              .where(eq(signatureRequests.clientId, clientId))
+              .orderBy(desc(signatureRequests.createdAt));
+
+        // Get recipients for each request with person names
+        const requestIds = requests.map(r => r.id);
+        const allRecipients = requestIds.length > 0 
+          ? await db
+              .select({
+                recipient: signatureRequestRecipients,
+                person: people,
+              })
+              .from(signatureRequestRecipients)
+              .leftJoin(people, eq(signatureRequestRecipients.personId, people.id))
+              .where(inArray(signatureRequestRecipients.signatureRequestId, requestIds))
+          : [];
+
+        // Group recipients by request ID
+        type RecipientWithName = (typeof allRecipients extends Array<infer T> ? T : never) extends { recipient: infer R; person: any } 
+          ? R & { personName: string | null }
+          : never;
+        
+        const recipientsByRequest = allRecipients.reduce((acc, item) => {
+          const requestId = item.recipient.signatureRequestId;
+          if (!acc[requestId]) {
+            acc[requestId] = [];
+          }
+          acc[requestId].push({
+            ...item.recipient,
+            personName: item.person?.fullName || null,
+          });
+          return acc;
+        }, {} as Record<string, Array<RecipientWithName>>);
+
+        // Convert bigint timestamps to ISO strings and add recipients
         const serializedRequests = requests.map(request => ({
           ...request,
           createdAt: request.createdAt 
@@ -698,6 +760,11 @@ export function registerSignatureRoutes(
           completedAt: request.completedAt
             ? new Date(Number(request.completedAt)).toISOString()
             : null,
+          recipients: (recipientsByRequest[request.id] || []).map(r => ({
+            name: r.personName || r.email,
+            email: r.email,
+            signedAt: r.signedAt ? new Date(Number(r.signedAt)).toISOString() : null,
+          })),
         }));
 
         res.json(serializedRequests);
@@ -961,9 +1028,10 @@ export function registerSignatureRoutes(
 
           const peopleMap = new Map(peopleList.map(p => [p.id, p]));
 
-          // Get firm name from company settings for email
+          // Get firm name and email sender name from company settings for email
           const [settings] = await db.select().from(companySettings).limit(1);
           const firmName = settings?.firmName || "The Link";
+          const emailSenderName = settings?.emailSenderName || firmName;
 
           // Send emails to all recipients using Promise.allSettled (don't fail entire request if one email fails)
           const emailPromises = createdRecipients.map(async (recipient) => {
@@ -985,7 +1053,8 @@ export function registerSignatureRoutes(
                 firmName,
                 request.friendlyName || document.fileName,
                 request.emailMessage || "",
-                signLink
+                signLink,
+                emailSenderName  // Use company settings email sender name for client emails
               );
 
               // Update recipient to mark as sent with success status
@@ -1104,9 +1173,10 @@ export function registerSignatureRoutes(
           ? `https://${process.env.REPLIT_DEV_DOMAIN}`
           : `http://localhost:5000`;
         
-        // Get firm name from company settings for email
+        // Get firm name and email sender name from company settings for email
         const [settings] = await db.select().from(companySettings).limit(1);
         const firmName = settings?.firmName || "The Link";
+        const emailSenderName = settings?.emailSenderName || firmName;
         
         // Send emails to each recipient
         const emailResults = [];
@@ -1120,7 +1190,8 @@ export function registerSignatureRoutes(
               firmName,
               request.friendlyName || document.fileName,
               request.emailMessage || "",
-              signLink
+              signLink,
+              emailSenderName  // Use company settings email sender name for client emails
             );
 
             // Update recipient to mark as sent

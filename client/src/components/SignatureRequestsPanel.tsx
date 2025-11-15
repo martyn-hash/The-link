@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Download, Shield, FileSignature, X } from "lucide-react";
+import { Check, Download, Shield, FileSignature, X, Users } from "lucide-react";
 import { format } from "date-fns";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { useState } from "react";
@@ -37,9 +38,18 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [requestToCancel, setRequestToCancel] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data: signatureRequests, isLoading } = useQuery<any[]>({
-    queryKey: ['/api/signature-requests/client', clientId],
+    queryKey: ['/api/signature-requests/client', clientId, statusFilter],
+    queryFn: async () => {
+      const url = statusFilter === "all" 
+        ? `/api/signature-requests/client/${clientId}`
+        : `/api/signature-requests/client/${clientId}?status=${statusFilter}`;
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch signature requests");
+      return response.json();
+    },
     enabled: !!clientId,
   });
 
@@ -58,7 +68,15 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/signature-requests/client', clientId] });
+      // Invalidate all queries matching the client signature requests pattern (any status filter)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return Array.isArray(key) && 
+                 key[0] === '/api/signature-requests/client' && 
+                 key[1] === clientId;
+        }
+      });
       toast({
         title: "Success",
         description: "Signature request cancelled successfully",
@@ -142,22 +160,39 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
     );
   }
 
-  if (!signatureRequests || signatureRequests.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <FileSignature className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p>No signature requests yet</p>
-        <p className="text-sm">Use the "Create Signature Request" button above to send documents for e-signature</p>
-      </div>
-    );
-  }
+  const filteredRequests = signatureRequests || [];
 
-  // Mobile Card View (preserving existing mobile-friendly layout)
-  if (isMobile) {
-    return (
-      <>
+  return (
+    <>
+      {/* Status Filter - above table */}
+      <div className="flex items-center gap-3 mb-4">
+        <Label htmlFor="status-filter" className="text-sm font-medium whitespace-nowrap">
+          Filter by status:
+        </Label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[200px]" id="status-filter" data-testid="select-status-filter">
+            <SelectValue placeholder="All Requests" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Requests</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="partially_signed">Partially Signed</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!filteredRequests || filteredRequests.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <FileSignature className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No signature requests {statusFilter !== "all" ? `with status "${statusFilter}"` : "yet"}</p>
+          <p className="text-sm">Use the "Create Signature Request" button above to send documents for e-signature</p>
+        </div>
+      ) : isMobile ? (
         <div className="space-y-3">
-          {signatureRequests.map((request: any) => (
+          {filteredRequests.map((request: any) => (
             <Card 
               key={request.id} 
               className="border-l-4"
@@ -240,33 +275,21 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
             </Card>
           ))}
         </div>
-        
-        <AuditTrailDialog
-          open={auditDialogOpen}
-          onOpenChange={setAuditDialogOpen}
-          auditLogs={currentAuditTrail}
-          documentName={currentDocumentName}
-        />
-      </>
-    );
-  }
-
-  // Desktop Table View (following data_view_guidelines.md)
-  return (
-    <>
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Document Name</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Completed</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {signatureRequests.map((request: any) => (
+      ) : (
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Document Name</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Signees</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Completed</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRequests.map((request: any) => (
               <TableRow key={request.id} data-testid={`row-${request.id}`}>
                 <TableCell className="font-medium">
                   <span data-testid={`text-name-${request.id}`}>
@@ -290,6 +313,16 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
                      request.status === 'cancelled' ? 'Cancelled' :
                      request.status}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground" data-testid={`text-signees-${request.id}`}>
+                    <Users className="w-3 h-3" />
+                    <span>
+                      {request.recipients && request.recipients.length > 0
+                        ? request.recipients.map((r: any) => r.name).join(', ')
+                        : '-'}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span className="text-sm" data-testid={`text-created-${request.id}`}>
@@ -337,10 +370,11 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       
       <AuditTrailDialog
         open={auditDialogOpen}

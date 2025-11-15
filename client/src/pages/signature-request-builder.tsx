@@ -395,10 +395,7 @@ export default function SignatureRequestBuilder() {
     setFields([...fields, newField]);
     setHasUnsavedChanges(true);
     
-    toast({
-      title: "Field added",
-      description: `${selectedFieldType === "signature" ? "Signature" : "Name"} field placed on page ${pageNumber}`,
-    });
+    // Visual feedback provided by field appearing on PDF - no toast needed
   };
 
   // Remove field
