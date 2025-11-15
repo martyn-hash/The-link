@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import { updateCompanySettingsSchema } from "@shared/schema";
+import multer from "multer";
+import { ObjectStorageService, objectStorageClient, parseObjectPath } from "../objectStorage";
 
 /**
  * Super Admin routes for activity logs and login attempts
@@ -279,6 +281,135 @@ export function registerSuperAdminRoutes(
       } catch (error) {
         console.error("Error updating company settings:", error);
         res.status(500).json({ message: "Failed to update company settings" });
+      }
+    }
+  );
+
+  // Configure multer for logo uploads
+  const logoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB max
+    },
+    fileFilter: (req, file, cb) => {
+      // Only allow image files
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    },
+  });
+
+  // Upload company logo
+  app.post(
+    "/api/super-admin/company-logo",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    logoUpload.single('logo'),
+    async (req: any, res: any) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ message: "No logo file provided" });
+        }
+
+        // Use same pattern as uploadSignedDocument
+        const objectStorageService = new ObjectStorageService();
+        
+        // Create normalized object path (with /objects/ prefix)
+        const timestamp = Date.now();
+        const sanitizedFileName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const objectPath = `/objects/company-logos/logo-${timestamp}-${sanitizedFileName}`;
+        
+        // Convert /objects/... path to full bucket path (same as uploadSignedDocument)
+        const privateDir = objectStorageService.getPrivateObjectDir();
+        const entityId = objectPath.slice('/objects/'.length);
+        const fullPath = `${privateDir}/${entityId}`;
+        
+        // Parse path and get file reference
+        const { bucketName, objectName } = parseObjectPath(fullPath);
+        const bucket = objectStorageClient.bucket(bucketName);
+        const file = bucket.file(objectName);
+        
+        // Upload the logo
+        await file.save(req.file.buffer, {
+          contentType: req.file.mimetype,
+          metadata: {
+            contentType: req.file.mimetype,
+            uploadedBy: req.effectiveUserId,
+            uploadedAt: new Date().toISOString(),
+          },
+        });
+
+        // Delete old logo if it exists
+        const currentSettings = await storage.getCompanySettings();
+        if (currentSettings?.logoObjectPath) {
+          try {
+            const oldLogoFile = await objectStorageService.getObjectEntityFile(currentSettings.logoObjectPath);
+            await oldLogoFile.delete();
+          } catch (error) {
+            console.error("Error deleting old logo:", error);
+            // Continue even if delete fails
+          }
+        }
+
+        // Update company settings with new logo path
+        const updatedSettings = await storage.updateCompanySettings({
+          logoObjectPath: objectPath,
+        });
+
+        res.json({
+          message: "Logo uploaded successfully",
+          logoObjectPath: objectPath,
+        });
+      } catch (error: any) {
+        console.error("Error uploading company logo:", error);
+        res.status(500).json({ 
+          message: "Failed to upload logo",
+          error: error.message 
+        });
+      }
+    }
+  );
+
+  // Delete company logo
+  app.delete(
+    "/api/super-admin/company-logo",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const currentSettings = await storage.getCompanySettings();
+        
+        if (!currentSettings?.logoObjectPath) {
+          return res.status(404).json({ message: "No logo to delete" });
+        }
+
+        const objectStorageService = new ObjectStorageService();
+        
+        // Delete logo from object storage
+        try {
+          const logoFile = await objectStorageService.getObjectEntityFile(currentSettings.logoObjectPath);
+          await logoFile.delete();
+        } catch (error) {
+          console.error("Error deleting logo file:", error);
+          // Continue even if delete fails
+        }
+
+        // Update company settings to remove logo path
+        await storage.updateCompanySettings({
+          logoObjectPath: null,
+        });
+
+        res.json({ message: "Logo deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting company logo:", error);
+        res.status(500).json({ 
+          message: "Failed to delete logo",
+          error: error.message 
+        });
       }
     }
   );

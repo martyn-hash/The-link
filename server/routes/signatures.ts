@@ -558,7 +558,26 @@ export function registerSignatureRoutes(
       try {
         const statusFilter = req.query.status as string | undefined;
 
-        let query = db
+        // Narrow status filter to literal type using switch for type safety
+        type ValidStatus = 'pending' | 'partially_signed' | 'completed' | 'cancelled' | 'draft';
+        let narrowedStatus: ValidStatus | null = null;
+        
+        if (statusFilter && statusFilter !== "all") {
+          switch (statusFilter) {
+            case 'pending':
+            case 'partially_signed':
+            case 'completed':
+            case 'cancelled':
+            case 'draft':
+              narrowedStatus = statusFilter;
+              break;
+            default:
+              // Invalid status, ignore filter
+              break;
+          }
+        }
+
+        const baseQuery = db
           .select({
             signatureRequest: signatureRequests,
             client: clients,
@@ -566,31 +585,44 @@ export function registerSignatureRoutes(
           })
           .from(signatureRequests)
           .leftJoin(clients, eq(signatureRequests.clientId, clients.id))
-          .leftJoin(people, eq(signatureRequests.createdBy, people.id));
+          .leftJoin(people, eq(signatureRequests.createdBy, people.id))
+          .$dynamic();
 
-        if (statusFilter && statusFilter !== "all") {
-          query = query.where(eq(signatureRequests.status, statusFilter)) as any;
-        }
+        const requests = narrowedStatus
+          ? await baseQuery
+              .where(eq(signatureRequests.status, narrowedStatus))
+              .orderBy(desc(signatureRequests.createdAt))
+          : await baseQuery.orderBy(desc(signatureRequests.createdAt));
 
-        const requests = await query.orderBy(desc(signatureRequests.createdAt));
-
-        // Get recipients for each request
+        // Get recipients for each request with person names
         const requestIds = requests.map(r => r.signatureRequest.id);
         const allRecipients = requestIds.length > 0 
           ? await db
-              .select()
+              .select({
+                recipient: signatureRequestRecipients,
+                person: people,
+              })
               .from(signatureRequestRecipients)
+              .leftJoin(people, eq(signatureRequestRecipients.personId, people.id))
               .where(inArray(signatureRequestRecipients.signatureRequestId, requestIds))
           : [];
 
-        // Group recipients by request ID
-        const recipientsByRequest = allRecipients.reduce((acc, recipient) => {
-          if (!acc[recipient.signatureRequestId]) {
-            acc[recipient.signatureRequestId] = [];
+        // Group recipients by request ID (handle empty array safely)
+        type RecipientWithName = (typeof allRecipients extends Array<infer T> ? T : never) extends { recipient: infer R; person: any } 
+          ? R & { personName: string | null }
+          : never;
+        
+        const recipientsByRequest = allRecipients.reduce((acc, item) => {
+          const requestId = item.recipient.signatureRequestId;
+          if (!acc[requestId]) {
+            acc[requestId] = [];
           }
-          acc[recipient.signatureRequestId].push(recipient);
+          acc[requestId].push({
+            ...item.recipient,
+            personName: item.person?.fullName || null,
+          });
           return acc;
-        }, {} as Record<string, typeof allRecipients>);
+        }, {} as Record<string, Array<RecipientWithName>>);
 
         // Convert bigint timestamps to ISO strings for JSON serialization
         const serializedRequests = requests.map(item => ({
@@ -619,7 +651,7 @@ export function registerSignatureRoutes(
               : null,
           } : null,
           recipients: (recipientsByRequest[item.signatureRequest.id] || []).map(r => ({
-            name: r.name,
+            name: r.personName || r.email,
             email: r.email,
             signedAt: r.signedAt ? new Date(Number(r.signedAt)).toISOString() : null,
           })),
@@ -2264,24 +2296,15 @@ You agree that:
           return res.json([]);
         }
 
-        // Get audit logs for all recipients
+        // Get audit logs for all recipients using inArray for tenant scoping
         const recipientIds = recipients.map(r => r.id);
         const auditLogs = await db
           .select()
           .from(signatureAuditLogs)
-          .where(eq(signatureAuditLogs.signatureRequestRecipientId, recipientIds[0]));
+          .where(inArray(signatureAuditLogs.signatureRequestRecipientId, recipientIds))
+          .orderBy(desc(signatureAuditLogs.createdAt));
 
-        // TODO: Fix to use IN clause for multiple recipients
-        // For now, just fetch all and filter
-        const allAuditLogs = await db
-          .select()
-          .from(signatureAuditLogs);
-        
-        const filteredLogs = allAuditLogs.filter(log => 
-          recipientIds.includes(log.signatureRequestRecipientId)
-        );
-
-        res.json(filteredLogs);
+        res.json(auditLogs);
       } catch (error: any) {
         console.error("Error fetching audit trail:", error);
         res.status(500).json({ 

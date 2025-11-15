@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink } from "lucide-react";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 interface RedirectUrl {
@@ -32,6 +32,11 @@ export default function CompanySettingsPage() {
   const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
   const [newRedirectName, setNewRedirectName] = useState("");
   const [newRedirectUrl, setNewRedirectUrl] = useState("");
+
+  // Logo handling
+  const [logoObjectPath, setLogoObjectPath] = useState<string | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Redirect if not super admin
   useEffect(() => {
@@ -53,6 +58,22 @@ export default function CompanySettingsPage() {
       setFirmName(settings.firmName || "The Link");
       setPushNotificationsEnabled(settings.pushNotificationsEnabled || false);
       setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
+      setLogoObjectPath(settings.logoObjectPath || null);
+      
+      // If logo exists, fetch preview URL
+      if (settings.logoObjectPath) {
+        // logoObjectPath already includes /objects/ prefix, so use it directly
+        const logoUrl = settings.logoObjectPath.startsWith('/objects/') 
+          ? settings.logoObjectPath 
+          : `/objects/${settings.logoObjectPath}`;
+        
+        fetch(logoUrl, { credentials: 'include' })
+          .then(res => res.blob())
+          .then(blob => setLogoPreviewUrl(URL.createObjectURL(blob)))
+          .catch(err => console.error("Failed to load logo preview:", err));
+      } else {
+        setLogoPreviewUrl(null);
+      }
     }
   }, [settings]);
 
@@ -76,6 +97,115 @@ export default function CompanySettingsPage() {
       });
     },
   });
+
+  // Upload logo mutation
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      
+      const response = await fetch('/api/super-admin/company-logo', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to upload logo');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Logo uploaded",
+        description: "Company logo has been uploaded successfully.",
+      });
+      setLogoObjectPath(data.logoObjectPath);
+      
+      // Generate preview URL from uploaded file
+      if (fileInputRef.current?.files?.[0]) {
+        setLogoPreviewUrl(URL.createObjectURL(fileInputRef.current.files[0]));
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/company-settings"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload logo. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete logo mutation
+  const deleteLogoMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/super-admin/company-logo', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete logo');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Logo deleted",
+        description: "Company logo has been removed.",
+      });
+      setLogoObjectPath(null);
+      setLogoPreviewUrl(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/company-settings"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete logo. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload an image file (PNG, JPG, etc.)",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    uploadLogoMutation.mutate(file);
+  };
+
+  const handleDeleteLogo = () => {
+    deleteLogoMutation.mutate();
+  };
 
   const handleAddRedirectUrl = () => {
     if (!newRedirectName.trim() || !newRedirectUrl.trim()) {
@@ -202,6 +332,70 @@ export default function CompanySettingsPage() {
                 <Save className="w-4 h-4 mr-2" />
                 {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Company Logo Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="w-5 h-5" />
+              Company Logo
+            </CardTitle>
+            <CardDescription>
+              Upload your company logo to display on e-signature certificates
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {logoPreviewUrl && (
+              <div className="flex items-start gap-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex-shrink-0">
+                  <img 
+                    src={logoPreviewUrl} 
+                    alt="Company logo" 
+                    className="max-w-[200px] max-h-[120px] object-contain border border-border rounded"
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm font-medium">Current Logo</p>
+                  <p className="text-sm text-muted-foreground">
+                    This logo will appear at the top of all signature certificates
+                  </p>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDeleteLogo}
+                    disabled={deleteLogoMutation.isPending}
+                    data-testid="button-delete-logo"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {deleteLogoMutation.isPending ? "Deleting..." : "Delete Logo"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="logo-upload">{logoPreviewUrl ? "Replace Logo" : "Upload Logo"}</Label>
+              <div className="flex items-center gap-4">
+                <Input
+                  id="logo-upload"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoFileChange}
+                  disabled={uploadLogoMutation.isPending}
+                  data-testid="input-logo-upload"
+                  className="cursor-pointer"
+                />
+                {uploadLogoMutation.isPending && (
+                  <span className="text-sm text-muted-foreground">Uploading...</span>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Upload a PNG or JPG image. Maximum file size: 5MB. Recommended size: 300x150px
+              </p>
             </div>
           </CardContent>
         </Card>
