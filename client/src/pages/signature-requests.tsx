@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSignature, Check, Clock, Eye, X } from "lucide-react";
+import { FileSignature, Check, Clock, Eye, X, Users } from "lucide-react";
 import { format } from "date-fns";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
@@ -25,6 +25,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function SignatureRequestsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -33,9 +40,20 @@ export default function SignatureRequestsPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [requestToCancel, setRequestToCancel] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data: requests, isLoading } = useQuery<any[]>({
-    queryKey: ['/api/signature-requests'],
+    queryKey: ['/api/signature-requests', { status: statusFilter }],
+    queryFn: async () => {
+      const url = statusFilter && statusFilter !== 'all'
+        ? `/api/signature-requests?status=${statusFilter}`
+        : '/api/signature-requests';
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) {
+        throw new Error('Failed to fetch signature requests');
+      }
+      return response.json();
+    },
     enabled: isAuthenticated,
   });
 
@@ -54,7 +72,9 @@ export default function SignatureRequestsPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/signature-requests'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0] === '/api/signature-requests'
+      });
       toast({
         title: "Success",
         description: "Signature request cancelled successfully",
@@ -108,13 +128,29 @@ export default function SignatureRequestsPage() {
       
       <main className="flex-1 container mx-auto px-4 py-6 pb-24">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileSignature className="w-6 h-6" />
-            E-Signature Requests
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            View all signature requests across clients. Create new requests from individual client pages.
-          </p>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <FileSignature className="w-6 h-6" />
+                E-Signature Requests
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                View all signature requests across clients. Create new requests from individual client pages.
+              </p>
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]" data-testid="select-status-filter">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Requests</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="partially_signed">Partially Signed</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {isLoading ? (
@@ -200,6 +236,30 @@ export default function SignatureRequestsPage() {
                             </span>
                           )}
                         </div>
+
+                        {item.recipients && item.recipients.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-border">
+                            <div className="flex items-start gap-2">
+                              <Users className="w-4 h-4 text-muted-foreground mt-0.5" />
+                              <div className="flex-1">
+                                <p className="text-xs font-medium text-muted-foreground mb-1">Signees:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {item.recipients.map((recipient: any, idx: number) => (
+                                    <Badge 
+                                      key={idx} 
+                                      variant={recipient.signedAt ? "default" : "outline"}
+                                      className="text-xs"
+                                      data-testid={`badge-recipient-${idx}`}
+                                    >
+                                      {recipient.signedAt && <Check className="w-3 h-3 mr-1" />}
+                                      {recipient.name}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">

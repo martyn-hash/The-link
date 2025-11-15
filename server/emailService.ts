@@ -9,6 +9,9 @@ if (process.env.SENDGRID_API_KEY) {
   mailService.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
+const baseUrl = 'https://flow.growth.accountants';
+const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+
 interface EmailParams {
   to: string;
   from?: string;
@@ -920,3 +923,104 @@ The Link Team
   });
 }
 
+
+export async function sendSignatureRequestCompletedEmail(
+  creatorEmail: string,
+  creatorName: string,
+  documentName: string,
+  clientName: string,
+  completedAt: Date,
+  recipientNames: string[]
+): Promise<boolean> {
+  const subject = `✅ Signature Request Completed: ${documentName} - The Link`;
+  
+  const formattedDate = completedAt.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
+        </div>
+        <div style="padding: 40px 30px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); width: 80px; height: 80px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+              <span style="font-size: 40px;">✅</span>
+            </div>
+            <h2 style="color: #1e293b; margin: 0;">Signature Request Completed!</h2>
+          </div>
+
+          <p style="color: #475569; font-size: 16px;">Hello ${creatorName},</p>
+          <p style="color: #475569; font-size: 16px;">Great news! Your signature request has been fully signed by all recipients.</p>
+          
+          <div style="background-color: #f0fdf4; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #bbf7d0;">
+            <h3 style="margin-top: 0; color: #059669; font-size: 18px;">📄 Document Details</h3>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Document:</strong> ${documentName}</p>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Client:</strong> ${clientName}</p>
+            <p style="margin-bottom: 12px; color: #374151;"><strong>Completed:</strong> ${formattedDate}</p>
+            <p style="margin-bottom: 0; color: #374151;"><strong>Signed by:</strong> ${recipientNames.join(', ')}</p>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${baseUrl}/signature-requests" 
+               style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+              📥 Download Signed Document
+            </a>
+          </div>
+          
+          <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+            The signed document and certificate of completion are now available for download in The Link system.
+          </p>
+        </div>
+        <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
+          <p style="margin: 0 0 10px 0;">
+            <strong style="color: #0A7BBF;">The Link</strong> by Growth Accountants
+          </p>
+          <p style="margin: 0; font-size: 13px;">
+            Your workflow management partner
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+Hello ${creatorName},
+
+Great news! Your signature request has been fully signed by all recipients.
+
+Document: ${documentName}
+Client: ${clientName}
+Completed: ${formattedDate}
+Signed by: ${recipientNames.join(', ')}
+
+The signed document and certificate of completion are now available for download in The Link system.
+
+View your signature requests: ${baseUrl}/signature-requests
+
+---
+The Link by Growth Accountants
+Your workflow management partner
+  `;
+
+  return await sendEmail({
+    to: creatorEmail,
+    subject,
+    text,
+    html,
+  });
+}

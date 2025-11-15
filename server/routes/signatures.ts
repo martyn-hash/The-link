@@ -24,6 +24,7 @@ import crypto from "crypto";
 import { PDFDocument, rgb } from "pdf-lib";
 import { ObjectStorageService } from "../objectStorage";
 import { sendSignatureRequestEmail, sendCompletedDocumentEmail } from "../lib/sendgrid";
+import { sendSignatureRequestCompletedEmail } from "../emailService";
 import { UAParser } from "ua-parser-js";
 import { generateCertificateOfCompletion } from "../lib/certificateGenerator";
 import geoip from "geoip-lite";
@@ -470,7 +471,9 @@ export function registerSignatureRoutes(
     resolveEffectiveUser,
     async (req: any, res) => {
       try {
-        const requests = await db
+        const statusFilter = req.query.status as string | undefined;
+
+        let query = db
           .select({
             signatureRequest: signatureRequests,
             client: clients,
@@ -478,8 +481,31 @@ export function registerSignatureRoutes(
           })
           .from(signatureRequests)
           .leftJoin(clients, eq(signatureRequests.clientId, clients.id))
-          .leftJoin(people, eq(signatureRequests.createdBy, people.id))
-          .orderBy(desc(signatureRequests.createdAt));
+          .leftJoin(people, eq(signatureRequests.createdBy, people.id));
+
+        if (statusFilter && statusFilter !== "all") {
+          query = query.where(eq(signatureRequests.status, statusFilter)) as any;
+        }
+
+        const requests = await query.orderBy(desc(signatureRequests.createdAt));
+
+        // Get recipients for each request
+        const requestIds = requests.map(r => r.signatureRequest.id);
+        const allRecipients = requestIds.length > 0 
+          ? await db
+              .select()
+              .from(signatureRequestRecipients)
+              .where(inArray(signatureRequestRecipients.signatureRequestId, requestIds))
+          : [];
+
+        // Group recipients by request ID
+        const recipientsByRequest = allRecipients.reduce((acc, recipient) => {
+          if (!acc[recipient.signatureRequestId]) {
+            acc[recipient.signatureRequestId] = [];
+          }
+          acc[recipient.signatureRequestId].push(recipient);
+          return acc;
+        }, {} as Record<string, typeof allRecipients>);
 
         // Convert bigint timestamps to ISO strings for JSON serialization
         const serializedRequests = requests.map(item => ({
@@ -507,6 +533,11 @@ export function registerSignatureRoutes(
               ? new Date(Number(item.createdByPerson.createdAt)).toISOString()
               : null,
           } : null,
+          recipients: (recipientsByRequest[item.signatureRequest.id] || []).map(r => ({
+            name: r.name,
+            email: r.email,
+            signedAt: r.signedAt ? new Date(Number(r.signedAt)).toISOString() : null,
+          })),
         }));
 
         res.json(serializedRequests);
@@ -2064,6 +2095,31 @@ You agree that:
                 console.error(`[E-Signature] Failed to update emailSentAt:`, error);
                 // Don't fail if update fails
               }
+            }
+
+            // Send notification to request creator
+            try {
+              const [creator] = await db
+                .select()
+                .from(people)
+                .where(eq(people.id, request.createdBy));
+
+              if (creator?.email) {
+                const recipientNames = allRecipientsForEmail.map(r => r.person.fullName || r.recipient.email);
+                
+                await sendSignatureRequestCompletedEmail(
+                  creator.email,
+                  creator.fullName || creator.email,
+                  request.friendlyName || document.fileName,
+                  client?.name || "Unknown",
+                  now,
+                  recipientNames
+                );
+                console.log(`[E-Signature] Creator notification email sent to ${creator.email}`);
+              }
+            } catch (error) {
+              console.error("[E-Signature] Error sending creator notification:", error);
+              // Don't fail signature submission if creator notification fails
             }
           } catch (error) {
             console.error("[E-Signature] Error sending completion emails:", error);

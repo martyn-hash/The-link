@@ -929,6 +929,31 @@ export default function SignPage() {
               </>
             )}
           />
+
+          {/* Duplicate completion banner at bottom (mobile-friendly) */}
+          {bannerState === "complete" && (
+            <div className="mt-6 p-4 bg-green-600 dark:bg-green-700 rounded-lg shadow-lg border border-green-500">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-1">
+                  <Check className="w-6 h-6 text-white flex-shrink-0" />
+                  <div>
+                    <p className="font-bold text-base text-white">✓ All fields complete - Ready to submit!</p>
+                    <p className="text-xs text-green-100">Review the document and click Submit to finalize your signature</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitMutation.isPending || sessionLost}
+                  data-testid="button-submit-signature-bottom"
+                  size="lg"
+                  className="w-full md:w-auto bg-white text-green-700 hover:bg-green-50 font-bold shadow-lg"
+                >
+                  <Send className="w-5 h-5 mr-2" />
+                  {submitMutation.isPending ? "Submitting..." : "Submit Signature"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
