@@ -1,88 +1,44 @@
 # The Link - CRM & Project Management Application
 
 ## Overview
-
-The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, manages client relationships, and provides a secure client portal for communication and document exchange. The application focuses on automation, compliance, and a mobile-first user experience, supporting automated project generation, integration with Companies House for UK company data, and features a multi-tenant architecture with robust access controls.
+The Link is a comprehensive full-stack CRM and project management application tailored for accounting and bookkeeping firms. It automates recurring service delivery through intelligent scheduling, streamlines client relationship management, and offers a secure client portal for communication and document exchange. The application emphasizes automation, compliance, and a mobile-first user experience, featuring automated project generation, integration with Companies House for UK company data, and a multi-tenant architecture with robust access controls.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
-
-## Recent UI Updates
-
-### Modern 2025 SaaS Refresh (Phase 1 - November 2025)
-
-Implemented a comprehensive visual refresh to achieve a modern Linear/Stripe/Notion aesthetic while preserving all business logic and functionality.
-
-**Design System Updates:**
-- **Brand Palette**: Growth Accountants colors (Primary Blue #0F7195, Dark Blue #0D343F, Light Green #77C044, Purple #7A3169, Yellow #FED402)
-- **Background**: Light gray (#F8FAFC) providing contrast against white cards
-- **Typography**: DM Sans font family with clear hierarchy (h1-h6 semantic styles)
-- **Spacing**: Increased vertical spacing (24-32px gaps) for airiness
-- **Shadows**: Soft, modern shadows (0 4px 12px rgba(0,0,0,0.08)) on cards
-- **Border Radius**: 1rem for cards, rounded-full for buttons and tabs
-
-**Component Modernization:**
-- **Buttons**: Pill-shaped (rounded-full), semibold weight, smooth hover states with shadow transitions
-- **Tabs**: Pill-style triggers with primary blue active state and smooth 150ms transitions
-- **Cards**: Rounded-xl corners with soft shadows and white background on gray pages
-- **Forms**: Unified styling with rounded-lg inputs/selects, visible grey borders (#E5E7EB), increased padding (h-11), primary blue focus rings
-- **Tables**: Improved row spacing (min 44px height), semibold headers, subtle hover effects
-
-**Global Enhancements:**
-- 150ms transition duration for all interactive elements
-- Utility classes for consistent page containers, section spacing, and meta text
-- Enhanced font rendering with ligatures and anti-aliasing
-- Maintained mobile-first responsive behavior
 
 ## System Architecture
 
-### Frontend
+### UI/UX
+The application features a modern SaaS aesthetic inspired by Linear, Stripe, and Notion. It utilizes a brand palette with specific blues, greens, purple, and yellow, a light gray background, and the DM Sans font family. Design principles include increased spacing for airiness, soft modern shadows, and a 1rem border-radius for cards. Components like buttons, tabs, cards, forms, and tables have been modernized with consistent styling, including rounded shapes, semibold weights, and smooth transitions. The design is mobile-first and responsive.
 
-The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for a mobile-first, responsive design.
+### Frontend
+The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for styling.
 
 ### Backend
-
-The backend is an Express.js server in TypeScript, offering a modular RESTful API with middleware for authentication, authorization, and data validation. It includes core logic for service mapping, project creation, sophisticated scheduling with UTC date normalization, and comprehensive audit trails. A nightly scheduler automates project generation.
+The backend is an Express.js server in TypeScript, providing a modular RESTful API. It includes middleware for authentication, authorization, and data validation, and handles core logic for service mapping, project creation, sophisticated scheduling with UTC date normalization, and comprehensive audit trails. A nightly scheduler automates project generation.
 
 ### Data Storage
-
 PostgreSQL (Neon) is the primary database, managed via Drizzle ORM, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage, accessed through Replit App Storage, handles object storage with secure signed URLs for documents.
 
 ### Authentication & Authorization
-
 Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. The client portal employs passwordless email verification.
 
-### Core Features
-
--   **Automatic Schema Migrations**: Ensures database schema synchronization on server startup.
--   **Service Scheduling & Project Automation**: Automated nightly scheduler generates projects from active client services, integrating with Companies House API.
--   **Client Service Role Assignment & Task Cascading**: Manages role assignments for client services with automatic task synchronization to projects.
--   **Push Notification Template Management**: Customizable push notification templates with dynamic variables.
--   **Internal Tasks System**: Comprehensive staff task management with document attachments.
--   **Standalone Staff-to-Staff Messaging**: Dedicated `/internal-chat` for direct staff communication.
--   **Mobile UI Improvements**: Desktop tables convert to mobile-friendly card layouts.
--   **Project Timeline Color Coding**: Intelligent color coding (Red, Amber, Green) for immediate visual feedback on project status.
--   **Email Threading & Deduplication**: Integrates Microsoft Graph for email ingestion, linking to client timelines with deduplication, threading, and a full UI.
--   **Client Notification & Reminder System**: Automated multi-channel (email, SMS, push) notifications based on project lifecycle events and client request reminders, with dynamic variables, opt-in/opt-out controls, and robust pre-validation.
--   **Service Inactive Management**: Permission-controlled system for marking client services inactive with required reasons, audit trails, and automatic exclusion from scheduling.
--   **Project Inactive Management**: Permission-controlled system for marking projects inactive with required reasons, audit trails, and automatic exclusion from scheduling, mirroring service inactive management.
--   **Completed Projects Filtering**: Ensures completed projects are always visible in kanban view and properly managed across all project views, bypassing standard filters.
--   **Hover-Activated Stage Information**: Desktop kanban view displays project stage change details via hover popover (300ms delay), while mobile maintains tap-to-view modal access. Popover shows latest status transition, change reason, assignee, and time in previous stage. Automatically dismisses on drag operations for seamless interaction.
--   **Document E-Signature System**: UK eIDAS-compliant electronic signature feature enabling staff to send PDFs for signature via secure public links. Supports multiple signers per document with sequential or parallel workflows. **Multi-page PDF support** with full page navigation during field placement and signing. Features include: interactive PDF viewer (react-pdf) with scrollable all-pages vertical layout for easy document navigation, precise percentage-based coordinate system (2 decimal places) ensuring accurate field positioning across all PDF sizes/devices, signature and typed name fields with visual indicators on correct pages, **public signing page with two-step flow** (full-screen consent disclosure first, then split-screen signing with PDF viewer + signature controls), mandatory consent disclosure showing firm name from company settings, real-time signature drawing with mouse/touch support, automatic PDF processing using pdf-lib to overlay signatures on correct pages, SHA-256 hashing of original and signed documents, complete audit trails capturing signer identity/device/browser/OS/IP/timestamps, **signed URL generation** for secure PDF access via Replit Object Storage (15-minute expiry), secure token-based public access (no authentication required), signed document storage in Replit Object Storage, and downloadable signed PDFs with verifiable hashes. Full database schema includes signature_requests, signature_request_recipients, signature_fields (with decimal coordinates and page numbers), signatures, signature_audit_logs, and signed_documents tables with proper indexing and relationships. Coordinates stored as percentages (0-100 with decimal precision) to ensure consistent rendering across different screen sizes and PDF dimensions. **Global Signature Requests View**: Accessible via "E-Signatures" link in TopNavigation menu at `/signature-requests`, provides staff with system-wide visibility of all signature requests across clients. Displays request status, client information, creator, and dates in consistent "MMM d, yyyy" format. API endpoints properly serialize all timestamp fields (including nested objects) to ISO strings for reliable frontend rendering. Both global view and client-specific views use consistent date formatting via date-fns. **Signature Request Builder (Nov 2025)**: Streamlined 3-step wizard at `/clients/:clientId/signature-requests/new` for creating signature requests: (1) Select Document (upload new or choose existing PDF), (2) Place Fields (click-to-place signature/typed_name fields on scrollable multi-page PDF with improved drag-and-drop repositioning using @dnd-kit), (3) Review & Send (auto-derived recipients, summary and confirmation). Recipients automatically derived from unique personIds in placed fields, eliminating redundant manual selection. Scrollable all-pages PDF viewer displays entire document vertically for easy navigation without page-by-page clicking. Enhanced drag handle (20px GripVertical icon, always-visible page badge, larger click targets) improves field manipulation UX. Implements per-page dimension tracking via Map for accurate coordinate conversion, cross-page field movement via dropdown selector, unsaved changes warning with AlertDialog and beforeunload listener, duplicate field prevention (one signature + one typed_name per recipient). Backend validates requests and rejects duplicates with 422 error. E2e tested with successful database persistence and coordinate accuracy. **Object Storage Integration**: `ObjectStorageService.getSignedDownloadURL` method generates temporary signed URLs (15-min TTL) for secure PDF access without exposing raw storage paths, preventing 401 Unauthorized errors on public signing pages. **PDF Viewer Fix (Nov 2025)**: Resolved InvalidPDFException in CreateSignatureRequestDialog Step 2 by implementing `GET /api/clients/:clientId/documents/:documentId/file` endpoint. Frontend now uses client-scoped authenticated streaming instead of raw `/objects/` paths. Backend validates document ownership (403 if mismatch), guards against null objectPath (404 if missing), and streams via ObjectStorageService. Frontend includes null objectPath guards with user-facing toast errors. **Document-Centric Signing UX (Nov 2025)**: Redesigned public signing page (`/sign`) with guided banner navigation replacing left sidebar approach. Features: (1) Guided banner with Start → Active flow showing "Field X of Y" progress, Previous/Next/Submit buttons, and visual progress bar; (2) Full-width PDF viewer as primary focus without sidebar clutter; (3) Click-to-show interactions with desktop modal or mobile bottom sheet for signature input; (4) Auto-scroll to active field on navigation with smooth scrolling; (5) Auto-advance to next field after saving signature, maintaining continuous guided flow; (6) Clickable field overlays on PDF with visual states (active=blue pulse, signed=green checkmark, unsigned=yellow); (7) Mobile optimization with bottom sheet UI (slides up from bottom) and touch-enabled canvas drawing; (8) Submit button only appears when all fields signed. Banner provides clear navigation (Start Signing → Sign Field 1 → Auto-advance to Field 2 → Continue → Submit), while PDF remains visible throughout. Modal/bottom sheet auto-advances to next unsigned field after each save, closing only when all fields complete. Eliminates separate field list interface, creating DocuSign-style document-centric experience optimized for both desktop and mobile. **Enhanced UX Features (Nov 2025)**: Green completion banner ("All fields complete - Ready to submit!") displays when all fields signed, providing clear visual feedback. 2-second success screen shown after submission with confirmation message before redirect. Mobile bottom sheet optimized with 60vh height and compact padding for seamless mobile experience. Cancel button added to client signature requests panel for managing pending requests. **Single-Session Protection (Nov 2025)**: Production-ready UK eIDAS-compliant session management preventing duplicate submissions across multiple browsers/devices. Backend implements 3 REST endpoints (claim/force/heartbeat) with 30-minute auto-expiry, device info storage (browser/OS/IP) for accurate conflict messages, session ownership validation in submit endpoint, and audit trails for forced takeovers. Frontend features session UUID generation with localStorage persistence, automatic session claim on page load, 60-second heartbeat monitoring, takeover dialog displaying device info on 409 conflict, comprehensive UI lockout with guards on 11 code paths (submit/navigation/canvas/auto-advance handlers), non-dismissable blocking dialog on session loss, disabled submit button, localStorage cleanup, and page reload for fresh state. Implementation prevents all post-lockout state mutations including queued setTimeout callbacks, ensuring zero mutations after session ownership is lost. Session protection covers all interactive entry points and delayed operations, providing reliable freeze once ownership is transferred.
+### Key Features
+-   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
+-   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system.
+-   **Document Management & E-Signatures**: A UK eIDAS-compliant electronic signature system enables staff to send multi-page PDFs for signature via secure public links. It supports multiple signers, precise field placement using percentage-based coordinates, a public signing page with two-step consent, real-time signature drawing, and automatic PDF processing. It includes SHA-256 hashing, comprehensive audit trails, secure signed URL generation for PDF access, and a global signature requests view. A streamlined 3-step wizard for creating signature requests includes document selection, interactive field placement with drag-and-drop, and automated recipient derivation. The system ensures robust single-session protection to prevent duplicate submissions.
+-   **Workflow & Status Management**: Offers project timeline color coding, permission-controlled inactive management for services and projects with audit trails, and specific handling for completed projects. Desktop kanban view provides hover-activated stage information, while mobile offers tap-to-view modal access.
 
 ## External Dependencies
 
 ### Third-Party Services
-
--   **Companies House API**: UK company data.
--   **Microsoft Graph API**: Staff email integration.
--   **RingCentral**: VoIP phone system.
--   **SendGrid**: Transactional email delivery.
--   **VoodooSMS**: Planned for client SMS.
--   **Replit Platform Services**: Object storage, authentication, and deployment.
+-   **Companies House API**: For UK company data integration.
+-   **Microsoft Graph API**: For staff email integration.
+-   **RingCentral**: For VoIP phone system integration.
+-   **SendGrid**: For transactional email delivery.
+-   **VoodooSMS**: Planned for client SMS services.
+-   **Replit Platform Services**: For object storage, authentication, and deployment.
 
 ### Frontend Libraries
-
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `react-quill`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
