@@ -310,16 +310,22 @@ export default function SignatureRequestsPage() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0A7BBF]/5 via-white to-[#76CA23]/5 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <TopNavigation />
       
-      <main className="flex-1 container mx-auto px-4 py-6 pb-24">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileSignature className="w-6 h-6" />
-            E-Signature Requests
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Active signature requests requiring completion. Create new requests from individual client pages.
-          </p>
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2">
+              <FileSignature className="w-6 h-6 md:w-7 md:h-7" />
+              E-Signature Requests
+            </h1>
+            <p className="text-meta mt-1">
+              Active signature requests requiring completion. Create new requests from individual client pages.
+            </p>
+          </div>
         </div>
+      </div>
+
+      <main className="flex-1 page-container py-6 md:py-8 pb-24 space-y-8">
 
         {isLoading ? (
           <div className="space-y-3">

@@ -589,37 +589,48 @@ export default function InternalChat() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)]">
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="page-title">
+                <Users className="w-6 h-6 md:w-7 md:h-7" />
+                Internal Chat
+              </h1>
+              <p className="text-meta mt-1">Staff-to-staff messaging</p>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowNewThreadDialog(true)}
+              data-testid="button-new-thread"
+            >
+              New Thread
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-300px)]">
           {/* Thread List */}
           <Card className="w-full md:w-1/3 flex flex-col" data-testid="thread-list-card">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2" data-testid="page-title">
-                  <Users className="w-5 h-5" />
-                  Internal Chat
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => setShowNewThreadDialog(true)}
-                    data-testid="button-new-thread"
-                  >
-                    New Thread
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-                      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
-                    }}
-                    data-testid="button-refresh"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </Button>
-                </div>
+                <CardTitle className="text-lg">Conversations</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+                    queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
+                  }}
+                  data-testid="button-refresh"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
               </div>
               <div className="space-y-3 mt-4">
                 <Input

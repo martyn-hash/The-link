@@ -1060,11 +1060,32 @@ export default function Messages() {
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="page-title">
+                <MessageCircle className="w-6 h-6 md:w-7 md:h-7" />
+                Messages
+              </h1>
+              <p className="text-meta mt-1">Client communication & staff messaging</p>
+            </div>
+            {activeTab === 'internal' && !isMobile && (
+              <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
+                <Plus className="w-4 h-4 mr-2" />
+                New Thread
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="flex-1 overflow-hidden">
-        <div className="max-w-7xl mx-auto h-full p-2 md:p-6">
+        <div className="page-container py-6 md:py-8 space-y-8 h-full">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             {!isMobile && (
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-6">
                 <TabsList className="grid w-full max-w-2xl grid-cols-3">
                   <TabsTrigger value="internal" className="relative" data-testid="tab-internal-chat">
                     Internal Chat
@@ -1091,13 +1112,6 @@ export default function Messages() {
                     )}
                   </TabsTrigger>
                 </TabsList>
-
-                {activeTab === 'internal' && (
-                  <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Thread
-                  </Button>
-                )}
               </div>
             )}
 

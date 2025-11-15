@@ -558,42 +558,46 @@ export default function InternalTaskDetail() {
     <div className="min-h-screen bg-background pb-20">
       <TopNavigation user={user} />
 
-      <div className="container mx-auto py-6 px-4 max-w-6xl">
-        {/* Header with Back Button */}
-        <Button
-          variant="ghost"
-          onClick={handleBack}
-          className="mb-4"
-          data-testid="button-back"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {getBackButtonText()}
-        </Button>
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <Button
+            variant="ghost"
+            onClick={handleBack}
+            className="mb-4"
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {getBackButtonText()}
+          </Button>
 
-        {/* Task Title and Badges */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-3" data-testid="text-task-title">
-            {task.title}
-          </h1>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={getPriorityColor(task.priority)} data-testid="badge-priority">
-              {task.priority}
-            </Badge>
-            <Badge variant={getStatusColor(task.status)} data-testid="badge-status">
-              {task.status === "in_progress" ? "In Progress" : task.status}
-            </Badge>
-            {task.taskType && (
-              <Badge variant="outline" data-testid="badge-task-type">
-                {task.taskType.name}
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-3" data-testid="text-task-title">
+              {task.title}
+            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant={getPriorityColor(task.priority)} data-testid="badge-priority">
+                {task.priority}
               </Badge>
-            )}
-            {task.dueDate && (
-              <Badge variant="outline" data-testid="badge-due-date">
-                Due: {format(new Date(task.dueDate), 'MMM d, yyyy')}
+              <Badge variant={getStatusColor(task.status)} data-testid="badge-status">
+                {task.status === "in_progress" ? "In Progress" : task.status}
               </Badge>
-            )}
+              {task.taskType && (
+                <Badge variant="outline" data-testid="badge-task-type">
+                  {task.taskType.name}
+                </Badge>
+              )}
+              {task.dueDate && (
+                <Badge variant="outline" data-testid="badge-due-date">
+                  Due: {format(new Date(task.dueDate), 'MMM d, yyyy')}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         {/* Main Content - Card-based Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

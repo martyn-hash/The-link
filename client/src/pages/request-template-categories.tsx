@@ -240,16 +240,23 @@ export default function TaskTemplateCategoriesPage() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation />
-      <div className="container mx-auto py-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold" data-testid="text-page-title">Client Request Template Categories</h1>
-            <p className="text-muted-foreground mt-1">
-              Organize your client request templates into categories for better management
-            </p>
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">Client Request Template Categories</h1>
+              <p className="text-meta mt-1">
+                Organize your client request templates into categories for better management
+              </p>
+            </div>
+            <CategoryModal onSuccess={() => {}} />
           </div>
-          <CategoryModal onSuccess={() => {}} />
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         <Card>
           <CardHeader>

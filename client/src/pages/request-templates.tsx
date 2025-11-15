@@ -337,27 +337,34 @@ export default function TaskTemplatesPage() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
-      <div className="container mx-auto py-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold" data-testid="text-page-title">Client Request Templates</h1>
-            <p className="text-muted-foreground mt-1">
-              Create and manage reusable client request templates for your clients
-            </p>
-          </div>
-          <div className="flex space-x-2">
-            <Link href="/task-template-categories">
-              <Button variant="outline" data-testid="button-manage-categories">
-                <Settings className="w-4 h-4 mr-2" />
-                Manage Categories
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">Client Request Templates</h1>
+              <p className="text-meta mt-1">
+                Create and manage reusable client request templates for your clients
+              </p>
+            </div>
+            <div className="flex space-x-2">
+              <Link href="/task-template-categories">
+                <Button variant="outline" data-testid="button-manage-categories">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Manage Categories
+                </Button>
+              </Link>
+              <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-template">
+                <Plus className="w-4 h-4 mr-2" />
+                New Template
               </Button>
-            </Link>
-            <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-template">
-              <Plus className="w-4 h-4 mr-2" />
-              New Template
-            </Button>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         {templatesLoading ? (
           <div className="flex justify-center py-12">

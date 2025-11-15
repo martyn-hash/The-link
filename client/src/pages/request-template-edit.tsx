@@ -951,9 +951,10 @@ export default function TaskTemplateEditPage() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
-      <div className="container mx-auto py-8">
-        {/* Compact Header with Template Details */}
-        <div className="mb-6">
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <div className="flex items-start justify-between mb-4">
             <Link href="/task-templates">
               <Button variant="ghost" size="sm" data-testid="button-back">
@@ -974,7 +975,7 @@ export default function TaskTemplateEditPage() {
           
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
-              <h1 className="text-3xl font-bold" data-testid="text-template-name">{template.name}</h1>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-template-name">{template.name}</h1>
               <Badge
                 variant={template.status === "active" ? "default" : "secondary"}
                 data-testid="badge-template-status"

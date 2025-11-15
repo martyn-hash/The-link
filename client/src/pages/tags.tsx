@@ -302,18 +302,22 @@ export default function TagsPage() {
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
       
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Tags className="w-8 h-8" />
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2">
+              <Tags className="w-6 h-6 md:w-7 md:h-7" />
               Tag Management
             </h1>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-meta mt-1">
               Create and manage tags for organizing clients and people
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         <Tabs defaultValue="client-tags" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 max-w-md">

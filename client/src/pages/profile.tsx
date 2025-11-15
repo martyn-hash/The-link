@@ -497,10 +497,17 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="heading-user-profile">Profile</h1>
+        </div>
+      </div>
+
       <div className="flex-1">
-        <div className="container mx-auto py-8 px-4">
+        <div className="page-container py-6 md:py-8 space-y-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8" data-testid="heading-user-profile">Profile</h1>
         
         {/* Profile Header */}
         <Card className="mb-8">

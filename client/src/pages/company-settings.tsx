@@ -255,32 +255,35 @@ export default function CompanySettingsPage() {
   return (
     <>
       <TopNavigation user={user} />
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
-        {/* Breadcrumbs */}
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="/">Home</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Company Settings</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <Breadcrumb className="mb-4">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Company Settings</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
 
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <Settings className="w-8 h-8" />
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="text-page-title">
+              <Settings className="w-6 h-6 md:w-7 md:h-7" />
               Company Settings
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-meta mt-1">
               Configure global system settings for your organization
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         {/* Email Settings Card */}
         <Card>

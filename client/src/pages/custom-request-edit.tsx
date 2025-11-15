@@ -824,9 +824,10 @@ export default function CustomRequestEdit() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
-      <div className="container mx-auto py-8">
-        {/* Header */}
-        <div className="mb-6">
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <div className="flex items-start justify-between mb-4">
             <Link href={`/clients/${request.clientId}`}>
               <Button variant="ghost" size="sm" data-testid="button-back">

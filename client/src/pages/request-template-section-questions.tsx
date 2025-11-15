@@ -339,27 +339,32 @@ export default function TaskTemplateSectionQuestionsPage() {
   return (
     <div className="min-h-screen bg-background">
       <TopNavigation />
-      <div className="container mx-auto py-8 max-w-4xl">
-        <div className="flex items-center space-x-4 mb-6">
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <Link href={`/task-templates/${templateId}/edit`}>
-            <Button variant="ghost" size="sm" data-testid="button-back">
+            <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Template
             </Button>
           </Link>
-        </div>
 
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold" data-testid="text-page-title">
-            {section?.title || "Section"} Questions
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Template: {template?.name}
-          </p>
-          {section?.description && (
-            <p className="text-sm text-muted-foreground mt-2">{section.description}</p>
-          )}
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">
+              {section?.title || "Section"} Questions
+            </h1>
+            <p className="text-meta mt-1">
+              Template: {template?.name}
+            </p>
+            {section?.description && (
+              <p className="text-sm text-muted-foreground mt-2">{section.description}</p>
+            )}
+          </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         <Card>
           <CardHeader>

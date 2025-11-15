@@ -55,18 +55,24 @@ export default function TaskSubmissions() {
   const reviewedCount = submissions?.filter(s => s.status === 'reviewed').length || 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background">
       <TopNavigation />
-      <div className="p-8 space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="page-title">
-            Task Submissions
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Review and manage submitted client requests
-          </p>
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="page-title">
+              Task Submissions
+            </h1>
+            <p className="text-meta mt-1">
+              Review and manage submitted client requests
+            </p>
+          </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         {/* Search and Filters */}
         <Card>

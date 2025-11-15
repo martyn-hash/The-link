@@ -554,18 +554,23 @@ export default function InternalTasks() {
     <div className="min-h-screen bg-background pb-20">
       <TopNavigation user={user} />
       
-      <div className="container mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="heading-tasks">
-              <ClipboardList className="w-8 h-8" />
-              Internal Tasks
-            </h1>
-            <p className="text-muted-foreground">Manage staff tasks and track progress</p>
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="heading-tasks">
+                <ClipboardList className="w-6 h-6 md:w-7 md:h-7" />
+                Internal Tasks
+              </h1>
+              <p className="text-meta mt-1">Manage staff tasks and track progress</p>
+            </div>
+            <CreateTaskDialog />
           </div>
-          <CreateTaskDialog />
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         {/* Tabs and Filters */}
         <Card>

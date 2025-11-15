@@ -176,15 +176,21 @@ export default function AdminTaskTypes() {
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       
-      <div className="max-w-7xl mx-auto p-6 w-full">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-page-title">
-            Task Type Management
-          </h1>
-          <p className="text-muted-foreground">
-            Manage task types for internal task organization
-          </p>
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">
+              Task Type Management
+            </h1>
+            <p className="text-meta mt-1">
+              Manage task types for internal task organization
+            </p>
+          </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         <Card>
           <CardHeader>
