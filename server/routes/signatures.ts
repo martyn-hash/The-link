@@ -1034,11 +1034,19 @@ export function registerSignatureRoutes(
           const emailSenderName = settings?.emailSenderName || firmName;
 
           // Send emails to all recipients using Promise.allSettled (don't fail entire request if one email fails)
-          const emailPromises = createdRecipients.map(async (recipient) => {
+          console.log(`[E-Signature] Preparing to send emails to ${createdRecipients.length} recipient(s)`);
+          createdRecipients.forEach((r, idx) => {
+            const person = peopleMap.get(r.personId);
+            console.log(`[E-Signature] Recipient ${idx + 1}: ${person?.fullName || 'Unknown'} <${r.email}>`);
+          });
+
+          const emailPromises = createdRecipients.map(async (recipient, index) => {
             const person = peopleMap.get(recipient.personId);
             if (!person) {
+              console.error(`[E-Signature] Recipient ${index + 1}: Person not found for personId ${recipient.personId}`);
               return { 
-                recipientId: recipient.id, 
+                recipientId: recipient.id,
+                email: recipient.email,
                 success: false, 
                 error: 'Person not found' 
               };
@@ -1046,6 +1054,7 @@ export function registerSignatureRoutes(
 
             try {
               const signLink = `${baseUrl}/sign?token=${recipient.secureToken}`;
+              console.log(`[E-Signature] Recipient ${index + 1}: Sending email to ${recipient.email}...`);
               
               await sendSignatureRequestEmail(
                 recipient.email,
@@ -1067,10 +1076,15 @@ export function registerSignatureRoutes(
                 })
                 .where(eq(signatureRequestRecipients.id, recipient.id));
 
-              console.log(`[E-Signature] Email sent successfully to ${recipient.email}`);
-              return { recipientId: recipient.id, success: true };
+              console.log(`[E-Signature] Recipient ${index + 1}: ✓ Email sent successfully to ${recipient.email}`);
+              return { recipientId: recipient.id, email: recipient.email, success: true };
             } catch (error: any) {
-              console.error(`[E-Signature] Failed to send email to ${recipient.email}:`, error);
+              console.error(`[E-Signature] Recipient ${index + 1}: ✗ Failed to send email to ${recipient.email}`);
+              console.error(`[E-Signature] Recipient ${index + 1}: Error details:`, {
+                message: error.message,
+                code: error.code,
+                response: error.response?.body || error.response || 'No response data'
+              });
               
               // Update recipient with failed status
               await db
@@ -1082,7 +1096,8 @@ export function registerSignatureRoutes(
                 .where(eq(signatureRequestRecipients.id, recipient.id));
 
               return { 
-                recipientId: recipient.id, 
+                recipientId: recipient.id,
+                email: recipient.email,
                 success: false, 
                 error: error.message 
               };
@@ -1094,7 +1109,18 @@ export function registerSignatureRoutes(
           const successfulSends = emailResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
           const failedSends = emailResults.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
 
-          console.log(`[E-Signature] Email results: ${successfulSends} sent, ${failedSends} failed`);
+          console.log(`[E-Signature] ═══════════════════════════════════════════════════`);
+          console.log(`[E-Signature] Email Summary: ${successfulSends} sent, ${failedSends} failed`);
+          emailResults.forEach((result, idx) => {
+            if (result.status === 'fulfilled' && result.value.success) {
+              console.log(`[E-Signature]   ${idx + 1}. ✓ ${result.value.email} - Delivered`);
+            } else if (result.status === 'fulfilled' && !result.value.success) {
+              console.log(`[E-Signature]   ${idx + 1}. ✗ ${result.value.email} - Failed: ${result.value.error}`);
+            } else if (result.status === 'rejected') {
+              console.log(`[E-Signature]   ${idx + 1}. ✗ Promise rejected:`, result.reason);
+            }
+          });
+          console.log(`[E-Signature] ═══════════════════════════════════════════════════`);
 
           // Update request status to pending (emails sent or attempted)
           await db
@@ -2348,6 +2374,7 @@ You agree that:
   /**
    * GET /api/signature-requests/:id/audit-trail
    * Get audit trail for a signature request (staff only)
+   * Returns recipients grouped with their audit events
    */
   app.get(
     "/api/signature-requests/:id/audit-trail",
@@ -2357,25 +2384,75 @@ You agree that:
       try {
         const { id } = req.params;
 
-        // Get all recipients for this request
-        const recipients = await db
-          .select()
+        // Get all recipients for this request with person info
+        const recipientsWithPeople = await db
+          .select({
+            recipient: signatureRequestRecipients,
+            person: people,
+          })
           .from(signatureRequestRecipients)
-          .where(eq(signatureRequestRecipients.signatureRequestId, id));
+          .leftJoin(people, eq(signatureRequestRecipients.personId, people.id))
+          .where(eq(signatureRequestRecipients.signatureRequestId, id))
+          .orderBy(signatureRequestRecipients.orderIndex);
 
-        if (recipients.length === 0) {
+        if (recipientsWithPeople.length === 0) {
           return res.json([]);
         }
 
-        // Get audit logs for all recipients using inArray for tenant scoping
-        const recipientIds = recipients.map(r => r.id);
+        // Get audit logs for all recipients
+        const recipientIds = recipientsWithPeople.map(r => r.recipient.id);
         const auditLogs = await db
           .select()
           .from(signatureAuditLogs)
           .where(inArray(signatureAuditLogs.signatureRequestRecipientId, recipientIds))
           .orderBy(desc(signatureAuditLogs.createdAt));
 
-        res.json(auditLogs);
+        // Group audit logs by recipient ID
+        const logsByRecipient = auditLogs.reduce((acc, log) => {
+          const recipientId = log.signatureRequestRecipientId;
+          if (!acc[recipientId]) {
+            acc[recipientId] = [];
+          }
+          acc[recipientId].push(log);
+          return acc;
+        }, {} as Record<string, typeof auditLogs>);
+
+        // Build response with recipients and their audit events
+        const response = recipientsWithPeople.map((item, index) => ({
+          recipientNumber: index + 1,
+          recipientId: item.recipient.id,
+          personName: item.person?.fullName || null,
+          email: item.recipient.email,
+          signedAt: item.recipient.signedAt 
+            ? new Date(Number(item.recipient.signedAt)).toISOString()
+            : null,
+          status: item.recipient.signedAt ? 'signed' : 'pending',
+          auditEvents: (logsByRecipient[item.recipient.id] || []).map(log => ({
+            id: log.id,
+            eventType: log.eventType,
+            signerName: log.signerName,
+            signerEmail: log.signerEmail,
+            ipAddress: log.ipAddress,
+            userAgent: log.userAgent,
+            deviceInfo: log.deviceInfo,
+            browserInfo: log.browserInfo,
+            osInfo: log.osInfo,
+            consentAcceptedAt: log.consentAcceptedAt 
+              ? new Date(Number(log.consentAcceptedAt)).toISOString()
+              : null,
+            signedAt: log.signedAt 
+              ? new Date(Number(log.signedAt)).toISOString()
+              : null,
+            documentHash: log.documentHash,
+            authMethod: log.authMethod,
+            metadata: log.metadata || {},
+            createdAt: log.createdAt 
+              ? new Date(Number(log.createdAt)).toISOString()
+              : null,
+          })),
+        }));
+
+        res.json(response);
       } catch (error: any) {
         console.error("Error fetching audit trail:", error);
         res.status(500).json({ 
