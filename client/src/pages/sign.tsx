@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type MouseEvent } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest } from "@/lib/queryClient";
-import { FileText, Check, AlertCircle, PenTool, Type, Send, Shield } from "lucide-react";
+import { FileText, Check, AlertCircle, Type, Send, Shield } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 import { Progress } from "@/components/ui/progress";
 import { nanoid } from "nanoid";
@@ -79,10 +78,6 @@ export default function SignPage() {
   // Signature state
   const [fieldSignatures, setFieldSignatures] = useState<Map<string, { type: string; data: string }>>(new Map());
   const [currentFieldId, setCurrentFieldId] = useState<string | null>(null);
-  
-  // Canvas refs for signature drawing
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
   const [typedName, setTypedName] = useState("");
   
   // Document-centric signing state
@@ -304,9 +299,8 @@ export default function SignPage() {
   useEffect(() => {
     if (signData && currentStep === "consent") {
       // Log consent view for audit trail
-      apiRequest("POST", `/api/sign/${token}/consent-viewed`, {}).catch(error => {
-        console.error("Failed to log consent view:", error);
-        // Don't show error to user - this is just for audit tracking
+      apiRequest("POST", `/api/sign/${token}/consent-viewed`, {}).catch(() => {
+        // Silently fail - this is just for audit tracking
       });
     }
   }, [signData, currentStep, token]);
@@ -321,104 +315,32 @@ export default function SignPage() {
     }
   }, [signData, currentStep]);
 
-  // Canvas drawing functions
-  const startDrawing = (e: MouseEvent<HTMLCanvasElement>) => {
-    // CRITICAL: Block drawing if session is lost
-    if (sessionLost) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    setIsDrawing(true);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const draw = (e: MouseEvent<HTMLCanvasElement>) => {
-    // CRITICAL: Block drawing if session is lost
-    if (sessionLost) return;
-    
-    if (!isDrawing) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    // CRITICAL: Block drawing if session is lost
-    if (sessionLost) return;
-    
-    setIsDrawing(false);
-  };
-
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  };
-
-  const saveSignature = (type: "drawn" | "typed") => {
+  const saveSignature = () => {
     // CRITICAL: Block all interactions if session is lost
     if (sessionLost) return;
     
     if (!currentFieldId) return;
 
-    if (type === "drawn") {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const dataUrl = canvas.toDataURL("image/png");
-      setFieldSignatures(new Map(fieldSignatures.set(currentFieldId, {
-        type: "drawn",
-        data: dataUrl,
-      })));
-    } else {
-      if (!typedName.trim()) {
-        toast({
-          title: "Name required",
-          description: "Please type your name",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setFieldSignatures(new Map(fieldSignatures.set(currentFieldId, {
-        type: "typed",
-        data: typedName.trim(),
-      })));
+    if (!typedName.trim()) {
+      toast({
+        title: "Name required",
+        description: "Please type your name",
+        variant: "destructive",
+      });
+      return;
     }
+
+    setFieldSignatures(new Map(fieldSignatures.set(currentFieldId, {
+      type: "typed",
+      data: typedName.trim(),
+    })));
 
     toast({
       title: "Signature saved",
-      description: "Signature has been added to this field",
+      description: "Your name has been added to this field",
     });
 
-    // Clear inputs and move to next unsigned field
-    clearCanvas();
+    // Clear input and move to next unsigned field
     setTypedName("");
     
     // Auto-advance to next field after a short delay for UX
@@ -454,6 +376,33 @@ export default function SignPage() {
       setCurrentFieldId(signData.fields[0]!.id);
     }
   }, [currentStep, signData, currentFieldId]);
+
+  // PDF Processing Indicator - show while submission is in progress
+  if (submitMutation.isPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950 dark:to-indigo-900 p-4">
+        <Card className="w-full max-w-md border-blue-200 dark:border-blue-800 shadow-2xl">
+          <CardContent className="pt-8 pb-8">
+            <div className="text-center">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-blue-600 shadow-lg animate-pulse">
+                <FileText className="h-12 w-12 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-100 mb-3">
+                Processing Your Signature
+              </h2>
+              <p className="text-blue-700 dark:text-blue-300 mb-6">
+                Please wait while we securely process and embed your signatures into the document...
+              </p>
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <span>This may take a few moments</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Success screen - show after submission for 2 seconds
   if (postSubmitState) {
@@ -552,6 +501,8 @@ export default function SignPage() {
               <CardTitle>Document Signature</CardTitle>
             </div>
             <CardDescription>
+              <span className="font-medium">Signing as: {signData.recipient.name}</span>
+              <br />
               From: {signData.firmName}
               <br />
               <span className="text-xs">{signData.request.friendlyName}</span>
@@ -738,12 +689,11 @@ export default function SignPage() {
 
   const closeModal = () => {
     setShowFieldModal(false);
-    clearCanvas();
     setTypedName("");
   };
 
-  const saveAndClose = (type: "drawn" | "typed") => {
-    saveSignature(type);
+  const saveAndClose = () => {
+    saveSignature();
     setTimeout(() => {
       // CRITICAL: Block queued state updates if session lost during timeout
       if (sessionLost) return;
@@ -759,7 +709,6 @@ export default function SignPage() {
         // All fields signed - close modal
         setShowFieldModal(false);
       }
-      clearCanvas();
       setTypedName("");
     }, 300);
   };
@@ -793,7 +742,9 @@ export default function SignPage() {
                 <FileText className="w-5 h-5 text-primary flex-shrink-0" />
                 <div>
                   <p className="font-semibold text-sm">Ready to sign {signData.request.friendlyName}?</p>
-                  <p className="text-xs text-muted-foreground">Click Start to begin signing</p>
+                  <p className="text-xs text-muted-foreground">
+                    Signing as: <span className="font-medium">{signData.recipient.name}</span> • Click Start to begin
+                  </p>
                 </div>
               </div>
               <Button 
@@ -969,12 +920,8 @@ export default function SignPage() {
               >
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    {currentField.fieldType === "signature" ? (
-                      <PenTool className="w-5 h-5" />
-                    ) : (
-                      <Type className="w-5 h-5" />
-                    )}
-                    {currentField.fieldType === "signature" ? "Sign Here" : "Type Your Name"}
+                    <Type className="w-5 h-5" />
+                    Type Your Name
                   </CardTitle>
                   <CardDescription>
                     Field {currentFieldIndex + 1} of {sortedFields.length}
@@ -997,66 +944,30 @@ export default function SignPage() {
                       </Button>
                     </div>
                   ) : (
-                    <Tabs defaultValue={currentField.fieldType === "signature" ? "draw" : "type"}>
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="draw">Draw</TabsTrigger>
-                        <TabsTrigger value="type">Type</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="draw" className="space-y-3 mt-4">
-                        <div className="border-2 border-dashed rounded-lg bg-white dark:bg-gray-900 p-2">
-                          <canvas
-                            ref={canvasRef}
-                            width={400}
-                            height={150}
-                            onMouseDown={startDrawing}
-                            onMouseMove={draw}
-                            onMouseUp={stopDrawing}
-                            onMouseLeave={stopDrawing}
-                            className="w-full cursor-crosshair"
-                            data-testid="canvas-signature"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={clearCanvas}
-                            data-testid="button-clear-signature"
-                            className="flex-1"
-                          >
-                            Clear
-                          </Button>
-                          <Button
-                            onClick={() => saveAndClose("drawn")}
-                            data-testid="button-save-drawn-signature"
-                            className="flex-1"
-                          >
-                            <Check className="w-4 h-4 mr-2" />
-                            Save
-                          </Button>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="type" className="space-y-3 mt-4">
-                        <Input
-                          value={typedName}
-                          onChange={(e) => setTypedName(e.target.value)}
-                          placeholder="Enter your full name"
-                          className="font-serif text-xl h-12"
-                          data-testid="input-typed-name"
-                          autoFocus
-                        />
-                        <Button
-                          onClick={() => saveAndClose("typed")}
-                          disabled={!typedName.trim()}
-                          data-testid="button-save-typed-name"
-                          className="w-full"
-                        >
-                          <Check className="w-4 h-4 mr-2" />
-                          Save
-                        </Button>
-                      </TabsContent>
-                    </Tabs>
+                    <div className="space-y-3">
+                      <Input
+                        value={typedName}
+                        onChange={(e) => setTypedName(e.target.value)}
+                        placeholder="Enter your full name"
+                        className="font-serif text-xl h-12"
+                        data-testid="input-typed-name"
+                        autoFocus
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && typedName.trim()) {
+                            saveAndClose();
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={saveAndClose}
+                        disabled={!typedName.trim()}
+                        data-testid="button-save-typed-name"
+                        className="w-full"
+                      >
+                        <Check className="w-4 h-4 mr-2" />
+                        Save
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -1075,11 +986,7 @@ export default function SignPage() {
               <div className="sticky top-0 bg-white dark:bg-gray-900 border-b px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {currentField.fieldType === "signature" ? (
-                      <PenTool className="w-4 h-4 text-primary" />
-                    ) : (
-                      <Type className="w-4 h-4 text-primary" />
-                    )}
+                    <Type className="w-4 h-4 text-primary" />
                     <span className="text-sm font-medium">
                       Field {currentFieldIndex + 1} of {sortedFields.length}
                     </span>
@@ -1105,88 +1012,31 @@ export default function SignPage() {
                     </Button>
                   </div>
                 ) : (
-                  <Tabs defaultValue={currentField.fieldType === "signature" ? "draw" : "type"} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 h-9 mb-3">
-                      <TabsTrigger value="draw" className="text-xs">Draw</TabsTrigger>
-                      <TabsTrigger value="type" className="text-xs">Type</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="draw" className="space-y-2 mt-0">
-                      <div className="border-2 border-dashed rounded-md bg-white dark:bg-gray-950 p-1">
-                        <canvas
-                          ref={canvasRef}
-                          width={300}
-                          height={120}
-                          onTouchStart={(e) => {
-                            const touch = e.touches[0];
-                            if (touch && canvasRef.current) {
-                              const rect = canvasRef.current.getBoundingClientRect();
-                              const mouseEvent = new MouseEvent('mousedown', {
-                                clientX: touch.clientX,
-                                clientY: touch.clientY
-                              });
-                              canvasRef.current.dispatchEvent(mouseEvent);
-                            }
-                          }}
-                          onTouchMove={(e) => {
-                            e.preventDefault();
-                            const touch = e.touches[0];
-                            if (touch && canvasRef.current) {
-                              const mouseEvent = new MouseEvent('mousemove', {
-                                clientX: touch.clientX,
-                                clientY: touch.clientY
-                              });
-                              canvasRef.current.dispatchEvent(mouseEvent);
-                            }
-                          }}
-                          onTouchEnd={() => {
-                            if (canvasRef.current) {
-                              canvasRef.current.dispatchEvent(new MouseEvent('mouseup'));
-                            }
-                          }}
-                          className="w-full touch-none"
-                        />
-                      </div>
-                      {/* Stacked buttons for vertical space efficiency */}
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          onClick={() => saveAndClose("drawn")}
-                          className="w-full"
-                          size="sm"
-                        >
-                          <Check className="w-4 h-4 mr-2" />
-                          Save Signature
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={clearCanvas}
-                          className="w-full"
-                          size="sm"
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="type" className="space-y-2 mt-0">
-                      <Input
-                        value={typedName}
-                        onChange={(e) => setTypedName(e.target.value)}
-                        placeholder="Your full name"
-                        className="font-serif text-lg h-10"
-                        autoFocus
-                      />
-                      <Button
-                        onClick={() => saveAndClose("typed")}
-                        disabled={!typedName.trim()}
-                        className="w-full"
-                        size="sm"
-                      >
-                        <Check className="w-4 h-4 mr-2" />
-                        Save Name
-                      </Button>
-                    </TabsContent>
-                  </Tabs>
+                  <div className="space-y-2">
+                    <Input
+                      value={typedName}
+                      onChange={(e) => setTypedName(e.target.value)}
+                      placeholder="Your full name"
+                      className="font-serif text-lg h-10"
+                      autoFocus
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && typedName.trim()) {
+                          saveAndClose();
+                        }
+                      }}
+                      data-testid="input-typed-name"
+                    />
+                    <Button
+                      onClick={saveAndClose}
+                      disabled={!typedName.trim()}
+                      className="w-full"
+                      size="sm"
+                      data-testid="button-save-typed-name"
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      Save Name
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

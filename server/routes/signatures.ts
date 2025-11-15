@@ -172,7 +172,6 @@ async function createAuditLog(params: {
     })
     .returning();
 
-  console.log(`[Audit] ${eventType} logged for ${signerEmail} from ${ipAddress} (${city || 'Unknown'}, ${country || 'Unknown'})`);
   return auditLog;
 }
 

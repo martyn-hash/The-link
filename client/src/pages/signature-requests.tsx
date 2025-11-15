@@ -6,11 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSignature, Check, Clock, Eye, X, Users } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { FileSignature, Check, Eye, X, Clock } from "lucide-react";
 import { format } from "date-fns";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import { useState } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,38 +25,216 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
+interface SignatureRequestRowProps {
+  item: any;
+  onCancelClick: (requestId: string) => void;
+  onViewClick: (clientId: string) => void;
+}
+
+function SignatureRequestRow({ item, onCancelClick, onViewClick }: SignatureRequestRowProps) {
+  const isMobile = useIsMobile();
+  const request = item.signatureRequest;
+  const client = item.client;
+  const creator = item.createdByPerson;
+
+  // Get signed/total count
+  const signedCount = item.recipients?.filter((r: any) => r.signedAt).length || 0;
+  const totalCount = item.recipients?.length || 0;
+
+  if (isMobile) {
+    // Mobile card view
+    return (
+      <Card 
+        className="mb-3"
+        data-testid={`card-signature-request-${request.id}`}
+      >
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-sm truncate" data-testid={`text-title-${request.id}`}>
+                  {request.title || "Untitled Document"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1" data-testid={`text-client-${request.id}`}>
+                  {client?.companyName || "Unknown Client"}
+                </p>
+              </div>
+              <Badge
+                variant={
+                  request.status === 'completed' ? 'default' :
+                  request.status === 'partially_signed' ? 'secondary' :
+                  request.status === 'pending' ? 'outline' :
+                  'destructive'
+                }
+                className="text-xs shrink-0"
+                data-testid={`badge-status-${request.id}`}
+              >
+                {request.status === 'completed' && <Check className="w-3 h-3 mr-1" />}
+                {request.status === 'partially_signed' ? 'Partially Signed' :
+                 request.status === 'pending' ? 'Pending' :
+                 request.status === 'cancelled' ? 'Cancelled' :
+                 request.status}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              {totalCount > 0 && (
+                <span data-testid={`text-signees-${request.id}`}>
+                  {signedCount}/{totalCount} signed
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {request.createdAt ? format(new Date(request.createdAt), 'MMM d, yyyy') : '-'}
+              </span>
+            </div>
+
+            {creator && (
+              <p className="text-xs text-muted-foreground">
+                by {creator.fullName}
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              {(request.status === 'draft' || request.status === 'pending' || request.status === 'partially_signed') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onCancelClick(request.id)}
+                  data-testid={`button-cancel-${request.id}`}
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
+              )}
+              {client?.id && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => onViewClick(client.id)}
+                  data-testid={`button-view-${request.id}`}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Client
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Desktop table row
+  return (
+    <TableRow data-testid={`row-${request.id}`}>
+      <TableCell className="font-medium">
+        <span data-testid={`text-title-${request.id}`}>
+          {request.title || "Untitled Document"}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-client-${request.id}`}>
+          {client?.companyName || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <Badge
+          variant={
+            request.status === 'completed' ? 'default' :
+            request.status === 'partially_signed' ? 'secondary' :
+            request.status === 'pending' ? 'outline' :
+            'destructive'
+          }
+          className="text-xs"
+          data-testid={`badge-status-${request.id}`}
+        >
+          {request.status === 'completed' && <Check className="w-3 h-3 mr-1" />}
+          {request.status === 'partially_signed' ? 'Partially Signed' :
+           request.status === 'pending' ? 'Pending' :
+           request.status === 'cancelled' ? 'Cancelled' :
+           request.status}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-signees-${request.id}`}>
+          {totalCount > 0 ? `${signedCount}/${totalCount}` : '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm">
+          {request.createdAt ? format(new Date(request.createdAt), 'MMM d, yyyy') : '-'}
+        </span>
+      </TableCell>
+
+      <TableCell>
+        <span className="text-sm text-muted-foreground">
+          {creator?.fullName || '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-2">
+          {(request.status === 'draft' || request.status === 'pending' || request.status === 'partially_signed') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCancelClick(request.id)}
+              data-testid={`button-cancel-${request.id}`}
+            >
+              <X className="w-4 h-4 mr-1" />
+              Cancel
+            </Button>
+          )}
+          {client?.id && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onViewClick(client.id)}
+              data-testid={`button-view-${request.id}`}
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              View
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export default function SignatureRequestsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [_location, setLocation] = useLocation();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [requestToCancel, setRequestToCancel] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const { data: requests, isLoading } = useQuery<any[]>({
-    queryKey: ['/api/signature-requests', { status: statusFilter }],
+  const { data: allRequests, isLoading } = useQuery<any[]>({
+    queryKey: ['/api/signature-requests'],
     queryFn: async () => {
-      const url = statusFilter && statusFilter !== 'all'
-        ? `/api/signature-requests?status=${statusFilter}`
-        : '/api/signature-requests';
-      const response = await fetch(url, { credentials: 'include' });
+      const response = await fetch('/api/signature-requests', { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Failed to fetch signature requests');
       }
       return response.json();
     },
     enabled: isAuthenticated,
+  });
+
+  // Filter to only show pending and partially_signed requests
+  const requests = allRequests?.filter((item: any) => {
+    const status = item.signatureRequest?.status;
+    return status === 'pending' || status === 'partially_signed';
   });
 
   const cancelMutation = useMutation({
@@ -110,6 +290,10 @@ export default function SignatureRequestsPage() {
     cancelMutation.mutate({ requestId: requestToCancel, reason: cancellationReason.trim() });
   };
 
+  const handleViewClick = (clientId: string) => {
+    setLocation(`/clients/${clientId}`);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -128,177 +312,74 @@ export default function SignatureRequestsPage() {
       
       <main className="flex-1 container mx-auto px-4 py-6 pb-24">
         <div className="mb-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <FileSignature className="w-6 h-6" />
-                E-Signature Requests
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                View all signature requests across clients. Create new requests from individual client pages.
-              </p>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-status-filter">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Requests</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="partially_signed">Partially Signed</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <FileSignature className="w-6 h-6" />
+            E-Signature Requests
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Active signature requests requiring completion. Create new requests from individual client pages.
+          </p>
         </div>
 
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32 w-full" />
+              <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
         ) : !requests || requests.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileSignature className="w-16 h-16 text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-medium mb-2">No signature requests yet</h3>
-              <p className="text-muted-foreground">
-                Create signature requests from individual client pages to get started
+              <h3 className="text-lg font-medium mb-2">No active signature requests</h3>
+              <p className="text-muted-foreground text-center">
+                All signature requests have been completed or there are no pending requests.
               </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
-            {requests.map((item: any) => {
-              const request = item.signatureRequest;
-              const client = item.client;
-              const creator = item.createdByPerson;
-
-              return (
-                <Card 
-                  key={request.id} 
-                  className={client?.id ? "hover:shadow-md transition-shadow cursor-pointer" : ""}
-                  onClick={() => client?.id && setLocation(`/clients/${client.id}`)}
-                  data-testid={`card-signature-request-${request.id}`}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold">{request.title || "Untitled Document"}</h3>
-                          <Badge
-                            variant={
-                              request.status === 'completed' ? 'default' :
-                              request.status === 'partially_signed' ? 'secondary' :
-                              request.status === 'pending' ? 'outline' :
-                              'destructive'
-                            }
-                            data-testid={`badge-status-${request.id}`}
-                          >
-                            {request.status === 'completed' && <Check className="w-3 h-3 mr-1" />}
-                            {request.status === 'partially_signed' ? 'Partially Signed' :
-                             request.status === 'pending' ? 'Pending' :
-                             request.status === 'cancelled' ? 'Cancelled' :
-                             request.status}
-                          </Badge>
-                        </div>
-
-                        {client ? (
-                          <div className="text-sm text-muted-foreground">
-                            Client: <span className="font-medium">{client.companyName}</span>
-                          </div>
-                        ) : (
-                          <div className="text-sm text-muted-foreground italic">
-                            Client not found
-                          </div>
-                        )}
-
-                        {request.message && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {request.message}
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {request.createdAt ? (
-                              <>Created {format(new Date(request.createdAt), 'MMM d, yyyy')}</>
-                            ) : (
-                              <>Created recently</>
-                            )}
-                          </span>
-                          {creator && (
-                            <span>
-                              by {creator.fullName}
-                            </span>
-                          )}
-                        </div>
-
-                        {item.recipients && item.recipients.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-border">
-                            <div className="flex items-start gap-2">
-                              <Users className="w-4 h-4 text-muted-foreground mt-0.5" />
-                              <div className="flex-1">
-                                <p className="text-xs font-medium text-muted-foreground mb-1">Signees:</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {item.recipients.map((recipient: any, idx: number) => (
-                                    <Badge 
-                                      key={idx} 
-                                      variant={recipient.signedAt ? "default" : "outline"}
-                                      className="text-xs"
-                                      data-testid={`badge-recipient-${idx}`}
-                                    >
-                                      {recipient.signedAt && <Check className="w-3 h-3 mr-1" />}
-                                      {recipient.name}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* Show Cancel button for non-completed, non-cancelled requests */}
-                        {(request.status === 'draft' || request.status === 'pending' || request.status === 'partially_signed') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCancelClick(request.id);
-                            }}
-                            data-testid={`button-cancel-${request.id}`}
-                          >
-                            <X className="w-4 h-4 mr-1" />
-                            Cancel
-                          </Button>
-                        )}
-                        {client?.id && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocation(`/clients/${client.id}`);
-                            }}
-                            data-testid={`button-view-${request.id}`}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <>
+            {isMobile ? (
+              // Mobile card view
+              <div>
+                {requests.map((item: any) => (
+                  <SignatureRequestRow
+                    key={item.signatureRequest.id}
+                    item={item}
+                    onCancelClick={handleCancelClick}
+                    onViewClick={handleViewClick}
+                  />
+                ))}
+              </div>
+            ) : (
+              // Desktop table view
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Document Name</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Signees</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Created By</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {requests.map((item: any) => (
+                      <SignatureRequestRow
+                        key={item.signatureRequest.id}
+                        item={item}
+                        onCancelClick={handleCancelClick}
+                        onViewClick={handleViewClick}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
         )}
       </main>
 
