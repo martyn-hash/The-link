@@ -56,13 +56,27 @@ function isSessionExpired(sessionLastActive: Date | string | null): boolean {
  * Helper function to extract IP address from request
  */
 function getClientIp(req: any): string {
-  return (
-    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-    req.ip ||
-    req.connection?.remoteAddress ||
-    req.socket?.remoteAddress ||
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  const reqIp = req.ip;
+  const connectionIp = req.connection?.remoteAddress;
+  const socketIp = req.socket?.remoteAddress;
+  
+  // Debug logging to see what we're getting
+  console.log('[IP Debug] x-forwarded-for:', xForwardedFor);
+  console.log('[IP Debug] req.ip:', reqIp);
+  console.log('[IP Debug] connection.remoteAddress:', connectionIp);
+  console.log('[IP Debug] socket.remoteAddress:', socketIp);
+  
+  const clientIp = (
+    xForwardedFor?.split(',')[0]?.trim() ||
+    reqIp ||
+    connectionIp ||
+    socketIp ||
     "unknown"
   );
+  
+  console.log('[IP Debug] Final IP:', clientIp);
+  return clientIp;
 }
 
 /**
