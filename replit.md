@@ -11,6 +11,22 @@ Preferred communication style: Simple, everyday language.
 ### UI/UX
 The application features a modern SaaS aesthetic inspired by Linear, Stripe, and Notion. It utilizes a brand palette with specific blues, greens, purple, and yellow, a light gray background, and the DM Sans font family. Design principles include increased spacing for airiness, soft modern shadows, and a 1rem border-radius for cards. Components like buttons, tabs, cards, forms, and tables have been modernized with consistent styling, including rounded shapes, semibold weights, and smooth transitions. The design is mobile-first and responsive.
 
+#### Phase 3 UI Pattern (Approved November 2025)
+The application follows a consistent layout pattern across all pages:
+
+**Page Structure:**
+- Header blocks: `<div className="border-b border-border bg-card"><div className="page-container py-6 md:py-8">...</div></div>`
+- Body regions: `<div className="page-container py-6 md:py-8 space-y-8">...</div>`
+- Tab-based layouts: `<TabsContent className="space-y-8"><div className="page-container py-6 md:py-8">...</div></TabsContent>`
+
+**Typography Standards:**
+- Primary headings: `text-2xl md:text-3xl font-semibold tracking-tight`
+- Subtitles: `text-meta mt-1`
+
+**Spacing Standards:**
+- Vertical rhythm: `space-y-8` for main sections, `gap-6` for grids
+- Responsive padding: `py-6 md:py-8` for page-level containers
+
 ### Frontend
 The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for styling.
 
