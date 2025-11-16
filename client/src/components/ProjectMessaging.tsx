@@ -424,7 +424,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                           className="rounded-lg p-4 bg-card border border-border shadow-sm"
                         >
                           <div 
-                            className="text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary"
+                            className="text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-p:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-border prose-td:p-2"
                             dangerouslySetInnerHTML={{ 
                               __html: DOMPurify.sanitize(message.content, {
                                 ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
