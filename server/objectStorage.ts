@@ -354,6 +354,17 @@ export class ObjectStorageService {
   }
 
   /**
+   * Static method to generate a signed download URL for an object
+   * @param objectPath Normalized object path (e.g., /objects/uploads/<id>)
+   * @param ttlSec Time-to-live in seconds (default: 900 = 15 minutes)
+   * @returns Signed URL string
+   */
+  static async generateSignedUrl(objectPath: string, ttlSec: number = 900): Promise<string> {
+    const service = new ObjectStorageService();
+    return service.getSignedDownloadURL(objectPath, ttlSec);
+  }
+
+  /**
    * Downloads an object from storage into a Buffer
    * Enforces ACL checks via getObjectEntityFile
    * @param objectPath Normalized object path (e.g., /objects/signed-documents/...)

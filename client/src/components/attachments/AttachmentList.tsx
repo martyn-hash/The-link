@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { DocumentPreviewDialog } from './DocumentPreviewDialog';
+import { AttachmentPreview, type AttachmentData } from './AttachmentPreview';
 
 interface Attachment {
   fileName: string;
@@ -190,56 +190,17 @@ export function AttachmentList({
         );
       })}
 
-      {/* Preview Dialog */}
+      {/* Preview Dialog - Use unified AttachmentPreview for all file types */}
       {previewFile && (
-        <>
-          {/* Use inline dialog for images and PDFs */}
-          {(previewFile.attachment.fileType.startsWith('image/') || previewFile.attachment.fileType === 'application/pdf') ? (
-            <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <div className="flex items-center justify-between">
-                    <DialogTitle className="flex-1 truncate pr-4">{previewFile.attachment.fileName}</DialogTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownload(previewFile.attachment)}
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download
-                    </Button>
-                  </div>
-                </DialogHeader>
-                <div className="mt-4">
-                  {previewFile.attachment.fileType.startsWith('image/') ? (
-                    <div className="flex justify-center bg-muted/20 rounded p-4">
-                      <img
-                        src={previewFile.url}
-                        alt={previewFile.attachment.fileName}
-                        className="max-w-full max-h-[70vh] object-contain rounded"
-                      />
-                    </div>
-                  ) : (
-                    <iframe
-                      src={previewFile.url}
-                      className="w-full h-[70vh] border-0 rounded-lg"
-                      title={previewFile.attachment.fileName}
-                    />
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          ) : (
-            /* Use DocumentPreviewDialog for Word and Excel files */
-            <DocumentPreviewDialog
-              open={!!previewFile}
-              onOpenChange={() => setPreviewFile(null)}
-              fileName={previewFile.attachment.fileName}
-              fileUrl={previewFile.url}
-              fileType={previewFile.attachment.fileType}
-            />
-          )}
-        </>
+        <AttachmentPreview
+          attachment={{
+            ...previewFile.attachment,
+            url: previewFile.url, // Pass the resolved URL for previews/downloads
+            threadId,
+          } as AttachmentData}
+          onClose={() => setPreviewFile(null)}
+          open={!!previewFile}
+        />
       )}
     </div>
   );

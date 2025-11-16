@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "../objectStorage";
 import { sendPushNotificationToMultiple, type PushNotificationPayload } from "../push-service";
 import { validateFileUpload, MAX_FILE_SIZE } from "../utils/fileValidation";
 import { createDocumentsFromAttachments } from "../utils/documentHelpers";
@@ -14,6 +14,7 @@ import {
   paramPersonIdSchema,
   validateParams,
 } from "./routeHelpers";
+import { convertOfficeToPDF, getCacheKey, isConvertibleOfficeDoc } from "../utils/documentConverter";
 
 // Communications parameter validation schemas
 const paramCommunicationIdSchema = z.object({
@@ -1287,6 +1288,91 @@ export function registerMessageRoutes(
     } catch (error) {
       console.error("Error serving project message attachment:", error);
       res.status(500).json({ message: "Failed to serve attachment" });
+    }
+  });
+
+  // Convert Office documents to PDF for preview
+  app.post("/api/internal/project-messages/convert-to-pdf", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { objectPath, fileName, threadId } = req.body;
+
+      if (!objectPath || !fileName || !threadId) {
+        return res.status(400).json({ message: "objectPath, fileName, and threadId are required" });
+      }
+
+      // Verify thread access
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some(p => p.userId === effectiveUserId);
+
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+
+      // Check if file is convertible
+      if (!isConvertibleOfficeDoc(fileName)) {
+        return res.status(400).json({ message: "File type not supported for conversion" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const cacheKey = getCacheKey(objectPath);
+      const cachedPdfPath = `/objects/${cacheKey}`;
+
+      // Check if converted PDF exists in cache
+      try {
+        const cachedUrl = await ObjectStorageService.generateSignedUrl(cachedPdfPath, 3600);
+        console.log(`[ConvertToPDF] Cache hit for ${fileName}`);
+        return res.json({ pdfUrl: cachedUrl, cached: true });
+      } catch (error) {
+        // Cache miss, proceed with conversion
+        console.log(`[ConvertToPDF] Cache miss for ${fileName}, converting...`);
+      }
+
+      // Download original Office document
+      const originalBuffer = await objectStorageService.downloadObjectToBuffer(objectPath);
+
+      // Convert to PDF
+      const pdfBuffer = await convertOfficeToPDF(originalBuffer, fileName);
+
+      // Upload converted PDF to cache in object storage
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const fullCachePath = `${privateDir}/${cacheKey}`;
+
+      // Parse bucket and object name from full path
+      const pathParts = fullCachePath.split("/").filter(p => p);
+      const bucketName = pathParts[0];
+      const objectName = pathParts.slice(1).join("/");
+
+      const bucket = objectStorageClient.bucket(bucketName);
+      const pdfFile = bucket.file(objectName);
+
+      await pdfFile.save(pdfBuffer, {
+        contentType: 'application/pdf',
+        metadata: {
+          contentType: 'application/pdf',
+          originalPath: objectPath,
+          convertedAt: new Date().toISOString(),
+        },
+      });
+
+      console.log(`[ConvertToPDF] Converted and cached ${fileName} (${(pdfBuffer.length / 1024).toFixed(1)} KB)`);
+
+      // Generate signed URL for the cached PDF
+      const pdfUrl = await ObjectStorageService.generateSignedUrl(cachedPdfPath, 3600);
+
+      res.json({ pdfUrl, cached: false });
+
+    } catch (error) {
+      console.error("Error converting document to PDF:", error);
+      res.status(500).json({ 
+        message: "Failed to convert document", 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
