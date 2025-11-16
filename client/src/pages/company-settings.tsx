@@ -283,169 +283,174 @@ export default function CompanySettingsPage() {
         </div>
       </div>
 
-      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">
+      <div className="w-full py-6 md:py-8 space-y-8">
 
-        {/* Email Settings Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Settings</CardTitle>
-            <CardDescription>
-              Configure how emails are sent to clients from the system
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="firm-name">Firm Name</Label>
-              <Input
-                id="firm-name"
-                data-testid="input-firm-name"
-                type="text"
-                value={firmName}
-                onChange={(e) => setFirmName(e.target.value)}
-                placeholder="The Link"
-                disabled={settingsLoading || updateSettingsMutation.isPending}
-              />
-              <p className="text-sm text-muted-foreground">
-                Your firm's name used in legal consent text and document signatures
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email-sender-name">Email Sender Name</Label>
-              <Input
-                id="email-sender-name"
-                data-testid="input-email-sender-name"
-                type="text"
-                value={emailSenderName}
-                onChange={(e) => setEmailSenderName(e.target.value)}
-                placeholder="The Link Team"
-                disabled={settingsLoading || updateSettingsMutation.isPending}
-              />
-              <p className="text-sm text-muted-foreground">
-                This name will appear in the 'From' field of all email notifications sent to clients
-              </p>
-            </div>
-
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim() || !firmName.trim()}
-                data-testid="button-save-company-settings"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Company Logo Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ImageIcon className="w-5 h-5" />
-              Company Logo
-            </CardTitle>
-            <CardDescription>
-              Upload your company logo to display on e-signature certificates
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {logoPreviewUrl && (
-              <div className="flex items-start gap-4 p-4 border rounded-lg bg-muted/30">
-                <div className="flex-shrink-0">
-                  <img 
-                    src={logoPreviewUrl} 
-                    alt="Company logo" 
-                    className="max-w-[200px] max-h-[120px] object-contain border border-border rounded"
-                  />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <p className="text-sm font-medium">Current Logo</p>
-                  <p className="text-sm text-muted-foreground">
-                    This logo will appear at the top of all signature certificates
-                  </p>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDeleteLogo}
-                    disabled={deleteLogoMutation.isPending}
-                    data-testid="button-delete-logo"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    {deleteLogoMutation.isPending ? "Deleting..." : "Delete Logo"}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="logo-upload">{logoPreviewUrl ? "Replace Logo" : "Upload Logo"}</Label>
-              <div className="flex items-center gap-4">
+        {/* Centered Form Cards */}
+        <div className="page-container space-y-8">
+          {/* Email Settings Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Settings</CardTitle>
+              <CardDescription>
+                Configure how emails are sent to clients from the system
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="firm-name">Firm Name</Label>
                 <Input
-                  id="logo-upload"
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoFileChange}
-                  disabled={uploadLogoMutation.isPending}
-                  data-testid="input-logo-upload"
-                  className="cursor-pointer"
+                  id="firm-name"
+                  data-testid="input-firm-name"
+                  type="text"
+                  value={firmName}
+                  onChange={(e) => setFirmName(e.target.value)}
+                  placeholder="The Link"
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
                 />
-                {uploadLogoMutation.isPending && (
-                  <span className="text-sm text-muted-foreground">Uploading...</span>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Upload a PNG or JPG image. Maximum file size: 5MB. Recommended size: 300x150px
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Push Notifications Settings Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="w-5 h-5" />
-              Push Notifications
-            </CardTitle>
-            <CardDescription>
-              Control whether push notifications are sent to clients
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between space-x-4">
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="push-notifications-enabled">Enable Push Notifications</Label>
                 <p className="text-sm text-muted-foreground">
-                  When enabled, the system will schedule and send push notifications to clients. Turn off until clients are using the portal to avoid unnecessary notifications.
+                  Your firm's name used in legal consent text and document signatures
                 </p>
               </div>
-              <Switch
-                id="push-notifications-enabled"
-                data-testid="switch-push-notifications-enabled"
-                checked={pushNotificationsEnabled}
-                onCheckedChange={setPushNotificationsEnabled}
-                disabled={settingsLoading || updateSettingsMutation.isPending}
-              />
-            </div>
 
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
-                data-testid="button-save-push-settings"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="space-y-2">
+                <Label htmlFor="email-sender-name">Email Sender Name</Label>
+                <Input
+                  id="email-sender-name"
+                  data-testid="input-email-sender-name"
+                  type="text"
+                  value={emailSenderName}
+                  onChange={(e) => setEmailSenderName(e.target.value)}
+                  placeholder="The Link Team"
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+                <p className="text-sm text-muted-foreground">
+                  This name will appear in the 'From' field of all email notifications sent to clients
+                </p>
+              </div>
 
-        {/* Post-Signature Redirect URLs Card */}
-        <Card>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim() || !firmName.trim()}
+                  data-testid="button-save-company-settings"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Company Logo Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="w-5 h-5" />
+                Company Logo
+              </CardTitle>
+              <CardDescription>
+                Upload your company logo to display on e-signature certificates
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {logoPreviewUrl && (
+                <div className="flex items-start gap-4 p-4 border rounded-lg bg-muted/30">
+                  <div className="flex-shrink-0">
+                    <img 
+                      src={logoPreviewUrl} 
+                      alt="Company logo" 
+                      className="max-w-[200px] max-h-[120px] object-contain border border-border rounded"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-medium">Current Logo</p>
+                    <p className="text-sm text-muted-foreground">
+                      This logo will appear at the top of all signature certificates
+                    </p>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDeleteLogo}
+                      disabled={deleteLogoMutation.isPending}
+                      data-testid="button-delete-logo"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      {deleteLogoMutation.isPending ? "Deleting..." : "Delete Logo"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="logo-upload">{logoPreviewUrl ? "Replace Logo" : "Upload Logo"}</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="logo-upload"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoFileChange}
+                    disabled={uploadLogoMutation.isPending}
+                    data-testid="input-logo-upload"
+                    className="cursor-pointer"
+                  />
+                  {uploadLogoMutation.isPending && (
+                    <span className="text-sm text-muted-foreground">Uploading...</span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upload a PNG or JPG image. Maximum file size: 5MB. Recommended size: 300x150px
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Push Notifications Settings Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="w-5 h-5" />
+                Push Notifications
+              </CardTitle>
+              <CardDescription>
+                Control whether push notifications are sent to clients
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="push-notifications-enabled">Enable Push Notifications</Label>
+                  <p className="text-sm text-muted-foreground">
+                    When enabled, the system will schedule and send push notifications to clients. Turn off until clients are using the portal to avoid unnecessary notifications.
+                  </p>
+                </div>
+                <Switch
+                  id="push-notifications-enabled"
+                  data-testid="switch-push-notifications-enabled"
+                  checked={pushNotificationsEnabled}
+                  onCheckedChange={setPushNotificationsEnabled}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                  data-testid="button-save-push-settings"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Full-Width Table Section */}
+        <div className="px-4 md:px-6 lg:px-8">
+          {/* Post-Signature Redirect URLs Card */}
+          <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Link2 className="w-5 h-5" />
@@ -559,6 +564,7 @@ export default function CompanySettingsPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     </>
   );
