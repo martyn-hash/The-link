@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -14,9 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { X, Check } from 'lucide-react';
+import { X, Check, Paperclip, File as FileIcon, Table as TableIcon } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface User {
   id: string;
@@ -51,6 +52,10 @@ export default function NewProjectThreadModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [initialMessage, setInitialMessage] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const quillRef = useRef<any>(null);
 
   // Fetch all users for participant selection
   const { data: allUsers } = useQuery<User[]>({
@@ -66,14 +71,65 @@ export default function NewProjectThreadModal({
     user?.id,
   ].filter(Boolean));
 
+  // Upload files to object storage with improved error handling
+  const uploadFiles = async (threadId: string, files: File[]) => {
+    const uploadedAttachments = [];
+    const errors: string[] = [];
+
+    for (const file of files) {
+      try {
+        const uploadUrlResponse = await apiRequest('POST', '/api/internal/project-messages/attachments/upload-url', {
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          threadId: threadId,
+        });
+
+        const { url, objectPath } = uploadUrlResponse as any;
+
+        const uploadResponse = await fetch(url, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type,
+          },
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed with status ${uploadResponse.status}`);
+        }
+
+        uploadedAttachments.push({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          objectPath,
+        });
+      } catch (error) {
+        const errorMessage = `Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        console.error(errorMessage);
+        errors.push(errorMessage);
+      }
+    }
+
+    if (errors.length > 0) {
+      setUploadErrors(errors);
+      if (uploadedAttachments.length === 0) {
+        throw new Error('All file uploads failed');
+      }
+    }
+
+    return uploadedAttachments;
+  };
+
   // Create thread mutation
   const createThreadMutation = useMutation({
-    mutationFn: async (data: { topic: string; participantUserIds: string[]; initialMessage: string }) => {
+    mutationFn: async (data: { topic: string; participantUserIds: string[]; initialMessage: string; attachments?: any[] }) => {
       return await apiRequest('POST', '/api/internal/project-messages/threads', {
         projectId: project.id,
         topic: data.topic,
         participantUserIds: data.participantUserIds,
-        initialMessage: data.initialMessage ? { content: data.initialMessage } : null,
+        initialMessage: data.initialMessage ? { content: data.initialMessage, attachments: data.attachments } : null,
       });
     },
     onSuccess: () => {
@@ -99,10 +155,13 @@ export default function NewProjectThreadModal({
     setSearchTerm('');
     setInitialMessage('');
     setShowSearchResults(false);
+    setSelectedFiles([]);
+    setUploadingFiles(false);
+    setUploadErrors([]);
     onOpenChange(false);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!topic.trim()) {
       toast({
         title: "Topic required",
@@ -121,20 +180,119 @@ export default function NewProjectThreadModal({
       return;
     }
 
-    if (!initialMessage.trim()) {
+    // Validate message content - check for text, tables, images, or any meaningful content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(initialMessage, 'text/html');
+    const textContent = (doc.body.textContent || '').trim();
+    const hasTables = doc.querySelectorAll('table').length > 0;
+    const hasImages = doc.querySelectorAll('img').length > 0;
+    const hasLists = doc.querySelectorAll('ul, ol').length > 0;
+    const hasContent = textContent.length > 0 || hasTables || hasImages || hasLists;
+    
+    if (!hasContent && selectedFiles.length === 0) {
       toast({
         title: "Message required",
-        description: "Please enter an initial message for the thread",
+        description: "Please enter an initial message or attach files",
         variant: "destructive",
       });
       return;
     }
 
-    createThreadMutation.mutate({
-      topic: topic.trim(),
-      participantUserIds: selectedParticipants,
-      initialMessage: initialMessage.trim(),
+    // Sanitize HTML content before sending - include all table-related attributes
+    // NOTE: style attribute removed for security (prevents XSS via background-image:url(javascript:...))
+    const sanitizedMessage = DOMPurify.sanitize(initialMessage, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+      ALLOWED_ATTR: ['href', 'target', 'class', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+      FORBID_ATTR: ['style', 'onerror', 'onload'],
     });
+
+    try {
+      setUploadingFiles(true);
+      setUploadErrors([]);
+
+      if (selectedFiles.length > 0) {
+        // Step 1: Create the thread WITHOUT an initial message
+        const threadResponse = await apiRequest('POST', '/api/internal/project-messages/threads', {
+          projectId: project.id,
+          topic: topic.trim(),
+          participantUserIds: selectedParticipants,
+        }) as any;
+
+        const threadId = threadResponse.id;
+
+        // Step 2: Upload files using the thread ID
+        const attachments = await uploadFiles(threadId, selectedFiles);
+
+        // Step 3: Send the initial message with attachments
+        // Ensure fallback text is also safe (no HTML)
+        const messageContent = sanitizedMessage || '<p>(Attachment)</p>';
+        await apiRequest('POST', `/api/internal/project-messages/threads/${threadId}/messages`, {
+          content: messageContent,
+          attachments: attachments,
+        });
+
+        // Step 4: Invalidate queries, show toast, and close
+        queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', project.id] });
+        toast({
+          title: "Thread created",
+          description: "The conversation thread has been created with your message.",
+        });
+        handleClose();
+      } else {
+        // No files to upload - use existing behavior
+        createThreadMutation.mutate({
+          topic: topic.trim(),
+          participantUserIds: selectedParticipants,
+          initialMessage: sanitizedMessage || '(Attachment)',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Failed to create thread",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (selectedFiles.length + files.length > 5) {
+      toast({
+        title: "Too many files",
+        description: "You can only attach up to 5 files per message",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validFiles = files.filter(file => {
+      const isValid = file.size <= 25 * 1024 * 1024; // 25MB limit
+      if (!isValid) {
+        toast({
+          title: "File too large",
+          description: `${file.name} exceeds 25MB limit`,
+          variant: "destructive",
+        });
+      }
+      return isValid;
+    });
+
+    setSelectedFiles(prev => [...prev, ...validFiles]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   const getUserDisplayName = (user: User) => {
@@ -168,17 +326,37 @@ export default function NewProjectThreadModal({
     return getUserDisplayName(a).localeCompare(getUserDisplayName(b));
   });
 
+  // ReactQuill modules configuration
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      ['link'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'align': [] }],
+      ['clean']
+    ],
+  };
+
+  const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike',
+    'list', 'bullet', 'indent',
+    'link',
+    'color', 'background',
+    'align'
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" data-testid="dialog-new-thread">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col" data-testid="dialog-new-thread">
         <DialogHeader>
           <DialogTitle>New Conversation Thread</DialogTitle>
-          <DialogDescription>
-            Create a new conversation thread for this project. Add staff members and send your first message.
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 flex-1 overflow-y-auto">
           {/* Topic Input */}
           <div className="space-y-2">
             <Label htmlFor="topic">Topic</Label>
@@ -289,14 +467,93 @@ export default function NewProjectThreadModal({
           {/* Initial Message */}
           <div className="space-y-2">
             <Label htmlFor="message">Initial Message</Label>
-            <Textarea
-              id="message"
-              value={initialMessage}
-              onChange={(e) => setInitialMessage(e.target.value)}
-              placeholder="Type your first message..."
-              className="min-h-[100px]"
-              data-testid="input-initial-message"
-            />
+            <div className="border rounded-md" data-testid="editor-initial-message">
+              <ReactQuill
+                ref={quillRef}
+                theme="snow"
+                value={initialMessage}
+                onChange={setInitialMessage}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="Type or paste your message here. You can paste tables, formatted text, and content from Word or Outlook..."
+                className="bg-background"
+                style={{ minHeight: '250px' }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tip: Paste tables and formatted content directly from Word or Outlook. The editor supports rich text formatting including bold, italic, lists, colors, and more.
+            </p>
+          </div>
+
+          {/* File Attachments */}
+          <div className="space-y-2">
+            <Label>Attachments</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => document.getElementById('file-upload')?.click()}
+                disabled={selectedFiles.length >= 5}
+                data-testid="button-attach-file"
+              >
+                <Paperclip className="w-4 h-4 mr-2" />
+                Attach Files
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {selectedFiles.length}/5 files (25MB max each)
+              </span>
+              <input
+                id="file-upload"
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+                accept="image/*,.pdf,audio/*,.doc,.docx,.xls,.xlsx,.txt,.csv"
+              />
+            </div>
+            
+            {selectedFiles.length > 0 && (
+              <div className="space-y-2 mt-2">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-muted rounded-md"
+                    data-testid={`attachment-${index}`}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <FileIcon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveFile(index)}
+                      data-testid={`button-remove-attachment-${index}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {uploadErrors.length > 0 && (
+              <div className="mt-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm font-medium text-destructive mb-1">Upload warnings:</p>
+                <ul className="text-xs text-destructive space-y-1">
+                  {uploadErrors.map((error, index) => (
+                    <li key={index}>• {error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -310,10 +567,10 @@ export default function NewProjectThreadModal({
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={createThreadMutation.isPending || !topic.trim() || selectedParticipants.length === 0 || !initialMessage.trim()}
+            disabled={createThreadMutation.isPending || uploadingFiles || !topic.trim() || selectedParticipants.length === 0}
             data-testid="button-create"
           >
-            {createThreadMutation.isPending ? 'Creating...' : 'Create Thread'}
+            {uploadingFiles ? 'Uploading...' : createThreadMutation.isPending ? 'Creating...' : 'Create Thread'}
           </Button>
         </DialogFooter>
       </DialogContent>

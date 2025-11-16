@@ -28,6 +28,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import NewProjectThreadModal from '@/components/NewProjectThreadModal';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface ProjectMessageThread {
   id: string;
@@ -426,13 +427,22 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                               : 'bg-muted'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          <div 
+                            className="text-sm prose prose-sm max-w-none break-words"
+                            dangerouslySetInnerHTML={{ 
+                              __html: DOMPurify.sanitize(message.content, {
+                                ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+                                ALLOWED_ATTR: ['href', 'target', 'class', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+                                FORBID_ATTR: ['style', 'onerror', 'onload', 'contenteditable'],
+                              })
+                            }}
+                            data-testid="message-content"
+                          />
                           {message.attachments && message.attachments.length > 0 && (
                             <div className="mt-2">
                               <AttachmentList
                                 attachments={message.attachments}
-                                threadId={selectedThreadId}
-                                pathPrefix="/api/internal/project-messages/attachments"
+                                readonly={true}
                               />
                             </div>
                           )}

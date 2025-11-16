@@ -103,6 +103,7 @@
     "pdfjs-dist": "^5.4.394",
     "qrcode": "^1.5.4",
     "quill": "^2.0.3",
+    "quill-better-table": "^1.2.10",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",

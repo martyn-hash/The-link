@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -928,7 +928,7 @@ export default function ProjectDetail() {
                                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                       {task.assignedTo && (
                                         <div className="flex items-center gap-1" data-testid={`text-assigned-${task.id}`}>
-                                          <User className="w-3 h-3" />
+                                          <UserIcon className="w-3 h-3" />
                                           <span>{task.assignedTo.firstName} {task.assignedTo.lastName}</span>
                                         </div>
                                       )}
