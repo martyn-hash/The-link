@@ -2,8 +2,7 @@
 import { useParams, Link as RouterLink, useLocation } from "wouter";
 import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/TiptapEditor';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
@@ -317,24 +316,6 @@ type CommunicationWithRelations = Communication & {
   user: User;
 };
 
-// Quill editor configuration for email
-const emailEditorModules = {
-  toolbar: [
-    [{ 'header': [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline'],
-    [{ 'color': [] }, { 'background': [] }],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    [{ 'align': [] }],
-    ['link'],
-    ['clean']
-  ],
-};
-
-const emailEditorFormats = [
-  'header', 'bold', 'italic', 'underline',
-  'color', 'background', 'list', 'bullet',
-  'align', 'link'
-];
 
 // Project Link Component - displays project name with link
 function ProjectLink({ projectId }: { projectId: string }) {
@@ -1389,29 +1370,15 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             
             <div className="space-y-2">
               <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
-              <ResizablePanelGroup direction="vertical" className="min-h-[300px] border rounded-md">
-                <ResizablePanel defaultSize={100} minSize={40}>
-                  <div data-testid="input-email-content-editor" className="h-full p-0">
-                    <ReactQuill
-                      value={emailContent}
-                      onChange={setEmailContent}
-                      modules={emailEditorModules}
-                      formats={emailEditorFormats}
-                      theme="snow"
-                      placeholder="Enter your email message..."
-                      className="h-full"
-                      style={{ height: '100%' }}
-                    />
-                  </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={0} minSize={0} className="bg-muted/20">
-                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                    Drag to resize editor
-                  </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
-              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address • Drag the handle above to resize editor height</p>
+              <div data-testid="input-email-content-editor">
+                <TiptapEditor
+                  content={emailContent}
+                  onChange={setEmailContent}
+                  placeholder="Enter your email message..."
+                  editorHeight="300px"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
             </div>
             
             <div className="flex justify-end gap-2">

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/TiptapEditor';
 import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -778,22 +777,12 @@ function ProjectNotificationForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <div data-testid="richtext-email-body" style={{ minHeight: '300px' }}>
-                <ReactQuill
-                  value={emailBody}
+              <div data-testid="richtext-email-body">
+                <TiptapEditor
+                  content={emailBody}
                   onChange={setEmailBody}
-                  theme="snow"
                   placeholder="Enter email body"
-                  style={{ height: '250px', marginBottom: '42px' }}
-                  modules={{
-                    toolbar: [
-                      [{ 'header': [1, 2, 3, false] }],
-                      ['bold', 'italic', 'underline', 'strike'],
-                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                      ['link'],
-                      ['clean']
-                    ]
-                  }}
+                  editorHeight="250px"
                 />
               </div>
             </div>
@@ -1001,22 +990,12 @@ function StageNotificationForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <div data-testid="richtext-stage-email-body" style={{ minHeight: '300px' }}>
-                <ReactQuill
-                  value={emailBody}
+              <div data-testid="richtext-stage-email-body">
+                <TiptapEditor
+                  content={emailBody}
                   onChange={setEmailBody}
-                  theme="snow"
                   placeholder="Enter email body"
-                  style={{ height: '250px', marginBottom: '42px' }}
-                  modules={{
-                    toolbar: [
-                      [{ 'header': [1, 2, 3, false] }],
-                      ['bold', 'italic', 'underline', 'strike'],
-                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                      ['link'],
-                      ['clean']
-                    ]
-                  }}
+                  editorHeight="250px"
                 />
               </div>
             </div>
@@ -1357,22 +1336,12 @@ function ReminderForm({
             </div>
             <div className="space-y-2">
               <Label>Email Body</Label>
-              <div data-testid="richtext-reminder-email-body" style={{ minHeight: '300px' }}>
-                <ReactQuill
-                  value={emailBody}
+              <div data-testid="richtext-reminder-email-body">
+                <TiptapEditor
+                  content={emailBody}
                   onChange={setEmailBody}
-                  theme="snow"
                   placeholder="Enter email body"
-                  style={{ height: '250px', marginBottom: '42px' }}
-                  modules={{
-                    toolbar: [
-                      [{ 'header': [1, 2, 3, false] }],
-                      ['bold', 'italic', 'underline', 'strike'],
-                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                      ['link'],
-                      ['clean']
-                    ]
-                  }}
+                  editorHeight="250px"
                 />
               </div>
             </div>

@@ -3,12 +3,12 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { Underline } from '@tiptap/extension-underline';
-import { Link } from '@tiptap/extension-link';
 
 /**
  * Standard Tiptap extensions for rich text editing with table support
  * Used across all editor instances in the application
+ * 
+ * Note: Link and Underline are already included in StarterKit, so we don't need to import them separately
  */
 export const getTiptapExtensions = (): Extensions => [
   StarterKit.configure({
@@ -24,13 +24,6 @@ export const getTiptapExtensions = (): Extensions => [
   }),
   TextStyle,
   Color,
-  Underline,
-  Link.configure({
-    openOnClick: false,
-    HTMLAttributes: {
-      class: 'text-primary underline',
-    },
-  }),
 ];
 
 /**

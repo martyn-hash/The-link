@@ -33,8 +33,7 @@ import {
 
 // Icons
 import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3, Phone } from "lucide-react";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 // Zod schemas
 const profileUpdateSchema = insertUserSchema.pick({
@@ -1012,29 +1011,12 @@ export default function Profile() {
                 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Signature Content</Label>
-                  <div className="border rounded-md" data-testid="editor-email-signature">
-                    <ReactQuill
-                      value={emailSignature}
+                  <div data-testid="editor-email-signature">
+                    <TiptapEditor
+                      content={emailSignature}
                       onChange={setEmailSignature}
-                      theme="snow"
                       placeholder="Enter your email signature..."
-                      style={{ minHeight: '200px' }}
-                      modules={{
-                        toolbar: [
-                          [{ 'header': [1, 2, 3, false] }],
-                          ['bold', 'italic', 'underline'],
-                          [{ 'color': [] }, { 'background': [] }],
-                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                          [{ 'align': [] }],
-                          ['link', 'image'],
-                          ['clean']
-                        ],
-                      }}
-                      formats={[
-                        'header', 'bold', 'italic', 'underline',
-                        'color', 'background', 'list', 'bullet',
-                        'align', 'link', 'image'
-                      ]}
+                      editorHeight="200px"
                     />
                   </div>
                 </div>
