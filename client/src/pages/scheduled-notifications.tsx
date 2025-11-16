@@ -342,33 +342,41 @@ export default function ScheduledNotificationsPage() {
   return (
     <>
       <TopNavigation user={user} />
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <Breadcrumb className="mb-2">
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink href="/">Home</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Scheduled Notifications</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-            <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <CalendarClock className="w-8 h-8" />
-              Scheduled Notifications
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage upcoming client notifications
-            </p>
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <Breadcrumb className="mb-4">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Scheduled Notifications</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="text-page-title">
+                <CalendarClock className="w-6 h-6 md:w-7 md:h-7" />
+                Scheduled Notifications
+              </h1>
+              <p className="text-meta mt-1">
+                Manage upcoming client notifications
+              </p>
+            </div>
+            <Button onClick={() => refetch()} variant="outline" data-testid="button-refresh">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
           </div>
-          <Button onClick={() => refetch()} variant="outline" data-testid="button-refresh">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
         </div>
+      </div>
+
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">
 
         {/* Filters Section */}
         <Card>

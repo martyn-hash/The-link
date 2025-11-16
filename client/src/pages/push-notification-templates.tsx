@@ -245,15 +245,19 @@ export default function PushNotificationTemplates() {
     <div className="flex flex-col min-h-screen bg-background dark:bg-background">
       <TopNavigation />
       
-      <main className="flex-1 max-w-7xl mx-auto w-full p-6 space-y-8">
-        <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2" data-testid="text-page-title">Push Notification Templates</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">Push Notification Templates</h1>
+            <p className="text-meta mt-1">
               Customize how push notifications appear for different events. Multiple templates per type are randomly selected for variety.
             </p>
           </div>
         </div>
+      </div>
+
+      <main className="flex-1 w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8 max-w-7xl mx-auto">
 
         <div className="grid gap-6">
           {TEMPLATE_TYPES.map((templateType) => {
