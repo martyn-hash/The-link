@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   MessageCircle,
@@ -28,7 +29,14 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import NewProjectThreadModal from '@/components/NewProjectThreadModal';
+import ReactQuill, { Quill } from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import QuillBetterTable from 'quill-better-table';
+import 'quill-better-table/dist/quill-better-table.css';
 import DOMPurify from 'isomorphic-dompurify';
+
+// Register the better table module
+Quill.register('modules/better-table', QuillBetterTable);
 
 interface ProjectMessageThread {
   id: string;
@@ -87,6 +95,8 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [showNewThreadModal, setShowNewThreadModal] = useState(false);
+  const [notifyImmediately, setNotifyImmediately] = useState(true);
+  const quillRef = useRef<any>(null);
 
   // Check URL for thread parameter (from push notification)
   const urlParams = new URLSearchParams(window.location.search);
@@ -112,10 +122,11 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ content, attachments }: { content: string; attachments?: any }) => {
+    mutationFn: async ({ content, attachments, notifyImmediately }: { content: string; attachments?: any; notifyImmediately?: boolean }) => {
       return await apiRequest('POST', `/api/internal/project-messages/threads/${selectedThreadId}/messages`, {
         content,
         attachments,
+        notifyImmediately,
       });
     },
     onSuccess: () => {
@@ -123,6 +134,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', projectId] });
       setNewMessage('');
       setSelectedFiles([]);
+      setNotifyImmediately(true);
     },
     onError: (error: any) => {
       toast({
@@ -193,7 +205,25 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && selectedFiles.length === 0) return;
+    if (!selectedThreadId) {
+      toast({
+        title: "No thread selected",
+        description: "Please select a thread first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for meaningful content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(newMessage, 'text/html');
+    const textContent = (doc.body.textContent || '').trim();
+    const hasTables = doc.querySelectorAll('table').length > 0;
+    const hasImages = doc.querySelectorAll('img').length > 0;
+    const hasLists = doc.querySelectorAll('ul, ol').length > 0;
+    const hasContent = textContent.length > 0 || hasTables || hasImages || hasLists;
+
+    if (!hasContent && selectedFiles.length === 0) return;
 
     try {
       setUploadingFiles(true);
@@ -203,9 +233,18 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
         attachments = await uploadFiles(selectedFiles);
       }
 
+      // Sanitize HTML content before sending
+      const sanitizedMessage = DOMPurify.sanitize(newMessage, {
+        ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+        ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+        FORBID_ATTR: ['onerror', 'onload', 'contenteditable'],
+        ALLOW_DATA_ATTR: false,
+      });
+
       sendMessageMutation.mutate({
-        content: newMessage.trim() || '(Attachment)',
+        content: sanitizedMessage || '<p>(Attachment)</p>',
         attachments,
+        notifyImmediately,
       });
     } catch (error: any) {
       toast({
@@ -261,6 +300,49 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     }
     return user?.email || 'Unknown User';
   };
+
+  // ReactQuill modules configuration with table support
+  const quillModules = useMemo(() => ({
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link'],
+      [{ 'color': [] }, { 'background': [] }],
+      ['better-table'],
+      ['clean']
+    ],
+    'better-table': {
+      operationMenu: {
+        items: {
+          unmergeCells: { text: 'Unmerge cells' },
+          insertColumnRight: { text: 'Insert column right' },
+          insertColumnLeft: { text: 'Insert column left' },
+          insertRowUp: { text: 'Insert row above' },
+          insertRowDown: { text: 'Insert row below' },
+          mergeCells: { text: 'Merge cells' },
+          deleteColumn: { text: 'Delete column' },
+          deleteRow: { text: 'Delete row' },
+          deleteTable: { text: 'Delete table' }
+        }
+      }
+    },
+    clipboard: {
+      matchVisual: false,
+    },
+    keyboard: {
+      bindings: QuillBetterTable.keyboardBindings
+    }
+  }), []);
+
+  const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike',
+    'list', 'bullet',
+    'link',
+    'color', 'background',
+    'table', 'table-col', 'table-row', 'table-cell', 'table-cell-line'
+  ];
 
   return (
     <>
@@ -440,6 +522,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                               <AttachmentList
                                 attachments={message.attachments}
                                 readonly={true}
+                                threadId={selectedThreadId || undefined}
                               />
                             </div>
                           )}
@@ -453,7 +536,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
 
             {/* Message Composer */}
             <div className="p-4 border-t">
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {selectedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {selectedFiles.map((file, index) => (
@@ -477,21 +560,35 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <Textarea
+                
+                <div className="border rounded-md" data-testid="editor-message">
+                  <ReactQuill
+                    ref={quillRef}
+                    theme="snow"
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
-                    className="min-h-[80px]"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    data-testid="textarea-message"
+                    onChange={setNewMessage}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    placeholder="Type your message with rich text, tables, and formatting..."
+                    className="bg-background"
+                    style={{ minHeight: '150px' }}
                   />
-                  <div className="flex flex-col gap-2">
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="notify-immediately" 
+                        checked={notifyImmediately}
+                        onCheckedChange={(checked) => setNotifyImmediately(checked as boolean)}
+                        data-testid="checkbox-notify-immediately"
+                      />
+                      <Label htmlFor="notify-immediately" className="text-sm cursor-pointer">
+                        Notify colleagues immediately
+                      </Label>
+                    </div>
+
                     <input
                       type="file"
                       multiple
@@ -502,27 +599,34 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                       data-testid="input-file"
                     />
                     <Button
-                      size="icon"
+                      size="sm"
                       variant="outline"
                       disabled={uploadingFiles}
                       onClick={() => document.getElementById('file-upload')?.click()}
                       data-testid="button-attach-file"
                     >
-                      <Paperclip className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      onClick={handleSendMessage}
-                      disabled={sendMessageMutation.isPending || uploadingFiles || (!newMessage.trim() && selectedFiles.length === 0)}
-                      data-testid="button-send"
-                    >
-                      {uploadingFiles ? (
-                        <span className="w-4 h-4 animate-spin">⏳</span>
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
+                      <Paperclip className="w-4 h-4 mr-2" />
+                      Attach
                     </Button>
                   </div>
+
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={sendMessageMutation.isPending || uploadingFiles}
+                    data-testid="button-send"
+                  >
+                    {uploadingFiles ? (
+                      <>
+                        <span className="w-4 h-4 animate-spin mr-2">⏳</span>
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
             </div>

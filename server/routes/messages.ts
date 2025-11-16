@@ -884,12 +884,52 @@ export function registerMessageRoutes(
 
       // If there's an initial message, create it
       if (initialMessage && initialMessage.content) {
-        await storage.createProjectMessage({
+        const message = await storage.createProjectMessage({
           threadId: thread.id,
           content: initialMessage.content,
           userId: effectiveUserId,
           attachments: initialMessage.attachments || null,
         });
+
+        // Send email notifications if notifyImmediately is true
+        if (initialMessage.notifyImmediately) {
+          try {
+            const { sendProjectMessageNotification } = await import('../lib/sendgridClient.js');
+            const sender = await storage.getUser(effectiveUserId);
+            const senderName = sender?.firstName && sender?.lastName
+              ? `${sender.firstName} ${sender.lastName}`
+              : sender?.email || 'Someone';
+            
+            const projectName = project?.projectName || 'Unknown Project';
+            const messagePreview = initialMessage.content.replace(/<[^>]*>/g, '').substring(0, 200);
+            const baseUrl = process.env.REPLIT_DEPLOYMENT ? `https://${process.env.REPLIT_DEPLOYMENT}` : 'http://localhost:5000';
+            const threadUrl = `${baseUrl}/projects/${projectId}?tab=messages&thread=${thread.id}`;
+
+            // Send email to participants except the sender
+            for (const userId of participantUserIds) {
+              if (userId !== effectiveUserId) {
+                const user = await storage.getUser(userId);
+                if (user?.email) {
+                  try {
+                    await sendProjectMessageNotification({
+                      to: user.email,
+                      senderName,
+                      projectName,
+                      threadTopic: topic,
+                      messagePreview,
+                      threadUrl,
+                    });
+                  } catch (emailError) {
+                    console.error(`[SendGrid] Failed to send notification to ${user.email}:`, emailError);
+                  }
+                }
+              }
+            }
+          } catch (sendGridError) {
+            console.error('[SendGrid] Error sending email notifications:', sendGridError);
+            // Don't fail the thread creation if email fails
+          }
+        }
       }
 
       res.status(201).json(thread);
@@ -955,7 +995,7 @@ export function registerMessageRoutes(
   app.post("/api/internal/project-messages/threads/:threadId/messages", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { threadId } = req.params;
-      const { content, attachments } = req.body;
+      const { content, attachments, notifyImmediately = false } = req.body;
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
 
       if (!content) {
@@ -1003,6 +1043,42 @@ export function registerMessageRoutes(
             content,
             url
           );
+
+          // Send email notifications if notifyImmediately is true
+          if (notifyImmediately) {
+            try {
+              const { sendProjectMessageNotification } = await import('../lib/sendgridClient.js');
+              const project = await storage.getProject(thread.projectId);
+              const projectName = project?.projectName || 'Unknown Project';
+              
+              // Extract preview text (remove HTML tags)
+              const messagePreview = content.replace(/<[^>]*>/g, '').substring(0, 200);
+              const baseUrl = process.env.REPLIT_DEPLOYMENT ? `https://${process.env.REPLIT_DEPLOYMENT}` : 'http://localhost:5000';
+              const threadUrl = `${baseUrl}/projects/${thread.projectId}?tab=messages&thread=${threadId}`;
+
+              // Send email to each participant
+              for (const participant of otherParticipants) {
+                const user = await storage.getUser(participant.userId);
+                if (user?.email) {
+                  try {
+                    await sendProjectMessageNotification({
+                      to: user.email,
+                      senderName,
+                      projectName,
+                      threadTopic: thread.topic,
+                      messagePreview,
+                      threadUrl,
+                    });
+                  } catch (emailError) {
+                    console.error(`[SendGrid] Failed to send notification to ${user.email}:`, emailError);
+                  }
+                }
+              }
+            } catch (sendGridError) {
+              console.error('[SendGrid] Error sending email notifications:', sendGridError);
+              // Don't fail the message send if email fails
+            }
+          }
         }
       } catch (pushError) {
         console.error('[Push] Error sending project message notifications:', pushError);

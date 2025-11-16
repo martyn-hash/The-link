@@ -13,11 +13,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { X, Check, Paperclip, File as FileIcon, Table as TableIcon } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import ReactQuill from 'react-quill';
+import ReactQuill, { Quill } from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import QuillBetterTable from 'quill-better-table';
+import 'quill-better-table/dist/quill-better-table.css';
 import DOMPurify from 'isomorphic-dompurify';
+
+// Register the better table module
+Quill.register('modules/better-table', QuillBetterTable);
 
 interface User {
   id: string;
@@ -55,6 +61,7 @@ export default function NewProjectThreadModal({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [notifyImmediately, setNotifyImmediately] = useState(true);
   const quillRef = useRef<any>(null);
 
   // Check if the editor has valid content (text, tables, images, or lists)
@@ -138,12 +145,12 @@ export default function NewProjectThreadModal({
 
   // Create thread mutation
   const createThreadMutation = useMutation({
-    mutationFn: async (data: { topic: string; participantUserIds: string[]; initialMessage: string; attachments?: any[] }) => {
+    mutationFn: async (data: { topic: string; participantUserIds: string[]; initialMessage: { content: string; notifyImmediately?: boolean; attachments?: any[] } }) => {
       return await apiRequest('POST', '/api/internal/project-messages/threads', {
         projectId: project.id,
         topic: data.topic,
         participantUserIds: data.participantUserIds,
-        initialMessage: data.initialMessage ? { content: data.initialMessage, attachments: data.attachments } : null,
+        initialMessage: data.initialMessage,
       });
     },
     onSuccess: () => {
@@ -172,6 +179,7 @@ export default function NewProjectThreadModal({
     setSelectedFiles([]);
     setUploadingFiles(false);
     setUploadErrors([]);
+    setNotifyImmediately(true);
     onOpenChange(false);
   };
 
@@ -244,6 +252,7 @@ export default function NewProjectThreadModal({
         await apiRequest('POST', `/api/internal/project-messages/threads/${threadId}/messages`, {
           content: messageContent,
           attachments: attachments,
+          notifyImmediately,
         });
 
         // Step 4: Reset state, invalidate queries, show toast, and close
@@ -259,7 +268,11 @@ export default function NewProjectThreadModal({
         createThreadMutation.mutate({
           topic: topic.trim(),
           participantUserIds: selectedParticipants,
-          initialMessage: sanitizedMessage || '(Attachment)',
+          initialMessage: {
+            content: sanitizedMessage || '(Attachment)',
+            notifyImmediately,
+            attachments: [],
+          },
         });
       }
     } catch (error: any) {
@@ -341,8 +354,8 @@ export default function NewProjectThreadModal({
     return getUserDisplayName(a).localeCompare(getUserDisplayName(b));
   });
 
-  // ReactQuill modules configuration
-  const quillModules = {
+  // ReactQuill modules configuration with table support
+  const quillModules = useMemo(() => ({
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
       ['bold', 'italic', 'underline', 'strike'],
@@ -351,12 +364,49 @@ export default function NewProjectThreadModal({
       ['link'],
       [{ 'color': [] }, { 'background': [] }],
       [{ 'align': [] }],
+      ['better-table'],
       ['clean']
     ],
+    'better-table': {
+      operationMenu: {
+        items: {
+          unmergeCells: {
+            text: 'Unmerge cells'
+          },
+          insertColumnRight: {
+            text: 'Insert column right'
+          },
+          insertColumnLeft: {
+            text: 'Insert column left'
+          },
+          insertRowUp: {
+            text: 'Insert row above'
+          },
+          insertRowDown: {
+            text: 'Insert row below'
+          },
+          mergeCells: {
+            text: 'Merge cells'
+          },
+          deleteColumn: {
+            text: 'Delete column'
+          },
+          deleteRow: {
+            text: 'Delete row'
+          },
+          deleteTable: {
+            text: 'Delete table'
+          }
+        }
+      }
+    },
     clipboard: {
       matchVisual: false, // Preserve pasted formatting
+    },
+    keyboard: {
+      bindings: QuillBetterTable.keyboardBindings
     }
-  };
+  }), []);
 
   const quillFormats = [
     'header',
@@ -365,7 +415,7 @@ export default function NewProjectThreadModal({
     'link',
     'color', 'background',
     'align',
-    'table', 'table-cell-line' // Add table formats for pasting
+    'table', 'table-col', 'table-row', 'table-cell', 'table-cell-line'
   ];
 
   return (
@@ -575,21 +625,34 @@ export default function NewProjectThreadModal({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            data-testid="button-cancel"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={createThreadMutation.isPending || uploadingFiles || !topic.trim() || selectedParticipants.length === 0 || (!hasValidContent && selectedFiles.length === 0)}
-            data-testid="button-create"
-          >
-            {uploadingFiles ? 'Uploading...' : createThreadMutation.isPending ? 'Creating...' : 'Create Thread'}
-          </Button>
+        <DialogFooter className="flex-col sm:flex-row gap-4">
+          <div className="flex items-center space-x-2 mr-auto">
+            <Checkbox 
+              id="notify-immediately-new-thread" 
+              checked={notifyImmediately}
+              onCheckedChange={(checked) => setNotifyImmediately(checked as boolean)}
+              data-testid="checkbox-notify-immediately"
+            />
+            <Label htmlFor="notify-immediately-new-thread" className="text-sm cursor-pointer">
+              Notify colleagues immediately
+            </Label>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              data-testid="button-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={createThreadMutation.isPending || uploadingFiles || !topic.trim() || selectedParticipants.length === 0 || (!hasValidContent && selectedFiles.length === 0)}
+              data-testid="button-create"
+            >
+              {uploadingFiles ? 'Uploading...' : createThreadMutation.isPending ? 'Creating...' : 'Create Thread'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
