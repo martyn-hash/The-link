@@ -919,7 +919,32 @@ export function registerMessageRoutes(
       }
 
       const messages = await storage.getProjectMessagesByThreadId(threadId);
-      res.json(messages);
+      
+      // Add signed URLs to attachments
+      const messagesWithUrls = await Promise.all(
+        messages.map(async (message) => {
+          if (message.attachments && Array.isArray(message.attachments)) {
+            const attachmentsWithUrls = await Promise.all(
+              message.attachments.map(async (attachment: any) => {
+                if (attachment.objectPath) {
+                  try {
+                    const url = await ObjectStorageService.generateSignedUrl(attachment.objectPath);
+                    return { ...attachment, url };
+                  } catch (error) {
+                    console.error(`Failed to generate signed URL for ${attachment.objectPath}:`, error);
+                    return attachment;
+                  }
+                }
+                return attachment;
+              })
+            );
+            return { ...message, attachments: attachmentsWithUrls };
+          }
+          return message;
+        })
+      );
+      
+      res.json(messagesWithUrls);
     } catch (error) {
       console.error("Error fetching project messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });

@@ -421,14 +421,10 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                           </span>
                         </div>
                         <div
-                          className={`rounded-lg p-3 ${
-                            isOwnMessage
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted'
-                          }`}
+                          className="rounded-lg p-4 bg-card border border-border shadow-sm"
                         >
                           <div 
-                            className="text-sm prose prose-sm max-w-none break-words"
+                            className="text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary"
                             dangerouslySetInnerHTML={{ 
                               __html: DOMPurify.sanitize(message.content, {
                                 ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
