@@ -12,14 +12,13 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, AlertCircle, RefreshCw, List } from "lucide-react";
+import { Plus, AlertCircle, RefreshCw } from "lucide-react";
 import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 
 interface KanbanBoardProps {
   projects: ProjectWithRelations[];
   user: User;
-  onSwitchToList?: () => void;
 }
 
 // Transform user role enum values to display names
@@ -49,7 +48,7 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
   return <div ref={setNodeRef} className="flex-1 min-w-80 h-full">{children}</div>;
 }
 
-export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBoardProps) {
+export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -357,19 +356,6 @@ export default function KanbanBoard({ projects, user, onSwitchToList }: KanbanBo
 
   return (
     <div className="p-6" data-testid="kanban-board">
-      {onSwitchToList && (
-        <div className="mb-4 flex justify-end">
-          <Button
-            variant="outline"
-            onClick={onSwitchToList}
-            data-testid="button-switch-to-list-view"
-            className="gap-2"
-          >
-            <List className="w-4 h-4" />
-            Switch to List View
-          </Button>
-        </div>
-      )}
       <DndContext
         sensors={sensors}
         collisionDetection={customCollisionDetection}

@@ -943,6 +943,20 @@ export default function Projects() {
                 View All Projects
               </Button>
 
+              {/* Switch to List View button - only show in kanban view */}
+              {viewMode === "kanban" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-switch-to-list-view"
+                  className="gap-2"
+                >
+                  <List className="w-4 h-4" />
+                  Switch to List View
+                </Button>
+              )}
+
               {/* Dashboard-specific buttons */}
               {viewMode === "dashboard" && (
                 <>
@@ -1078,6 +1092,20 @@ export default function Projects() {
                 <List className="w-4 h-4" />
               </Button>
 
+              {/* Switch to List View button - only show in kanban view */}
+              {viewMode === "kanban" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-switch-to-list-view-mobile"
+                  className="h-11 px-3 gap-2"
+                >
+                  <List className="w-4 h-4" />
+                  <span className="hidden sm:inline">List View</span>
+                </Button>
+              )}
+
               {/* View Mode Toggle */}
               {isManagerOrAdmin && (
                 <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
@@ -1175,7 +1203,6 @@ export default function Projects() {
                   <KanbanBoard 
                     projects={paginatedProjects} 
                     user={user}
-                    onSwitchToList={() => setViewMode("list")}
                   />
                 ) : (
                   <>
@@ -1280,7 +1307,6 @@ export default function Projects() {
                 <KanbanBoard 
                   projects={paginatedProjects} 
                   user={user}
-                  onSwitchToList={() => setViewMode("list")}
                 />
               ) : (
                 <>
