@@ -72,7 +72,7 @@ export default function TaskSubmissions() {
         </div>
       </div>
 
-      <div className="page-container py-6 md:py-8 space-y-8">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">
 
         {/* Search and Filters */}
         <Card>

@@ -325,7 +325,7 @@ export default function SignatureRequestsPage() {
         </div>
       </div>
 
-      <main className="flex-1 page-container py-6 md:py-8 pb-24 space-y-8">
+      <main className="flex-1 w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 pb-24 space-y-8">
 
         {isLoading ? (
           <div className="space-y-3">
