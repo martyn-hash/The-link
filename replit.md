@@ -16,7 +16,8 @@ The application follows a consistent layout pattern across all pages:
 
 **Page Structure:**
 - Header blocks: `<div className="border-b border-border bg-card"><div className="page-container py-6 md:py-8">...</div></div>`
-- Body regions: `<div className="page-container py-6 md:py-8 space-y-8">...</div>`
+- Body regions (detail/form pages): `<div className="page-container py-6 md:py-8 space-y-8">...</div>`
+- Body regions (data/list pages): `<div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">...</div>`
 - Tab-based layouts: `<TabsContent className="space-y-8"><div className="page-container py-6 md:py-8">...</div></TabsContent>`
 
 **Typography Standards:**
@@ -26,9 +27,15 @@ The application follows a consistent layout pattern across all pages:
 **Spacing Standards:**
 - Vertical rhythm: `space-y-8` for main sections, `gap-6` for grids
 - Responsive padding: `py-6 md:py-8` for page-level containers
+- Responsive horizontal padding (data pages): `px-4 md:px-6 lg:px-8`
+
+**Full-Width Data View Pattern (November 2025):**
+Data-heavy list/table pages use full-width layouts while maintaining Phase 3 styling. Detail/form pages remain centered for readability.
+- **Standard full-width:** Header centered, body full-width with responsive padding
+- **Special case (company-settings):** Header centered, form cards in centered wrapper, table sections full-width
 
 #### Phase 3 Completion Status (November 2025)
-**Completed: 29 pages** across all major application areas with consistent Phase 3 pattern:
+**Completed: 47 pages** across all major application areas with consistent Phase 3 pattern:
 
 **Core Workflow (11 pages - Baseline):** clients, companies, people, person-detail, services, client-service-detail, scheduled-services, project-detail, project-types, project-type-detail, task-instance-detail
 
@@ -40,7 +47,18 @@ The application follows a consistent layout pattern across all pages:
 
 **Settings & Configuration (5 pages):** profile, company-settings, tags, admin-task-types, (settings redirect)
 
-**Remaining pages for future work (~8 pages):** notification-edit, push-notification-templates, scheduled-notifications, push-diagnostics, signature-request-builder, ch-changes, upload
+**Notifications & Admin (3 pages):** scheduled-notifications, push-notification-templates, push-diagnostics
+
+**Full-Width Data Updates (November 2025):**
+Enhanced 18 pages with full-width data views for improved table/list readability. All pages retain Phase 3 typography and spacing while maximizing horizontal space for data-heavy content:
+- **Core entities (5):** clients, companies, people, services, scheduled-services
+- **Workflow (4):** projects, internal-tasks, client-requests, request-templates
+- **Submissions (2):** signature-requests, task-submissions
+- **Admin (3):** tags, admin-task-types, request-template-categories
+- **Notifications (3):** scheduled-notifications, push-notification-templates, push-diagnostics
+- **Settings (1):** company-settings (granular: centered forms + full-width tables)
+
+**Remaining pages for future work (~8 pages):** notification-edit, signature-request-builder, ch-changes, upload
 
 ### Frontend
 The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for styling.
