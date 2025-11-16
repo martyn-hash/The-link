@@ -343,7 +343,7 @@ export default function TaskTemplateSectionQuestionsPage() {
       {/* Header */}
       <div className="border-b border-border bg-card">
         <div className="page-container py-6 md:py-8">
-          <Link href={`/task-templates/${templateId}/edit`}>
+          <Link href={`/request-templates/${templateId}/edit`}>
             <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Template

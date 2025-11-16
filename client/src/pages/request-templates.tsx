@@ -165,7 +165,7 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(`/task-templates/${template.id}/edit`)}
+              onClick={() => navigate(`/request-templates/${template.id}/edit`)}
               data-testid={`button-edit-${template.id}`}
               title="Edit"
             >
@@ -286,7 +286,7 @@ export default function TaskTemplatesPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
       setShowCreateDialog(false);
       form.reset();
-      navigate(`/task-templates/${data.id}/edit`);
+      navigate(`/request-templates/${data.id}/edit`);
     },
     onError: (error) => {
       toast({

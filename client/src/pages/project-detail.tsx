@@ -642,13 +642,16 @@ export default function ProjectDetail() {
             </div>
           </TabsContent>
 
-          <TabsContent value="messages" className="mt-6">
-            <ProjectMessaging projectId={project.id} project={project} />
+          <TabsContent value="messages" className="space-y-8">
+            <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+              <ProjectMessaging projectId={project.id} project={project} />
+            </div>
           </TabsContent>
 
-          <TabsContent value="tasks" className="mt-6">
-            {/* Internal Tasks Section */}
-            <Card>
+          <TabsContent value="tasks" className="space-y-8">
+            <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+              {/* Internal Tasks Section */}
+              <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
@@ -827,14 +830,17 @@ export default function ProjectDetail() {
                 )}
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
 
-          <TabsContent value="progress-notes" className="mt-6">
-            <ProjectProgressNotes 
-              projectId={projectId!} 
-              clientId={project?.clientId || ''} 
-              clientPeople={clientPeople}
-            />
+          <TabsContent value="progress-notes" className="space-y-8">
+            <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+              <ProjectProgressNotes 
+                projectId={projectId!} 
+                clientId={project?.clientId || ''} 
+                clientPeople={clientPeople}
+              />
+            </div>
           </TabsContent>
           </SwipeableTabsWrapper>
         </Tabs>
