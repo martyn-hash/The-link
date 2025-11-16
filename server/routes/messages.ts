@@ -1229,8 +1229,9 @@ export function registerMessageRoutes(
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getUploadURLForPath(fullPath);
 
-      // Return the normalized object path for later retrieval
-      const objectPath = `/objects/project-messages/${threadId}/${timestamp}_${sanitizedFileName}`;
+      // Return the normalized object path for later retrieval (without /objects prefix)
+      // The /objects prefix is added by the GET endpoint when serving
+      const objectPath = `/project-messages/${threadId}/${timestamp}_${sanitizedFileName}`;
 
       res.json({
         url: uploadURL,
