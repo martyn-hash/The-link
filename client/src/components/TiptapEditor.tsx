@@ -3,6 +3,7 @@ import { getTiptapExtensions, getEditorProps } from '@/lib/tiptapSetup';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Bold,
   Italic,
@@ -21,8 +22,11 @@ import {
   Undo,
   Redo,
   Palette,
+  TableProperties,
+  Trash2,
+  Plus,
 } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface TiptapEditorProps {
   content: string;
@@ -58,12 +62,77 @@ const MenuButton = ({
   </Button>
 );
 
+const TableInsertPicker = ({ editor }: { editor: Editor }) => {
+  const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const gridSize = 6;
+
+  const handleCellHover = (row: number, col: number) => {
+    setHoveredCell({ row, col });
+  };
+
+  const handleCellClick = (row: number, col: number) => {
+    // Insert the table first, then close the popover
+    editor.chain().focus().insertTable({
+      rows: row + 1,
+      cols: col + 1,
+      withHeaderRow: true,
+    }).run();
+    
+    // Use setTimeout to ensure the table is inserted before closing
+    setTimeout(() => {
+      setIsOpen(false);
+      setHoveredCell(null);
+    }, 50);
+  };
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant={editor.isActive('table') ? "secondary" : "ghost"}
+          size="sm"
+          title="Insert Table"
+          className="h-8 w-8 p-0"
+          data-testid="button-insert-table"
+        >
+          <TableIcon className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="start">
+        <div className="space-y-2">
+          <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${gridSize}, 20px)` }}>
+            {Array.from({ length: gridSize }, (_, row) =>
+              Array.from({ length: gridSize }, (_, col) => {
+                const isHighlighted = hoveredCell && row <= hoveredCell.row && col <= hoveredCell.col;
+                return (
+                  <button
+                    key={`${row}-${col}`}
+                    type="button"
+                    className={`w-5 h-5 border border-border cursor-pointer transition-colors ${
+                      isHighlighted ? 'bg-primary' : 'bg-background hover:bg-muted'
+                    }`}
+                    onMouseEnter={() => handleCellHover(row, col)}
+                    onClick={() => handleCellClick(row, col)}
+                    aria-label={`Insert ${row + 1} x ${col + 1} table`}
+                    data-testid={`table-cell-${row}-${col}`}
+                  />
+                );
+              })
+            )}
+          </div>
+          <div className="text-xs text-center text-muted-foreground">
+            {hoveredCell ? `${hoveredCell.row + 1} × ${hoveredCell.col + 1}` : 'Select table size'}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
   if (!editor) return null;
-
-  const addTable = () => {
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-  };
 
   const setLink = () => {
     const url = window.prompt('Enter URL:');
@@ -71,6 +140,8 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
       editor.chain().focus().setLink({ href: url }).run();
     }
   };
+
+  const isInTable = editor.isActive('table');
 
   return (
     <div className="border-b border-border bg-muted/30 p-2 flex flex-wrap gap-1">
@@ -222,13 +293,63 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
       >
         <LinkIcon className="h-4 w-4" />
       </MenuButton>
-      <MenuButton
-        onClick={addTable}
-        active={editor.isActive('table')}
-        title="Insert Table"
-      >
-        <TableIcon className="h-4 w-4" />
-      </MenuButton>
+      <TableInsertPicker editor={editor} />
+
+      {/* Table Editing Buttons - only show when in table */}
+      {isInTable && (
+        <>
+          <Separator orientation="vertical" className="h-8" />
+          
+          <MenuButton
+            onClick={() => editor.chain().focus().addRowBefore().run()}
+            title="Add Row Before"
+          >
+            <Plus className="h-4 w-4" />
+          </MenuButton>
+          <MenuButton
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+            title="Add Row After"
+          >
+            <Plus className="h-4 w-4 rotate-180" />
+          </MenuButton>
+          <MenuButton
+            onClick={() => editor.chain().focus().deleteRow().run()}
+            title="Delete Row"
+          >
+            <Trash2 className="h-4 w-4" />
+          </MenuButton>
+          
+          <Separator orientation="vertical" className="h-8" />
+          
+          <MenuButton
+            onClick={() => editor.chain().focus().addColumnBefore().run()}
+            title="Add Column Before"
+          >
+            <Plus className="h-4 w-4 -rotate-90" />
+          </MenuButton>
+          <MenuButton
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+            title="Add Column After"
+          >
+            <Plus className="h-4 w-4 rotate-90" />
+          </MenuButton>
+          <MenuButton
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+            title="Delete Column"
+          >
+            <Trash2 className="h-4 w-4" />
+          </MenuButton>
+          
+          <Separator orientation="vertical" className="h-8" />
+          
+          <MenuButton
+            onClick={() => editor.chain().focus().deleteTable().run()}
+            title="Delete Table"
+          >
+            <TableProperties className="h-4 w-4 text-destructive" />
+          </MenuButton>
+        </>
+      )}
 
       <Separator orientation="vertical" className="h-8" />
 
