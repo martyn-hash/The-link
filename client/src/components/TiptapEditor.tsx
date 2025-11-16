@@ -2,6 +2,7 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import { getTiptapExtensions, getEditorProps } from '@/lib/tiptapSetup';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   Bold,
   Italic,
@@ -19,6 +20,7 @@ import {
   AlignRight,
   Undo,
   Redo,
+  Palette,
 } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
 
@@ -101,6 +103,71 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
       >
         <Strikethrough className="h-4 w-4" />
       </MenuButton>
+
+      {/* Text Color */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            title="Text Color"
+            className="h-8 w-8 p-0"
+          >
+            <Palette className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#000000').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#000000' }} />
+              Black
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#ef4444').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#ef4444' }} />
+              Red
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#f97316').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#f97316' }} />
+              Orange
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#eab308').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#eab308' }} />
+              Yellow
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#22c55e').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#22c55e' }} />
+              Green
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#3b82f6').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#3b82f6' }} />
+              Blue
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#8b5cf6').run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#8b5cf6' }} />
+              Purple
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()}>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border bg-muted" />
+              Default
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Separator orientation="vertical" className="h-8" />
 
