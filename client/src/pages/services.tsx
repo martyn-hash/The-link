@@ -694,7 +694,7 @@ export default function Services() {
 
             {/* Services Tab */}
             <TabsContent value="services" className="space-y-8">
-              <div className="page-container py-6 md:py-8">
+              <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
               {/* Services List View */}
               {currentTab === 'services' && viewMode === 'list' && (
                 <>
@@ -1348,7 +1348,7 @@ export default function Services() {
 
             {/* Roles Tab */}
             <TabsContent value="roles" className="space-y-8">
-              <div className="page-container py-6 md:py-8">
+              <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
               {/* Roles List View */}
               {currentTab === 'roles' && viewMode === 'list' && (
                 <>

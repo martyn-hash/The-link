@@ -518,7 +518,7 @@ export default function People() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto page-container py-6 md:py-8">
+        <div className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
           {peopleLoading ? (
             <Card>
               <CardContent className="p-6">

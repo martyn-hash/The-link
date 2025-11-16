@@ -152,7 +152,7 @@ export default function Clients() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto page-container py-6 md:py-8 space-y-8">
+        <div className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">
           {clientsLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
