@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -56,6 +56,20 @@ export default function NewProjectThreadModal({
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const quillRef = useRef<any>(null);
+
+  // Check if the editor has valid content (text, tables, images, or lists)
+  const hasValidContent = useMemo(() => {
+    if (!initialMessage) return false;
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(initialMessage, 'text/html');
+    const textContent = (doc.body.textContent || '').trim();
+    const hasTables = doc.querySelectorAll('table').length > 0;
+    const hasImages = doc.querySelectorAll('img').length > 0;
+    const hasLists = doc.querySelectorAll('ul, ol').length > 0;
+    
+    return textContent.length > 0 || hasTables || hasImages || hasLists;
+  }, [initialMessage]);
 
   // Fetch all users for participant selection
   const { data: allUsers } = useQuery<User[]>({
@@ -571,7 +585,7 @@ export default function NewProjectThreadModal({
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={createThreadMutation.isPending || uploadingFiles || !topic.trim() || selectedParticipants.length === 0}
+            disabled={createThreadMutation.isPending || uploadingFiles || !topic.trim() || selectedParticipants.length === 0 || (!hasValidContent && selectedFiles.length === 0)}
             data-testid="button-create"
           >
             {uploadingFiles ? 'Uploading...' : createThreadMutation.isPending ? 'Creating...' : 'Create Thread'}
