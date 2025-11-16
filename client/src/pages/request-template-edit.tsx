@@ -956,7 +956,7 @@ export default function TaskTemplateEditPage() {
       <div className="border-b border-border bg-card">
         <div className="page-container py-6 md:py-8">
           <div className="flex items-start justify-between mb-4">
-            <Link href="/task-templates">
+            <Link href="/request-templates">
               <Button variant="ghost" size="sm" data-testid="button-back">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back

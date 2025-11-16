@@ -58,6 +58,15 @@ Enhanced 18 pages with full-width data views for improved table/list readability
 - **Notifications (3):** scheduled-notifications, push-notification-templates, push-diagnostics
 - **Settings (1):** company-settings (granular: centered forms + full-width tables)
 
+**Project Detail Tab Layout (November 2025 - Completed):**
+Implemented full-width layouts for Messages, Internal Tasks, and Progress Notes tabs while keeping Overview centered. Key changes:
+- **Layout restructuring**: Moved Tabs component outside constraining flex containers - header in separate `page-container`, Tabs in dedicated `flex-1` container
+- **Component updates**: Restructured ProjectMessaging from grid to flex layout for responsive width
+- **Mobile/desktop separation**: Mobile uses SwipeableTabsWrapper for swipe gestures, desktop renders TabsContent directly
+- **Styling refinements**: Applied `!max-w-none` with !important to full-width tabs, removed nested wrapper divs
+- **Bug fixes**: Fixed runtime error with `projectInternalTasksLoading` variable naming
+- **Related fixes**: Updated `/task-templates/` references to `/request-templates/` across 3 files, redesigned 404 page with Phase 3 styling
+
 **Remaining pages for future work (~8 pages):** notification-edit, signature-request-builder, ch-changes, upload
 
 ### Frontend

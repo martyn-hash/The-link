@@ -553,11 +553,13 @@ export default function ProjectDetail() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Tabs Layout */}
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
-          {/* Desktop Tabs */}
-          <div className="hidden md:block">
+      {/* Tabs Layout - Outside all constrained containers for full-width */}
+      <div className="flex-1 overflow-y-auto">
+      <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
+          {/* Desktop Tabs - Centered */}
+          <div className="hidden md:block mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
             <TabsList className="grid w-full max-w-4xl grid-cols-4">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
@@ -606,7 +608,7 @@ export default function ProjectDetail() {
 
           {/* Mobile Section Title */}
           {isMobile && (
-            <div className="mt-4 mb-2">
+            <div className="mt-4 mb-2 mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
               <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
                 {currentTab === "overview" && "Overview"}
                 {currentTab === "messages" && "Messages"}
@@ -616,17 +618,18 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          <SwipeableTabsWrapper
-            tabs={["overview", "messages", "tasks", "progress-notes"]}
-            currentTab={currentTab}
-            onTabChange={setCurrentTab}
-            enabled={isMobile}
-            dataAttribute="project"
-          >
-            <TabsContent value="overview" className="mt-6">
-            <div className="space-y-6">
-              {/* Row 1: Full-width project info */}
-              <div className="bg-card border border-border rounded-lg p-6">
+          {isMobile ? (
+            <SwipeableTabsWrapper
+              tabs={["overview", "messages", "tasks", "progress-notes"]}
+              currentTab={currentTab}
+              onTabChange={setCurrentTab}
+              enabled={true}
+              dataAttribute="project"
+            >
+              <TabsContent value="overview" className="mt-6">
+              <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-6">
+                {/* Row 1: Full-width project info */}
+                <div className="bg-card border border-border rounded-lg p-6">
                 <ProjectInfo 
                   project={project} 
                   user={user} 
@@ -635,21 +638,18 @@ export default function ProjectDetail() {
                 />
               </div>
 
-              {/* Row 2: Full-width chronology */}
-              <div className="bg-card border border-border rounded-lg p-6">
-                <ProjectChronology project={project} />
+                {/* Row 2: Full-width chronology */}
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <ProjectChronology project={project} />
+                </div>
               </div>
-            </div>
+            </TabsContent>
+
+          <TabsContent value="messages" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+            <ProjectMessaging projectId={project.id} project={project} />
           </TabsContent>
 
-          <TabsContent value="messages" className="space-y-8">
-            <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-              <ProjectMessaging projectId={project.id} project={project} />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="tasks" className="space-y-8">
-            <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+          <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
               {/* Internal Tasks Section */}
               <Card>
               <CardHeader>
@@ -830,19 +830,152 @@ export default function ProjectDetail() {
                 )}
               </CardContent>
             </Card>
-            </div>
           </TabsContent>
 
-          <TabsContent value="progress-notes" className="space-y-8">
-            <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-              <ProjectProgressNotes 
-                projectId={projectId!} 
-                clientId={project?.clientId || ''} 
-                clientPeople={clientPeople}
-              />
-            </div>
+          <TabsContent value="progress-notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+            <ProjectProgressNotes 
+              projectId={projectId!} 
+              clientId={project?.clientId || ''} 
+              clientPeople={clientPeople}
+            />
           </TabsContent>
-          </SwipeableTabsWrapper>
+            </SwipeableTabsWrapper>
+          ) : (
+            <>
+              <TabsContent value="overview" className="mt-6">
+                <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-6">
+                  <div className="bg-card border border-border rounded-lg p-6">
+                    <ProjectInfo 
+                      project={project} 
+                      user={user} 
+                      currentStage={currentStage}
+                      currentAssignee={currentAssignee}
+                    />
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-6">
+                    <ProjectChronology project={project} />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="messages" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <ProjectMessaging projectId={project.id} project={project} />
+              </TabsContent>
+
+              <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <CheckSquare className="w-5 h-5" />
+                          Internal Tasks
+                        </CardTitle>
+                        <Button
+                          onClick={() => setShowTaskModal(true)}
+                          size="sm"
+                          data-testid="button-create-task"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Task
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {projectInternalTasksLoading ? (
+                        <div className="space-y-4">
+                          {[1, 2, 3].map((i) => (
+                            <Skeleton key={i} className="h-20" />
+                          ))}
+                        </div>
+                      ) : projectInternalTasks && projectInternalTasks.length > 0 ? (
+                        <>
+                          <div className="text-sm text-muted-foreground mb-4">
+                            {projectInternalTasks.length} {projectInternalTasks.length === 1 ? 'task' : 'tasks'}
+                          </div>
+                          <div className="space-y-4">
+                            {projectInternalTasks.map((task) => (
+                              <Card key={task.id} className="hover:shadow-md transition-shadow">
+                                <CardContent className="p-4">
+                                  <div className="space-y-3">
+                                    <div className="flex items-start justify-between gap-4">
+                                      <div className="flex-1 space-y-1">
+                                        <div className="flex items-center gap-2">
+                                          <div className="font-medium text-base">{task.title}</div>
+                                          <Badge variant={
+                                            task.priority === 'urgent' ? 'destructive' :
+                                            task.priority === 'high' ? 'default' :
+                                            task.priority === 'medium' ? 'secondary' :
+                                            'outline'
+                                          } data-testid={`badge-priority-${task.id}`}>
+                                            {task.priority}
+                                          </Badge>
+                                          <Badge variant={
+                                            task.status === 'completed' ? 'default' :
+                                            task.status === 'in_progress' ? 'secondary' :
+                                            'outline'
+                                          } data-testid={`badge-status-${task.id}`}>
+                                            {task.status.replace('_', ' ')}
+                                          </Badge>
+                                        </div>
+                                        {task.description && (
+                                          <p className="text-sm text-muted-foreground line-clamp-2">
+                                            {task.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                      {task.assignedTo && (
+                                        <div className="flex items-center gap-1" data-testid={`text-assigned-${task.id}`}>
+                                          <User className="w-3 h-3" />
+                                          <span>{task.assignedTo.firstName} {task.assignedTo.lastName}</span>
+                                        </div>
+                                      )}
+                                      {task.dueDate && (
+                                        <div className="flex items-center gap-1" data-testid={`text-due-${task.id}`}>
+                                          <Calendar className="w-3 h-3" />
+                                          <span>Due: {format(new Date(task.dueDate), 'MMM d, yyyy')}</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                      <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                                        <Button
+                                          variant="outline"
+                                          className="w-full h-11"
+                                          data-testid={`button-view-task-${task.id}`}
+                                        >
+                                          View Task
+                                        </Button>
+                                      </RouterLink>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-12 text-muted-foreground">
+                          <CheckSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>No internal tasks for this project yet.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+              </TabsContent>
+
+              <TabsContent value="progress-notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <ProjectProgressNotes 
+                  projectId={projectId!} 
+                  clientId={project?.clientId || ''} 
+                  clientPeople={clientPeople}
+                />
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
 

@@ -1,13 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Home, RefreshCw, ArrowLeft } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 
 export default function NotFound() {
-  const [, navigate] = useLocation();
-
   const handleRefresh = () => {
     window.location.reload();
+  };
+
+  const handleGoBack = () => {
+    window.history.back();
   };
 
   return (
@@ -45,7 +47,7 @@ export default function NotFound() {
                   Refresh Page
                 </Button>
                 <Button
-                  onClick={() => navigate(-1)}
+                  onClick={handleGoBack}
                   variant="outline"
                   className="flex-1"
                   data-testid="button-go-back"
