@@ -16,9 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { X, Check, Paperclip, File as FileIcon, Table as TableIcon } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 import DOMPurify from 'isomorphic-dompurify';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 interface User {
   id: string;
@@ -57,7 +56,6 @@ export default function NewProjectThreadModal({
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [notifyImmediately, setNotifyImmediately] = useState(true);
-  const quillRef = useRef<any>(null);
 
   // Check if the editor has valid content (text, tables, images, or lists)
   const hasValidContent = useMemo(() => {
@@ -349,34 +347,6 @@ export default function NewProjectThreadModal({
     return getUserDisplayName(a).localeCompare(getUserDisplayName(b));
   });
 
-  // ReactQuill modules configuration with rich text formatting
-  // Note: Table support via quill-better-table removed due to compatibility issues
-  // Users can paste tables from external sources as a workaround
-  const quillModules = useMemo(() => ({
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      [{ 'indent': '-1'}, { 'indent': '+1' }],
-      ['link'],
-      [{ 'color': [] }, { 'background': [] }],
-      [{ 'align': [] }],
-      ['clean']
-    ],
-    clipboard: {
-      matchVisual: false,
-    }
-  }), []);
-
-  const quillFormats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet', 'indent',
-    'link',
-    'color', 'background',
-    'align',
-    'table', 'table-col', 'table-row', 'table-cell', 'table-cell-line'
-  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -496,20 +466,14 @@ export default function NewProjectThreadModal({
           {/* Initial Message */}
           <div className="space-y-2">
             <Label htmlFor="message">Initial Message</Label>
-            <div className="border rounded-md min-h-[300px]" data-testid="editor-initial-message">
-              <ReactQuill
-                ref={quillRef}
-                theme="snow"
-                value={initialMessage}
-                onChange={setInitialMessage}
-                modules={quillModules}
-                formats={quillFormats}
-                placeholder="Type or paste your message here. You can paste tables, formatted text, and content from Word or Outlook..."
-                className="bg-background h-[300px]"
-              />
-            </div>
+            <TiptapEditor
+              content={initialMessage}
+              onChange={setInitialMessage}
+              placeholder="Type or paste your message here. You can insert tables, formatted text, and content from Word or Outlook..."
+              className="min-h-[300px]"
+            />
             <p className="text-xs text-muted-foreground">
-              Tip: Paste tables and formatted content directly from Word or Outlook. The editor supports rich text formatting including bold, italic, lists, colors, and more.
+              Tip: Use the table button in the toolbar to insert tables, or paste formatted content directly from Word or Outlook. The editor supports rich text formatting including bold, italic, lists, colors, and more.
             </p>
           </div>
 

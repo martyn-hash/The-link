@@ -29,9 +29,8 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import NewProjectThreadModal from '@/components/NewProjectThreadModal';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 import DOMPurify from 'isomorphic-dompurify';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 interface ProjectMessageThread {
   id: string;
@@ -91,7 +90,6 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [showNewThreadModal, setShowNewThreadModal] = useState(false);
   const [notifyImmediately, setNotifyImmediately] = useState(true);
-  const quillRef = useRef<any>(null);
 
   // Check URL for thread parameter (from push notification)
   const urlParams = new URLSearchParams(window.location.search);
@@ -296,31 +294,6 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     return user?.email || 'Unknown User';
   };
 
-  // ReactQuill modules configuration with rich text formatting
-  // Note: Table support via quill-better-table removed due to compatibility issues
-  // Users can paste tables from external sources as a workaround
-  const quillModules = useMemo(() => ({
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['link'],
-      [{ 'color': [] }, { 'background': [] }],
-      ['clean']
-    ],
-    clipboard: {
-      matchVisual: false,
-    }
-  }), []);
-
-  const quillFormats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet',
-    'link',
-    'color', 'background',
-    'table', 'table-col', 'table-row', 'table-cell', 'table-cell-line'
-  ];
 
   return (
     <>
@@ -539,19 +512,12 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                   </div>
                 )}
                 
-                <div className="border rounded-md" data-testid="editor-message">
-                  <ReactQuill
-                    ref={quillRef}
-                    theme="snow"
-                    value={newMessage}
-                    onChange={setNewMessage}
-                    modules={quillModules}
-                    formats={quillFormats}
-                    placeholder="Type your message with rich text, tables, and formatting..."
-                    className="bg-background"
-                    style={{ minHeight: '150px' }}
-                  />
-                </div>
+                <TiptapEditor
+                  content={newMessage}
+                  onChange={setNewMessage}
+                  placeholder="Type your message with rich text, tables, and formatting..."
+                  className="min-h-[150px]"
+                />
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6">
