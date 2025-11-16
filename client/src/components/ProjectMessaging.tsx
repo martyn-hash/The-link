@@ -29,14 +29,9 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import NewProjectThreadModal from '@/components/NewProjectThreadModal';
-import ReactQuill, { Quill } from 'react-quill';
+import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import QuillBetterTable from 'quill-better-table';
-import 'quill-better-table/dist/quill-better-table.css';
 import DOMPurify from 'isomorphic-dompurify';
-
-// Register the better table module
-Quill.register('modules/better-table', QuillBetterTable);
 
 interface ProjectMessageThread {
   id: string;
@@ -301,7 +296,9 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     return user?.email || 'Unknown User';
   };
 
-  // ReactQuill modules configuration with table support
+  // ReactQuill modules configuration with rich text formatting
+  // Note: Table support via quill-better-table removed due to compatibility issues
+  // Users can paste tables from external sources as a workaround
   const quillModules = useMemo(() => ({
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
@@ -309,29 +306,10 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
       ['link'],
       [{ 'color': [] }, { 'background': [] }],
-      ['better-table'],
       ['clean']
     ],
-    'better-table': {
-      operationMenu: {
-        items: {
-          unmergeCells: { text: 'Unmerge cells' },
-          insertColumnRight: { text: 'Insert column right' },
-          insertColumnLeft: { text: 'Insert column left' },
-          insertRowUp: { text: 'Insert row above' },
-          insertRowDown: { text: 'Insert row below' },
-          mergeCells: { text: 'Merge cells' },
-          deleteColumn: { text: 'Delete column' },
-          deleteRow: { text: 'Delete row' },
-          deleteTable: { text: 'Delete table' }
-        }
-      }
-    },
     clipboard: {
       matchVisual: false,
-    },
-    keyboard: {
-      bindings: QuillBetterTable.keyboardBindings
     }
   }), []);
 

@@ -16,14 +16,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { X, Check, Paperclip, File as FileIcon, Table as TableIcon } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import ReactQuill, { Quill } from 'react-quill';
+import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import QuillBetterTable from 'quill-better-table';
-import 'quill-better-table/dist/quill-better-table.css';
 import DOMPurify from 'isomorphic-dompurify';
-
-// Register the better table module
-Quill.register('modules/better-table', QuillBetterTable);
 
 interface User {
   id: string;
@@ -354,7 +349,9 @@ export default function NewProjectThreadModal({
     return getUserDisplayName(a).localeCompare(getUserDisplayName(b));
   });
 
-  // ReactQuill modules configuration with table support
+  // ReactQuill modules configuration with rich text formatting
+  // Note: Table support via quill-better-table removed due to compatibility issues
+  // Users can paste tables from external sources as a workaround
   const quillModules = useMemo(() => ({
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
@@ -364,47 +361,10 @@ export default function NewProjectThreadModal({
       ['link'],
       [{ 'color': [] }, { 'background': [] }],
       [{ 'align': [] }],
-      ['better-table'],
       ['clean']
     ],
-    'better-table': {
-      operationMenu: {
-        items: {
-          unmergeCells: {
-            text: 'Unmerge cells'
-          },
-          insertColumnRight: {
-            text: 'Insert column right'
-          },
-          insertColumnLeft: {
-            text: 'Insert column left'
-          },
-          insertRowUp: {
-            text: 'Insert row above'
-          },
-          insertRowDown: {
-            text: 'Insert row below'
-          },
-          mergeCells: {
-            text: 'Merge cells'
-          },
-          deleteColumn: {
-            text: 'Delete column'
-          },
-          deleteRow: {
-            text: 'Delete row'
-          },
-          deleteTable: {
-            text: 'Delete table'
-          }
-        }
-      }
-    },
     clipboard: {
-      matchVisual: false, // Preserve pasted formatting
-    },
-    keyboard: {
-      bindings: QuillBetterTable.keyboardBindings
+      matchVisual: false,
     }
   }), []);
 
