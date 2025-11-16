@@ -432,8 +432,9 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                             dangerouslySetInnerHTML={{ 
                               __html: DOMPurify.sanitize(message.content, {
                                 ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
-                                ALLOWED_ATTR: ['href', 'target', 'class', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
-                                FORBID_ATTR: ['style', 'onerror', 'onload', 'contenteditable'],
+                                ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+                                FORBID_ATTR: ['onerror', 'onload', 'contenteditable'],
+                                ALLOW_DATA_ATTR: false,
                               })
                             }}
                             data-testid="message-content"

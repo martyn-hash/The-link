@@ -198,12 +198,13 @@ export default function NewProjectThreadModal({
       return;
     }
 
-    // Sanitize HTML content before sending - include all table-related attributes
-    // NOTE: style attribute removed for security (prevents XSS via background-image:url(javascript:...))
+    // Sanitize HTML content before sending
+    // NOTE: DOMPurify sanitizes style attribute content (removes javascript:, expression(), etc.) while preserving safe CSS
     const sanitizedMessage = DOMPurify.sanitize(initialMessage, {
       ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
-      ALLOWED_ATTR: ['href', 'target', 'class', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
-      FORBID_ATTR: ['style', 'onerror', 'onload'],
+      ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+      FORBID_ATTR: ['onerror', 'onload'],
+      ALLOW_DATA_ATTR: false,
     });
 
     try {
@@ -231,7 +232,8 @@ export default function NewProjectThreadModal({
           attachments: attachments,
         });
 
-        // Step 4: Invalidate queries, show toast, and close
+        // Step 4: Reset state, invalidate queries, show toast, and close
+        setUploadingFiles(false);
         queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', project.id] });
         toast({
           title: "Thread created",
@@ -247,13 +249,12 @@ export default function NewProjectThreadModal({
         });
       }
     } catch (error: any) {
+      setUploadingFiles(false);
       toast({
         title: "Failed to create thread",
         description: error.message || "An error occurred",
         variant: "destructive",
       });
-    } finally {
-      setUploadingFiles(false);
     }
   };
 
@@ -467,7 +468,7 @@ export default function NewProjectThreadModal({
           {/* Initial Message */}
           <div className="space-y-2">
             <Label htmlFor="message">Initial Message</Label>
-            <div className="border rounded-md" data-testid="editor-initial-message">
+            <div className="border rounded-md min-h-[300px]" data-testid="editor-initial-message">
               <ReactQuill
                 ref={quillRef}
                 theme="snow"
@@ -476,8 +477,7 @@ export default function NewProjectThreadModal({
                 modules={quillModules}
                 formats={quillFormats}
                 placeholder="Type or paste your message here. You can paste tables, formatted text, and content from Word or Outlook..."
-                className="bg-background"
-                style={{ minHeight: '250px' }}
+                className="bg-background h-[300px]"
               />
             </div>
             <p className="text-xs text-muted-foreground">
