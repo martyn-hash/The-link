@@ -339,6 +339,9 @@ export default function NewProjectThreadModal({
       [{ 'align': [] }],
       ['clean']
     ],
+    clipboard: {
+      matchVisual: false, // Preserve pasted formatting
+    }
   };
 
   const quillFormats = [
@@ -347,7 +350,8 @@ export default function NewProjectThreadModal({
     'list', 'bullet', 'indent',
     'link',
     'color', 'background',
-    'align'
+    'align',
+    'table', 'table-cell-line' // Add table formats for pasting
   ];
 
   return (
