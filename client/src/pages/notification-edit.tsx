@@ -11,9 +11,8 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProjectTypeNotification, KanbanStage, ClientRequestTemplate, ProjectType } from "@shared/schema";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
+import { TiptapEditor } from "@/components/TiptapEditor";
 import TopNavigation from "@/components/top-navigation";
 
 // Character counter component
@@ -339,23 +338,12 @@ export default function NotificationEditPage() {
               </div>
               <div className="space-y-2">
                 <Label>Email Body</Label>
-                <div data-testid="richtext-email-body">
-                  <ReactQuill
-                    value={emailBody}
-                    onChange={setEmailBody}
-                    theme="snow"
-                    placeholder="Enter email body"
-                    modules={{
-                      toolbar: [
-                        [{ 'header': [1, 2, 3, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        ['link'],
-                        ['clean']
-                      ]
-                    }}
-                  />
-                </div>
+                <TiptapEditor
+                  content={emailBody}
+                  onChange={setEmailBody}
+                  placeholder="Enter email body with rich text formatting and tables"
+                  className="min-h-[200px]"
+                />
               </div>
             </>
           )}

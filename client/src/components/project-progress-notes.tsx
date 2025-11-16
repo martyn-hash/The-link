@@ -17,9 +17,8 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { MessageSquare, Plus, Phone, Mail, Send, FileText, Inbox, PhoneCall, Eye } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 import { insertCommunicationSchema } from "@shared/schema";
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 interface ProjectProgressNotesProps {
   projectId: string;
@@ -560,11 +559,11 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
 
               <div>
                 <label className="text-sm font-medium">Content</label>
-                <ReactQuill
-                  theme="snow"
-                  value={emailContent}
+                <TiptapEditor
+                  content={emailContent}
                   onChange={setEmailContent}
-                  className="mt-2 bg-white dark:bg-gray-950"
+                  placeholder="Enter email content with rich formatting and tables..."
+                  className="mt-2 min-h-[200px]"
                 />
               </div>
 

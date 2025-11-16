@@ -26,8 +26,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import DOMPurify from 'isomorphic-dompurify';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 interface EmailAttachment {
   id: string;
@@ -524,15 +523,12 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
               })()}
 
               {/* Rich Text Editor */}
-              <div className="border rounded-md">
-                <ReactQuill
-                  value={replyBody}
-                  onChange={setReplyBody}
-                  placeholder="Type your reply..."
-                  className="h-48"
-                  data-testid="editor-reply-body"
-                />
-              </div>
+              <TiptapEditor
+                content={replyBody}
+                onChange={setReplyBody}
+                placeholder="Type your reply with rich formatting and tables..."
+                className="min-h-[200px]"
+              />
 
               {/* Attachment Upload */}
               <div>
