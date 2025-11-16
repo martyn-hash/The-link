@@ -1127,7 +1127,7 @@ export default function Projects() {
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-auto page-container py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
+        <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
           {isMobile ? (
             <PullToRefresh
               onRefresh={handleRefresh}
