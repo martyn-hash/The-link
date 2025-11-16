@@ -317,7 +317,7 @@ export default function TagsPage() {
         </div>
       </div>
 
-      <div className="page-container py-6 md:py-8 space-y-8">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">
 
         <Tabs defaultValue="client-tags" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 max-w-md">
