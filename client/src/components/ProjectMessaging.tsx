@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   MessageCircle,
   Send,
@@ -26,6 +27,7 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
+  Maximize2,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -94,6 +96,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const [notifyImmediately, setNotifyImmediately] = useState(true);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [showAttachmentsGallery, setShowAttachmentsGallery] = useState(false);
+  const [focusModeOpen, setFocusModeOpen] = useState(false);
 
   // Check URL for thread parameter (from push notification)
   const urlParams = new URLSearchParams(window.location.search);
@@ -458,6 +461,16 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                 <div className="flex gap-2">
                   <Button
                     size="sm"
+                    variant="ghost"
+                    onClick={() => setFocusModeOpen(true)}
+                    aria-label="Focus Mode"
+                    title="Open in focus mode"
+                    data-testid="button-focus-mode-project"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
                     variant="outline"
                     onClick={() => archiveMutation.mutate({ 
                       threadId: selectedThreadId, 
@@ -690,6 +703,126 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       onOpenChange={setShowNewThreadModal}
       project={project}
     />
+
+    {/* Focus Mode Dialog */}
+    <Dialog open={focusModeOpen} onOpenChange={setFocusModeOpen}>
+      <DialogContent className="max-w-[80vw] h-[85vh] flex flex-col p-0" data-testid="dialog-focus-mode-project">
+        <DialogHeader className="px-6 py-4 border-b">
+          <DialogTitle className="text-xl">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              <span>{selectedThread?.topic}</span>
+            </div>
+          </DialogTitle>
+          <DialogDescription>
+            Participants: {selectedThread?.participants?.map(p => getUserDisplayName(p)).join(', ')}
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {messagesLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : messages && messages.length > 0 ? (
+            <div className="space-y-4">
+              {messages.map((message) => {
+                const isOwnMessage = message.userId === user?.id;
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                    data-testid={`focus-message-${message.id}`}
+                  >
+                    <div className={`w-full max-w-[85%]`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        {!isOwnMessage && (
+                          <Avatar className="w-6 h-6">
+                            <AvatarFallback className="text-xs">
+                              {getUserDisplayName(message.user).charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                        <span className="text-xs font-medium text-foreground">
+                          {getUserDisplayName(message.user)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                      <div className="rounded-lg p-4 bg-card border border-border shadow-sm relative">
+                        {isMessageLong(message.content) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="absolute top-2 right-2 h-6 w-6 p-0 hover:bg-muted z-10"
+                            onClick={() => toggleMessageExpansion(message.id)}
+                            data-testid={`focus-button-toggle-expand-${message.id}`}
+                          >
+                            {expandedMessages.has(message.id) ? (
+                              <ChevronUp className="w-4 h-4" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4" />
+                            )}
+                          </Button>
+                        )}
+                        <div 
+                          className={`text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
+                            isMessageLong(message.content) && !expandedMessages.has(message.id) 
+                              ? 'max-h-[200px] overflow-hidden relative' 
+                              : ''
+                          }`}
+                          dangerouslySetInnerHTML={{
+                            __html: DOMPurify.sanitize(message.content, {
+                              ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+                              ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+                              FORBID_ATTR: ['onerror', 'onload', 'contenteditable'],
+                              ALLOW_DATA_ATTR: false,
+                            })
+                          }}
+                        />
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="mt-2">
+                            <AttachmentList
+                              attachments={message.attachments}
+                              readonly={true}
+                              threadId={message.threadId}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-8">
+              <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No messages yet</p>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFocusModeOpen(false)}
+              data-testid="button-close-focus-mode-project"
+            >
+              Close Focus Mode
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Close to send messages and access full features
+            </span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   </>
   );
 }
