@@ -354,9 +354,9 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
 
   return (
     <>
-      <div className="flex flex-col lg:flex-row gap-6 min-w-0">
+      <div className="flex flex-col lg:flex-row gap-6 min-w-0 lg:h-full">
         {/* Thread List */}
-        <Card className="lg:w-80 lg:flex-shrink-0 h-[600px] flex flex-col">
+        <Card className="lg:w-60 lg:flex-shrink-0 h-[400px] lg:h-full flex flex-col">
           <div className="p-4 border-b">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Threads</h2>
@@ -436,7 +436,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       </Card>
 
       {/* Conversation View */}
-      <Card className="flex-1 min-w-0 h-[600px] flex flex-col">
+      <Card className="flex-1 min-w-0 h-[400px] lg:h-full flex flex-col">
         {!selectedThreadId ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center">

@@ -1,8 +1,6 @@
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import ProjectMessaging from "@/components/ProjectMessaging";
 
@@ -21,11 +19,11 @@ export function MessagesModal({
 }: MessagesModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle>Project Messages</DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 overflow-hidden px-6 pb-6">
+      <DialogContent 
+        className="w-[80vw] h-[80vh] max-w-none overflow-hidden flex flex-col p-6"
+        aria-label="Project Messages"
+      >
+        <div className="flex-1 overflow-y-auto">
           {open && <ProjectMessaging projectId={projectId} project={project} />}
         </div>
       </DialogContent>
