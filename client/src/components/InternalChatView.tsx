@@ -592,6 +592,12 @@ export function InternalChatView({
     return user.email[0].toUpperCase();
   };
 
+  const stripHtml = (html: string): string => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    return (doc.body.textContent || '').trim();
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -703,7 +709,7 @@ export function InternalChatView({
       <div className="page-container py-6 md:py-8 space-y-8">
         <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-300px)]">
           {/* Thread List */}
-          <Card className="w-full md:w-1/3 flex flex-col" data-testid="thread-list-card">
+          <Card className="w-full md:w-60 md:flex-shrink-0 flex flex-col" data-testid="thread-list-card">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Conversations</CardTitle>
@@ -789,7 +795,7 @@ export function InternalChatView({
                           </p>
                           {thread.lastMessage && (
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              {thread.lastMessage.content}
+                              {stripHtml(thread.lastMessage.content)}
                             </p>
                           )}
                         </div>
@@ -818,28 +824,28 @@ export function InternalChatView({
           <Card className="flex-1 flex flex-col" data-testid="message-view-card">
             {selectedThreadId && selectedThread ? (
               <>
-                <CardHeader className="border-b">
+                <CardHeader className="border-b py-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       {selectedThread.threadType === 'project' && (
-                        <>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Building2 className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground" data-testid="text-selected-company">
+                        <div className="flex items-center gap-3 mb-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5" />
+                            <span data-testid="text-selected-company">
                               {selectedThread.client.name}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground" data-testid="text-selected-project">
+                          <div className="flex items-center gap-1">
+                            <FolderKanban className="w-3.5 h-3.5" />
+                            <span data-testid="text-selected-project">
                               {selectedThread.project.description}
                             </span>
                           </div>
-                        </>
+                        </div>
                       )}
-                      <CardTitle className="text-lg" data-testid="text-selected-topic">{selectedThread.topic}</CardTitle>
-                      <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                        <Users className="w-4 h-4" />
+                      <CardTitle className="text-lg mb-1" data-testid="text-selected-topic">{selectedThread.topic}</CardTitle>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Users className="w-3.5 h-3.5" />
                         <span data-testid="text-participants">
                           {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
                         </span>

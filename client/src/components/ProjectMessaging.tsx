@@ -356,7 +356,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     <>
       <div className="flex flex-col lg:flex-row gap-6 min-w-0">
         {/* Thread List */}
-        <Card className="lg:w-80 lg:flex-shrink-0 h-[600px] flex flex-col">
+        <Card className="lg:w-60 lg:flex-shrink-0 h-[600px] flex flex-col">
           <div className="p-4 border-b">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Threads</h2>
