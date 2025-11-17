@@ -969,7 +969,11 @@ export function registerMessageRoutes(
               message.attachments.map(async (attachment: any) => {
                 if (attachment.objectPath) {
                   try {
-                    const url = await ObjectStorageService.generateSignedUrl(attachment.objectPath);
+                    // Ensure objectPath has /objects/ prefix
+                    const fullObjectPath = attachment.objectPath.startsWith('/objects/') 
+                      ? attachment.objectPath 
+                      : `/objects${attachment.objectPath}`;
+                    const url = await ObjectStorageService.generateSignedUrl(fullObjectPath);
                     return { ...attachment, url };
                   } catch (error) {
                     console.error(`Failed to generate signed URL for ${attachment.objectPath}:`, error);
@@ -1334,7 +1338,9 @@ export function registerMessageRoutes(
       }
 
       // Download original Office document
-      const originalBuffer = await objectStorageService.downloadObjectToBuffer(objectPath);
+      // objectPath comes as /project-messages/... so we need to prepend /objects
+      const fullObjectPath = objectPath.startsWith('/objects/') ? objectPath : `/objects${objectPath}`;
+      const originalBuffer = await objectStorageService.downloadObjectToBuffer(fullObjectPath);
 
       // Convert to PDF
       const pdfBuffer = await convertOfficeToPDF(originalBuffer, fileName);
