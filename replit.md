@@ -4,6 +4,17 @@
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
 ## Recent Changes (November 17, 2025)
+-   **Unread Messages Badge**: Added notification badge to top navigation bar
+    -   Pink badge with MessageCircle icon displays count of unread internal (staff-to-staff) message threads
+    -   Counts both standalone staff threads and project message threads
+    -   Badge automatically hides when count is zero
+    -   Clicking badge navigates to /messages page
+    -   Updates every 30 seconds via `/api/project-messages/unread-count` endpoint
+    -   Excludes client-staff threads (those are tracked separately in Client Chat tab)
+-   **Messages Page Tab Improvements**: Fixed Client Chat tab to display correct data
+    -   Client Chat tab now correctly fetches and displays client-to-staff communication threads from `/api/internal/messages/threads`
+    -   Previously incorrectly showed project message threads (staff-to-staff)
+    -   Internal Chat and Client Chat tabs now properly separated with independent unread counts
 -   **Clients Page Redesign**: Transformed the Companies page into a unified Clients page with tabbed interface
     -   Two tabs: "Companies" (Companies House data) and "People" (contacts)
     -   Both tabs feature 30-row pagination for improved performance
