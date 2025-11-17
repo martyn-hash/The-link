@@ -131,13 +131,6 @@ interface EmailThread {
   clientName: string | null;
 }
 
-// Utility function to strip HTML tags from content
-function stripHtml(html: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  return (doc.body.textContent || '').trim();
-}
-
 // Separate component to avoid hooks-in-loop issue
 interface ThreadListItemProps {
   thread: MessageThread;
@@ -270,7 +263,7 @@ function ThreadListItem({
             </p>
             {thread.lastMessage && (
               <p className="text-xs text-muted-foreground truncate mt-0.5">
-                {stripHtml(thread.lastMessage.content)}
+                {thread.lastMessage.content}
               </p>
             )}
           </div>
