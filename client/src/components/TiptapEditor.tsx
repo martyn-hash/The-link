@@ -41,22 +41,28 @@ const MenuButton = ({
   active, 
   disabled,
   children, 
-  title 
+  title,
+  preserveFocus = false,
 }: { 
   onClick: () => void; 
   active?: boolean; 
   disabled?: boolean;
   children: React.ReactNode; 
   title: string;
+  preserveFocus?: boolean;
 }) => (
   <Button
     type="button"
     variant={active ? "secondary" : "ghost"}
     size="sm"
-    onMouseDown={(e) => {
-      e.preventDefault();
-      onClick();
-    }}
+    {...(preserveFocus ? {
+      onMouseDown: (e: React.MouseEvent) => {
+        e.preventDefault();
+        onClick();
+      }
+    } : {
+      onClick
+    })}
     disabled={disabled}
     title={title}
     className="h-8 w-8 p-0"
@@ -74,20 +80,21 @@ const TableInsertPicker = ({ editor }: { editor: Editor }) => {
     setHoveredCell({ row, col });
   };
 
-  const handleCellClick = (e: React.MouseEvent, row: number, col: number) => {
-    e.preventDefault();
+  const handleCellClick = (row: number, col: number) => {
+    console.log(`[Table Insert] Attempting to insert table: ${row + 1}x${col + 1}`);
+    
     // Insert the table first, then close the popover
-    editor.chain().focus().insertTable({
+    const result = editor.chain().focus().insertTable({
       rows: row + 1,
       cols: col + 1,
       withHeaderRow: true,
     }).run();
     
-    // Use setTimeout to ensure the table is inserted before closing
-    setTimeout(() => {
-      setIsOpen(false);
-      setHoveredCell(null);
-    }, 50);
+    console.log(`[Table Insert] Insert command result:`, result);
+    
+    // Close the popover
+    setIsOpen(false);
+    setHoveredCell(null);
   };
 
   return (
@@ -104,7 +111,7 @@ const TableInsertPicker = ({ editor }: { editor: Editor }) => {
           <TableIcon className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="start">
+      <PopoverContent className="w-auto p-2 z-[1000] pointer-events-auto" align="start">
         <div className="space-y-2">
           <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${gridSize}, 20px)` }}>
             {Array.from({ length: gridSize }, (_, row) =>
@@ -114,11 +121,11 @@ const TableInsertPicker = ({ editor }: { editor: Editor }) => {
                   <button
                     key={`${row}-${col}`}
                     type="button"
-                    className={`w-5 h-5 border border-border cursor-pointer transition-colors ${
+                    className={`w-5 h-5 border border-border cursor-pointer transition-colors pointer-events-auto ${
                       isHighlighted ? 'bg-primary' : 'bg-background hover:bg-muted'
                     }`}
                     onMouseEnter={() => handleCellHover(row, col)}
-                    onMouseDown={(e) => handleCellClick(e, row, col)}
+                    onClick={() => handleCellClick(row, col)}
                     aria-label={`Insert ${row + 1} x ${col + 1} table`}
                     data-testid={`table-cell-${row}-${col}`}
                   />
@@ -307,18 +314,21 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
           <MenuButton
             onClick={() => editor.chain().focus().addRowBefore().run()}
             title="Add Row Before"
+            preserveFocus={true}
           >
             <Plus className="h-4 w-4" />
           </MenuButton>
           <MenuButton
             onClick={() => editor.chain().focus().addRowAfter().run()}
             title="Add Row After"
+            preserveFocus={true}
           >
             <Plus className="h-4 w-4 rotate-180" />
           </MenuButton>
           <MenuButton
             onClick={() => editor.chain().focus().deleteRow().run()}
             title="Delete Row"
+            preserveFocus={true}
           >
             <Trash2 className="h-4 w-4" />
           </MenuButton>
@@ -328,18 +338,21 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
           <MenuButton
             onClick={() => editor.chain().focus().addColumnBefore().run()}
             title="Add Column Before"
+            preserveFocus={true}
           >
             <Plus className="h-4 w-4 -rotate-90" />
           </MenuButton>
           <MenuButton
             onClick={() => editor.chain().focus().addColumnAfter().run()}
             title="Add Column After"
+            preserveFocus={true}
           >
             <Plus className="h-4 w-4 rotate-90" />
           </MenuButton>
           <MenuButton
             onClick={() => editor.chain().focus().deleteColumn().run()}
             title="Delete Column"
+            preserveFocus={true}
           >
             <Trash2 className="h-4 w-4" />
           </MenuButton>
@@ -349,6 +362,7 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
           <MenuButton
             onClick={() => editor.chain().focus().deleteTable().run()}
             title="Delete Table"
+            preserveFocus={true}
           >
             <TableProperties className="h-4 w-4 text-destructive" />
           </MenuButton>
