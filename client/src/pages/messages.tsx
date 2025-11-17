@@ -330,14 +330,14 @@ export default function Messages() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch project message threads (Client Chat)
-  const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
-    queryKey: ['/api/project-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
+  // Fetch client-staff message threads (Client Chat)
+  const { data: clientStaffThreads, isLoading: clientStaffThreadsLoading } = useQuery<any[]>({
+    queryKey: ['/api/internal/messages/threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
-      const response = await fetch(`/api/project-messages/my-threads?includeArchived=${archiveFilter === 'archived'}`, {
+      const response = await fetch(`/api/internal/messages/threads`, {
         credentials: 'include'
       });
-      if (!response.ok) throw new Error('Failed to fetch project threads');
+      if (!response.ok) throw new Error('Failed to fetch client-staff threads');
       return response.json();
     },
     enabled: isAuthenticated && !!user,
@@ -375,15 +375,25 @@ export default function Messages() {
 
   const emailThreads = emailThreadsData?.threads || [];
 
-  // Separate threads by type
-  const clientThreads: MessageThread[] = (projectThreads?.map(t => ({ ...t, threadType: 'project' as const })) || [])
+  // Process client-staff threads for display
+  const clientChatThreads = (clientStaffThreads || [])
+    .filter(t => !archiveFilter || (archiveFilter === 'archived' ? t.isArchived : !t.isArchived))
+    .map(t => ({
+      id: t.id,
+      topic: t.subject,
+      lastMessageAt: t.lastMessageAt,
+      hasUnreadMessages: t.hasUnreadMessages,
+      isArchived: t.isArchived,
+      clientName: t.clientPortalUser?.client?.name || 'Unknown Client',
+      lastMessageContent: t.lastMessageContent,
+    }))
     .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
 
-  const threadsLoading = projectThreadsLoading || staffThreadsLoading || emailThreadsLoading;
+  const threadsLoading = clientStaffThreadsLoading || staffThreadsLoading || emailThreadsLoading;
 
   // Calculate unread counts
   const internalUnreadCount = (staffThreads || []).reduce((sum, thread) => sum + thread.unreadCount, 0);
-  const clientUnreadCount = clientThreads.reduce((sum, thread) => sum + thread.unreadCount, 0);
+  const clientUnreadCount = clientChatThreads.filter(thread => thread.hasUnreadMessages).length;
   const emailUnreadCount = emailThreads.filter(thread => thread.hasUnread).length;
 
   // Fetch messages for selected thread (project threads only)
@@ -884,21 +894,14 @@ export default function Messages() {
     );
   }
 
-  // Get current threads based on active tab (only client tab uses thread list now)
-  const currentThreads = activeTab === 'client' ? clientThreads : [];
-  
-  // Filter threads based on search (only for client/project threads)
-  const filteredThreads = currentThreads.filter(thread => {
+  // Filter client-staff threads based on search
+  const filteredClientThreads = clientChatThreads.filter(thread => {
     if (threadSearchTerm.trim()) {
       const searchLower = threadSearchTerm.toLowerCase();
       const topicMatch = thread.topic.toLowerCase().includes(searchLower);
-      const participantMatch = thread.participants.some(p => 
-        getUserDisplayName(p).toLowerCase().includes(searchLower)
-      );
-      const messageMatch = thread.lastMessage?.content.toLowerCase().includes(searchLower);
-      const clientMatch = thread.client.name.toLowerCase().includes(searchLower);
-      const projectMatch = thread.project.description.toLowerCase().includes(searchLower);
-      return topicMatch || participantMatch || messageMatch || clientMatch || projectMatch;
+      const clientMatch = thread.clientName.toLowerCase().includes(searchLower);
+      const messageMatch = thread.lastMessageContent?.toLowerCase().includes(searchLower);
+      return topicMatch || clientMatch || messageMatch;
     }
     return true;
   });
@@ -942,7 +945,7 @@ export default function Messages() {
     return true;
   });
 
-  const selectedThread = currentThreads.find(t => t.id === selectedThreadId);
+  const selectedClientThread = clientChatThreads.find(t => t.id === selectedThreadId);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -1170,404 +1173,83 @@ export default function Messages() {
                         <p>No email threads found</p>
                       </div>
                     )
-                  ) : filteredThreads && filteredThreads.length > 0 ? (
+                  ) : filteredClientThreads && filteredClientThreads.length > 0 ? (
                     <div className="divide-y divide-border">
-                      {filteredThreads.map((thread) => (
-                        <ThreadListItem
+                      {filteredClientThreads.map((thread) => (
+                        <button
                           key={thread.id}
-                          thread={thread}
-                          isActive={selectedThreadId === thread.id}
-                          isMobile={isMobile}
-                          isSwipedLeft={swipedThreadId === thread.id && swipeDirection === 'left'}
-                          isSwipedRight={swipedThreadId === thread.id && swipeDirection === 'right'}
-                          onSwipedLeft={() => handleSwipeLeft(thread.id)}
-                          onSwipedRight={() => handleSwipeRight(thread.id)}
-                          onReplyAction={() => handleReplyAction(thread)}
-                          onArchiveAction={() => handleArchiveAction(thread)}
                           onClick={() => {
-                            if (swipedThreadId === thread.id) {
-                              setSwipedThreadId(null);
-                              setSwipeDirection(null);
-                            } else {
-                              setSelectedThreadId(thread.id);
-                              if (isMobile) {
-                                setShowMobileThreadView(true);
-                              }
+                            setSelectedThreadId(thread.id);
+                            if (isMobile) {
+                              setShowMobileThreadView(true);
                             }
                           }}
-                        />
+                          className={`w-full text-left p-2 hover:bg-muted/50 transition-colors ${
+                            selectedThreadId === thread.id ? 'bg-muted' : ''
+                          }`}
+                          data-testid={`client-thread-item-${thread.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm text-muted-foreground truncate">
+                                  {thread.clientName}
+                                </span>
+                              </div>
+                              <p className="font-semibold text-sm mt-0.5 truncate">
+                                {thread.topic}
+                              </p>
+                              {thread.lastMessageContent && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {thread.lastMessageContent}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+                              </span>
+                              {thread.hasUnreadMessages && (
+                                <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+                              )}
+                            </div>
+                          </div>
+                        </button>
                       ))}
                     </div>
                   ) : (
                     <div className="p-8 text-center text-muted-foreground">
                       <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>No threads found</p>
+                      <p>No client threads found</p>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               {/* Message View - Hidden on mobile */}
-              {!isMobile && (
+              {!isMobile && activeTab === 'client' && (
               <Card className="flex-1 flex flex-col" data-testid="message-view-card">
-                {selectedThreadId && selectedThread ? (
-                  <>
-                    <CardHeader className="border-b">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Building2 className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">
-                              {selectedThread.client.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">
-                              {selectedThread.project.description}
-                            </span>
-                          </div>
-                          <CardTitle className="text-lg">{selectedThread.topic}</CardTitle>
-                          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                            <Users className="w-4 h-4" />
-                            <span>
-                              {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
-                            data-testid="button-view-project"
-                          >
-                            <ExternalLink className="w-4 h-4 mr-1" />
-                            View Project
-                          </Button>
-                          {selectedThread.isArchived ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
-                              data-testid="button-unarchive"
-                            >
-                              <ArchiveRestore className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
-                              data-testid="button-archive"
-                            >
-                              <Archive className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-
-                    {/* All Attachments Gallery */}
-                    {allAttachments.length > 0 && (
-                      <div className="border-b">
-                        <button
-                          onClick={() => setShowAttachmentsGallery(!showAttachmentsGallery)}
-                          className="w-full px-4 py-2 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                          data-testid="button-toggle-attachments-gallery"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Paperclip className="w-4 h-4" />
-                            <span className="text-sm font-medium">All Attachments ({allAttachments.length})</span>
-                          </div>
-                          {showAttachmentsGallery ? (
-                            <ChevronUp className="w-4 h-4" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4" />
-                          )}
-                        </button>
-                        {showAttachmentsGallery && (
-                          <div className="p-4 bg-muted/30">
-                            <AttachmentList
-                              attachments={allAttachments}
-                              readonly={true}
-                              threadId={selectedThreadId || undefined}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-                      {messagesLoading ? (
-                        <div className="space-y-3">
-                          {[1, 2, 3].map((i) => (
-                            <Skeleton key={i} className="h-16 w-full" />
-                          ))}
-                        </div>
-                      ) : messages && messages.length > 0 ? (
-                        <>
-                          {messages.map((message) => {
-                            const isCurrentUser = message.userId === user?.id;
-                            return (
-                              <div
-                                key={message.id}
-                                className={`group flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                                data-testid={`message-${message.id}`}
-                                onTouchStart={(e) => handleMessageTouchStart(e, message.id)}
-                                onTouchEnd={handleMessageTouchEnd}
-                                onTouchMove={handleMessageTouchMove}
-                                onContextMenu={handleMessageContextMenu}
-                              >
-                                <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    {!isCurrentUser && message.user && (
-                                      <>
-                                        <Avatar className="w-6 h-6">
-                                          <AvatarFallback className="text-xs">
-                                            {getUserInitials(message.user)}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <span className="text-xs font-medium text-foreground">
-                                          {getUserDisplayName(message.user)}
-                                        </span>
-                                      </>
-                                    )}
-                                    {isCurrentUser && message.user && (
-                                      <span className="text-xs font-medium text-foreground">
-                                        {getUserDisplayName(message.user)}
-                                      </span>
-                                    )}
-                                    <span className="text-xs text-muted-foreground">
-                                      {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                                    </span>
-                                  </div>
-                                  <div className="relative">
-                                    <div
-                                      className={`rounded-lg p-3 select-none touch-manipulation relative ${
-                                        isCurrentUser
-                                          ? 'bg-primary text-primary-foreground'
-                                          : 'bg-muted'
-                                      }`}
-                                    >
-                                      {isMessageLong(message.content) && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className={`absolute top-2 right-2 h-6 w-6 p-0 z-10 ${
-                                            isCurrentUser 
-                                              ? 'hover:bg-primary-foreground/20 text-primary-foreground' 
-                                              : 'hover:bg-muted-foreground/20'
-                                          }`}
-                                          onClick={() => toggleMessageExpansion(message.id)}
-                                          data-testid={`button-toggle-expand-${message.id}`}
-                                        >
-                                          {expandedMessages.has(message.id) ? (
-                                            <ChevronUp className="w-4 h-4" />
-                                          ) : (
-                                            <ChevronDown className="w-4 h-4" />
-                                          )}
-                                        </Button>
-                                      )}
-                                      <div 
-                                        className={`text-sm prose prose-sm max-w-none break-words ${
-                                          isCurrentUser 
-                                            ? 'prose-headings:text-primary-foreground prose-p:text-primary-foreground prose-strong:font-bold prose-strong:text-primary-foreground prose-em:italic prose-em:text-primary-foreground prose-ul:text-primary-foreground prose-ol:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground prose-a:underline' 
-                                            : 'prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary'
-                                        } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
-                                          isMessageLong(message.content) && !expandedMessages.has(message.id) 
-                                            ? 'max-h-[200px] overflow-hidden relative' 
-                                            : ''
-                                        }`}
-                                        dangerouslySetInnerHTML={{ 
-                                          __html: DOMPurify.sanitize(message.content, {
-                                            ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
-                                            ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
-                                            FORBID_ATTR: ['onerror', 'onload', 'contenteditable'],
-                                            ALLOW_DATA_ATTR: false,
-                                          })
-                                        }}
-                                      />
-                                      {message.attachments && message.attachments.length > 0 && (
-                                        <div className="mt-2">
-                                          <AttachmentList
-                                            attachments={message.attachments}
-                                            readonly={true}
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                    
-                                    {/* Reply button - shows on hover/group-hover */}
-                                    <div className={`absolute ${isCurrentUser ? 'left-[-40px]' : 'right-[-40px]'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity`}>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleReplyToMessage(message)}
-                                        className="h-8 w-8 p-0 rounded-full bg-muted shadow-sm hover:bg-accent"
-                                        data-testid={`button-reply-${message.id}`}
-                                      >
-                                        <Reply className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <div ref={messagesEndRef} />
-                        </>
-                      ) : (
-                        <div className="text-center text-muted-foreground py-8">
-                          <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p>No messages yet</p>
-                        </div>
-                      )}
-                    </CardContent>
-
-                    <div className="border-t p-4">
-                      {/* Reply-to indicator */}
-                      {replyToMessage && (
-                        <div className="mb-3 flex items-center gap-2 p-2 bg-muted rounded text-sm">
-                          <Reply className="w-4 h-4 text-muted-foreground" />
-                          <div className="flex-1">
-                            <div className="font-medium text-xs">
-                              Replying to {replyToMessage.user ? getUserDisplayName(replyToMessage.user) : 'Unknown'}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {replyToMessage.content.substring(0, 50)}...
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={clearReplyTo}
-                            data-testid="button-clear-reply"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      )}
-
-                      {recordedAudio && audioUrl && (
-                        <div className="mb-3 flex items-center gap-2 p-2 bg-muted rounded">
-                          <FileAudio className="w-4 h-4" />
-                          <VoiceNotePlayer audioUrl={audioUrl} />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={deleteRecording}
-                            data-testid="button-delete-recording"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      )}
-
-                      {selectedFiles.length > 0 && (
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {selectedFiles.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 bg-muted rounded px-3 py-2">
-                              <File className="w-4 h-4" />
-                              <span className="text-sm truncate max-w-[200px]">{file.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedFiles(selectedFiles.filter((_, i) => i !== index))}
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {isRecording && (
-                        <div className="mb-3 flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950 rounded">
-                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                          <span className="text-sm font-medium">Recording: {formatTime(recordingTime)}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={stopRecording}
-                            data-testid="button-stop-recording"
-                          >
-                            <Square className="w-4 h-4 mr-1" />
-                            Stop
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={cancelRecording}
-                            data-testid="button-cancel-recording"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      )}
-
-                      {!isRecording && !recordedAudio && selectedFiles.length < 5 && (
-                        <div className="mb-3">
-                          <FileUploadZone
-                            onFilesSelected={(files) => setSelectedFiles([...selectedFiles, ...files])}
-                            maxFiles={5 - selectedFiles.length}
-                            maxSize={25 * 1024 * 1024}
-                            compact={true}
-                          />
-                        </div>
-                      )}
-
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => isRecording ? stopRecording() : startRecording()}
-                          disabled={uploadingFiles || !!recordedAudio}
-                          data-testid="button-record-voice"
-                        >
-                          <Mic className="w-4 h-4" />
-                        </Button>
-
-                        <Textarea
-                          ref={messageInputRef}
-                          placeholder="Type your message..."
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSendMessage();
-                            }
-                          }}
-                          className="flex-1 min-h-[80px] resize-none"
-                          disabled={uploadingFiles}
-                          data-testid="input-message"
-                        />
-
-                        <Button
-                          onClick={handleSendMessage}
-                          disabled={(!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) || uploadingFiles || sendMessageMutation.isPending}
-                          data-testid="button-send"
-                        >
-                          {uploadingFiles || sendMessageMutation.isPending ? (
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Send className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
+                {selectedThreadId && selectedClientThread ? (
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium mb-1">Client Thread: {selectedClientThread.topic}</p>
+                      <p className="text-sm">Client: {selectedClientThread.clientName}</p>
+                      <p className="text-xs mt-4">Message view for client threads coming soon</p>
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <MessageCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p>Select a thread to view messages</p>
                     </div>
                   </div>
                 )}
               </Card>
               )}
+              
               </>
               )}
             </div>
@@ -1639,8 +1321,8 @@ export default function Messages() {
         onOpenChange={setMobileSearchOpen}
       />
 
-      {/* Mobile Thread View Dialog */}
-      {isMobile && selectedThreadId && selectedThread && (
+      {/* Mobile Thread View Dialog - Disabled for client tab (client threads not fully implemented yet) */}
+      {isMobile && selectedThreadId && activeTab !== 'client' && (
         <Dialog open={showMobileThreadView} onOpenChange={setShowMobileThreadView}>
           <DialogContent className="max-w-full h-[90vh] p-0 flex flex-col">
             <DialogHeader className="border-b p-4">

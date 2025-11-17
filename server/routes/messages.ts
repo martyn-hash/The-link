@@ -731,58 +731,24 @@ export function registerMessageRoutes(
   // PROJECT MESSAGING ROUTES (Staff Only)
   // ==================================================
 
-  // Get count of unread message threads for the current user
+  // Get count of unread INTERNAL message threads for the current user
+  // Internal = staff-to-staff only (both project threads and standalone staff threads)
+  // Excludes client-staff threads
   app.get("/api/project-messages/unread-count", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
 
-      // Get all participants for this user
-      const participants = await storage.getProjectMessageParticipantsByUserId(effectiveUserId);
-      
       let unreadThreadCount = 0;
 
-      // For each thread where user is a participant, check if there are unread messages
-      for (const participant of participants) {
-        const thread = await storage.getProjectMessageThreadById(participant.threadId);
-        
-        // Skip archived threads
-        if (!thread || thread.isArchived) {
-          continue;
-        }
+      // Count unread standalone staff message threads (staff-to-staff conversations)
+      const staffThreads = await storage.getStaffMessageThreadsForUser(effectiveUserId, { includeArchived: false });
+      const unreadStaffThreads = staffThreads.filter(t => t.unreadCount > 0).length;
+      unreadThreadCount += unreadStaffThreads;
 
-        // Get all messages in this thread
-        const messages = await storage.getProjectMessagesByThreadId(participant.threadId);
-        
-        if (messages.length === 0) {
-          continue;
-        }
-
-        // Check if there are any unread messages
-        let hasUnread = false;
-
-        if (!participant.lastReadMessageId && !participant.lastReadAt) {
-          // User has never read any messages in this thread
-          hasUnread = true;
-        } else if (participant.lastReadMessageId) {
-          // Check if there are messages after the last read message
-          const lastReadIndex = messages.findIndex(m => m.id === participant.lastReadMessageId);
-          if (lastReadIndex === -1) {
-            // Last read message was deleted or not found - treat as unread
-            hasUnread = true;
-          } else if (lastReadIndex < messages.length - 1) {
-            // There are messages after the last read message
-            hasUnread = true;
-          }
-        } else if (participant.lastReadAt !== null) {
-          // Check if there are messages after the last read timestamp
-          const lastReadTime = new Date(participant.lastReadAt).getTime();
-          hasUnread = messages.some(m => new Date(m.createdAt).getTime() > lastReadTime);
-        }
-
-        if (hasUnread) {
-          unreadThreadCount++;
-        }
-      }
+      // Count unread project message threads (staff-to-staff about projects)
+      const projectThreads = await storage.getProjectMessageThreadsForUser(effectiveUserId, { includeArchived: false });
+      const unreadProjectThreads = projectThreads.filter(t => t.unreadCount > 0).length;
+      unreadThreadCount += unreadProjectThreads;
 
       res.json({ unreadCount: unreadThreadCount });
     } catch (error) {
@@ -790,6 +756,7 @@ export function registerMessageRoutes(
       res.status(500).json({ message: "Failed to fetch unread count" });
     }
   });
+
 
   // Get all threads the user participates in across all projects
   app.get("/api/project-messages/my-threads", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
