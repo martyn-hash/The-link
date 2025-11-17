@@ -613,41 +613,23 @@ export default function InternalChat() {
 
   // Check if a message content is long enough to need expand/collapse
   const isMessageLong = (content: string): boolean => {
-    console.log('[isMessageLong] Checking content, length:', content.length, 'preview:', content.substring(0, 100));
-    
     // Check character count
-    if (content.length > 500) {
-      console.log('[isMessageLong] ✓ Content >500 chars:', content.length);
-      return true;
-    }
+    if (content.length > 500) return true;
     
     // Parse HTML to check for tall-rendering content
     const parser = new DOMParser();
     const doc = parser.parseFromString(content, 'text/html');
     
     // Check for tables (often render tall)
-    const tableCount = doc.querySelectorAll('table').length;
-    console.log('[isMessageLong] Table check - count:', tableCount);
-    if (tableCount > 0) {
-      console.log('[isMessageLong] ✓ Found tables:', tableCount);
-      return true;
-    }
+    if (doc.querySelectorAll('table').length > 0) return true;
     
     // Check for images
-    const imgCount = doc.querySelectorAll('img').length;
-    if (imgCount > 0) {
-      console.log('[isMessageLong] ✓ Found images:', imgCount);
-      return true;
-    }
+    if (doc.querySelectorAll('img').length > 0) return true;
     
     // Check for many paragraphs or list items (>5)
     const blockCount = doc.querySelectorAll('p, li').length;
-    if (blockCount > 5) {
-      console.log('[isMessageLong] ✓ Found many blocks:', blockCount);
-      return true;
-    }
+    if (blockCount > 5) return true;
     
-    console.log('[isMessageLong] ✗ Message not long - length:', content.length, 'tables:', tableCount, 'blocks:', blockCount);
     return false;
   };
 
