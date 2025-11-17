@@ -896,6 +896,7 @@ export default function Messages() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Page-level navigation - visible across all tabs. InternalChatView suppresses its own navigation when embedded (showNavigation={false}) */}
       <TopNavigation user={user} />
       
       {/* Header */}
