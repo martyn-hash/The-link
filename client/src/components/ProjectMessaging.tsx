@@ -111,6 +111,16 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
 
   const threads = threadsResponse?.threads ?? [];
 
+  // Auto-select first thread if none selected
+  useEffect(() => {
+    if (threads.length > 0 && !selectedThreadId && !threadsLoading) {
+      // Try to find first non-archived thread, otherwise use first thread
+      const firstOpenThread = threads.find(t => !t.isArchived);
+      const threadToSelect = firstOpenThread || threads[0];
+      setSelectedThreadId(threadToSelect.id);
+    }
+  }, [threads, selectedThreadId, threadsLoading]);
+
   // Fetch messages for selected thread
   const { data: messages, isLoading: messagesLoading } = useQuery<ProjectMessage[]>({
     queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'],
@@ -569,7 +579,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                               <AttachmentList
                                 attachments={message.attachments}
                                 readonly={true}
-                                threadId={selectedThreadId || undefined}
+                                threadId={message.threadId}
                               />
                             </div>
                           )}
