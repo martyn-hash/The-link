@@ -1,6 +1,9 @@
 import { Extensions } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { TableKit } from '@tiptap/extension-table';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { Underline } from '@tiptap/extension-underline';
@@ -16,12 +19,15 @@ export const getTiptapExtensions = (): Extensions => [
       levels: [1, 2, 3],
     },
   }),
-  TableKit.configure({
+  Table.configure({
     resizable: true,
     HTMLAttributes: {
       class: 'tiptap-table',
     },
   }),
+  TableRow,
+  TableHeader,
+  TableCell,
   TextStyle,
   Color,
   Underline,
