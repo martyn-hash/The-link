@@ -31,10 +31,25 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
   const isMobile = useIsMobile();
 
   // Fetch unread message count
-  const { data: unreadData } = useQuery<{ unreadCount: number }>({
+  const { data: unreadData, isLoading: isLoadingUnread, error: unreadError } = useQuery<{ unreadCount: number }>({
     queryKey: ['/api/project-messages/unread-count'],
     enabled: !!user,
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: (failureCount, error) => {
+      // Always retry on network errors (Failed to fetch)
+      if (error?.message?.includes('Failed to fetch')) {
+        return failureCount < 10; // Retry up to 10 times for fetch failures
+      }
+      // Don't retry on client errors
+      if (error?.message?.includes('400') || error?.message?.includes('403') || error?.message?.includes('404')) {
+        return false;
+      }
+      return failureCount < 3; // Default retry for other errors
+    },
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff: 1s, 2s, 4s, 8s
+      return Math.min(1000 * 2 ** attemptIndex, 8000);
+    },
   });
 
   const unreadCount = unreadData?.unreadCount || 0;
