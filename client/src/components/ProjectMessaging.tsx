@@ -93,6 +93,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const [showNewThreadModal, setShowNewThreadModal] = useState(false);
   const [notifyImmediately, setNotifyImmediately] = useState(true);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [showAttachmentsGallery, setShowAttachmentsGallery] = useState(false);
 
   // Check URL for thread parameter (from push notification)
   const urlParams = new URLSearchParams(window.location.search);
@@ -332,6 +333,14 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     });
   };
 
+  // Collect all attachments from all messages in the thread
+  const allAttachments = useMemo(() => {
+    if (!messages) return [];
+    return messages
+      .filter(m => m.attachments && m.attachments.length > 0)
+      .flatMap(m => m.attachments || []);
+  }, [messages]);
+
 
   return (
     <>
@@ -456,6 +465,36 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
               </div>
             </div>
 
+            {/* All Attachments Gallery */}
+            {allAttachments.length > 0 && (
+              <div className="border-b">
+                <button
+                  onClick={() => setShowAttachmentsGallery(!showAttachmentsGallery)}
+                  className="w-full px-4 py-2 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                  data-testid="button-toggle-attachments-gallery"
+                >
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    <span className="text-sm font-medium">All Attachments ({allAttachments.length})</span>
+                  </div>
+                  {showAttachmentsGallery ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+                {showAttachmentsGallery && (
+                  <div className="p-4 bg-muted/30">
+                    <AttachmentList
+                      attachments={allAttachments}
+                      readonly={true}
+                      threadId={selectedThreadId || undefined}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messagesLoading ? (
@@ -484,7 +523,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                               </AvatarFallback>
                             </Avatar>
                           )}
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs font-medium text-foreground">
                             {getUserDisplayName(message.user)}
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -492,8 +531,23 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                           </span>
                         </div>
                         <div
-                          className="rounded-lg p-4 bg-card border border-border shadow-sm"
+                          className="rounded-lg p-4 bg-card border border-border shadow-sm relative"
                         >
+                          {isMessageLong(message.content) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="absolute top-2 right-2 h-6 w-6 p-0 hover:bg-muted z-10"
+                              onClick={() => toggleMessageExpansion(message.id)}
+                              data-testid={`button-toggle-expand-${message.id}`}
+                            >
+                              {expandedMessages.has(message.id) ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                           <div 
                             className={`text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
                               isMessageLong(message.content) && !expandedMessages.has(message.id) 
@@ -510,27 +564,6 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                             }}
                             data-testid="message-content"
                           />
-                          {isMessageLong(message.content) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="mt-2 w-full text-xs"
-                              onClick={() => toggleMessageExpansion(message.id)}
-                              data-testid={`button-toggle-expand-${message.id}`}
-                            >
-                              {expandedMessages.has(message.id) ? (
-                                <>
-                                  <ChevronUp className="w-3 h-3 mr-1" />
-                                  Show less
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="w-3 h-3 mr-1" />
-                                  Show more
-                                </>
-                              )}
-                            </Button>
-                          )}
                           {message.attachments && message.attachments.length > 0 && (
                             <div className="mt-2">
                               <AttachmentList

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
@@ -184,6 +184,7 @@ export function InternalChatView({
   
   // Expand/collapse message state
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [showAttachmentsGallery, setShowAttachmentsGallery] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -657,6 +658,14 @@ export function InternalChatView({
     });
   };
 
+  // Collect all attachments from all messages in the thread
+  const allAttachments = useMemo(() => {
+    if (!messages) return [];
+    return messages
+      .filter(m => m.attachments && m.attachments.length > 0)
+      .flatMap(m => m.attachments || []);
+  }, [messages]);
+
   // Call onThreadSelected when thread selection changes
   useEffect(() => {
     if (onThreadSelected) {
@@ -871,6 +880,36 @@ export function InternalChatView({
                   </div>
                 </CardHeader>
 
+                {/* All Attachments Gallery */}
+                {allAttachments.length > 0 && (
+                  <div className="border-b">
+                    <button
+                      onClick={() => setShowAttachmentsGallery(!showAttachmentsGallery)}
+                      className="w-full px-4 py-2 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                      data-testid="button-toggle-attachments-gallery"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Paperclip className="w-4 h-4" />
+                        <span className="text-sm font-medium">All Attachments ({allAttachments.length})</span>
+                      </div>
+                      {showAttachmentsGallery ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
+                    {showAttachmentsGallery && (
+                      <div className="p-4 bg-muted/30">
+                        <AttachmentList
+                          attachments={allAttachments}
+                          readonly={true}
+                          threadId={selectedThreadId || undefined}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
                   {isMobile ? (
                     <PullToRefresh
@@ -908,22 +947,46 @@ export function InternalChatView({
                                               {getUserInitials(message.user)}
                                             </AvatarFallback>
                                           </Avatar>
-                                          <span className="text-xs text-muted-foreground">
+                                          <span className="text-xs font-medium text-foreground">
                                             {getUserDisplayName(message.user)}
                                           </span>
                                         </>
+                                      )}
+                                      {isCurrentUser && message.user && (
+                                        <span className="text-xs font-medium text-foreground">
+                                          {getUserDisplayName(message.user)}
+                                        </span>
                                       )}
                                       <span className="text-xs text-muted-foreground">
                                         {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                                       </span>
                                     </div>
                                     <div
-                                      className={`rounded-lg p-3 ${
+                                      className={`rounded-lg p-3 relative ${
                                         isCurrentUser
                                           ? 'bg-primary text-primary-foreground'
                                           : 'bg-muted'
                                       }`}
                                     >
+                                      {isMessageLong(message.content) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className={`absolute top-2 right-2 h-6 w-6 p-0 z-10 ${
+                                            isCurrentUser 
+                                              ? 'hover:bg-primary-foreground/20 text-primary-foreground' 
+                                              : 'hover:bg-muted-foreground/20'
+                                          }`}
+                                          onClick={() => toggleMessageExpansion(message.id)}
+                                          data-testid={`button-toggle-expand-${message.id}`}
+                                        >
+                                          {expandedMessages.has(message.id) ? (
+                                            <ChevronUp className="w-4 h-4" />
+                                          ) : (
+                                            <ChevronDown className="w-4 h-4" />
+                                          )}
+                                        </Button>
+                                      )}
                                       <div 
                                         className={`text-sm prose prose-sm max-w-none break-words ${
                                           isCurrentUser 
@@ -946,27 +1009,6 @@ export function InternalChatView({
                                           )
                                         }}
                                       />
-                                      {isMessageLong(message.content) && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className={`mt-2 w-full text-xs ${isCurrentUser ? 'text-primary-foreground hover:bg-primary/20' : ''}`}
-                                          onClick={() => toggleMessageExpansion(message.id)}
-                                          data-testid={`button-toggle-expand-${message.id}`}
-                                        >
-                                          {expandedMessages.has(message.id) ? (
-                                            <>
-                                              <ChevronUp className="w-3 h-3 mr-1" />
-                                              Show less
-                                            </>
-                                          ) : (
-                                            <>
-                                              <ChevronDown className="w-3 h-3 mr-1" />
-                                              Show more
-                                            </>
-                                          )}
-                                        </Button>
-                                      )}
                                       {message.attachments && message.attachments.length > 0 && (
                                         <div className="mt-2">
                                           <AttachmentList
@@ -1017,22 +1059,46 @@ export function InternalChatView({
                                             {getUserInitials(message.user)}
                                           </AvatarFallback>
                                           </Avatar>
-                                        <span className="text-xs text-muted-foreground">
+                                        <span className="text-xs font-medium text-foreground">
                                           {getUserDisplayName(message.user)}
                                         </span>
                                       </>
+                                    )}
+                                    {isCurrentUser && message.user && (
+                                      <span className="text-xs font-medium text-foreground">
+                                        {getUserDisplayName(message.user)}
+                                      </span>
                                     )}
                                     <span className="text-xs text-muted-foreground">
                                       {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                                     </span>
                                   </div>
                                   <div
-                                    className={`rounded-lg p-3 ${
+                                    className={`rounded-lg p-3 relative ${
                                       isCurrentUser
                                         ? 'bg-primary text-primary-foreground'
                                         : 'bg-muted'
                                     }`}
                                   >
+                                    {isMessageLong(message.content) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className={`absolute top-2 right-2 h-6 w-6 p-0 z-10 ${
+                                          isCurrentUser 
+                                            ? 'hover:bg-primary-foreground/20 text-primary-foreground' 
+                                            : 'hover:bg-muted-foreground/20'
+                                        }`}
+                                        onClick={() => toggleMessageExpansion(message.id)}
+                                        data-testid={`button-toggle-expand-${message.id}`}
+                                      >
+                                        {expandedMessages.has(message.id) ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
+                                      </Button>
+                                    )}
                                     <div 
                                       className={`text-sm prose prose-sm max-w-none break-words ${
                                         isCurrentUser 
@@ -1055,27 +1121,6 @@ export function InternalChatView({
                                         )
                                       }}
                                     />
-                                    {isMessageLong(message.content) && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className={`mt-2 w-full text-xs ${isCurrentUser ? 'text-primary-foreground hover:bg-primary/20' : ''}`}
-                                        onClick={() => toggleMessageExpansion(message.id)}
-                                        data-testid={`button-toggle-expand-${message.id}`}
-                                      >
-                                        {expandedMessages.has(message.id) ? (
-                                          <>
-                                            <ChevronUp className="w-3 h-3 mr-1" />
-                                            Show less
-                                          </>
-                                        ) : (
-                                          <>
-                                            <ChevronDown className="w-3 h-3 mr-1" />
-                                            Show more
-                                          </>
-                                        )}
-                                      </Button>
-                                    )}
                                     {message.attachments && message.attachments.length > 0 && (
                                       <div className="mt-2">
                                         <AttachmentList
@@ -1165,6 +1210,7 @@ export function InternalChatView({
                         onFilesSelected={(files) => setSelectedFiles([...selectedFiles, ...files])}
                         maxFiles={5 - selectedFiles.length}
                         maxSize={25 * 1024 * 1024}
+                        compact={true}
                       />
                     </div>
                   )}

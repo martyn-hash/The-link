@@ -207,7 +207,7 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
             <p>Select text first, then choose a color</p>
           </TooltipContent>
         </Tooltip>
-        <DropdownMenuContent>
+        <DropdownMenuContent className="z-[100]">
           <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#000000').run()}>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded border" style={{ backgroundColor: '#000000' }} />

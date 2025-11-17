@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useSwipeable } from 'react-swipeable';
@@ -45,13 +45,16 @@ import {
   Check,
   Reply,
   Smile,
-  Filter
+  Filter,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import { EmailThreadViewer } from '@/components/EmailThreadViewer';
 import { InternalChatView, type StaffMessageThread } from '@/components/InternalChatView';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface ProjectMessageThread {
   threadType: 'project';
@@ -321,6 +324,10 @@ export default function Messages() {
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
   const isCancelledRef = useRef(false);
 
+  // Expand/collapse message state
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [showAttachmentsGallery, setShowAttachmentsGallery] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch project message threads (Client Chat)
@@ -518,6 +525,49 @@ export default function Messages() {
     }
     return user.email.charAt(0).toUpperCase();
   };
+
+  // Check if a message content is long enough to need expand/collapse
+  const isMessageLong = (content: string): boolean => {
+    // Check character count
+    if (content.length > 500) return true;
+    
+    // Parse HTML to check for tall-rendering content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Check for tables (often render tall)
+    if (doc.querySelectorAll('table').length > 0) return true;
+    
+    // Check for images
+    if (doc.querySelectorAll('img').length > 0) return true;
+    
+    // Check for many paragraphs or list items (>5)
+    const blockCount = doc.querySelectorAll('p, li').length;
+    if (blockCount > 5) return true;
+    
+    return false;
+  };
+
+  // Toggle message expansion
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  // Collect all attachments from all messages in the thread
+  const allAttachments = useMemo(() => {
+    if (!messages) return [];
+    return messages
+      .filter(m => m.attachments && m.attachments.length > 0)
+      .flatMap(m => m.attachments || []);
+  }, [messages]);
 
   const uploadFiles = async (files: File[]) => {
     const uploadedAttachments = [];
@@ -1218,6 +1268,36 @@ export default function Messages() {
                       </div>
                     </CardHeader>
 
+                    {/* All Attachments Gallery */}
+                    {allAttachments.length > 0 && (
+                      <div className="border-b">
+                        <button
+                          onClick={() => setShowAttachmentsGallery(!showAttachmentsGallery)}
+                          className="w-full px-4 py-2 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                          data-testid="button-toggle-attachments-gallery"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Paperclip className="w-4 h-4" />
+                            <span className="text-sm font-medium">All Attachments ({allAttachments.length})</span>
+                          </div>
+                          {showAttachmentsGallery ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                        </button>
+                        {showAttachmentsGallery && (
+                          <div className="p-4 bg-muted/30">
+                            <AttachmentList
+                              attachments={allAttachments}
+                              readonly={true}
+                              threadId={selectedThreadId || undefined}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
                       {messagesLoading ? (
                         <div className="space-y-3">
@@ -1248,10 +1328,15 @@ export default function Messages() {
                                             {getUserInitials(message.user)}
                                           </AvatarFallback>
                                         </Avatar>
-                                        <span className="text-xs text-muted-foreground">
+                                        <span className="text-xs font-medium text-foreground">
                                           {getUserDisplayName(message.user)}
                                         </span>
                                       </>
+                                    )}
+                                    {isCurrentUser && message.user && (
+                                      <span className="text-xs font-medium text-foreground">
+                                        {getUserDisplayName(message.user)}
+                                      </span>
                                     )}
                                     <span className="text-xs text-muted-foreground">
                                       {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
@@ -1259,13 +1344,50 @@ export default function Messages() {
                                   </div>
                                   <div className="relative">
                                     <div
-                                      className={`rounded-lg p-3 select-none touch-manipulation ${
+                                      className={`rounded-lg p-3 select-none touch-manipulation relative ${
                                         isCurrentUser
                                           ? 'bg-primary text-primary-foreground'
                                           : 'bg-muted'
                                       }`}
                                     >
-                                      <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                      {isMessageLong(message.content) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className={`absolute top-2 right-2 h-6 w-6 p-0 z-10 ${
+                                            isCurrentUser 
+                                              ? 'hover:bg-primary-foreground/20 text-primary-foreground' 
+                                              : 'hover:bg-muted-foreground/20'
+                                          }`}
+                                          onClick={() => toggleMessageExpansion(message.id)}
+                                          data-testid={`button-toggle-expand-${message.id}`}
+                                        >
+                                          {expandedMessages.has(message.id) ? (
+                                            <ChevronUp className="w-4 h-4" />
+                                          ) : (
+                                            <ChevronDown className="w-4 h-4" />
+                                          )}
+                                        </Button>
+                                      )}
+                                      <div 
+                                        className={`text-sm prose prose-sm max-w-none break-words ${
+                                          isCurrentUser 
+                                            ? 'prose-headings:text-primary-foreground prose-p:text-primary-foreground prose-strong:font-bold prose-strong:text-primary-foreground prose-em:italic prose-em:text-primary-foreground prose-ul:text-primary-foreground prose-ol:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground prose-a:underline' 
+                                            : 'prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary'
+                                        } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
+                                          isMessageLong(message.content) && !expandedMessages.has(message.id) 
+                                            ? 'max-h-[200px] overflow-hidden relative' 
+                                            : ''
+                                        }`}
+                                        dangerouslySetInnerHTML={{ 
+                                          __html: DOMPurify.sanitize(message.content, {
+                                            ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+                                            ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+                                            FORBID_ATTR: ['onerror', 'onload', 'contenteditable'],
+                                            ALLOW_DATA_ATTR: false,
+                                          })
+                                        }}
+                                      />
                                       {message.attachments && message.attachments.length > 0 && (
                                         <div className="mt-2">
                                           <AttachmentList
@@ -1390,6 +1512,7 @@ export default function Messages() {
                             onFilesSelected={(files) => setSelectedFiles([...selectedFiles, ...files])}
                             maxFiles={5 - selectedFiles.length}
                             maxSize={25 * 1024 * 1024}
+                            compact={true}
                           />
                         </div>
                       )}
