@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList, FileSignature } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList, FileSignature, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
@@ -30,6 +30,14 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
   const { isImpersonating } = useAuth();
   const isMobile = useIsMobile();
 
+  // Fetch unread message count
+  const { data: unreadData } = useQuery<{ unreadCount: number }>({
+    queryKey: ['/api/project-messages/unread-count'],
+    enabled: !!user,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  const unreadCount = unreadData?.unreadCount || 0;
 
   const getUserInitials = () => {
     if (!user) return "U";
@@ -260,8 +268,29 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
             </div>
           )}
 
-          {/* Right Section: User Profile for desktop, Profile icon for mobile */}
+          {/* Right Section: Unread Messages Badge + User Profile */}
           <div className="flex items-center gap-3">
+            {/* Unread Messages Badge */}
+            {user && unreadCount > 0 && (
+              <Link href="/messages">
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="relative h-10 w-10 hover:bg-accent/50 transition-colors"
+                  data-testid="button-unread-messages"
+                >
+                  <MessageCircle className="h-5 w-5 text-muted-foreground" />
+                  <Badge 
+                    className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center bg-pink-600 hover:bg-pink-600 text-white text-xs px-1"
+                    data-testid="badge-unread-count"
+                  >
+                    {unreadCount}
+                  </Badge>
+                </Button>
+              </Link>
+            )}
+
+            {/* User Profile - Desktop */}
             {!isMobile && user && (
               <Link href="/profile">
                 <Button 
@@ -286,6 +315,8 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                 </Button>
               </Link>
             )}
+
+            {/* User Profile - Mobile */}
             {isMobile && user && (
               <Link href="/profile">
                 <Button variant="ghost" size="icon" className="h-10 w-10" data-testid="button-mobile-profile">
