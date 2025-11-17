@@ -33,7 +33,9 @@ import {
   RefreshCw,
   ExternalLink,
   Users,
-  FolderKanban
+  FolderKanban,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -168,6 +170,9 @@ export default function InternalChat() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
   const isCancelledRef = useRef(false);
+  
+  // Expand/collapse message state
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -606,6 +611,41 @@ export default function InternalChat() {
     return textContent.length > 0 || hasTables || hasImages || hasLists;
   };
 
+  // Check if a message content is long enough to need expand/collapse
+  const isMessageLong = (content: string): boolean => {
+    // Check character count
+    if (content.length > 500) return true;
+    
+    // Parse HTML to check for tall-rendering content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Check for tables (often render tall)
+    if (doc.querySelectorAll('table').length > 0) return true;
+    
+    // Check for images
+    if (doc.querySelectorAll('img').length > 0) return true;
+    
+    // Check for many paragraphs or list items (>5)
+    const blockCount = doc.querySelectorAll('p, li').length;
+    if (blockCount > 5) return true;
+    
+    return false;
+  };
+
+  // Toggle message expansion
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -886,7 +926,11 @@ export default function InternalChat() {
                                           isCurrentUser 
                                             ? 'prose-headings:text-primary-foreground prose-p:text-primary-foreground prose-strong:font-bold prose-strong:text-primary-foreground prose-em:italic prose-em:text-primary-foreground prose-ul:text-primary-foreground prose-ol:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground prose-a:underline' 
                                             : 'prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary'
-                                        } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2`}
+                                        } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
+                                          isMessageLong(message.content) && !expandedMessages.has(message.id) 
+                                            ? 'max-h-[200px] overflow-hidden relative' 
+                                            : ''
+                                        }`}
                                         dangerouslySetInnerHTML={{ 
                                           __html: DOMPurify.sanitize(
                                             isHtmlContent(message.content) 
@@ -899,6 +943,27 @@ export default function InternalChat() {
                                           )
                                         }}
                                       />
+                                      {isMessageLong(message.content) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className={`mt-2 w-full text-xs ${isCurrentUser ? 'text-primary-foreground hover:bg-primary/20' : ''}`}
+                                          onClick={() => toggleMessageExpansion(message.id)}
+                                          data-testid={`button-toggle-expand-${message.id}`}
+                                        >
+                                          {expandedMessages.has(message.id) ? (
+                                            <>
+                                              <ChevronUp className="w-3 h-3 mr-1" />
+                                              Show less
+                                            </>
+                                          ) : (
+                                            <>
+                                              <ChevronDown className="w-3 h-3 mr-1" />
+                                              Show more
+                                            </>
+                                          )}
+                                        </Button>
+                                      )}
                                       {message.attachments && message.attachments.length > 0 && (
                                         <div className="mt-2">
                                           <AttachmentList
@@ -970,7 +1035,11 @@ export default function InternalChat() {
                                         isCurrentUser 
                                           ? 'prose-headings:text-primary-foreground prose-p:text-primary-foreground prose-strong:font-bold prose-strong:text-primary-foreground prose-em:italic prose-em:text-primary-foreground prose-ul:text-primary-foreground prose-ol:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground prose-a:underline' 
                                           : 'prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary'
-                                      } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2`}
+                                      } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
+                                        isMessageLong(message.content) && !expandedMessages.has(message.id) 
+                                          ? 'max-h-[200px] overflow-hidden relative' 
+                                          : ''
+                                      }`}
                                       dangerouslySetInnerHTML={{ 
                                         __html: DOMPurify.sanitize(
                                           isHtmlContent(message.content) 
@@ -983,6 +1052,27 @@ export default function InternalChat() {
                                         )
                                       }}
                                     />
+                                    {isMessageLong(message.content) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className={`mt-2 w-full text-xs ${isCurrentUser ? 'text-primary-foreground hover:bg-primary/20' : ''}`}
+                                        onClick={() => toggleMessageExpansion(message.id)}
+                                        data-testid={`button-toggle-expand-${message.id}`}
+                                      >
+                                        {expandedMessages.has(message.id) ? (
+                                          <>
+                                            <ChevronUp className="w-3 h-3 mr-1" />
+                                            Show less
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ChevronDown className="w-3 h-3 mr-1" />
+                                            Show more
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
                                     {message.attachments && message.attachments.length > 0 && (
                                       <div className="mt-2">
                                         <AttachmentList

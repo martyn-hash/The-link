@@ -24,6 +24,8 @@ import {
   FileAudio,
   Image as ImageIcon,
   Plus,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -90,6 +92,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [showNewThreadModal, setShowNewThreadModal] = useState(false);
   const [notifyImmediately, setNotifyImmediately] = useState(true);
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
 
   // Check URL for thread parameter (from push notification)
   const urlParams = new URLSearchParams(window.location.search);
@@ -294,6 +297,41 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
     return user?.email || 'Unknown User';
   };
 
+  // Check if a message content is long enough to need expand/collapse
+  const isMessageLong = (content: string): boolean => {
+    // Check character count
+    if (content.length > 500) return true;
+    
+    // Parse HTML to check for tall-rendering content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Check for tables (often render tall)
+    if (doc.querySelectorAll('table').length > 0) return true;
+    
+    // Check for images
+    if (doc.querySelectorAll('img').length > 0) return true;
+    
+    // Check for many paragraphs or list items (>5)
+    const blockCount = doc.querySelectorAll('p, li').length;
+    if (blockCount > 5) return true;
+    
+    return false;
+  };
+
+  // Toggle message expansion
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
 
   return (
     <>
@@ -457,7 +495,11 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                           className="rounded-lg p-4 bg-card border border-border shadow-sm"
                         >
                           <div 
-                            className="text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2"
+                            className={`text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2 ${
+                              isMessageLong(message.content) && !expandedMessages.has(message.id) 
+                                ? 'max-h-[200px] overflow-hidden relative' 
+                                : ''
+                            }`}
                             dangerouslySetInnerHTML={{ 
                               __html: DOMPurify.sanitize(message.content, {
                                 ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
@@ -468,6 +510,27 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                             }}
                             data-testid="message-content"
                           />
+                          {isMessageLong(message.content) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-2 w-full text-xs"
+                              onClick={() => toggleMessageExpansion(message.id)}
+                              data-testid={`button-toggle-expand-${message.id}`}
+                            >
+                              {expandedMessages.has(message.id) ? (
+                                <>
+                                  <ChevronUp className="w-3 h-3 mr-1" />
+                                  Show less
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-3 h-3 mr-1" />
+                                  Show more
+                                </>
+                              )}
+                            </Button>
+                          )}
                           {message.attachments && message.attachments.length > 0 && (
                             <div className="mt-2">
                               <AttachmentList
