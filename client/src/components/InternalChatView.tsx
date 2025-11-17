@@ -988,6 +988,7 @@ export function InternalChatView({
                                               : 'hover:bg-muted-foreground/20'
                                           }`}
                                           onClick={() => toggleMessageExpansion(message.id)}
+                                          aria-label={expandedMessages.has(message.id) ? 'Collapse message' : 'Expand message'}
                                           data-testid={`button-toggle-expand-${message.id}`}
                                         >
                                           {expandedMessages.has(message.id) ? (
@@ -1100,6 +1101,7 @@ export function InternalChatView({
                                             : 'hover:bg-muted-foreground/20'
                                         }`}
                                         onClick={() => toggleMessageExpansion(message.id)}
+                                        aria-label={expandedMessages.has(message.id) ? 'Collapse message' : 'Expand message'}
                                         data-testid={`button-toggle-expand-${message.id}`}
                                       >
                                         {expandedMessages.has(message.id) ? (
