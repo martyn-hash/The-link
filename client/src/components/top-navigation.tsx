@@ -212,7 +212,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                               <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground text-sm">Companies</div>
+                              <div className="font-medium text-foreground text-sm">Clients</div>
                             </div>
                           </div>
                         </Link>

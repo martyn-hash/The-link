@@ -134,7 +134,10 @@ function Router() {
       <Route path="/clients/:clientId/signature-requests/new" component={SignatureRequestBuilder} />
       <Route path="/client-service/:id" component={ClientServiceDetail} />
       <Route path="/signature-requests" component={SignatureRequestsPage} />
-      <Route path="/people" component={People} />
+      {/* Redirect /people to new Clients page with People tab */}
+      <Route path="/people">
+        <Redirect to="/companies" />
+      </Route>
       <Route path="/person/:id" component={PersonDetail} />
       <Route path="/profile" component={Profile} />
       <Route path="/settings" component={Settings} />
