@@ -77,7 +77,7 @@ interface ProjectMessageThread {
   }>;
 }
 
-interface StaffMessageThread {
+export interface StaffMessageThread {
   threadType: 'staff';
   id: string;
   topic: string;

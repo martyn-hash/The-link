@@ -51,6 +51,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import { EmailThreadViewer } from '@/components/EmailThreadViewer';
+import { InternalChatView, type StaffMessageThread } from '@/components/InternalChatView';
 
 interface ProjectMessageThread {
   threadType: 'project';
@@ -85,50 +86,13 @@ interface ProjectMessageThread {
   }>;
 }
 
-interface StaffMessageThread {
-  threadType: 'staff';
-  id: string;
-  topic: string;
-  isArchived: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastMessageAt: string;
-  unreadCount: number;
-  lastMessage: {
-    content: string;
-    createdAt: string;
-    userId: string | null;
-  } | null;
-  participants: Array<{
-    id: string;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-  }>;
-}
-
-type MessageThread = ProjectMessageThread | StaffMessageThread;
+type MessageThread = ProjectMessageThread;
 
 interface UserType {
   id: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
-}
-
-interface StaffMessage {
-  id: string;
-  threadId: string;
-  userId: string | null;
-  content: string;
-  attachments?: Array<{
-    fileName: string;
-    fileType: string;
-    fileSize: number;
-    objectPath: string;
-  }> | null;
-  createdAt: string;
-  user?: UserType;
 }
 
 interface ProjectMessage {
@@ -325,13 +289,7 @@ export default function Messages() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [threadSearchTerm, setThreadSearchTerm] = useState('');
-  const [showNewThreadDialog, setShowNewThreadDialog] = useState(false);
   const [showMobileThreadView, setShowMobileThreadView] = useState(false);
-  const [newThreadTopic, setNewThreadTopic] = useState('');
-  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
-  const [selectedThreadType, setSelectedThreadType] = useState<'project' | 'staff' | null>(null);
-  const [participantSearch, setParticipantSearch] = useState('');
-  const [initialMessage, setInitialMessage] = useState('');
   const [activeTab, setActiveTab] = useState('internal');
   const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
   const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
@@ -346,7 +304,7 @@ export default function Messages() {
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
 
   // Message interaction state
-  const [replyToMessage, setReplyToMessage] = useState<(ProjectMessage | StaffMessage) | null>(null);
+  const [replyToMessage, setReplyToMessage] = useState<ProjectMessage | null>(null);
   const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showMessageContextMenu, setShowMessageContextMenu] = useState(false);
@@ -411,56 +369,34 @@ export default function Messages() {
   const emailThreads = emailThreadsData?.threads || [];
 
   // Separate threads by type
-  const internalThreads: MessageThread[] = (staffThreads?.map(t => ({ ...t, threadType: 'staff' as const })) || [])
-    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-
   const clientThreads: MessageThread[] = (projectThreads?.map(t => ({ ...t, threadType: 'project' as const })) || [])
     .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
 
   const threadsLoading = projectThreadsLoading || staffThreadsLoading || emailThreadsLoading;
 
   // Calculate unread counts
-  const internalUnreadCount = internalThreads.reduce((sum, thread) => sum + thread.unreadCount, 0);
+  const internalUnreadCount = (staffThreads || []).reduce((sum, thread) => sum + thread.unreadCount, 0);
   const clientUnreadCount = clientThreads.reduce((sum, thread) => sum + thread.unreadCount, 0);
   const emailUnreadCount = emailThreads.filter(thread => thread.hasUnread).length;
 
-  // Fetch all users for participant selection
-  const { data: allUsers, isLoading: usersLoading } = useQuery<UserType[]>({
-    queryKey: ['/api/users/for-messaging'],
+  // Fetch messages for selected thread (project threads only)
+  const { data: messages, isLoading: messagesLoading} = useQuery<ProjectMessage[]>({
+    queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'],
     queryFn: async () => {
-      const response = await fetch('/api/users/for-messaging', {
-        credentials: 'include'
-      });
-      if (!response.ok) throw new Error('Failed to fetch users');
-      return response.json();
-    },
-    enabled: isAuthenticated && showNewThreadDialog,
-  });
-
-  // Fetch messages for selected thread (works for both project and staff threads)
-  const { data: messages, isLoading: messagesLoading} = useQuery<(ProjectMessage | StaffMessage)[]>({
-    queryKey: [selectedThreadType === 'staff' ? '/api/staff-messages/threads' : '/api/internal/project-messages/threads', selectedThreadId, 'messages'],
-    queryFn: async () => {
-      const baseUrl = selectedThreadType === 'staff' 
-        ? `/api/staff-messages/threads/${selectedThreadId}/messages`
-        : `/api/internal/project-messages/threads/${selectedThreadId}/messages`;
-      const response = await fetch(baseUrl, {
+      const response = await fetch(`/api/internal/project-messages/threads/${selectedThreadId}/messages`, {
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch messages');
       return response.json();
     },
-    enabled: !!selectedThreadId && !!selectedThreadType && isAuthenticated,
+    enabled: !!selectedThreadId && isAuthenticated,
     refetchInterval: 10000,
   });
 
   // Mutations
   const sendMessageMutation = useMutation({
     mutationFn: (data: { content: string; attachments?: any[] }) => {
-      const url = selectedThreadType === 'staff'
-        ? `/api/staff-messages/threads/${selectedThreadId}/messages`
-        : `/api/internal/project-messages/threads/${selectedThreadId}/messages`;
-      return apiRequest('POST', url, data);
+      return apiRequest('POST', `/api/internal/project-messages/threads/${selectedThreadId}/messages`, data);
     },
     onSuccess: () => {
       setNewMessage('');
@@ -470,9 +406,8 @@ export default function Messages() {
         URL.revokeObjectURL(audioUrl);
         setAudioUrl(null);
       }
-      queryClient.invalidateQueries({ queryKey: [selectedThreadType === 'staff' ? '/api/staff-messages/threads' : '/api/internal/project-messages/threads', selectedThreadId, 'messages'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'] });
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
       toast({
         title: "Success",
         description: "Message sent",
@@ -489,14 +424,10 @@ export default function Messages() {
 
   const archiveThreadMutation = useMutation({
     mutationFn: (threadId: string) => {
-      const url = selectedThreadType === 'staff'
-        ? `/api/staff-messages/threads/${threadId}/archive`
-        : `/api/internal/project-messages/threads/${threadId}/archive`;
-      return apiRequest('PUT', url);
+      return apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/archive`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
       setSelectedThreadId(null);
       toast({
         title: "Success",
@@ -514,14 +445,10 @@ export default function Messages() {
 
   const unarchiveThreadMutation = useMutation({
     mutationFn: (threadId: string) => {
-      const url = selectedThreadType === 'staff'
-        ? `/api/staff-messages/threads/${threadId}/unarchive`
-        : `/api/internal/project-messages/threads/${threadId}/unarchive`;
-      return apiRequest('PUT', url);
+      return apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/unarchive`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
       toast({
         title: "Success",
         description: "Thread restored",
@@ -536,42 +463,12 @@ export default function Messages() {
     },
   });
 
-  const createStaffThreadMutation = useMutation({
-    mutationFn: (data: { topic: string; participantUserIds: string[]; initialMessage?: { content: string; attachments?: any[] } }) =>
-      apiRequest('POST', '/api/staff-messages/threads', data),
-    onSuccess: (newThread: any) => {
-      setShowNewThreadDialog(false);
-      setNewThreadTopic('');
-      setSelectedParticipants([]);
-      setInitialMessage('');
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
-      setSelectedThreadId(newThread.id);
-      setSelectedThreadType('staff');
-      setActiveTab('internal');
-      toast({
-        title: "Success",
-        description: "Staff thread created",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create thread",
-        variant: "destructive",
-      });
-    },
-  });
-
   const markAsReadMutation = useMutation({
-    mutationFn: ({ threadId, threadType, lastMessageId }: { threadId: string; threadType: 'staff' | 'project'; lastMessageId: string }) => {
-      const url = threadType === 'staff'
-        ? `/api/staff-messages/threads/${threadId}/mark-read`
-        : `/api/internal/project-messages/threads/${threadId}/mark-read`;
-      return apiRequest('PUT', url, { lastReadMessageId: lastMessageId });
+    mutationFn: ({ threadId, lastMessageId }: { threadId: string; lastMessageId: string }) => {
+      return apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/mark-read`, { lastReadMessageId: lastMessageId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
     },
   });
 
@@ -582,15 +479,14 @@ export default function Messages() {
 
   // Mark messages as read when viewing a thread
   useEffect(() => {
-    if (selectedThreadId && selectedThreadType && messages && messages.length > 0) {
+    if (selectedThreadId && messages && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       markAsReadMutation.mutate({
         threadId: selectedThreadId,
-        threadType: selectedThreadType,
         lastMessageId: lastMessage.id,
       });
     }
-  }, [selectedThreadId, selectedThreadType, messages]);
+  }, [selectedThreadId, messages]);
 
   // Reset swipe state when filter menu or search opens
   useEffect(() => {
@@ -808,7 +704,6 @@ export default function Messages() {
 
   const handleReplyAction = (thread: MessageThread) => {
     setSelectedThreadId(thread.id);
-    setSelectedThreadType(thread.threadType);
     setSwipedThreadId(null);
     setSwipeDirection(null);
     setShouldFocusComposer(true); // Focus input when replying via swipe
@@ -818,21 +713,14 @@ export default function Messages() {
   };
 
   const handleArchiveAction = (thread: MessageThread) => {
-    // Create thread-specific archive mutation based on thread's own type
-    const archiveUrl = thread.threadType === 'staff'
-      ? `/api/staff-messages/threads/${thread.id}/archive`
+    // Archive/unarchive for project threads only
+    const url = thread.isArchived 
+      ? `/api/internal/project-messages/threads/${thread.id}/unarchive`
       : `/api/internal/project-messages/threads/${thread.id}/archive`;
-    
-    const unarchiveUrl = thread.threadType === 'staff'
-      ? `/api/staff-messages/threads/${thread.id}/unarchive`
-      : `/api/internal/project-messages/threads/${thread.id}/unarchive`;
-
-    const url = thread.isArchived ? unarchiveUrl : archiveUrl;
 
     apiRequest('PUT', url)
       .then(() => {
         queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
         toast({
           title: "Success",
           description: thread.isArchived ? "Thread restored" : "Thread archived",
@@ -913,47 +801,12 @@ export default function Messages() {
   };
 
   // Reply to message handling
-  const handleReplyToMessage = (message: ProjectMessage | StaffMessage) => {
+  const handleReplyToMessage = (message: ProjectMessage) => {
     setReplyToMessage(message);
   };
 
   const clearReplyTo = () => {
     setReplyToMessage(null);
-  };
-
-  const handleCreateStaffThread = () => {
-    if (!newThreadTopic.trim()) {
-      toast({
-        title: "Topic required",
-        description: "Please enter a topic for the thread",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (selectedParticipants.length === 0) {
-      toast({
-        title: "Participants required",
-        description: "Please select at least one participant",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!initialMessage.trim()) {
-      toast({
-        title: "Message required",
-        description: "Please enter an initial message for the thread",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createStaffThreadMutation.mutate({
-      topic: newThreadTopic.trim(),
-      participantUserIds: selectedParticipants,
-      initialMessage: { content: initialMessage.trim() },
-    });
   };
 
   // Redirect to login if not authenticated
@@ -981,10 +834,10 @@ export default function Messages() {
     );
   }
 
-  // Get current threads based on active tab
-  const currentThreads = activeTab === 'internal' ? internalThreads : activeTab === 'client' ? clientThreads : [];
+  // Get current threads based on active tab (only client tab uses thread list now)
+  const currentThreads = activeTab === 'client' ? clientThreads : [];
   
-  // Filter threads based on search
+  // Filter threads based on search (only for client/project threads)
   const filteredThreads = currentThreads.filter(thread => {
     if (threadSearchTerm.trim()) {
       const searchLower = threadSearchTerm.toLowerCase();
@@ -993,14 +846,9 @@ export default function Messages() {
         getUserDisplayName(p).toLowerCase().includes(searchLower)
       );
       const messageMatch = thread.lastMessage?.content.toLowerCase().includes(searchLower);
-      
-      if (thread.threadType === 'project') {
-        const clientMatch = thread.client.name.toLowerCase().includes(searchLower);
-        const projectMatch = thread.project.description.toLowerCase().includes(searchLower);
-        return topicMatch || participantMatch || messageMatch || clientMatch || projectMatch;
-      }
-      
-      return topicMatch || participantMatch || messageMatch;
+      const clientMatch = thread.client.name.toLowerCase().includes(searchLower);
+      const projectMatch = thread.project.description.toLowerCase().includes(searchLower);
+      return topicMatch || participantMatch || messageMatch || clientMatch || projectMatch;
     }
     return true;
   });
@@ -1046,16 +894,6 @@ export default function Messages() {
 
   const selectedThread = currentThreads.find(t => t.id === selectedThreadId);
 
-  // Filter participants for selection
-  const filteredParticipants = participantSearch.trim()
-    ? allUsers?.filter(u => {
-        const searchLower = participantSearch.toLowerCase();
-        const nameMatch = getUserDisplayName(u).toLowerCase().includes(searchLower);
-        const emailMatch = u.email.toLowerCase().includes(searchLower);
-        return (nameMatch || emailMatch) && u.id !== user?.id;
-      })
-    : allUsers?.filter(u => u.id !== user?.id);
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
@@ -1071,12 +909,6 @@ export default function Messages() {
               </h1>
               <p className="text-meta mt-1">Client communication & staff messaging</p>
             </div>
-            {activeTab === 'internal' && !isMobile && (
-              <Button onClick={() => setShowNewThreadDialog(true)} data-testid="button-new-thread">
-                <Plus className="w-4 h-4 mr-2" />
-                New Thread
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -1116,7 +948,14 @@ export default function Messages() {
             )}
 
             <div className="flex-1 flex gap-4 overflow-hidden">
-              {/* Thread List */}
+              {/* Internal Chat View - uses dedicated /internal-chat layout */}
+              {activeTab === 'internal' && (
+                <InternalChatView showNavigation={false} className="flex-1" />
+              )}
+              
+              {/* Thread List for Client Chat and Emails tabs */}
+              {activeTab !== 'internal' && (
+              <>
               <Card className="w-full md:w-80 flex flex-col">
                 <CardHeader className="space-y-3 pb-3">
                   <Input
@@ -1300,7 +1139,6 @@ export default function Messages() {
                               setSwipeDirection(null);
                             } else {
                               setSelectedThreadId(thread.id);
-                              setSelectedThreadType(thread.threadType);
                               if (isMobile) {
                                 setShowMobileThreadView(true);
                               }
@@ -1326,22 +1164,18 @@ export default function Messages() {
                     <CardHeader className="border-b">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          {selectedThread.threadType === 'project' && (
-                            <>
-                              <div className="flex items-center gap-2 mb-2">
-                                <Building2 className="w-4 h-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">
-                                  {selectedThread.client.name}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">
-                                  {selectedThread.project.description}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                          <div className="flex items-center gap-2 mb-2">
+                            <Building2 className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              {selectedThread.client.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              {selectedThread.project.description}
+                            </span>
+                          </div>
                           <CardTitle className="text-lg">{selectedThread.topic}</CardTitle>
                           <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                             <Users className="w-4 h-4" />
@@ -1351,17 +1185,15 @@ export default function Messages() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {selectedThread.threadType === 'project' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
-                              data-testid="button-view-project"
-                            >
-                              <ExternalLink className="w-4 h-4 mr-1" />
-                              View Project
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
+                            data-testid="button-view-project"
+                          >
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            View Project
+                          </Button>
                           {selectedThread.isArchived ? (
                             <Button
                               variant="outline"
@@ -1612,6 +1444,8 @@ export default function Messages() {
                 )}
               </Card>
               )}
+              </>
+              )}
             </div>
           </Tabs>
         </div>
@@ -1688,22 +1522,18 @@ export default function Messages() {
             <DialogHeader className="border-b p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  {selectedThread.threadType === 'project' && (
-                    <>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Building2 className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">
-                          {selectedThread.client.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">
-                          {selectedThread.project.description}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex items-center gap-2 mb-1">
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedThread.client.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedThread.project.description}
+                    </span>
+                  </div>
                   <DialogTitle>{selectedThread.topic}</DialogTitle>
                   <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                     <Users className="w-4 h-4" />
@@ -1846,142 +1676,6 @@ export default function Messages() {
           </DialogContent>
         </Dialog>
       )}
-
-      {/* New Staff Thread Dialog */}
-      <Dialog open={showNewThreadDialog} onOpenChange={setShowNewThreadDialog}>
-        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-new-thread">
-          <DialogHeader>
-            <DialogTitle>Create New Staff Thread</DialogTitle>
-            <DialogDescription>
-              Start a new conversation with team members and send your first message.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="topic">Topic</Label>
-              <Input
-                id="topic"
-                placeholder="Enter thread topic..."
-                value={newThreadTopic}
-                onChange={(e) => setNewThreadTopic(e.target.value)}
-                data-testid="input-thread-topic"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Participants</Label>
-              
-              {/* Search Input */}
-              <div className="relative">
-                <Input
-                  placeholder="Search and select staff members..."
-                  value={participantSearch}
-                  onChange={(e) => setParticipantSearch(e.target.value)}
-                  data-testid="input-participant-search"
-                />
-                
-                {/* Search Results Dropdown */}
-                {participantSearch && (
-                  <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
-                    {usersLoading ? (
-                      <div className="text-sm text-muted-foreground p-4 text-center">Loading users...</div>
-                    ) : filteredParticipants && filteredParticipants.length > 0 ? (
-                      <div className="p-1">
-                        {filteredParticipants.map((u) => {
-                          const isSelected = selectedParticipants.includes(u.id);
-                          return (
-                            <div
-                              key={u.id}
-                              onClick={() => {
-                                if (!isSelected) {
-                                  setSelectedParticipants([...selectedParticipants, u.id]);
-                                }
-                                setParticipantSearch('');
-                              }}
-                              className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md cursor-pointer"
-                              data-testid={`button-add-participant-${u.id}`}
-                            >
-                              <div className="flex-1">
-                                <div className="font-medium text-sm">{getUserDisplayName(u)}</div>
-                                <div className="text-xs text-muted-foreground">{u.email}</div>
-                              </div>
-                              {isSelected && (
-                                <Check className="w-4 h-4 text-primary" />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-muted-foreground p-4 text-center">No users found</div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Selected Participants */}
-              {selectedParticipants.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-2 bg-muted/50 rounded-md min-h-[40px]">
-                  {selectedParticipants.map((userId) => {
-                    const user = allUsers?.find(u => u.id === userId);
-                    return user ? (
-                      <Badge
-                        key={userId}
-                        variant="secondary"
-                        className="flex items-center gap-1"
-                        data-testid={`selected-participant-${userId}`}
-                      >
-                        <span>{getUserDisplayName(user)}</span>
-                        <button
-                          onClick={() => setSelectedParticipants(selectedParticipants.filter(id => id !== userId))}
-                          className="hover:bg-muted-foreground/20 rounded-full p-0.5"
-                          data-testid={`remove-participant-${userId}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ) : null;
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="initial-message">Initial Message</Label>
-              <Textarea
-                id="initial-message"
-                placeholder="Type your first message..."
-                value={initialMessage}
-                onChange={(e) => setInitialMessage(e.target.value)}
-                className="min-h-[100px]"
-                data-testid="input-initial-message"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowNewThreadDialog(false);
-                setNewThreadTopic('');
-                setSelectedParticipants([]);
-                setInitialMessage('');
-                setParticipantSearch('');
-              }}
-              data-testid="button-cancel"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleCreateStaffThread} 
-              disabled={!newThreadTopic.trim() || selectedParticipants.length === 0 || !initialMessage.trim()}
-              data-testid="button-create-thread"
-            >
-              Create Thread
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Email Thread Viewer Modal */}
       {selectedEmailThreadId && (
