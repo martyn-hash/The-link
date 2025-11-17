@@ -666,6 +666,13 @@ export function InternalChatView({
       .flatMap(m => m.attachments || []);
   }, [messages]);
 
+  // Strip HTML tags from content to get plain text
+  const stripHtml = (html: string): string => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    return (doc.body.textContent || '').trim();
+  };
+
   // Call onThreadSelected when thread selection changes
   useEffect(() => {
     if (onThreadSelected) {
@@ -677,10 +684,10 @@ export function InternalChatView({
     <div className={`min-h-screen bg-background ${className}`}>
       {showNavigation && <TopNavigation user={user} />}
       
-      {/* Header */}
+      {/* Header with Thread Info */}
       <div className="border-b border-border bg-card">
         <div className="page-container py-6 md:py-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="page-title">
                 <Users className="w-6 h-6 md:w-7 md:h-7" />
@@ -697,13 +704,78 @@ export function InternalChatView({
               New Thread
             </Button>
           </div>
+          
+          {/* Thread Info Banner - shown when a thread is selected */}
+          {selectedThreadId && selectedThread && (
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  {selectedThread.threadType === 'project' && (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground" data-testid="text-selected-company">
+                          {selectedThread.client.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground" data-testid="text-selected-project">
+                          {selectedThread.project.description}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  <h2 className="text-lg font-semibold" data-testid="text-selected-topic">{selectedThread.topic}</h2>
+                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                    <Users className="w-4 h-4" />
+                    <span data-testid="text-participants">
+                      {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {selectedThread.threadType === 'project' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
+                      data-testid="button-view-project"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1" />
+                      View Project
+                    </Button>
+                  )}
+                  {selectedThread.isArchived ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
+                      data-testid="button-unarchive"
+                    >
+                      <ArchiveRestore className="w-4 h-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
+                      data-testid="button-archive"
+                    >
+                      <Archive className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="page-container py-6 md:py-8 space-y-8">
         <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-300px)]">
           {/* Thread List */}
-          <Card className="w-full md:w-1/3 flex flex-col" data-testid="thread-list-card">
+          <Card className="w-full md:w-80 flex flex-col" data-testid="thread-list-card">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Conversations</CardTitle>
@@ -789,7 +861,7 @@ export function InternalChatView({
                           </p>
                           {thread.lastMessage && (
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              {thread.lastMessage.content}
+                              {stripHtml(thread.lastMessage.content)}
                             </p>
                           )}
                         </div>
@@ -818,68 +890,6 @@ export function InternalChatView({
           <Card className="flex-1 flex flex-col" data-testid="message-view-card">
             {selectedThreadId && selectedThread ? (
               <>
-                <CardHeader className="border-b">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      {selectedThread.threadType === 'project' && (
-                        <>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Building2 className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground" data-testid="text-selected-company">
-                              {selectedThread.client.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground" data-testid="text-selected-project">
-                              {selectedThread.project.description}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                      <CardTitle className="text-lg" data-testid="text-selected-topic">{selectedThread.topic}</CardTitle>
-                      <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                        <Users className="w-4 h-4" />
-                        <span data-testid="text-participants">
-                          {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {selectedThread.threadType === 'project' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
-                          data-testid="button-view-project"
-                        >
-                          <ExternalLink className="w-4 h-4 mr-1" />
-                          View Project
-                        </Button>
-                      )}
-                      {selectedThread.isArchived ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
-                          data-testid="button-unarchive"
-                        >
-                          <ArchiveRestore className="w-4 h-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
-                          data-testid="button-archive"
-                        >
-                          <Archive className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
                 {/* All Attachments Gallery */}
                 {allAttachments.length > 0 && (
                   <div className="border-b">
