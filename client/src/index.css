@@ -241,7 +241,7 @@ textarea {
 .ProseMirror table td,
 .ProseMirror table th {
   min-width: 1em;
-  border: 1px solid #d0d7de;
+  border: 1px solid #000000;
   padding: 6px 8px;
   vertical-align: top;
   box-sizing: border-box;

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Bold,
   Italic,
@@ -188,17 +189,24 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
 
       {/* Text Color */}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            title="Text Color"
-            className="h-8 w-8 p-0"
-          >
-            <Palette className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 gap-1 min-w-[70px]"
+              >
+                <Palette className="h-4 w-4" />
+                <span className="text-xs">Color</span>
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Select text first, then choose a color</p>
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent>
           <DropdownMenuItem onClick={() => editor.chain().focus().setColor('#000000').run()}>
             <div className="flex items-center gap-2">
@@ -415,13 +423,15 @@ export function TiptapEditor({
   }, [content, editor]);
 
   return (
-    <div className={`border border-border rounded-md overflow-hidden ${className}`}>
-      {editable && <EditorMenuBar editor={editor} />}
-      <EditorContent 
-        editor={editor} 
-        className="tiptap-editor"
-        placeholder={placeholder}
-      />
-    </div>
+    <TooltipProvider>
+      <div className={`border border-border rounded-md overflow-hidden ${className}`}>
+        {editable && <EditorMenuBar editor={editor} />}
+        <EditorContent 
+          editor={editor} 
+          className="tiptap-editor"
+          placeholder={placeholder}
+        />
+      </div>
+    </TooltipProvider>
   );
 }

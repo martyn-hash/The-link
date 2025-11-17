@@ -437,7 +437,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                       className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                       data-testid={`message-${message.id}`}
                     >
-                      <div className={`max-w-[70%] ${isOwnMessage ? 'text-right' : 'text-left'}`}>
+                      <div className={`w-full max-w-[85%] ${isOwnMessage ? 'text-right' : 'text-left'}`}>
                         <div className="flex items-center gap-2 mb-1">
                           {!isOwnMessage && (
                             <Avatar className="w-6 h-6">
@@ -457,7 +457,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                           className="rounded-lg p-4 bg-card border border-border shadow-sm"
                         >
                           <div 
-                            className="text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-p:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-border prose-td:p-2"
+                            className="text-sm prose prose-sm max-w-none break-words prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2"
                             dangerouslySetInnerHTML={{ 
                               __html: DOMPurify.sanitize(message.content, {
                                 ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
