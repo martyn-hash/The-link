@@ -11,10 +11,12 @@ The Link is a comprehensive full-stack CRM and project management application de
     -   Clicking badge navigates to /messages page
     -   Updates every 30 seconds via `/api/project-messages/unread-count` endpoint
     -   Excludes client-staff threads (those are tracked separately in Client Chat tab)
+    -   **Fixed badge count mismatch**: Internal Chat tab badge now correctly matches top navigation badge by including both staff and project threads in calculation
 -   **Messages Page Tab Improvements**: Fixed Client Chat tab to display correct data
     -   Client Chat tab now correctly fetches and displays client-to-staff communication threads from `/api/internal/messages/threads`
     -   Previously incorrectly showed project message threads (staff-to-staff)
     -   Internal Chat and Client Chat tabs now properly separated with independent unread counts
+    -   **Added project thread fetching**: Messages page now fetches both staff and project threads to ensure accurate badge counts
 -   **Clients Page Redesign**: Transformed the Companies page into a unified Clients page with tabbed interface
     -   Two tabs: "Companies" (Companies House data) and "People" (contacts)
     -   Both tabs feature 30-row pagination for improved performance

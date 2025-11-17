@@ -358,6 +358,20 @@ export default function Messages() {
     refetchInterval: 30000,
   });
 
+  // Fetch project message threads (Internal Chat - project discussions)
+  const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
+    queryKey: ['/api/project-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
+    queryFn: async () => {
+      const response = await fetch(`/api/project-messages/my-threads?includeArchived=${archiveFilter === 'archived'}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch project threads');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+  });
+
   // Fetch email threads (Client Emails)
   const { data: emailThreadsData, isLoading: emailThreadsLoading } = useQuery<{ threads: EmailThread[] }>({
     queryKey: ['/api/emails/my-threads', { myEmailsOnly: emailFilter === 'my' }],
@@ -389,10 +403,14 @@ export default function Messages() {
     }))
     .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
 
-  const threadsLoading = clientStaffThreadsLoading || staffThreadsLoading || emailThreadsLoading;
+  const threadsLoading = clientStaffThreadsLoading || staffThreadsLoading || projectThreadsLoading || emailThreadsLoading;
 
   // Calculate unread counts
-  const internalUnreadCount = (staffThreads || []).reduce((sum, thread) => sum + thread.unreadCount, 0);
+  // Internal Chat includes BOTH standalone staff threads AND project message threads
+  // Count the NUMBER OF THREADS with unread messages (not total messages)
+  const internalUnreadCount = 
+    (staffThreads || []).filter(thread => thread.unreadCount > 0).length +
+    (projectThreads || []).filter(thread => thread.unreadCount > 0).length;
   const clientUnreadCount = clientChatThreads.filter(thread => thread.hasUnreadMessages).length;
   const emailUnreadCount = emailThreads.filter(thread => thread.hasUnread).length;
 
