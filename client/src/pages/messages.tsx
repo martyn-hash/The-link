@@ -957,15 +957,12 @@ export default function Messages() {
               Messages
             </h2>
           </div>
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-hidden">
-        <div className="page-container py-6 md:py-8 space-y-8 h-full">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            {!isMobile && (
-              <div className="flex items-center justify-between mb-6">
-                <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          
+          {/* Desktop Tabs - on same line as title */}
+          {!isMobile && (
+            <div className="flex-shrink-0">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid grid-cols-3">
                   <TabsTrigger value="internal" className="relative" data-testid="tab-internal-chat">
                     Internal Chat
                     {internalUnreadCount > 0 && (
@@ -991,8 +988,15 @@ export default function Messages() {
                     )}
                   </TabsTrigger>
                 </TabsList>
-              </div>
-            )}
+              </Tabs>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-hidden">
+        <div className="page-container py-6 md:py-8 space-y-8 h-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
 
             <div className="flex-1 flex gap-4 overflow-hidden">
               {/* Internal Chat View - uses dedicated /internal-chat layout */}

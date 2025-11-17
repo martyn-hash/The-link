@@ -36,6 +36,7 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
+  Maximize2,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -186,8 +187,11 @@ export function InternalChatView({
   // Expand/collapse message state
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [showAttachmentsGallery, setShowAttachmentsGallery] = useState(false);
+  const [focusModeOpen, setFocusModeOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previousMessageCountRef = useRef<number>(0);
+  const isInitialThreadLoadRef = useRef<boolean>(true);
 
   // Fetch project message threads
   const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
@@ -279,9 +283,31 @@ export function InternalChatView({
     }
   }, [selectedThreadId, selectedThreadType, allThreads]);
 
-  // Scroll to bottom when messages change
+  // Mark as initial load when switching threads
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    isInitialThreadLoadRef.current = true;
+    previousMessageCountRef.current = 0;
+  }, [selectedThreadId]);
+
+  // Scroll to bottom only when new messages are added (not when switching threads)
+  useEffect(() => {
+    const currentCount = messages?.length || 0;
+    const previousCount = previousMessageCountRef.current;
+    
+    // Skip scroll on initial thread load
+    if (isInitialThreadLoadRef.current && currentCount > 0) {
+      isInitialThreadLoadRef.current = false;
+      previousMessageCountRef.current = currentCount;
+      return;
+    }
+    
+    // Only scroll if the count increased (new messages were added)
+    if (currentCount > previousCount && currentCount > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    // Update the ref for next comparison
+    previousMessageCountRef.current = currentCount;
   }, [messages]);
 
   // Mark messages as read when thread is selected
@@ -896,6 +922,22 @@ export function InternalChatView({
           <Card className="flex-1 flex flex-col" data-testid="message-view-card">
             {selectedThreadId && selectedThread ? (
               <>
+                {/* Focus Mode Button */}
+                <CardHeader className="py-3 px-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFocusModeOpen(true)}
+                      aria-label="Focus Mode"
+                      title="Open in focus mode"
+                      data-testid="button-focus-mode"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+
                 {/* All Attachments Gallery */}
                 {allAttachments.length > 0 && (
                   <div className="border-b">
@@ -1466,6 +1508,129 @@ export function InternalChatView({
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Focus Mode Dialog */}
+      <Dialog open={focusModeOpen} onOpenChange={setFocusModeOpen}>
+        <DialogContent className="max-w-[80vw] h-[85vh] flex flex-col p-0" data-testid="dialog-focus-mode">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="text-xl">
+              {selectedThread?.threadType === 'project' ? (
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  <span>{selectedThread?.client?.name}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="w-5 h-5" />
+                  <span>{selectedThread?.topic}</span>
+                </div>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedThread?.threadType === 'project' 
+                ? selectedThread?.project?.description 
+                : `Participants: ${selectedThread?.participants.map(p => getUserDisplayName(p)).join(', ')}`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {messagesLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : messages && messages.length > 0 ? (
+              <div className="space-y-4">
+                {messages.map((message) => {
+                  const isCurrentUser = message.userId === user?.id;
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                      data-testid={`focus-message-${message.id}`}
+                    >
+                      <div className={`max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          {!isCurrentUser && message.user && (
+                            <>
+                              <Avatar className="w-6 h-6">
+                                <AvatarFallback className="text-xs">
+                                  {getUserInitials(message.user)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs font-medium text-foreground">
+                                {getUserDisplayName(message.user)}
+                              </span>
+                            </>
+                          )}
+                          {isCurrentUser && message.user && (
+                            <span className="text-xs font-medium text-foreground">
+                              {getUserDisplayName(message.user)}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                          </span>
+                        </div>
+                        <div
+                          className={`rounded-lg p-3 ${
+                            isCurrentUser
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                          }`}
+                        >
+                          <div 
+                            className="prose prose-sm max-w-none dark:prose-invert break-words"
+                            dangerouslySetInnerHTML={{
+                              __html: DOMPurify.sanitize(message.content, {
+                                ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+                                ALLOWED_ATTR: ['href', 'target', 'rel', 'style']
+                              })
+                            }}
+                          />
+                          {message.attachments && message.attachments.length > 0 && (
+                            <div className="mt-2">
+                              <AttachmentList
+                                attachments={message.attachments}
+                                readonly={true}
+                                threadId={selectedThreadId || undefined}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No messages yet</p>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t px-6 py-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFocusModeOpen(false)}
+                data-testid="button-close-focus-mode"
+              >
+                Close Focus Mode
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Close to send messages and access full features
+              </span>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
