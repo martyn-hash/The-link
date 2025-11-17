@@ -14,6 +14,12 @@ The Link is a comprehensive full-stack CRM and project management application de
         -   Drag-and-drop column reordering with @dnd-kit
         -   Resizable columns with single-save-on-mouseup optimization
         -   Preferences saved per user via /api/column-preferences endpoint
+-   **Navigation Menu Standardization**: Streamlined all navigation menus for consistency and reduced redundancy
+    -   Removed "Internal Chat" from desktop and mobile menus (accessible via Messages page)
+    -   Removed "People" from desktop and mobile menus (accessible via Clients page → People tab)
+    -   Desktop logo dropdown reorganized into balanced 3-column layout (3-3-2 items)
+    -   Mobile menu updated to display "Clients" label for consistency
+    -   All menus now funnel users through core destinations: Dashboard, Projects, Messages, Clients
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
