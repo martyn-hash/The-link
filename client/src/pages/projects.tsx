@@ -855,8 +855,17 @@ export default function Projects() {
     }
 
     // Archived/completed projects filter
-    // Only show archived/completed projects if showArchived is true
-    if (project.completionStatus || project.archived) {
+    // Special handling for kanban view: show completed projects regardless of showArchived
+    if (project.completionStatus) {
+      // In kanban view, always show projects with completion status (they go to completion columns)
+      if (viewMode === "kanban") {
+        // Continue to other filters - don't return early
+      } else {
+        // In list/dashboard views, only show if showArchived is true
+        return showArchived;
+      }
+    } else if (project.archived) {
+      // Archived projects without completion status: only show if showArchived is true
       return showArchived;
     }
 
