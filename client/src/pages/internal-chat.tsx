@@ -41,6 +41,7 @@ import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/at
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useIsMobile } from '@/hooks/use-mobile';
 import DOMPurify from 'isomorphic-dompurify';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 interface ProjectMessageThread {
   threadType: 'project';
@@ -438,31 +439,38 @@ export default function InternalChat() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) return;
+    // Check for meaningful content
+    if (!hasMeaningfulContent(newMessage) && selectedFiles.length === 0 && !recordedAudio) return;
 
     let attachments: any[] = [];
 
     try {
+      setUploadingFiles(true);
+      
       // Upload selected files
       if (selectedFiles.length > 0) {
-        setUploadingFiles(true);
         attachments = await Promise.all(selectedFiles.map(file => uploadFile(file)));
-        setUploadingFiles(false);
       }
 
       // Upload recorded audio
       if (recordedAudio) {
-        setUploadingFiles(true);
         // Create a file-like object from the blob
         const audioFile = Object.assign(recordedAudio, { name: 'voice-note.webm' }) as File;
         const audioAttachment = await uploadFile(audioFile);
         attachments.push(audioAttachment);
-        setUploadingFiles(false);
       }
+
+      // Sanitize HTML content before sending
+      const sanitizedMessage = DOMPurify.sanitize(newMessage, {
+        ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+        ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+        FORBID_ATTR: ['onerror', 'onload', 'contenteditable'],
+        ALLOW_DATA_ATTR: false,
+      });
 
       // Send message with attachments
       sendMessageMutation.mutate({
-        content: newMessage,
+        content: sanitizedMessage || '<p>(Attachment)</p>',
         attachments: attachments.length > 0 ? attachments : undefined,
       });
     } catch (error: any) {
@@ -471,6 +479,7 @@ export default function InternalChat() {
         description: error.message || "Failed to upload files",
         variant: "destructive",
       });
+    } finally {
       setUploadingFiles(false);
     }
   };
@@ -585,6 +594,16 @@ export default function InternalChat() {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  };
+
+  const hasMeaningfulContent = (htmlContent: string): boolean => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const textContent = (doc.body.textContent || '').trim();
+    const hasTables = doc.querySelectorAll('table').length > 0;
+    const hasImages = doc.querySelectorAll('img').length > 0;
+    const hasLists = doc.querySelectorAll('ul, ol').length > 0;
+    return textContent.length > 0 || hasTables || hasImages || hasLists;
   };
 
   if (authLoading) {
@@ -1057,43 +1076,39 @@ export default function InternalChat() {
                     </div>
                   )}
 
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => isRecording ? stopRecording() : startRecording()}
-                      disabled={uploadingFiles || !!recordedAudio}
-                      data-testid="button-record-voice"
-                    >
-                      <Mic className="w-4 h-4" />
-                    </Button>
-
-                    <Textarea
-                      placeholder="Type your message..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                      className="flex-1 min-h-[80px] resize-none"
-                      disabled={uploadingFiles}
-                      data-testid="input-message"
+                  <div className="space-y-3">
+                    <TiptapEditor
+                      content={newMessage}
+                      onChange={setNewMessage}
+                      placeholder="Type your message with rich text, tables, and formatting..."
+                      className="min-h-[150px]"
                     />
 
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={(!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) || uploadingFiles || sendMessageMutation.isPending}
-                      data-testid="button-send"
-                    >
-                      {uploadingFiles || sendMessageMutation.isPending ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                    </Button>
+                    <div className="flex gap-2 items-center">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => isRecording ? stopRecording() : startRecording()}
+                        disabled={uploadingFiles || !!recordedAudio}
+                        data-testid="button-record-voice"
+                      >
+                        <Mic className="w-4 h-4" />
+                      </Button>
+
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={(!hasMeaningfulContent(newMessage) && selectedFiles.length === 0 && !recordedAudio) || uploadingFiles || sendMessageMutation.isPending}
+                        data-testid="button-send"
+                        className="flex-1"
+                      >
+                        {uploadingFiles || sendMessageMutation.isPending ? (
+                          <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                          <Send className="w-4 h-4 mr-2" />
+                        )}
+                        Send Message
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </>
