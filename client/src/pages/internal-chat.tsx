@@ -40,6 +40,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useIsMobile } from '@/hooks/use-mobile';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface ProjectMessageThread {
   threadType: 'project';
@@ -571,6 +572,21 @@ export default function InternalChat() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const isHtmlContent = (content: string): boolean => {
+    // Check for actual HTML tags from our allow-list (not placeholders like <project>)
+    const htmlTagPattern = /<(p|br|strong|b|em|i|u|s|h1|h2|h3|ol|ul|li|a|table|thead|tbody|tr|th|td|span|div)[>\s/]/i;
+    return htmlTagPattern.test(content);
+  };
+
+  const escapeHtml = (text: string): string => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -846,7 +862,24 @@ export default function InternalChat() {
                                           : 'bg-muted'
                                       }`}
                                     >
-                                      <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                      <div 
+                                        className={`text-sm prose prose-sm max-w-none break-words ${
+                                          isCurrentUser 
+                                            ? 'prose-headings:text-primary-foreground prose-p:text-primary-foreground prose-strong:font-bold prose-strong:text-primary-foreground prose-em:italic prose-em:text-primary-foreground prose-ul:text-primary-foreground prose-ol:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground prose-a:underline' 
+                                            : 'prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary'
+                                        } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2`}
+                                        dangerouslySetInnerHTML={{ 
+                                          __html: DOMPurify.sanitize(
+                                            isHtmlContent(message.content) 
+                                              ? message.content 
+                                              : `<p style="white-space: pre-wrap">${escapeHtml(message.content).replace(/\n/g, '<br>')}</p>`,
+                                            {
+                                              ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+                                              ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+                                            }
+                                          )
+                                        }}
+                                      />
                                       {message.attachments && message.attachments.length > 0 && (
                                         <div className="mt-2">
                                           <AttachmentList
@@ -913,7 +946,24 @@ export default function InternalChat() {
                                         : 'bg-muted'
                                     }`}
                                   >
-                                    <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                                    <div 
+                                      className={`text-sm prose prose-sm max-w-none break-words ${
+                                        isCurrentUser 
+                                          ? 'prose-headings:text-primary-foreground prose-p:text-primary-foreground prose-strong:font-bold prose-strong:text-primary-foreground prose-em:italic prose-em:text-primary-foreground prose-ul:text-primary-foreground prose-ol:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground prose-a:underline' 
+                                          : 'prose-headings:text-foreground prose-strong:font-bold prose-strong:text-foreground prose-em:italic prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-a:text-primary'
+                                      } prose-table:border-collapse prose-th:border prose-th:border-black prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-black prose-td:p-2`}
+                                      dangerouslySetInnerHTML={{ 
+                                        __html: DOMPurify.sanitize(
+                                          isHtmlContent(message.content) 
+                                            ? message.content 
+                                            : `<p style="white-space: pre-wrap">${escapeHtml(message.content).replace(/\n/g, '<br>')}</p>`,
+                                          {
+                                            ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+                                            ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'colspan', 'rowspan', 'data-row', 'data-column', 'data-cell'],
+                                          }
+                                        )
+                                      }}
+                                    />
                                     {message.attachments && message.attachments.length > 0 && (
                                       <div className="mt-2">
                                         <AttachmentList
