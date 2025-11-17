@@ -3,6 +3,18 @@
 ## Overview
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
+## Recent Changes (November 17, 2025)
+-   **Clients Page Redesign**: Transformed the Companies page into a unified Clients page with tabbed interface
+    -   Two tabs: "Companies" (Companies House data) and "People" (contacts)
+    -   Both tabs feature 30-row pagination for improved performance
+    -   Navigation label updated from "Companies" to "Clients"
+    -   /people route now redirects to /companies with automatic tab switching
+    -   People tab includes advanced column customization:
+        -   Column visibility toggles
+        -   Drag-and-drop column reordering with @dnd-kit
+        -   Resizable columns with single-save-on-mouseup optimization
+        -   Preferences saved per user via /api/column-preferences endpoint
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
