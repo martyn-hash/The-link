@@ -35,6 +35,7 @@ import {
   FolderKanban,
   ChevronDown,
   ChevronUp,
+  Plus,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -684,93 +685,86 @@ export function InternalChatView({
     <div className={`min-h-screen bg-background ${className}`}>
       {showNavigation && <TopNavigation user={user} />}
       
-      {/* Header with Thread Info */}
-      <div className="border-b border-border bg-card">
-        <div className="page-container py-6 md:py-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="page-title">
-                <Users className="w-6 h-6 md:w-7 md:h-7" />
-                Internal Chat
-              </h1>
-              <p className="text-meta mt-1">Staff-to-staff messaging</p>
-            </div>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setShowNewThreadDialog(true)}
-              data-testid="button-new-thread"
-            >
-              New Thread
-            </Button>
-          </div>
-          
-          {/* Thread Info Banner - shown when a thread is selected */}
-          {selectedThreadId && selectedThread && (
-            <div className="border-t pt-4 mt-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  {selectedThread.threadType === 'project' && (
-                    <>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Building2 className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground" data-testid="text-selected-company">
-                          {selectedThread.client.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground" data-testid="text-selected-project">
-                          {selectedThread.project.description}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  <h2 className="text-lg font-semibold" data-testid="text-selected-topic">{selectedThread.topic}</h2>
-                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                    <Users className="w-4 h-4" />
-                    <span data-testid="text-participants">
-                      {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  {selectedThread.threadType === 'project' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
-                      data-testid="button-view-project"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-1" />
-                      View Project
-                    </Button>
-                  )}
-                  {selectedThread.isArchived ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
-                      data-testid="button-unarchive"
-                    >
-                      <ArchiveRestore className="w-4 h-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
-                      data-testid="button-archive"
-                    >
-                      <Archive className="w-4 h-4" />
-                    </Button>
-                  )}
+      {/* Thread Info Banner - compact layout shown when a thread is selected */}
+      {selectedThreadId && selectedThread && (
+        <div className="border-b border-border bg-card">
+          <div className="page-container py-4">
+            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4">
+              {/* Column 1: Client + Project */}
+              <div className="min-w-0">
+                {selectedThread.threadType === 'project' ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm font-medium truncate" data-testid="text-selected-company">
+                      <Building2 className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+                      <span className="truncate">{selectedThread.client.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 truncate" data-testid="text-selected-project">
+                      <FolderKanban className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{selectedThread.project.description}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm font-medium">Staff Discussion</div>
+                )}
+              </div>
+              
+              {/* Column 2: Topic + Participants */}
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate" data-testid="text-selected-topic">{selectedThread.topic}</div>
+                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground truncate">
+                  <Users className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate" data-testid="text-participants">
+                    {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                  </span>
                 </div>
               </div>
+              
+              {/* Column 3: Action Buttons - stack on mobile, row on desktop */}
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowNewThreadDialog(true)}
+                  data-testid="button-new-thread"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  New Thread
+                </Button>
+                {selectedThread.threadType === 'project' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocation(`/projects/${selectedThread.project.id}`)}
+                    data-testid="button-view-project"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-1" />
+                    View Project
+                  </Button>
+                )}
+                {selectedThread.isArchived ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
+                    data-testid="button-unarchive"
+                  >
+                    <ArchiveRestore className="w-4 h-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
+                    data-testid="button-archive"
+                  >
+                    <Archive className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="page-container py-6 md:py-8 space-y-8">
         <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-300px)]">
@@ -779,17 +773,29 @@ export function InternalChatView({
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Conversations</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
-                    queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
-                  }}
-                  data-testid="button-refresh"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setShowNewThreadDialog(true)}
+                    aria-label="New Thread"
+                    title="New Thread"
+                    data-testid="button-new-thread-header"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+                      queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
+                    }}
+                    data-testid="button-refresh"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-3 mt-4">
                 <Input

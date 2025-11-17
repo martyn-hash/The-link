@@ -950,19 +950,15 @@ export default function Messages() {
       <TopNavigation user={user} />
       
       {/* Header */}
-      <div className="border-b border-border bg-card">
-        <div className="page-container py-6 md:py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="page-title">
-                <MessageCircle className="w-6 h-6 md:w-7 md:h-7" />
-                Messages
-              </h1>
-              <p className="text-meta mt-1">Client communication & staff messaging</p>
-            </div>
+      <header className="bg-card border-b border-border page-container py-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="page-title">
+              Messages
+            </h2>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="flex-1 overflow-hidden">
         <div className="page-container py-6 md:py-8 space-y-8 h-full">
