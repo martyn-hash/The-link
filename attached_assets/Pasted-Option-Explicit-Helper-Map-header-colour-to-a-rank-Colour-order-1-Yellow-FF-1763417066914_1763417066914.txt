@@ -1,0 +1,175 @@
+Option Explicit
+
+'==== Helper: Map header colour to a rank ====
+' Colour order:
+'   1 = Yellow  (#FFFF00)
+'   2 = Blue    (#00B0F0)
+'   3 = Red     (#FF0000)
+'   4 = No fill / anything else
+Function GetColourRank(cell As Range) As Long
+    Dim clr As Long
+    
+    With cell.Interior
+        If .ColorIndex = xlColorIndexNone Then
+            GetColourRank = 4
+            Exit Function
+        End If
+        clr = .Color
+    End With
+    
+    Select Case clr
+        Case RGB(255, 255, 0) ' #FFFF00 yellow
+            GetColourRank = 1
+        Case RGB(0, 176, 240) ' #00B0F0 blue
+            GetColourRank = 2
+        Case RGB(255, 0, 0)   ' #FF0000 red
+            GetColourRank = 3
+        Case Else             ' Anything else
+            GetColourRank = 4
+    End Select
+End Function
+
+
+'==== Sort by colour, then completion, then header ====
+' Colour order: Yellow, Blue, Red, No colour
+' Within colour: most populated → least
+' Then: header A–Z
+Sub SortColumnsByColourAndCompletion()
+
+    Dim ws As Worksheet
+    Dim lastRow As Long, lastCol As Long
+    Dim c As Long
+    Dim cnt As Long
+    
+    Set ws = ActiveSheet
+    
+    With ws
+        If Application.WorksheetFunction.CountA(.Cells) = 0 Then
+            MsgBox "No data found on sheet.", vbExclamation
+            Exit Sub
+        End If
+        
+        ' Find last used row & column
+        lastRow = .Cells.Find(What:="*", After:=.Cells(1, 1), _
+                              LookIn:=xlFormulas, LookAt:=xlPart, _
+                              SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
+        
+        lastCol = .Cells.Find(What:="*", After:=.Cells(1, 1), _
+                              LookIn:=xlFormulas, LookAt:=xlPart, _
+                              SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
+        
+        ' Insert two helper rows:
+        ' Row 1 = colour rank
+        ' Row 2 = non-empty count
+        .Rows(1).Insert
+        .Rows(1).Insert
+        lastRow = lastRow + 2   ' Shifted down
+        
+        ' Original headers are now in row 3
+        ' Data starts in row 4
+        For c = 1 To lastCol
+            ' Colour rank based on header cell colour
+            .Cells(1, c).Value = GetColourRank(.Cells(3, c))
+            
+            ' Count non-empty cells from row 4 down
+            cnt = Application.WorksheetFunction.CountA(.Range(.Cells(4, c), .Cells(lastRow, c)))
+            .Cells(2, c).Value = cnt
+        Next c
+        
+        ' Sort columns left-to-right:
+        ' 1) Colour rank (row 1) ascending
+        ' 2) Completion count (row 2) descending
+        ' 3) Header text (row 3) ascending
+        With .Sort
+            .SortFields.Clear
+            
+            .SortFields.Add Key:=ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol)), _
+                            SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+            
+            .SortFields.Add Key:=ws.Range(ws.Cells(2, 1), ws.Cells(2, lastCol)), _
+                            SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
+            
+            .SortFields.Add Key:=ws.Range(ws.Cells(3, 1), ws.Cells(3, lastCol)), _
+                            SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+            
+            .SetRange ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
+            .Header = xlNo
+            .MatchCase = False
+            .Orientation = xlLeftToRight
+            .Apply
+        End With
+        
+        ' Remove helper rows (headers back to row 1)
+        .Rows(1).Delete
+        .Rows(1).Delete
+    End With
+    
+    MsgBox "Columns sorted by colour, completion, then header.", vbInformation
+
+End Sub
+
+
+'==== Original: Sort only by completion, then header ====
+' Keeps columns in order of:
+'   1) Most populated rows → least
+'   2) Header A–Z
+Sub SortColumnsByCompletion()
+
+    Dim ws As Worksheet
+    Dim lastRow As Long, lastCol As Long
+    Dim c As Long
+    Dim cnt As Long
+    
+    Set ws = ActiveSheet
+    
+    With ws
+        If Application.WorksheetFunction.CountA(.Cells) = 0 Then
+            MsgBox "No data found on sheet.", vbExclamation
+            Exit Sub
+        End If
+        
+        ' Find last used row & column
+        lastRow = .Cells.Find(What:="*", After:=.Cells(1, 1), _
+                              LookIn:=xlFormulas, LookAt:=xlPart, _
+                              SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
+        
+        lastCol = .Cells.Find(What:="*", After:=.Cells(1, 1), _
+                              LookIn:=xlFormulas, LookAt:=xlPart, _
+                              SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
+        
+        ' Insert helper row for counts
+        .Rows(1).Insert
+        lastRow = lastRow + 1   ' Shifted down
+        
+        ' Headers now in row 2, data starts row 3
+        For c = 1 To lastCol
+            cnt = Application.WorksheetFunction.CountA(.Range(.Cells(3, c), .Cells(lastRow, c)))
+            .Cells(1, c).Value = cnt
+        Next c
+        
+        ' Sort columns left-to-right:
+        ' 1) Count (row 1) descending
+        ' 2) Header (row 2) ascending
+        With .Sort
+            .SortFields.Clear
+            
+            .SortFields.Add Key:=ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol)), _
+                            SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
+            
+            .SortFields.Add Key:=ws.Range(ws.Cells(2, 1), ws.Cells(2, lastCol)), _
+                            SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+            
+            .SetRange ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
+            .Header = xlNo
+            .MatchCase = False
+            .Orientation = xlLeftToRight
+            .Apply
+        End With
+        
+        ' Remove helper row
+        .Rows(1).Delete
+    End With
+    
+    MsgBox "Columns sorted by completion count, then header name.", vbInformation
+
+End Sub
