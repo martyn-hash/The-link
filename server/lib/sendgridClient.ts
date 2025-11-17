@@ -63,7 +63,10 @@ export async function sendProjectMessageNotification({
     
     const msg = {
       to,
-      from: fromEmail,
+      from: {
+        email: fromEmail,
+        name: 'The Link'
+      },
       subject: `New message in ${threadTopic}`,
       text: `${senderName} sent a message in "${threadTopic}" for project ${projectName}.\n\n${messagePreview}\n\nView the conversation: ${threadUrl}`,
       html: `

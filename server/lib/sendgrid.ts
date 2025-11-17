@@ -251,7 +251,10 @@ export async function sendReminderEmail(
 
     const msg = {
       to: recipientEmail,
-      from: fromEmail,
+      from: {
+        email: fromEmail,
+        name: 'The Link'
+      },
       subject,
       html,
     };
@@ -399,7 +402,10 @@ export async function sendCompletedDocumentEmail(
 
     const msg: any = {
       to: recipientEmail,
-      from: fromEmail,
+      from: {
+        email: fromEmail,
+        name: 'The Link'
+      },
       subject,
       html,
     };
