@@ -854,10 +854,10 @@ export default function Projects() {
       }
     }
 
-    // Always include completed projects regardless of filter settings
-    // Filters only apply to active (non-completed) projects
-    if (project.completionStatus) {
-      return true;
+    // Archived/completed projects filter
+    // Only show archived/completed projects if showArchived is true
+    if (project.completionStatus || project.archived) {
+      return showArchived;
     }
 
     return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch && behindScheduleMatch;
