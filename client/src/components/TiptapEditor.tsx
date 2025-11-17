@@ -53,7 +53,10 @@ const MenuButton = ({
     type="button"
     variant={active ? "secondary" : "ghost"}
     size="sm"
-    onClick={onClick}
+    onMouseDown={(e) => {
+      e.preventDefault();
+      onClick();
+    }}
     disabled={disabled}
     title={title}
     className="h-8 w-8 p-0"
@@ -71,7 +74,8 @@ const TableInsertPicker = ({ editor }: { editor: Editor }) => {
     setHoveredCell({ row, col });
   };
 
-  const handleCellClick = (row: number, col: number) => {
+  const handleCellClick = (e: React.MouseEvent, row: number, col: number) => {
+    e.preventDefault();
     // Insert the table first, then close the popover
     editor.chain().focus().insertTable({
       rows: row + 1,
@@ -114,7 +118,7 @@ const TableInsertPicker = ({ editor }: { editor: Editor }) => {
                       isHighlighted ? 'bg-primary' : 'bg-background hover:bg-muted'
                     }`}
                     onMouseEnter={() => handleCellHover(row, col)}
-                    onClick={() => handleCellClick(row, col)}
+                    onMouseDown={(e) => handleCellClick(e, row, col)}
                     aria-label={`Insert ${row + 1} x ${col + 1} table`}
                     data-testid={`table-cell-${row}-${col}`}
                   />
