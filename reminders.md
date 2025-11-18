@@ -163,9 +163,112 @@ This document provides a comprehensive review of the client-facing notifications
 
 ---
 
+---
+
+## 🔄 SCHEDULING WORKFLOW VERIFICATION
+
+### ✅ What Actually Works
+
+#### 1. Project Start Date Notifications (Service-Based)
+**Status:** ✅ **FULLY FUNCTIONAL**  
+**Trigger:** When a service is added to a client  
+**Function:** `scheduleServiceStartDateNotifications()`  
+**Called from:** 
+- `POST /api/clients/:id/services` (server/routes/clients.ts line 1145)
+- `POST /api/client-services` (server/routes/clients.ts line 1473)
+- `POST /api/project-types/:projectTypeId/reschedule-notifications` (server/routes/notifications.ts)
+
+**How it works:**
+1. Staff adds a service to a client
+2. System finds all active start_date notifications for that project type
+3. Creates scheduled_notifications entries for each notification × recipient
+4. Notifications are sent by the cron job (`notification-cron.ts`) every 5 minutes
+5. Idempotent - re-running replaces old scheduled notifications
+
+#### 2. Project Due Date Notifications (Project-Based)
+**Status:** ✅ **FULLY FUNCTIONAL**  
+**Trigger:** When a project is created (automatically or manually)  
+**Function:** `scheduleProjectDueDateNotifications()`  
+**Called from:**
+- `server/core/project-creator.ts` (when projects are auto-created)
+- `POST /api/project-types/:projectTypeId/reschedule-notifications` (server/routes/notifications.ts)
+
+**How it works:**
+1. Project is created with a due date
+2. System finds all active due_date notifications for that project type
+3. Creates scheduled_notifications entries for each notification × recipient
+4. Notifications are sent by the cron job every 5 minutes
+5. Idempotent - re-running replaces old scheduled notifications
+
+#### 3. Stage Change Notifications
+**Status:** ✅ **FUNCTIONAL (Different Pattern)**  
+**Important:** Stage notifications are **NOT scheduled in advance** - they are **sent immediately** when a stage change occurs.
+
+**Workflow:**
+1. Staff changes project stage via `PATCH /api/projects/:id/status`
+2. System calls `storage.prepareStageChangeNotification()` to build preview
+3. Frontend shows preview modal (`StageChangeNotificationModal`)
+4. Staff can review/edit email subject, body, push title/body
+5. Staff clicks "Send" → calls `POST /api/projects/:id/send-stage-change-notification`
+6. Emails sent immediately via SendGrid
+7. Push notifications sent immediately
+8. **No scheduled_notifications entries created** - this is intentional!
+
+**Why immediate vs scheduled?**
+- Stage changes happen in real-time during work
+- Notifications need to inform assignees immediately about status changes
+- Preview/approval ensures staff have control over timing and content
+
+---
+
 ## ⚠️ GAPS & INCOMPLETE FEATURES
 
 ### Critical Gaps
+
+#### 0. Client Request Reminders NOT Integrated! 🚨
+**Status:** ⚠️ **CODE EXISTS BUT NEVER CALLED**  
+**Impact:** HIGH - Reminders will never be scheduled  
+**Location:** `server/notification-scheduler.ts` line 641 (`scheduleClientRequestReminders()`)
+
+**The Problem:**
+The `scheduleClientRequestReminders()` function is complete and ready, but it's **NEVER CALLED** when task instances are created!
+
+**Expected workflow:**
+1. Staff creates task instance via `POST /api/task-instances` ✅
+2. Task is created and immediate email/push sent ✅
+3. System should call `scheduleClientRequestReminders()` ❌ **MISSING**
+4. Follow-up reminders should be scheduled ❌ **NEVER HAPPENS**
+
+**What needs to be fixed:**
+Add to `server/routes/tasks.ts` around line 1159 (after task creation):
+```typescript
+// Schedule follow-up reminders if this task is linked to a notification with reminders
+if (templateId) {
+  const template = await storage.getClientRequestTemplateById(templateId);
+  if (template?.projectTypeNotificationId) {
+    try {
+      const { scheduleClientRequestReminders } = await import("../notification-scheduler");
+      await scheduleClientRequestReminders({
+        taskInstanceId: instance.id,
+        clientId: clientId,
+        projectTypeNotificationId: template.projectTypeNotificationId,
+        taskCreatedAt: instance.createdAt,
+        relatedPeople: [personId], // Or get all related people for client
+      });
+    } catch (reminderError) {
+      console.error('[Reminders] Error scheduling reminders:', reminderError);
+      // Don't fail task creation if reminder scheduling fails
+    }
+  }
+}
+```
+
+**Backend verification:**
+- ✅ `scheduleClientRequestReminders()` function exists and is complete
+- ✅ Database table `client_request_reminders` exists
+- ✅ API routes for creating/managing reminders exist
+- ✅ `stopTaskInstanceReminders()` is called when tasks are cancelled (works correctly)
+- ❌ **Never scheduled in the first place!**
 
 #### 1. VoodooSMS Integration
 **Status:** Placeholder only  
@@ -427,26 +530,78 @@ Before marking the system as production-ready:
 
 The notifications and reminders system has a **solid foundation** with approximately **70-75% of the core functionality complete**. The backend architecture is robust and well-designed, the database schema is comprehensive, and the basic UI flows are functional.
 
-**Key Strengths:**
+### Fundamental Scheduling Status
+
+**✅ WHAT WORKS:**
+1. **Project Start Date Notifications** - Fully functional, scheduled when services are added to clients
+2. **Project Due Date Notifications** - Fully functional, scheduled when projects are created
+3. **Stage Change Notifications** - Fully functional, sent immediately with preview/approval (intentionally NOT scheduled)
+4. **Notification Sending** - Cron job runs every 5 minutes and processes due notifications
+5. **Reminder Stopping** - When tasks are cancelled, reminders are properly stopped
+
+**🚨 CRITICAL BUG:**
+- **Client Request Reminders** - The `scheduleClientRequestReminders()` function is complete but **NEVER CALLED** when task instances are created. This is a simple integration gap - the code exists, it just needs to be invoked in the task creation endpoint.
+
+### Key Strengths
 - ✅ Excellent backend architecture with proper separation of concerns
-- ✅ Comprehensive variable system for personalization
+- ✅ Comprehensive variable system for personalization (40+ variables)
 - ✅ **Tiptap rich text editor already integrated** ✨
-- ✅ Robust scheduling and sender services
+- ✅ Robust scheduling and sender services with idempotency
 - ✅ Good admin tooling for notification management
+- ✅ Transaction-based operations for data consistency
+- ✅ Proper filtering by notification preferences
 
-**Critical Gaps to Address:**
-- ⚠️ VoodooSMS integration (SMS currently non-functional)
-- ⚠️ Client Request Reminders UI (backend ready, no frontend)
-- ⚠️ Client-facing features (portal views, opt-out controls)
-- ⚠️ Service addition notification preview
-- ⚠️ Recipient selection when adding services
+### Critical Gaps to Address
 
-**Recommended Next Steps:**
-1. Integrate VoodooSMS for SMS delivery
-2. Build Client Request Reminders UI
-3. Implement notification preview when adding services
-4. Add recipient selection UI
-5. Build client portal notification views
-6. Complete Companies House integration for auto-rescheduling
+**Must Fix (Blocking Core Functionality):**
+1. 🚨 **Wire up Client Request Reminders** - Add one function call in task creation endpoint (5 minutes fix!)
+2. ⚠️ **VoodooSMS integration** - SMS notifications log to console but don't actually send
 
-Once these gaps are filled, the system will be production-ready and provide comprehensive automated communication capabilities for client engagement.
+**High Priority (User Experience):**
+3. ⚠️ **Client Request Reminders UI** - Backend complete, no frontend to create/manage reminders
+4. ⚠️ **Service addition notification preview** - Show clients what notifications they'll receive
+5. ⚠️ **Recipient selection UI** - Choose which people get notifications when adding service
+
+**Medium Priority (Client Features):**
+6. ⚠️ **Client portal notification views** - Let clients see/manage their notifications
+7. ⚠️ **Client detail notifications tab** - Staff view of client-specific notifications
+8. ⚠️ **Companies House auto-rescheduling** - When dates change, update notifications
+
+### Recommended Next Steps
+
+**Phase 1: Fix Critical Bug (30 minutes)**
+1. Add `scheduleClientRequestReminders()` call to task creation endpoint
+2. Test reminder scheduling end-to-end
+3. Verify reminders appear in scheduled notifications admin view
+
+**Phase 2: SMS Integration (2-3 hours)**
+1. Get VoodooSMS API credentials
+2. Implement SMS sending in notification-sender.ts
+3. Test with real phone numbers
+
+**Phase 3: Complete Reminder Workflow (1-2 days)**
+1. Build Client Request Reminders UI in notification edit page
+2. Show reminder schedule preview
+3. Test full workflow from notification creation → reminder scheduling → sending
+
+**Phase 4: Enhance User Experience (3-5 days)**
+1. Notification preview when adding services
+2. Recipient selection UI
+3. Client portal notification management
+4. Client detail notifications tab
+
+**Phase 5: Polish & Integration (2-3 days)**
+1. Companies House auto-rescheduling
+2. Notification preview/test send
+3. Time-of-day controls
+4. Analytics dashboard
+
+### Final Assessment
+
+The system is **functionally complete for 3 out of 4 notification types**:
+- ✅ **Project Start Date Notifications** - Production ready
+- ✅ **Project Due Date Notifications** - Production ready  
+- ✅ **Stage Change Notifications** - Production ready (different pattern but working as designed)
+- ❌ **Client Request Reminders** - **One function call away from working!**
+
+Once the Client Request Reminders are wired up and VoodooSMS is integrated, the fundamental scheduling infrastructure will be **100% operational**. The remaining gaps are all UI/UX enhancements and client-facing features, not core scheduling functionality.
