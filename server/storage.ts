@@ -4341,6 +4341,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Use a transaction to ensure chronology and field responses are created atomically
+    // Capture chronologyEntry for use outside transaction (for thread creation)
+    let chronologyEntryId: string | undefined;
+    
     const updatedProject = await db.transaction(async (tx) => {
       // Backfill plain text notes from HTML for backward compatibility
       let notesText = update.notes;
@@ -4371,6 +4374,9 @@ export class DatabaseStorage implements IStorage {
         timeInPreviousStage,
         businessHoursInPreviousStage,
       }).returning();
+
+      // Capture the chronology entry ID for thread creation
+      chronologyEntryId = chronologyEntry.id;
 
       // Create field responses if provided
       if (update.fieldResponses && update.fieldResponses.length > 0) {
@@ -4414,44 +4420,47 @@ export class DatabaseStorage implements IStorage {
 
     // Auto-create message thread if person changing stage differs from person responsible for new stage
     // Only create if both users are defined (new stage has an assignee)
-    if (userId && newAssigneeId && userId !== newAssigneeId) {
+    if (userId && newAssigneeId && userId !== newAssigneeId && chronologyEntryId) {
       try {
-        const threadTopic = `${oldStatus} to ${update.newStatus} chat`;
+        // Create unique thread topic with timestamp for each stage change
+        // Include chronology ID suffix to guarantee uniqueness even for rapid consecutive changes
+        const timestamp = new Date().toLocaleString('en-GB', { 
+          day: '2-digit', 
+          month: 'short', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        const shortId = chronologyEntryId.substring(0, 8); // First 8 chars for readability
+        const threadTopic = `${oldStatus} to ${update.newStatus} - ${timestamp} (${shortId})`;
         
-        // Check if a thread with this exact topic already exists for this project
-        const existingThreads = await this.getProjectMessageThreadsByProjectId(update.projectId);
-        const threadExists = existingThreads.some(t => t.topic === threadTopic);
+        // Create the message thread (no duplicate check - create new thread every time)
+        const newThread = await this.createProjectMessageThread({
+          projectId: update.projectId,
+          topic: threadTopic,
+          createdByUserId: userId,
+        });
         
-        if (!threadExists) {
-          // Create the message thread
-          const newThread = await this.createProjectMessageThread({
-            projectId: update.projectId,
-            topic: threadTopic,
-            createdByUserId: userId,
-          });
-          
-          // Add both users as participants
-          await this.createProjectMessageParticipant({
+        // Add both users as participants
+        await this.createProjectMessageParticipant({
+          threadId: newThread.id,
+          userId: userId,
+        });
+        
+        await this.createProjectMessageParticipant({
+          threadId: newThread.id,
+          userId: newAssigneeId,
+        });
+        
+        // Create initial message with stage change notes if provided
+        if (update.notesHtml && update.notesHtml.trim()) {
+          await this.createProjectMessage({
             threadId: newThread.id,
+            content: update.notesHtml,
             userId: userId,
           });
-          
-          await this.createProjectMessageParticipant({
-            threadId: newThread.id,
-            userId: newAssigneeId,
-          });
-          
-          // Create initial message with stage change notes if provided
-          if (update.notesHtml && update.notesHtml.trim()) {
-            await this.createProjectMessage({
-              threadId: newThread.id,
-              content: update.notesHtml,
-              userId: userId,
-            });
-          }
-          
-          console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}`);
         }
+        
+        console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}`);
       } catch (error) {
         console.error(`[Storage] Failed to create message thread for project ${update.projectId}:`, error);
         // Don't throw - thread creation failure shouldn't block the status update
