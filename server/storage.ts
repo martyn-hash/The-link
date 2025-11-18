@@ -4342,6 +4342,21 @@ export class DatabaseStorage implements IStorage {
 
     // Use a transaction to ensure chronology and field responses are created atomically
     const updatedProject = await db.transaction(async (tx) => {
+      // Backfill plain text notes from HTML for backward compatibility
+      let notesText = update.notes;
+      if (!notesText && update.notesHtml) {
+        // Strip HTML tags to create plain text version for legacy consumers
+        notesText = update.notesHtml
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+          .replace(/&amp;/g, '&') // Decode HTML entities
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .trim();
+      }
+      
       // Create chronology entry
       const [chronologyEntry] = await tx.insert(projectChronology).values({
         projectId: update.projectId,
@@ -4350,7 +4365,9 @@ export class DatabaseStorage implements IStorage {
         assigneeId: newAssigneeId,
         changedById: userId,
         changeReason: update.changeReason,
-        notes: update.notes,
+        notes: notesText,
+        notesHtml: update.notesHtml,
+        attachments: update.attachments,
         timeInPreviousStage,
         businessHoursInPreviousStage,
       }).returning();
@@ -4394,6 +4411,43 @@ export class DatabaseStorage implements IStorage {
     // This is done outside the transaction to avoid affecting the project update if notifications fail
     // CRITICAL FIX: Use captured oldStatus instead of project.currentStatus to avoid scope issues
     await this.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
+
+    // Auto-create message thread if person changing stage differs from person responsible for new stage
+    // Only create if both users are defined (new stage has an assignee)
+    if (userId && newAssigneeId && userId !== newAssigneeId) {
+      try {
+        const threadTopic = `${oldStatus} to ${update.newStatus} chat`;
+        
+        // Check if a thread with this exact topic already exists for this project
+        const existingThreads = await this.getProjectMessageThreadsByProjectId(update.projectId);
+        const threadExists = existingThreads.some(t => t.topic === threadTopic);
+        
+        if (!threadExists) {
+          // Create the message thread
+          const newThread = await this.createProjectMessageThread({
+            projectId: update.projectId,
+            topic: threadTopic,
+            createdByUserId: userId,
+          });
+          
+          // Add both users as participants
+          await this.createProjectMessageParticipant({
+            threadId: newThread.id,
+            userId: userId,
+          });
+          
+          await this.createProjectMessageParticipant({
+            threadId: newThread.id,
+            userId: newAssigneeId,
+          });
+          
+          console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}`);
+        }
+      } catch (error) {
+        console.error(`[Storage] Failed to create message thread for project ${update.projectId}:`, error);
+        // Don't throw - thread creation failure shouldn't block the status update
+      }
+    }
 
     // Auto-cancel remaining notifications when project moves to a final stage
     // (stages that can be final stages are intended as completion points)

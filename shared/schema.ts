@@ -422,7 +422,9 @@ export const projectChronology = pgTable("project_chronology", {
   assigneeId: varchar("assignee_id").references(() => users.id),
   changedById: varchar("changed_by_id").references(() => users.id), // User who made the stage change
   changeReason: varchar("change_reason"),
-  notes: text("notes"),
+  notes: text("notes"), // Plain text notes for backward compatibility
+  notesHtml: text("notes_html"), // Rich HTML notes from TiptapEditor
+  attachments: jsonb("attachments"), // Array of attachment metadata {fileName, fileSize, fileType, objectPath}
   timestamp: timestamp("timestamp").defaultNow(),
   timeInPreviousStage: integer("time_in_previous_stage"), // in minutes
   businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business minutes (for precision)
@@ -1492,7 +1494,14 @@ export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
   newStatus: z.string(), // Now accepts any kanban stage name
   changeReason: z.string().min(1, "Change reason is required").max(255, "Change reason too long"),
-  notes: z.string().optional(),
+  notes: z.string().optional(), // Plain text notes for backward compatibility
+  notesHtml: z.string().optional(), // Rich HTML notes from TiptapEditor
+  attachments: z.array(z.object({
+    fileName: z.string(),
+    fileSize: z.number(),
+    fileType: z.string(),
+    objectPath: z.string(),
+  })).optional(), // Array of attachment metadata
   fieldResponses: z.array(z.object({
     customFieldId: z.string(),
     // fieldType removed - will be derived server-side from the custom field definition

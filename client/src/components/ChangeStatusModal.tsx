@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TiptapEditor } from "@/components/TiptapEditor";
 import {
   Select,
   SelectContent,
@@ -134,7 +135,7 @@ export default function ChangeStatusModal({
 }: ChangeStatusModalProps) {
   const [newStatus, setNewStatus] = useState("");
   const [changeReason, setChangeReason] = useState("");
-  const [notes, setNotes] = useState("");
+  const [notesHtml, setNotesHtml] = useState("");
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
@@ -315,7 +316,7 @@ export default function ChangeStatusModal({
     if (!isOpen) {
       setNewStatus("");
       setChangeReason("");
-      setNotes("");
+      setNotesHtml("");
       setCustomFieldResponses({});
       setShowApprovalForm(false);
       approvalForm.reset();
@@ -349,7 +350,7 @@ export default function ChangeStatusModal({
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
-        notes: notes.trim() || undefined,
+        notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
       });
     },
@@ -366,7 +367,7 @@ export default function ChangeStatusModal({
     mutationFn: async (data: {
       newStatus: string;
       changeReason: string;
-      notes?: string;
+      notesHtml?: string;
       fieldResponses?: Array<{
         customFieldId: string;
         fieldType: "number" | "short_text" | "long_text" | "multi_select";
@@ -667,7 +668,7 @@ export default function ChangeStatusModal({
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
-        notes: notes.trim() || undefined,
+        notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
       });
     }
@@ -861,14 +862,11 @@ export default function ChangeStatusModal({
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="notes-textarea">Notes</Label>
-              <Textarea
-                id="notes-textarea"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+              <Label>Notes</Label>
+              <TiptapEditor
+                content={notesHtml}
+                onChange={setNotesHtml}
                 placeholder="Add notes explaining the status change..."
-                rows={4}
-                data-testid="textarea-notes"
               />
             </div>
           </div>

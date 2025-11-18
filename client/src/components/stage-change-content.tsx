@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowRight, Clock, UserIcon } from "lucide-react";
+import { ArrowRight, Clock, UserIcon, Paperclip } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
+import DOMPurify from "isomorphic-dompurify";
 
 interface StageChangeContentProps {
   projectId: string;
@@ -222,11 +223,46 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
       </div>
 
       {/* Notes - Show in both compact and full mode */}
-      {selectedStageChange.notes && (
+      {(selectedStageChange.notesHtml || selectedStageChange.notes) && (
         <div>
           <span className="text-xs text-muted-foreground font-medium">Notes</span>
           <div className="mt-2 p-3 bg-muted/30 rounded-lg">
-            <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{selectedStageChange.notes}</p>
+            {selectedStageChange.notesHtml ? (
+              <div 
+                className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                dangerouslySetInnerHTML={{ 
+                  __html: DOMPurify.sanitize(selectedStageChange.notesHtml) 
+                }}
+                data-testid="text-notes-html"
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{selectedStageChange.notes}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Attachments - Show in both compact and full mode */}
+      {selectedStageChange.attachments && selectedStageChange.attachments.length > 0 && (
+        <div>
+          <span className="text-xs text-muted-foreground font-medium">Attachments</span>
+          <div className="mt-2 space-y-2">
+            {selectedStageChange.attachments.map((attachment: any, idx: number) => (
+              <a
+                key={idx}
+                href={attachment.objectPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                data-testid={`attachment-${idx}`}
+              >
+                <Paperclip className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm flex-1">{attachment.fileName}</span>
+                <span className="text-xs text-muted-foreground">
+                  {(attachment.fileSize / 1024).toFixed(1)} KB
+                </span>
+              </a>
+            ))}
           </div>
         </div>
       )}
