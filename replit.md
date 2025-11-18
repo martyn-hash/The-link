@@ -4,6 +4,27 @@
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
 ## Recent Changes (November 18, 2025)
+-   **File Attachments for Stage Changes**: Added comprehensive file upload support to project stage changes
+    -   **File Upload UI**: ChangeStatusModal now includes file attachment picker with visual file list
+        -   Users can attach multiple files when changing project stages
+        -   Upload validation ensures failed uploads prevent stage change submission
+        -   Clear error messages display if uploads fail
+    -   **Backend Infrastructure**: Created secure API endpoints for attachment management
+        -   POST `/api/stage-changes/attachments/upload-url`: Generates presigned URLs for file uploads
+        -   GET `/api/stage-changes/attachments/*`: Downloads attachments with project access control
+        -   Files stored in object storage at path `/stage-changes/{projectId}/{timestamp}_{filename}`
+        -   Attachment metadata stored in `projectChronology.attachments` (JSONB)
+    -   **Auto-Thread Integration**: Attachments included in auto-created message threads
+        -   When stage assignee changes, auto-created threads include both notes and attachments
+        -   Initial message displays stage change notes (HTML) and attached files
+    -   **Universal Display**: Attachments appear in all views showing stage changes
+        -   Project Chronology modal: Full history with all attachments and download links
+        -   Kanban hover cards: Quick view of recent stage changes with attachments
+        -   Stage Change Details modal: Complete information including attached files
+        -   Message Threads: Auto-created threads display attachments from stage changes
+    -   **Bug Fix**: Corrected import path from `../object-storage-service` to `../objectStorage`
+        -   Resolved "Cannot find module" error that prevented file uploads
+        -   Upload endpoints now functional and server runs without module errors
 -   **Rich Text Stage Change Notes - QoL Improvements**: Enhanced project stage change functionality with four key refinements
     -   **Rich Text Editing**: Replaced plain textarea with TiptapEditor in both ChangeStatusModal and status-change-form
         -   Database schema updated with `notes_html` (text) and `attachments` (jsonb) columns in projectChronology table
@@ -60,6 +81,21 @@ The Link is a comprehensive full-stack CRM and project management application de
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
+
+## Testing Reminders
+**IMPORTANT: Read before every browser testing session**
+
+### Login Credentials
+- Login via root page (/)
+- Use the "Password" tab (not OIDC)
+- Email: `admin@example.com`
+- Password: `admin123`
+
+### Known Testing Issues
+- **Projects loading bug**: Sometimes projects do not load on the /projects page
+  - **Fix**: If this happens, MUST refresh the browser and restart testing
+  - This is a known issue that occurs intermittently
+  - Always check if projects are visible before proceeding with tests
 
 ## System Architecture
 

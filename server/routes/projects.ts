@@ -1045,7 +1045,7 @@ export function registerProjectRoutes(
       const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
       const fullPath = `${privateDir}/stage-changes/${projectId}/${timestamp}_${sanitizedFileName}`;
 
-      const { ObjectStorageService } = await import("../object-storage-service");
+      const { ObjectStorageService } = await import("../objectStorage");
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getUploadURLForPath(fullPath);
 
@@ -1096,7 +1096,7 @@ export function registerProjectRoutes(
       }
 
       // Get signed URL from object storage
-      const { ObjectStorageService } = await import("../object-storage-service");
+      const { ObjectStorageService } = await import("../objectStorage");
       const objectStorageService = new ObjectStorageService();
       const downloadURL = await objectStorageService.getDownloadURLForPath(objectPath);
 
