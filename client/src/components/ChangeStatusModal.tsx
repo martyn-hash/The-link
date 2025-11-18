@@ -32,8 +32,7 @@ import {
   CheckCircle, 
   ChevronDown, 
   ChevronUp, 
-  Equal,
-  Paperclip 
+  Equal 
 } from "lucide-react";
 import type {
   ProjectWithRelations,
@@ -47,7 +46,6 @@ import type {
   StageChangeNotificationPreview,
 } from "@shared/schema";
 import { StageChangeNotificationModal } from "./stage-change-notification-modal";
-import { AttachmentList } from "@/components/attachments/AttachmentList";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -142,7 +140,6 @@ export default function ChangeStatusModal({
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -322,78 +319,9 @@ export default function ChangeStatusModal({
       setNotesHtml("");
       setCustomFieldResponses({});
       setShowApprovalForm(false);
-      setSelectedFiles([]);
       approvalForm.reset();
     }
   }, [isOpen, approvalForm]);
-
-  // File handling functions
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      if (selectedFiles.length + newFiles.length > 5) {
-        toast({
-          title: "Too many files",
-          description: "You can only attach up to 5 files per stage change",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSelectedFiles([...selectedFiles, ...newFiles]);
-    }
-  };
-
-  const handleRemoveFile = (index: number) => {
-    setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
-  };
-
-  // Upload files and return attachment metadata
-  const uploadFiles = async (files: File[]) => {
-    const uploadedAttachments = [];
-    
-    for (const file of files) {
-      try {
-        // Get presigned URL from backend
-        const uploadUrlResponse = await apiRequest('POST', '/api/stage-changes/attachments/upload-url', {
-          fileName: file.name,
-          fileType: file.type,
-          projectId: project.id,
-        });
-
-        // Upload file to object storage
-        const uploadResponse = await fetch(uploadUrlResponse.url, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type,
-          },
-        });
-
-        // Check if upload was successful
-        if (!uploadResponse.ok) {
-          throw new Error(`Upload failed with status ${uploadResponse.status}`);
-        }
-
-        uploadedAttachments.push({
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          objectPath: uploadUrlResponse.objectPath,
-        });
-      } catch (error) {
-        console.error('File upload failed:', error);
-        toast({
-          title: "Upload failed",
-          description: `Failed to upload ${file.name}`,
-          variant: "destructive",
-        });
-        // Throw error to abort the status change
-        throw error;
-      }
-    }
-    
-    return uploadedAttachments;
-  };
 
   // Reset change reason and custom field responses when stage changes
   useEffect(() => {
@@ -417,29 +345,13 @@ export default function ChangeStatusModal({
         responses,
       });
     },
-    onSuccess: async () => {
-      // Upload files first
-      let attachments: any[] = [];
-      if (selectedFiles.length > 0) {
-        try {
-          attachments = await uploadFiles(selectedFiles);
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: "Failed to upload attachments",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-      
-      // After successful approval submission and file uploads, proceed with status change
+    onSuccess: () => {
+      // After successful approval submission, proceed with status change
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
         notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
-        attachments,
       });
     },
     onError: (error: any) => {
@@ -463,12 +375,6 @@ export default function ChangeStatusModal({
         valueShortText?: string;
         valueLongText?: string;
         valueMultiSelect?: string[];
-      }>;
-      attachments?: Array<{
-        fileName: string;
-        fileType: string;
-        fileSize: number;
-        objectPath: string;
       }>;
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
@@ -759,27 +665,11 @@ export default function ChangeStatusModal({
       submitApprovalResponsesMutation.mutate(responses);
     } else {
       // No stage approval required, proceed with normal status change
-      // Upload files first
-      let attachments: any[] = [];
-      if (selectedFiles.length > 0) {
-        try {
-          attachments = await uploadFiles(selectedFiles);
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: "Failed to upload attachments",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-      
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
         notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
-        attachments,
       });
     }
   };
@@ -982,39 +872,6 @@ export default function ChangeStatusModal({
                 onChange={setNotesHtml}
                 placeholder="Add notes explaining the status change..."
               />
-            </div>
-
-            {/* File Attachments */}
-            <div className="space-y-2">
-              <Label>Attachments</Label>
-              <div className="space-y-2">
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  id="stage-change-file-input"
-                  data-testid="input-attach-file"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById('stage-change-file-input')?.click()}
-                  disabled={isSubmitting}
-                  data-testid="button-attach-file"
-                >
-                  <Paperclip className="h-4 w-4 mr-2" />
-                  Attach Files
-                </Button>
-                {selectedFiles.length > 0 && (
-                  <AttachmentList
-                    attachments={selectedFiles}
-                    onRemove={handleRemoveFile}
-                    readonly={false}
-                  />
-                )}
-              </div>
             </div>
           </div>
 
