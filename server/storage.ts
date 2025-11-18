@@ -4276,22 +4276,27 @@ export class DatabaseStorage implements IStorage {
 
     // Determine new assignee based on the stage's assignment
     let newAssigneeId: string;
+    console.log(`[Auto-Thread Debug] Stage assignment - assignedUserId: ${stage.assignedUserId}, assignedWorkRoleId: ${stage.assignedWorkRoleId}`);
     if (stage.assignedUserId) {
       // Direct user assignment
       newAssigneeId = stage.assignedUserId;
+      console.log(`[Auto-Thread Debug] Using direct user assignment: ${newAssigneeId}`);
     } else if (stage.assignedWorkRoleId) {
       // Work role assignment - get the work role name and resolve through client service role assignments
       const workRole = await this.getWorkRoleById(stage.assignedWorkRoleId);
       if (workRole) {
         const roleAssignment = await this.resolveRoleAssigneeForClient(project.clientId, project.projectTypeId, workRole.name);
         newAssigneeId = roleAssignment?.id || project.clientManagerId;
+        console.log(`[Auto-Thread Debug] Resolved work role ${workRole.name} to assignee: ${newAssigneeId} (roleAssignment?.id: ${roleAssignment?.id}, clientManagerId: ${project.clientManagerId})`);
       } else {
         console.warn(`Work role ${stage.assignedWorkRoleId} not found, using client manager`);
         newAssigneeId = project.clientManagerId;
+        console.log(`[Auto-Thread Debug] Work role not found, using client manager: ${newAssigneeId}`);
       }
     } else {
       // Fallback to current assignee or client manager
       newAssigneeId = project.currentAssigneeId || project.clientManagerId;
+      console.log(`[Auto-Thread Debug] Using fallback - currentAssigneeId: ${project.currentAssigneeId}, clientManagerId: ${project.clientManagerId}, final: ${newAssigneeId}`);
     }
 
     // Calculate time in previous stage
@@ -4414,6 +4419,7 @@ export class DatabaseStorage implements IStorage {
 
     // Auto-create message thread if person changing stage differs from person responsible for new stage
     // Only create if both users are defined (new stage has an assignee)
+    console.log(`[Auto-Thread Debug] userId: ${userId}, newAssigneeId: ${newAssigneeId}, comparison: ${userId !== newAssigneeId}`);
     if (userId && newAssigneeId && userId !== newAssigneeId) {
       try {
         const threadTopic = `${oldStatus} to ${update.newStatus} chat`;
