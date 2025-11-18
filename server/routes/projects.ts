@@ -435,7 +435,7 @@ export function registerProjectRoutes(
         const { sendStageChangeNotificationEmail } = await import("../emailService");
         
         // Get the new stage to find the assigned user(s)
-        const newStage = await storage.getKanbanStageById(targetStage.id);
+        const newStage = await storage.getStageById(targetStage.id);
         if (!newStage) {
           console.warn(`[Stage Change Email] Stage ${targetStage.id} not found`);
         } else {
