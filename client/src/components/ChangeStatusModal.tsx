@@ -665,12 +665,15 @@ export default function ChangeStatusModal({
       submitApprovalResponsesMutation.mutate(responses);
     } else {
       // No stage approval required, proceed with normal status change
-      updateStatusMutation.mutate({
+      const payload = {
         newStatus,
         changeReason,
         notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
-      });
+      };
+      console.log('[ChangeStatusModal] Submitting payload:', payload);
+      console.log('[ChangeStatusModal] notesHtml state:', notesHtml);
+      updateStatusMutation.mutate(payload);
     }
   };
 
@@ -865,7 +868,10 @@ export default function ChangeStatusModal({
               <Label>Notes</Label>
               <TiptapEditor
                 content={notesHtml}
-                onChange={setNotesHtml}
+                onChange={(html) => {
+                  console.log('[ChangeStatusModal] TiptapEditor onChange called with:', html);
+                  setNotesHtml(html);
+                }}
                 placeholder="Add notes explaining the status change..."
               />
             </div>
