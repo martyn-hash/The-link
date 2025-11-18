@@ -4,6 +4,14 @@
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
 ## Recent Changes (November 18, 2025)
+-   **Fixed Message Thread Creation for Stage Changes**: Resolved intermittent thread creation issue
+    -   **Problem**: Threads were only created once per unique stage transition (e.g., "Do Work to Accounts Prep") due to duplicate checking
+    -   **Solution**: Removed duplicate check logic; threads now created every time assignee changes
+    -   **Thread Topics**: New format includes timestamp and unique ID: "{OldStage} to {NewStage} - {timestamp} ({shortId})"
+        -   Example: "Do Work to Accounts Prep - 18 Nov, 22:52 (a7f3b2c4)"
+        -   Guarantees uniqueness even for rapid consecutive changes in same minute
+    -   **Implementation**: Captured chronologyEntryId from transaction, used first 8 chars for readability
+    -   **Testing**: Verified rapid consecutive status changes create distinct threads with different IDs
 -   **Rich Text Stage Change Notes - QoL Improvements**: Enhanced project stage change functionality with four key refinements
     -   **Rich Text Editing**: Replaced plain textarea with TiptapEditor in both ChangeStatusModal and status-change-form
         -   Database schema updated with `notes_html` (text) and `attachments` (jsonb) columns in projectChronology table
