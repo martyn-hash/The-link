@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight } from "lucide-react";
+import DOMPurify from "isomorphic-dompurify";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -663,7 +664,10 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
 
       {/* Stage Change Detail Modal */}
       <Dialog open={isViewingStageChange} onOpenChange={setIsViewingStageChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent 
+          className="max-w-3xl max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Stage Change Details</DialogTitle>
           </DialogHeader>
@@ -754,11 +758,21 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               )}
 
               {/* Notes */}
-              {selectedStageChange.notes && (
+              {(selectedStageChange.notesHtml || selectedStageChange.notes) && (
                 <div>
                   <span className="text-xs text-muted-foreground font-medium">Notes</span>
-                  <div className="mt-2 p-3 bg-muted/30 rounded-lg">
-                    <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-notes">{selectedStageChange.notes}</p>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg max-h-[400px] overflow-y-auto">
+                    {selectedStageChange.notesHtml ? (
+                      <div 
+                        className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                        dangerouslySetInnerHTML={{ 
+                          __html: DOMPurify.sanitize(selectedStageChange.notesHtml) 
+                        }}
+                        data-testid="text-modal-notes-html"
+                      />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-notes">{selectedStageChange.notes}</p>
+                    )}
                   </div>
                 </div>
               )}
