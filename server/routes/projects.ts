@@ -500,17 +500,22 @@ export function registerProjectRoutes(
             const emailSent = await sendStageChangeNotificationEmail(
               user.email,
               userName,
-              projectWithDetails.projectName || 'Untitled Project',
+              projectWithDetails.description || 'Untitled Project',
               projectWithDetails.client?.name || 'Unknown Client',
               updateData.newStatus,
               project.currentStatus, // fromStage
               updatedProject.id,
               stageConfig,
-              chronology.map(c => ({ toStatus: c.toStatus, timestamp: c.timestamp })),
-              projectWithDetails.createdAt,
+              chronology
+                .filter(c => c.timestamp !== null)
+                .map(c => ({ 
+                  toStatus: c.toStatus, 
+                  timestamp: c.timestamp!.toISOString() 
+                })),
+              projectWithDetails.createdAt?.toISOString(),
               updateData.changeReason,
               updateData.notes,
-              updateData.fieldResponses
+              undefined // fieldResponses - different structure, not needed for notification email
             );
 
             if (emailSent) {
