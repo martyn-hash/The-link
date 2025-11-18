@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight } from "lucide-react";
+import { AttachmentList } from "@/components/attachments/AttachmentList";
 import DOMPurify from "isomorphic-dompurify";
 
 interface ProjectChronologyProps {
@@ -773,6 +774,22 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     ) : (
                       <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-notes">{selectedStageChange.notes}</p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments */}
+              {selectedStageChange.attachments && selectedStageChange.attachments.length > 0 && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Attachments</span>
+                  <div className="mt-2">
+                    <AttachmentList
+                      attachments={selectedStageChange.attachments.map((att: any) => ({
+                        ...att,
+                        url: `/api/stage-changes/attachments${att.objectPath}?projectId=${project.id}`,
+                      }))}
+                      readonly={true}
+                    />
                   </div>
                 </div>
               )}

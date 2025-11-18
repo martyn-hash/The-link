@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowRight, Clock, UserIcon, Paperclip } from "lucide-react";
+import { ArrowRight, Clock, UserIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
+import { AttachmentList } from "@/components/attachments/AttachmentList";
 import DOMPurify from "isomorphic-dompurify";
 
 interface StageChangeContentProps {
@@ -246,23 +247,14 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
       {selectedStageChange.attachments && selectedStageChange.attachments.length > 0 && (
         <div>
           <span className="text-xs text-muted-foreground font-medium">Attachments</span>
-          <div className="mt-2 space-y-2">
-            {selectedStageChange.attachments.map((attachment: any, idx: number) => (
-              <a
-                key={idx}
-                href={attachment.objectPath}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-                data-testid={`attachment-${idx}`}
-              >
-                <Paperclip className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm flex-1">{attachment.fileName}</span>
-                <span className="text-xs text-muted-foreground">
-                  {(attachment.fileSize / 1024).toFixed(1)} KB
-                </span>
-              </a>
-            ))}
+          <div className="mt-2">
+            <AttachmentList
+              attachments={selectedStageChange.attachments.map((att: any) => ({
+                ...att,
+                url: `/api/stage-changes/attachments${att.objectPath}?projectId=${projectId}`,
+              }))}
+              readonly={true}
+            />
           </div>
         </div>
       )}

@@ -1011,6 +1011,103 @@ export function registerProjectRoutes(
     }
   });
 
+  // Generate upload URL for stage change attachments
+  app.post("/api/stage-changes/attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType, projectId } = req.body;
+
+      if (!fileName || !fileType || !projectId) {
+        return res.status(400).json({ message: "fileName, fileType, and projectId are required" });
+      }
+
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Check if project exists and user has access
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const effectiveUser = req.user?.effectiveUser;
+      const canAccess =
+        effectiveUser.isAdmin ||
+        project.currentAssigneeId === effectiveUserId ||
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
+
+      if (!canAccess) {
+        return res.status(403).json({ message: "Access denied - not authorized for this project" });
+      }
+
+      // Generate a unique object path in the private directory
+      const timestamp = Date.now();
+      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const fullPath = `${privateDir}/stage-changes/${projectId}/${timestamp}_${sanitizedFileName}`;
+
+      const { ObjectStorageService } = await import("../object-storage-service");
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getUploadURLForPath(fullPath);
+
+      // Return the normalized object path for later retrieval
+      const objectPath = `/stage-changes/${projectId}/${timestamp}_${sanitizedFileName}`;
+
+      res.json({
+        url: uploadURL,
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error("Error generating upload URL for stage change:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Serve stage change attachments with project access check
+  app.get("/api/stage-changes/attachments/*", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Extract the object path from the URL
+      const objectPath = req.path.replace('/api/stage-changes/attachments', '/objects');
+
+      // Get the project ID from query params
+      const projectId = req.query.projectId;
+      if (!projectId) {
+        return res.status(400).json({ message: "projectId query parameter is required" });
+      }
+
+      // Check if the project exists
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Verify user has access to this project
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const effectiveUser = req.user?.effectiveUser;
+      const canAccess =
+        effectiveUser.isAdmin ||
+        project.currentAssigneeId === effectiveUserId ||
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
+
+      if (!canAccess) {
+        return res.status(403).json({ message: "Access denied - not authorized for this project" });
+      }
+
+      // Get signed URL from object storage
+      const { ObjectStorageService } = await import("../object-storage-service");
+      const objectStorageService = new ObjectStorageService();
+      const downloadURL = await objectStorageService.getDownloadURLForPath(objectPath);
+
+      // Redirect to the signed URL
+      res.redirect(downloadURL);
+    } catch (error) {
+      console.error("Error serving stage change attachment:", error);
+      res.status(500).json({ message: "Failed to serve attachment" });
+    }
+  });
+
   app.get("/api/projects/:projectId/field-responses", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;

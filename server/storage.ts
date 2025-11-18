@@ -4441,12 +4441,21 @@ export class DatabaseStorage implements IStorage {
             userId: newAssigneeId,
           });
           
-          // Create initial message with stage change notes if provided
+          // Create initial message with stage change notes and attachments if provided
           if (update.notesHtml && update.notesHtml.trim()) {
             await this.createProjectMessage({
               threadId: newThread.id,
               content: update.notesHtml,
               userId: userId,
+              attachments: update.attachments || undefined,
+            });
+          } else if (update.attachments && update.attachments.length > 0) {
+            // If no notes but attachments exist, create message with placeholder text
+            await this.createProjectMessage({
+              threadId: newThread.id,
+              content: '<p>(Stage change with attachments)</p>',
+              userId: userId,
+              attachments: update.attachments,
             });
           }
           
