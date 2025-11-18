@@ -3,6 +3,18 @@
 ## Overview
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
+## Recent Changes (November 18, 2025)
+-   **Rich Text Stage Change Notes**: Enhanced project stage change functionality with rich text editing
+    -   Replaced plain textarea with TiptapEditor in both ChangeStatusModal and status-change-form
+    -   Database schema updated with `notes_html` (text) and `attachments` (jsonb) columns in projectChronology table
+    -   Backend automatically backfills plain text `notes` field from HTML for backward compatibility
+    -   Stage change popup (StageChangeContent) now renders rich HTML using DOMPurify sanitization
+    -   Supports bold, italic, underline, tables, headings, and other formatting in stage change notes
+    -   Auto-creates message threads titled "{Old Stage} to {New Stage} chat" when stage assignee changes
+    -   Message thread creation includes guards to prevent crashes when stages lack assignees
+    -   Migration 0004 cleanly adds new columns with IF NOT EXISTS clauses
+    -   TiptapEditor uses named export pattern for consistency with codebase
+
 ## Recent Changes (November 17, 2025)
 -   **Unread Messages Badge**: Added notification badge to top navigation bar
     -   Pink badge with MessageCircle icon displays count of unread internal (staff-to-staff) message threads
