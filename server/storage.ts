@@ -4441,6 +4441,15 @@ export class DatabaseStorage implements IStorage {
             userId: newAssigneeId,
           });
           
+          // Create initial message with stage change notes if provided
+          if (update.notesHtml && update.notesHtml.trim()) {
+            await this.createProjectMessage({
+              threadId: newThread.id,
+              content: update.notesHtml,
+              userId: userId,
+            });
+          }
+          
           console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}`);
         }
       } catch (error) {

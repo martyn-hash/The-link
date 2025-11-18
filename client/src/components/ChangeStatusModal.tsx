@@ -681,7 +681,11 @@ export default function ChangeStatusModal({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={showApprovalForm ? "max-w-6xl" : "max-w-2xl"} data-testid="dialog-change-status">
+      <DialogContent 
+        className={showApprovalForm ? "max-w-6xl" : "max-w-2xl"} 
+        data-testid="dialog-change-status"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Change Project Status</DialogTitle>
           <DialogDescription>
@@ -689,7 +693,7 @@ export default function ChangeStatusModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className={showApprovalForm ? "grid grid-cols-2 gap-6" : ""}>
+        <div className={`max-h-[70vh] overflow-y-auto ${showApprovalForm ? "grid grid-cols-2 gap-6" : ""}`}>
           {/* Left column: Status change form */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Status Change Details</h3>

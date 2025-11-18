@@ -226,7 +226,7 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
       {(selectedStageChange.notesHtml || selectedStageChange.notes) && (
         <div>
           <span className="text-xs text-muted-foreground font-medium">Notes</span>
-          <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+          <div className="mt-2 p-3 bg-muted/30 rounded-lg max-h-[400px] overflow-y-auto">
             {selectedStageChange.notesHtml ? (
               <div 
                 className="text-sm prose prose-sm max-w-none dark:prose-invert"
