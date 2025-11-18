@@ -430,7 +430,102 @@ export function registerProjectRoutes(
 
       const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
 
-      // Prepare stage change notification preview instead of sending immediately
+      // Send automatic staff email notifications for stage change
+      try {
+        const { sendStageChangeNotificationEmail } = await import("../emailService");
+        
+        // Get the new stage to find the assigned user(s)
+        const newStage = await storage.getKanbanStageById(targetStage.id);
+        if (!newStage) {
+          console.warn(`[Stage Change Email] Stage ${targetStage.id} not found`);
+        } else {
+          // Determine who should receive the notification
+          let usersToNotify: any[] = [];
+          
+          if (newStage.assignedUserId) {
+            // Direct user assignment
+            const assignedUser = await storage.getUser(newStage.assignedUserId);
+            if (assignedUser) {
+              usersToNotify = [assignedUser];
+            }
+          } else if (newStage.assignedWorkRoleId) {
+            // Work role assignment - resolve for this client
+            const workRole = await storage.getWorkRoleById(newStage.assignedWorkRoleId);
+            if (workRole) {
+              const roleAssignment = await storage.resolveRoleAssigneeForClient(
+                project.clientId,
+                project.projectTypeId,
+                workRole.name
+              );
+              if (roleAssignment) {
+                usersToNotify = [roleAssignment];
+              }
+            }
+          }
+
+          // Send emails to all assigned users who have notifications enabled
+          for (const user of usersToNotify) {
+            // Check user notification preferences
+            const preferences = await storage.getUserNotificationPreferences(user.id);
+            const notifyStageChanges = preferences?.notifyStageChanges ?? true; // Default to true
+
+            if (!notifyStageChanges) {
+              console.log(`[Stage Change Email] User ${user.email} has stage change notifications disabled, skipping`);
+              continue;
+            }
+
+            if (!user.email) {
+              console.warn(`[Stage Change Email] User ${user.id} has no email address`);
+              continue;
+            }
+
+            // Get project details with client and chronology
+            const projectWithDetails = await storage.getProject(updatedProject.id);
+            if (!projectWithDetails) {
+              console.warn(`[Stage Change Email] Project ${updatedProject.id} not found`);
+              continue;
+            }
+
+            const userName = user.firstName && user.lastName 
+              ? `${user.firstName} ${user.lastName}` 
+              : user.email;
+
+            // Get stage configuration for deadline calculation
+            const stageConfig = newStage.maxInstanceTime ? { maxInstanceTime: newStage.maxInstanceTime } : undefined;
+
+            // Get chronology for the project
+            const chronology = await storage.getProjectChronology(updatedProject.id);
+
+            // Send the email
+            const emailSent = await sendStageChangeNotificationEmail(
+              user.email,
+              userName,
+              projectWithDetails.projectName || 'Untitled Project',
+              projectWithDetails.client?.name || 'Unknown Client',
+              updateData.newStatus,
+              project.currentStatus, // fromStage
+              updatedProject.id,
+              stageConfig,
+              chronology.map(c => ({ toStatus: c.toStatus, timestamp: c.timestamp })),
+              projectWithDetails.createdAt,
+              updateData.changeReason,
+              updateData.notes,
+              updateData.fieldResponses
+            );
+
+            if (emailSent) {
+              console.log(`[Stage Change Email] Sent to ${user.email} for project ${updatedProject.id}`);
+            } else {
+              console.warn(`[Stage Change Email] Failed to send to ${user.email} for project ${updatedProject.id}`);
+            }
+          }
+        }
+      } catch (emailError) {
+        // Log error but don't fail the status update
+        console.error("[Stage Change Email] Error sending automatic notifications:", emailError);
+      }
+
+      // Prepare stage change notification preview (for client reminders system - separate feature)
       const notificationPreview = await storage.prepareStageChangeNotification(
         updatedProject.id,
         updateData.newStatus,
