@@ -1098,7 +1098,7 @@ export function registerProjectRoutes(
       // Get signed URL from object storage
       const { ObjectStorageService } = await import("../objectStorage");
       const objectStorageService = new ObjectStorageService();
-      const downloadURL = await objectStorageService.getDownloadURLForPath(objectPath);
+      const downloadURL = await objectStorageService.getSignedDownloadURL(objectPath);
 
       // Redirect to the signed URL
       res.redirect(downloadURL);

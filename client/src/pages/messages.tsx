@@ -1421,7 +1421,20 @@ export default function Messages() {
                         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                       </div>
                       {message.attachments && message.attachments.length > 0 && (
-                        <AttachmentList attachments={message.attachments} readonly={true} />
+                        <AttachmentList 
+                          attachments={message.attachments.map((att: any) => {
+                            // If attachment has an objectPath (stage change attachment), construct download URL
+                            if (att.objectPath && selectedThread?.projectId) {
+                              return {
+                                ...att,
+                                url: `/api/stage-changes/attachments${att.objectPath}?projectId=${selectedThread.projectId}`,
+                              };
+                            }
+                            // Otherwise return as-is (regular message attachment with url already set)
+                            return att;
+                          })} 
+                          readonly={true} 
+                        />
                       )}
                     </div>
                   </div>
