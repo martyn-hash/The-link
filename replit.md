@@ -4,16 +4,28 @@
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
 ## Recent Changes (November 18, 2025)
--   **Rich Text Stage Change Notes**: Enhanced project stage change functionality with rich text editing
-    -   Replaced plain textarea with TiptapEditor in both ChangeStatusModal and status-change-form
-    -   Database schema updated with `notes_html` (text) and `attachments` (jsonb) columns in projectChronology table
-    -   Backend automatically backfills plain text `notes` field from HTML for backward compatibility
-    -   Stage change popup (StageChangeContent) now renders rich HTML using DOMPurify sanitization
-    -   Supports bold, italic, underline, tables, headings, and other formatting in stage change notes
-    -   Auto-creates message threads titled "{Old Stage} to {New Stage} chat" when stage assignee changes
-    -   Message thread creation includes guards to prevent crashes when stages lack assignees
-    -   Migration 0004 cleanly adds new columns with IF NOT EXISTS clauses
-    -   TiptapEditor uses named export pattern for consistency with codebase
+-   **Rich Text Stage Change Notes - QoL Improvements**: Enhanced project stage change functionality with four key refinements
+    -   **Rich Text Editing**: Replaced plain textarea with TiptapEditor in both ChangeStatusModal and status-change-form
+        -   Database schema updated with `notes_html` (text) and `attachments` (jsonb) columns in projectChronology table
+        -   Backend automatically backfills plain text `notes` field from HTML for backward compatibility
+        -   Supports bold, italic, underline, tables, headings, and other formatting
+        -   Migration 0004 cleanly adds new columns with IF NOT EXISTS clauses
+    -   **Auto-Create Message Threads**: When stage assignee changes, auto-creates thread titled "{Old Stage} to {New Stage} chat"
+        -   Initial message contains the stage change note (HTML) as content
+        -   Guards prevent crashes when stages lack assignees
+        -   Thread creation confirmed working (HTML visible in message thread list)
+    -   **Modal UX Enhancements**: Improved modal usability for both Change Status and Stage Change Details
+        -   Added scrollbars (max-h-[70vh] overflow-y-auto) for tall forms
+        -   Prevented accidental dismissal via onInteractOutside handlers on both modals
+        -   Both ChangeStatusModal and StageChangeModal block backdrop clicks
+    -   **HTML Notes Display**: Stage Change Details modal configured to display rich HTML notes
+        -   StageChangeContent uses DOMPurify sanitization for safe HTML rendering
+        -   Database correctly stores notes_html with HTML formatting
+        -   **Known Issue**: API response not including notesHtml field - requires investigation of serialization in /api/projects/:id/most-recent-stage-change endpoint
+    -   **Technical Notes**:
+        -   getMostRecentStageChange uses db.query.projectChronology.findFirst for proper camelCase field mapping
+        -   Drizzle's db.select() approach omits aliased fields like notesHtml
+        -   TiptapEditor uses named export pattern for consistency with codebase
 
 ## Recent Changes (November 17, 2025)
 -   **Unread Messages Badge**: Added notification badge to top navigation bar

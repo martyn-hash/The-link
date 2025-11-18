@@ -3987,6 +3987,13 @@ export class DatabaseStorage implements IStorage {
 
     if (!result) return undefined;
 
+    console.log('[Storage] getMostRecentStageChange - raw result fields:', {
+      hasNotesHtml: 'notesHtml' in result,
+      notesHtml: result.notesHtml,
+      notes: result.notes,
+      allKeys: Object.keys(result),
+    });
+
     // Fetch the project's stage approval responses and projectTypeId
     // The client-side modal will filter these based on the stage change's approval requirements
     const project = await db.query.projects.findFirst({
