@@ -221,6 +221,16 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
         )}
       </div>
 
+      {/* Notes - Show in both compact and full mode */}
+      {selectedStageChange.notes && (
+        <div>
+          <span className="text-xs text-muted-foreground font-medium">Notes</span>
+          <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+            <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{selectedStageChange.notes}</p>
+          </div>
+        </div>
+      )}
+
       {/* Show detailed info only in non-compact mode */}
       {!compact && (
         <>
@@ -231,16 +241,6 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
               <p className="text-sm font-medium mt-2" data-testid="text-change-reason">
                 {formatChangeReason(selectedStageChange.changeReason)}
               </p>
-            </div>
-          )}
-
-          {/* Notes */}
-          {selectedStageChange.notes && (
-            <div>
-              <span className="text-xs text-muted-foreground font-medium">Notes</span>
-              <div className="mt-2 p-3 bg-muted/30 rounded-lg">
-                <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{selectedStageChange.notes}</p>
-              </div>
             </div>
           )}
 
