@@ -149,8 +149,8 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
   return (
     <div className={compact ? "space-y-2" : "space-y-4"}>
       {/* Header Information */}
-      <div className={`grid ${compact ? 'grid-cols-1 gap-2' : 'grid-cols-2 gap-4'} p-${compact ? '3' : '4'} bg-muted/50 rounded-lg`}>
-        <div className={compact ? "" : "col-span-2"}>
+      <div className={`grid grid-cols-2 gap-${compact ? '2' : '4'} p-${compact ? '3' : '4'} bg-muted/50 rounded-lg`}>
+        <div className="col-span-2">
           <span className="text-xs text-muted-foreground">Stage Transition</span>
           <div className="mt-2 flex items-center gap-3">
             {selectedStageChange.fromStatus ? (
