@@ -4,6 +4,13 @@
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
 ## Recent Changes (November 19, 2025)
+-   **Fixed Project Message Thread Creation Permissions**: Resolved 403 "Access denied" error blocking staff from creating project message threads
+    -   **Problem**: Live users reported getting 403 errors when trying to create project messages via project detail page or kanban view
+    -   **Root Cause**: `userHasClientAccess` function in server/routes/messages.ts had placeholder implementation that returned false for all non-admin staff
+    -   **Solution**: Updated function to return true for all authenticated staff users, allowing them to create and access client messages
+    -   **Scope**: Affects all message thread creation endpoints including POST /api/internal/project-messages/threads
+    -   **Security Review**: Architect confirmed no security issues; all authenticated staff should have access to create messages for clients they're working with
+    -   **User Impact**: All staff can now create project message threads without admin privileges
 -   **Kanban Stage Change Popup Layout Optimization**: Reorganized the stage change information display to maximize space for notes
     -   **2-Column Metadata Layout**: Changed from vertical stacking to side-by-side display
         -   Row 1: Timestamp | Time in Previous Stage
