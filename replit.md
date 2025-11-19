@@ -4,6 +4,23 @@
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
 ## Recent Changes (November 19, 2025)
+-   **Email Notification Enhancements**: Fixed three critical issues with email notifications and added rich HTML formatting support
+    -   **Issue 1 - Project Name Displaying "Unknown"**: Changed from non-existent `project.projectName` to `project.description` in message notifications
+    -   **Issue 2 - Development URLs in Production Emails**: Hardcoded production URL (`https://flow.growth.accountants`) in all email notifications
+    -   **Issue 3 - Missing Stage Change Notes**: Stage change notifications now include rich HTML notes from TiptapEditor
+    -   **Rich HTML Email Formatting**: Both message and stage change emails now preserve HTML formatting (bold, lists, tables, headings)
+    -   **Security Hardening**: Added DOMPurify HTML sanitization with strict allowlist to prevent injection attacks
+        -   Allowed tags: `p, br, strong, em, u, h1-6, ul, ol, li, table, tr, td, th, thead, tbody`
+        -   All attributes stripped to prevent `onclick`, `onerror`, etc.
+        -   Sanitization applied to both message notifications (`server/lib/sendgridClient.ts`) and stage change emails (`server/emailService.ts`)
+    -   **Dual Email Format Support**: 
+        -   HTML emails: Render rich formatting with sanitized HTML (truncated to 2000 chars)
+        -   Plain text emails: Convert HTML to readable text (truncated to 500 chars)
+    -   **Files Modified**:
+        -   `server/routes/messages.ts`: Fixed project name, production URL, removed tag stripping
+        -   `server/routes/projects.ts`: Pass HTML notes to email function
+        -   `server/emailService.ts`: Added DOMPurify sanitization, dual format support
+        -   `server/lib/sendgridClient.ts`: Added DOMPurify sanitization, dual format support
 -   **Fixed Project Message Thread Creation Permissions**: Resolved 403 "Access denied" error blocking staff from creating project message threads
     -   **Problem**: Live users reported getting 403 errors when trying to create project messages via project detail page or kanban view
     -   **Root Cause**: `userHasClientAccess` function in server/routes/messages.ts had placeholder implementation that returned false for all non-admin staff
