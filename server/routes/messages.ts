@@ -927,7 +927,7 @@ export function registerMessageRoutes(
               : sender?.email || 'Someone';
             
             const projectName = project?.description || 'Unknown Project';
-            const messagePreview = initialMessage.content.replace(/<[^>]*>/g, '').substring(0, 200);
+            const messagePreview = initialMessage.content; // Keep HTML formatting for email
             const baseUrl = 'https://flow.growth.accountants';
             const threadUrl = `${baseUrl}/projects/${projectId}?tab=messages&thread=${thread.id}`;
 
@@ -1081,8 +1081,8 @@ export function registerMessageRoutes(
               const project = await storage.getProject(thread.projectId);
               const projectName = project?.description || 'Unknown Project';
               
-              // Extract preview text (remove HTML tags)
-              const messagePreview = content.replace(/<[^>]*>/g, '').substring(0, 200);
+              // Keep HTML formatting for email
+              const messagePreview = content;
               const baseUrl = 'https://flow.growth.accountants';
               const threadUrl = `${baseUrl}/projects/${thread.projectId}?tab=messages&thread=${threadId}`;
 

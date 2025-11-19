@@ -1,4 +1,5 @@
 import { MailService } from '@sendgrid/mail';
+import DOMPurify from 'isomorphic-dompurify';
 
 if (!process.env.SENDGRID_API_KEY) {
   console.warn("SENDGRID_API_KEY environment variable not set. Email notifications will be disabled.");
@@ -243,6 +244,29 @@ The Link Team
   });
 }
 
+// Helper function to convert HTML to plain text
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/[uo]l>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
+}
+
 export async function sendStageChangeNotificationEmail(
   recipientEmail: string,
   recipientName: string,
@@ -266,6 +290,16 @@ export async function sendStageChangeNotificationEmail(
   const stageTransition = fromStage 
     ? `from "${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}" to "${formattedStageName}"`
     : `to "${formattedStageName}"`;
+  
+  // Sanitize HTML notes to prevent injection attacks - only allow safe formatting tags
+  const sanitizedNotes = notes ? DOMPurify.sanitize(notes, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'thead', 'tbody'],
+    ALLOWED_ATTR: []
+  }) : '';
+  
+  // Convert sanitized notes to plain text for text email
+  const notesPlainText = sanitizedNotes ? htmlToPlainText(sanitizedNotes) : '';
+  const notesHtml = sanitizedNotes;
   
   // Calculate timing information if we have the necessary data
   let assignedTimestamp: string | null = null;
@@ -370,7 +404,7 @@ export async function sendStageChangeNotificationEmail(
             <h3 style="margin-top: 0; color: #475569; font-size: 18px;">📝 Details</h3>
             ${fromStage ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Stage Change:</strong> ${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} → ${formattedStageName}</p>` : ''}
             ${changeReason ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Change Reason:</strong> ${changeReason}</p>` : ''}
-            ${notes ? `<p style="margin-bottom: 12px; color: #374151;"><strong>Notes:</strong> ${notes}</p>` : ''}
+            ${notesHtml ? `<div style="margin-bottom: 12px; color: #374151;"><strong>Notes:</strong><div style="margin-top: 8px;">${notesHtml}</div></div>` : ''}
             ${fieldResponses && fieldResponses.length > 0 ? `
               <div style="margin-top: 15px;">
                 <p style="margin-bottom: 8px; color: #374151; font-weight: 600;">Additional Information:</p>
@@ -428,7 +462,7 @@ ${changeReason || notes || (fieldResponses && fieldResponses.length > 0) || from
 DETAILS:
 ${fromStage ? `Stage Change: ${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} → ${formattedStageName}` : ''}
 ${changeReason ? `Change Reason: ${changeReason}` : ''}
-${notes ? `Notes: ${notes}` : ''}
+${notesPlainText ? `Notes: ${notesPlainText}` : ''}
 ${fieldResponses && fieldResponses.length > 0 ? `
 Additional Information:
 ${fieldResponses.map(fr => `  - ${fr.fieldName}: ${formatFieldValue(fr.fieldType, fr.value)}`).join('\n')}
