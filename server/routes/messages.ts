@@ -42,16 +42,14 @@ export function registerMessageRoutes(
       return false;
     }
 
-    // For now, implement basic access control - could be enhanced based on business rules
-    // This is a placeholder for actual client-user relationship checks
-    // In a real application, you might check:
+    // For now, all authenticated staff users have access to all clients
+    // This could be enhanced based on business rules in the future:
     // - User is assigned to client account
     // - User has role permissions for this client
     // - Client belongs to user's organization/team
 
-    // As a basic implementation, only admins can access all clients
-    // Non-admin users need explicit permission (to be implemented)
-    return false; // Restrict access for non-admins until proper permissions are implemented
+    // All authenticated staff can access all clients
+    return true;
   };
 
   // ==================================================
