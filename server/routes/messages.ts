@@ -926,9 +926,9 @@ export function registerMessageRoutes(
               ? `${sender.firstName} ${sender.lastName}`
               : sender?.email || 'Someone';
             
-            const projectName = project?.projectName || 'Unknown Project';
+            const projectName = project?.description || 'Unknown Project';
             const messagePreview = initialMessage.content.replace(/<[^>]*>/g, '').substring(0, 200);
-            const baseUrl = process.env.REPLIT_DEPLOYMENT ? `https://${process.env.REPLIT_DEPLOYMENT}` : 'http://localhost:5000';
+            const baseUrl = 'https://flow.growth.accountants';
             const threadUrl = `${baseUrl}/projects/${projectId}?tab=messages&thread=${thread.id}`;
 
             // Send email to participants except the sender
@@ -1079,11 +1079,11 @@ export function registerMessageRoutes(
             try {
               const { sendProjectMessageNotification } = await import('../lib/sendgridClient.js');
               const project = await storage.getProject(thread.projectId);
-              const projectName = project?.projectName || 'Unknown Project';
+              const projectName = project?.description || 'Unknown Project';
               
               // Extract preview text (remove HTML tags)
               const messagePreview = content.replace(/<[^>]*>/g, '').substring(0, 200);
-              const baseUrl = process.env.REPLIT_DEPLOYMENT ? `https://${process.env.REPLIT_DEPLOYMENT}` : 'http://localhost:5000';
+              const baseUrl = 'https://flow.growth.accountants';
               const threadUrl = `${baseUrl}/projects/${thread.projectId}?tab=messages&thread=${threadId}`;
 
               // Send email to each participant

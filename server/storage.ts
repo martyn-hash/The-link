@@ -6517,7 +6517,7 @@ export class DatabaseStorage implements IStorage {
       
       // Extract change reason, notes, and field responses from the most recent entry
       const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
-      const notes = mostRecentChronologyEntry?.notes || undefined;
+      const notes = mostRecentChronologyEntry?.notesHtml || mostRecentChronologyEntry?.notes || undefined;
       const fieldResponses = mostRecentChronologyEntry?.fieldResponses?.map((fr: any) => ({
         fieldName: fr.customField.fieldName,
         fieldType: fr.fieldType,

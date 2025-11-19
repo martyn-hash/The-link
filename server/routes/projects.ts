@@ -34,6 +34,35 @@ const validateParams = <T>(schema: z.ZodSchema<T>, params: any): { success: true
     : { success: false, errors: result.error.issues };
 };
 
+// Helper function to convert HTML to plain text for email notifications
+const htmlToPlainText = (html: string): string => {
+  return html
+    // Add line breaks for block elements
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    // Convert lists to bullet points
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/[uo]l>/gi, '\n')
+    // Convert table rows to lines
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    // Strip all remaining HTML tags
+    .replace(/<[^>]+>/g, '')
+    // Decode HTML entities
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    // Clean up excessive whitespace
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
+};
+
 export function registerProjectRoutes(
   app: Express,
   isAuthenticated: any,
@@ -496,7 +525,9 @@ export function registerProjectRoutes(
             // Get chronology for the project
             const chronology = await storage.getProjectChronology(updatedProject.id);
 
-            // Send the email
+            // Send the email with notes (HTML will render in HTML email template)
+            const notesForEmail = updateData.notesHtml || updateData.notes;
+            
             const emailSent = await sendStageChangeNotificationEmail(
               user.email,
               userName,
@@ -514,7 +545,7 @@ export function registerProjectRoutes(
                 })),
               projectWithDetails.createdAt?.toISOString(),
               updateData.changeReason,
-              updateData.notes,
+              notesForEmail,
               undefined // fieldResponses - different structure, not needed for notification email
             );
 
