@@ -36,7 +36,7 @@ export function StageChangePopover({
         className="w-[500px] max-w-[90vw] p-0 overflow-hidden"
         data-testid="stage-change-popover"
       >
-        <div className="max-h-[400px] overflow-y-auto p-4">
+        <div className="max-h-[500px] overflow-y-auto p-4">
           <div className="mb-3 text-sm font-semibold text-foreground">
             Last Stage Change
           </div>

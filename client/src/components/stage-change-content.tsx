@@ -182,6 +182,17 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
           </div>
         </div>
         <div>
+          <span className="text-xs text-muted-foreground">Time in Previous Stage</span>
+          <div className="mt-1 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium" data-testid="text-time">
+              {selectedStageChange.timeInPreviousStage 
+                ? formatDuration(selectedStageChange.timeInPreviousStage)
+                : 'N/A'}
+            </span>
+          </div>
+        </div>
+        <div>
           <span className="text-xs text-muted-foreground">Changed By</span>
           <div className="mt-1">
             {selectedStageChange.changedBy ? (
@@ -196,30 +207,21 @@ export function StageChangeContent({ projectId, compact = false }: StageChangeCo
             )}
           </div>
         </div>
-        {selectedStageChange.assignee && (
-          <div>
-            <span className="text-xs text-muted-foreground">Assigned To</span>
-            <div className="mt-1">
+        <div>
+          <span className="text-xs text-muted-foreground">Assigned To</span>
+          <div className="mt-1">
+            {selectedStageChange.assignee ? (
               <div className="flex items-center gap-2">
                 <UserIcon className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm" data-testid="text-assignee">
                   {selectedStageChange.assignee.firstName} {selectedStageChange.assignee.lastName}
                 </span>
               </div>
-            </div>
+            ) : (
+              <span className="text-sm text-muted-foreground" data-testid="text-na">N/A</span>
+            )}
           </div>
-        )}
-        {selectedStageChange.timeInPreviousStage && (
-          <div>
-            <span className="text-xs text-muted-foreground">Time in Previous Stage</span>
-            <div className="mt-1 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium" data-testid="text-time">
-                {formatDuration(selectedStageChange.timeInPreviousStage)}
-              </span>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Notes - Show in both compact and full mode */}
