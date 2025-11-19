@@ -2,8 +2,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { StageChangeContent } from "./stage-change-content";
 
@@ -24,10 +22,6 @@ export function StageChangeModal({
         className="max-w-3xl max-h-[90vh] overflow-y-auto"
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <DialogHeader>
-          <DialogTitle>Stage Change Details</DialogTitle>
-        </DialogHeader>
-        
         <StageChangeContent projectId={projectId} compact={false} />
 
         {/* Close Button */}

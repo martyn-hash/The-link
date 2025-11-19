@@ -37,9 +37,6 @@ export function StageChangePopover({
         data-testid="stage-change-popover"
       >
         <div className="max-h-[500px] overflow-y-auto p-4">
-          <div className="mb-3 text-sm font-semibold text-foreground">
-            Last Stage Change
-          </div>
           <StageChangeContent projectId={projectId} compact={true} />
         </div>
       </HoverCardContent>

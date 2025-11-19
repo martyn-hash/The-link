@@ -3,6 +3,20 @@
 ## Overview
 The Link is a comprehensive full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal for communication and document exchange. Key capabilities include intelligent scheduling, automated project generation, integration with Companies House for UK company data, and a mobile-first user experience. The application emphasizes automation, compliance, and a multi-tenant architecture with robust access controls.
 
+## Recent Changes (November 19, 2025)
+-   **Kanban Stage Change Popup Layout Optimization**: Reorganized the stage change information display to maximize space for notes
+    -   **2-Column Metadata Layout**: Changed from vertical stacking to side-by-side display
+        -   Row 1: Timestamp | Time in Previous Stage
+        -   Row 2: Changed By | Assigned To
+    -   **Removed Titles**: Eliminated "Last Stage Change" header from hover popup and "Stage Change Details" header from modal dialog
+    -   **Stage Transition at Top**: Stage transition badges now appear as the first element, giving immediate context
+    -   **Increased Popup Height**: Hover popup max height increased from 400px to 500px
+    -   **Affected Components**:
+        -   stage-change-popover.tsx: Desktop hover popup on project cards
+        -   stage-change-modal.tsx: Mobile/touch info button modal
+        -   stage-change-content.tsx: Shared content component with 2-column grid (grid-cols-2) in both compact and full modes
+    -   **User Impact**: Notes field now has significantly more visible space, reducing the need to scroll for stage change details
+
 ## Recent Changes (November 18, 2025)
 -   **Fixed Message Thread Creation for Stage Changes**: Resolved intermittent thread creation issue
     -   **Problem**: Threads were only created once per unique stage transition (e.g., "Do Work to Accounts Prep") due to duplicate checking
