@@ -14,6 +14,7 @@ interface FileUploadZoneProps {
   acceptedTypes?: string[];
   disabled?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
 export function FileUploadZone({
@@ -23,6 +24,7 @@ export function FileUploadZone({
   acceptedTypes = ['image/*', '.pdf', 'audio/*', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv'],
   disabled = false,
   className = '',
+  compact = false,
 }: FileUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +141,8 @@ export function FileUploadZone({
     <div className={className}>
       <div
         className={`
-          relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
+          relative border-2 border-dashed rounded-lg text-center transition-colors
+          ${compact ? 'p-3' : 'p-8'}
           ${isDragging ? 'border-primary bg-primary/5' : 'border-gray-300 dark:border-gray-600'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary/50'}
         `}
@@ -157,28 +160,47 @@ export function FileUploadZone({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
         />
 
-        <div className="flex flex-col items-center gap-3">
-          <div className={`
-            rounded-full p-4
-            ${isDragging ? 'bg-primary/10' : 'bg-gray-100 dark:bg-gray-800'}
-          `}>
-            <Upload className={`h-8 w-8 ${isDragging ? 'text-primary' : 'text-gray-400'}`} />
+        {compact ? (
+          <div className="flex items-center gap-2">
+            <div className={`
+              rounded-full p-1.5
+              ${isDragging ? 'bg-primary/10' : 'bg-gray-100 dark:bg-gray-800'}
+            `}>
+              <Upload className={`h-4 w-4 ${isDragging ? 'text-primary' : 'text-gray-400'}`} />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-medium">
+                {isDragging ? 'Drop files here' : 'Click or drag files to attach'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Max {maxFiles} files • {formatFileSize(maxSize)} each
+              </p>
+            </div>
           </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <div className={`
+              rounded-full p-4
+              ${isDragging ? 'bg-primary/10' : 'bg-gray-100 dark:bg-gray-800'}
+            `}>
+              <Upload className={`h-8 w-8 ${isDragging ? 'text-primary' : 'text-gray-400'}`} />
+            </div>
 
-          <div>
-            <p className="text-lg font-medium">
-              {isDragging ? 'Drop files here' : 'Drag and drop files here'}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              or click to browse
-            </p>
-          </div>
+            <div>
+              <p className="text-lg font-medium">
+                {isDragging ? 'Drop files here' : 'Drag and drop files here'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                or click to browse
+              </p>
+            </div>
 
-          <div className="text-xs text-muted-foreground">
-            <p>Maximum {maxFiles} files • {formatFileSize(maxSize)} per file</p>
-            <p className="mt-1">Supported: Images, PDFs, Documents, Audio</p>
+            <div className="text-xs text-muted-foreground">
+              <p>Maximum {maxFiles} files • {formatFileSize(maxSize)} per file</p>
+              <p className="mt-1">Supported: Images, PDFs, Documents, Audio</p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {error && (

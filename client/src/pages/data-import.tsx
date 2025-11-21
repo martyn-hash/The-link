@@ -15,6 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Upload, FileText, CheckCircle, AlertCircle, Info, Download } from "lucide-react";
 import Papa from "papaparse";
 
@@ -59,6 +68,7 @@ export default function DataImport() {
   const [currentStep, setCurrentStep] = useState<'upload' | 'validate' | 'preview' | 'import' | 'complete'>('upload');
   const [importProgress, setImportProgress] = useState(0);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -239,7 +249,7 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNavigation />
+      <TopNavigation user={user} />
       <div className="container mx-auto p-6 max-w-7xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Data Import</h1>
@@ -391,13 +401,44 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {validationResult.errors.length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Validation Errors</AlertTitle>
+                <div className="flex items-center justify-between">
+                  <AlertTitle>Validation Errors ({validationResult.errors.length})</AlertTitle>
+                  <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="ml-4"
+                        data-testid="button-view-full-error"
+                      >
+                        View Full First Error
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle>Full Error Message</DialogTitle>
+                        <DialogDescription>
+                          Complete details of the first validation error
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="h-[60vh] pr-4">
+                        <div className="p-4 bg-destructive/10 rounded-md">
+                          <p className="text-sm font-mono whitespace-pre-wrap break-all">
+                            {validationResult.errors[0]}
+                          </p>
+                        </div>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
+                </div>
                 <AlertDescription>
-                  <ul className="list-disc list-inside space-y-1">
-                    {validationResult.errors.map((error, idx) => (
-                      <li key={idx}>{error}</li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="max-h-96 pr-4">
+                    <ul className="list-disc list-inside space-y-2">
+                      {validationResult.errors.map((error, idx) => (
+                        <li key={idx} className="break-words whitespace-normal">{error}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 </AlertDescription>
               </Alert>
             )}
@@ -405,13 +446,15 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {validationResult.warnings.length > 0 && (
               <Alert>
                 <Info className="h-4 w-4" />
-                <AlertTitle>Warnings</AlertTitle>
+                <AlertTitle>Warnings ({validationResult.warnings.length})</AlertTitle>
                 <AlertDescription>
-                  <ul className="list-disc list-inside space-y-1">
-                    {validationResult.warnings.map((warning, idx) => (
-                      <li key={idx}>{warning}</li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="max-h-96 pr-4">
+                    <ul className="list-disc list-inside space-y-2">
+                      {validationResult.warnings.map((warning, idx) => (
+                        <li key={idx} className="break-words whitespace-normal">{warning}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 </AlertDescription>
               </Alert>
             )}
@@ -644,13 +687,15 @@ CLI001,Monthly Bookkeeping Service,Bookkeeper,admin@example.com,yes`;
             {importResult.errors.length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Errors Encountered</AlertTitle>
+                <AlertTitle>Errors Encountered ({importResult.errors.length})</AlertTitle>
                 <AlertDescription>
-                  <ul className="list-disc list-inside space-y-1">
-                    {importResult.errors.map((error, idx) => (
-                      <li key={idx}>{error}</li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="max-h-96 pr-4">
+                    <ul className="list-disc list-inside space-y-2">
+                      {importResult.errors.map((error, idx) => (
+                        <li key={idx} className="break-words whitespace-normal">{error}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 </AlertDescription>
               </Alert>
             )}

@@ -1,4 +1,4 @@
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link as RouterLink } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,16 +21,29 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import ProjectInfo from "@/components/project-info";
 import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
 import ProjectMessaging from "@/components/ProjectMessaging";
+import { ProjectProgressNotes } from "@/components/project-progress-notes";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useActivityTracker } from "@/lib/activityTracker";
+import { format } from "date-fns";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 interface RoleAssigneeResponse {
   user: User | null;
@@ -37,17 +52,52 @@ interface RoleAssigneeResponse {
   source: 'role_assignment' | 'fallback_user' | 'direct_assignment' | 'none';
 }
 
+// Form schema for making project inactive
+const makeProjectInactiveSchema = z.object({
+  inactiveReason: z.enum(["created_in_error", "no_longer_required", "client_doing_work_themselves"], {
+    required_error: "Please select a reason for marking this project inactive",
+  }),
+});
+
+type MakeProjectInactiveData = z.infer<typeof makeProjectInactiveSchema>;
+
+// Utility function to format dates
+function formatDate(date: string | Date | null): string {
+  if (!date) return 'Not provided';
+  
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(dateObj.getTime())) return 'Invalid date';
+  
+  return dateObj.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
 export default function ProjectDetail() {
   const { id: projectId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const { trackProjectView } = useActivityTracker();
+  const isMobile = useIsMobile();
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completionType, setCompletionType] = useState<'completed_successfully' | 'completed_unsuccessfully' | null>(null);
   const [showStageErrorDialog, setShowStageErrorDialog] = useState(false);
   const [stageErrorMessage, setStageErrorMessage] = useState<{ currentStage: string; validStages: string[] } | null>(null);
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
+  const [currentTab, setCurrentTab] = useState<string>("overview");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showInactiveDialog, setShowInactiveDialog] = useState(false);
+  
+  // Form for making project inactive
+  const inactiveForm = useForm<MakeProjectInactiveData>({
+    resolver: zodResolver(makeProjectInactiveSchema),
+    defaultValues: {
+      inactiveReason: undefined,
+    },
+  });
 
   // Track project view activity when component mounts
   useEffect(() => {
@@ -85,6 +135,18 @@ export default function ProjectDetail() {
     queryKey: ['/api/config/project-types', project?.projectTypeId, 'stages'],
     enabled: !!project?.projectTypeId,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch internal tasks for this project
+  const { data: projectInternalTasks, isLoading: projectInternalTasksLoading } = useQuery<any[]>({
+    queryKey: [`/api/internal-tasks/project/${projectId}`],
+    enabled: !!projectId,
+  });
+
+  // Fetch client people for progress notes
+  const { data: clientPeople } = useQuery<any[]>({
+    queryKey: [`/api/clients/${project?.clientId}/people`],
+    enabled: !!project?.clientId,
   });
 
   // Find current stage and check if it allows completion
@@ -131,6 +193,47 @@ export default function ProjectDetail() {
       }
     }
   });
+  
+  // Mutation to make project inactive
+  const makeInactiveMutation = useMutation({
+    mutationFn: async (data: MakeProjectInactiveData) => {
+      return await apiRequest('PATCH', `/api/projects/${projectId}`, {
+        inactive: true,
+        inactiveReason: data.inactiveReason,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      // Invalidate client-specific projects queries to update the projects list on client detail page
+      if (project?.clientId) {
+        queryClient.invalidateQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey[0] as string;
+            return key?.includes(`/api/clients/${project.clientId}/projects`);
+          }
+        });
+      }
+      toast({
+        title: "Project marked inactive",
+        description: "The project has been successfully marked as inactive.",
+      });
+      setShowInactiveDialog(false);
+      inactiveForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to mark project inactive",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Handler for making project inactive
+  const handleMakeInactive = (data: MakeProjectInactiveData) => {
+    makeInactiveMutation.mutate(data);
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -344,9 +447,9 @@ export default function ProjectDetail() {
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       
-      <div className="max-w-7xl mx-auto p-6 w-full">
+      <div className="page-container py-6 md:py-8">
         {/* Header with back navigation */}
-        <div className="mb-6">
+        <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
             <Button 
               variant="ghost" 
@@ -361,9 +464,18 @@ export default function ProjectDetail() {
           
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-client-name">
-                {project.client?.name || 'Unknown Client'}
-              </h1>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <RouterLink to={`/clients/${project.clientId}`}>
+                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                    {project.client?.name || 'Unknown Client'}
+                  </h1>
+                </RouterLink>
+                {project.projectType?.name && (
+                  <span className="text-lg md:text-xl font-medium text-meta" data-testid="text-project-type">
+                    {project.projectType.name}
+                  </span>
+                )}
+              </div>
             </div>
             
             <div className="flex gap-2">
@@ -392,34 +504,478 @@ export default function ProjectDetail() {
                   Complete
                 </Button>
               )}
+              
+              {/* Make Inactive Button - Only visible for non-inactive projects with permission */}
+              {user?.canMakeProjectsInactive && !project.inactive && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowInactiveDialog(true)}
+                  data-testid="button-make-inactive"
+                >
+                  <Ban className="w-4 h-4 mr-2" />
+                  Make Inactive
+                </Button>
+              )}
             </div>
           </div>
         </div>
-
-        {/* Tabs Layout */}
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="mt-6">
-            <div className="space-y-6">
-              {/* Row 1: Full-width project info */}
-              <div className="bg-card border border-border rounded-lg p-6">
-                <ProjectInfo project={project} user={user} />
+        
+        {/* Inactive Status Display */}
+        {project.inactive && project.inactiveReason && (
+          <div className="mb-6 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4" data-testid="section-inactive-status">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <Ban className="w-5 h-5 text-red-600 dark:text-red-400" />
               </div>
-
-              {/* Row 2: Full-width chronology */}
-              <div className="bg-card border border-border rounded-lg p-6">
-                <ProjectChronology project={project} currentAssignee={currentAssignee} />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-2" data-testid="text-inactive-status">
+                  Inactive
+                </h3>
+                <div className="space-y-1 text-sm text-red-800 dark:text-red-200">
+                  <div>
+                    <span className="font-medium">Reason:</span>{" "}
+                    <span data-testid="text-inactive-reason-value">
+                      {project.inactiveReason
+                        ?.split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ')}
+                    </span>
+                  </div>
+                  {project.inactiveAt && (
+                    <div>
+                      <span className="font-medium">Marked Inactive On:</span>{" "}
+                      <span data-testid="text-inactive-date-value">{formatDate(project.inactiveAt)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </TabsContent>
+          </div>
+        )}
+      </div>
 
-          <TabsContent value="messages" className="mt-6">
+      {/* Tabs Layout - Outside all constrained containers for full-width */}
+      <div className="flex-1 overflow-y-auto">
+      <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
+          {/* Desktop Tabs - Centered */}
+          <div className="hidden md:block mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
+            <TabsList className="grid w-full max-w-4xl grid-cols-4">
+              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+              <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
+              <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
+              <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Mobile Tabs - Carousel */}
+          <div className="md:hidden w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <TabsList className="inline-flex gap-2 h-auto">
+              <TabsTrigger 
+                value="overview" 
+                data-testid="tab-overview" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Overview
+              </TabsTrigger>
+              <TabsTrigger 
+                value="messages" 
+                data-testid="tab-messages" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Messages
+              </TabsTrigger>
+              <TabsTrigger 
+                value="tasks" 
+                data-testid="tab-tasks" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Internal Tasks
+              </TabsTrigger>
+              <TabsTrigger 
+                value="progress-notes" 
+                data-testid="tab-progress-notes" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Progress Notes
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Mobile Section Title */}
+          {isMobile && (
+            <div className="mt-4 mb-2 mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
+              <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
+                {currentTab === "overview" && "Overview"}
+                {currentTab === "messages" && "Messages"}
+                {currentTab === "tasks" && "Internal Tasks"}
+                {currentTab === "progress-notes" && "Progress Notes"}
+              </h2>
+            </div>
+          )}
+
+          {isMobile ? (
+            <SwipeableTabsWrapper
+              tabs={["overview", "messages", "tasks", "progress-notes"]}
+              currentTab={currentTab}
+              onTabChange={setCurrentTab}
+              enabled={true}
+              dataAttribute="project"
+            >
+              <TabsContent value="overview" className="mt-6">
+              <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-6">
+                {/* Row 1: Full-width project info */}
+                <div className="bg-card border border-border rounded-lg p-6">
+                <ProjectInfo 
+                  project={project} 
+                  user={user} 
+                  currentStage={currentStage}
+                  currentAssignee={currentAssignee}
+                />
+              </div>
+
+                {/* Row 2: Full-width chronology */}
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <ProjectChronology project={project} />
+                </div>
+              </div>
+            </TabsContent>
+
+          <TabsContent value="messages" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
             <ProjectMessaging projectId={project.id} project={project} />
           </TabsContent>
+
+          <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+              {/* Internal Tasks Section */}
+              <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5" />
+                    Internal Tasks
+                  </CardTitle>
+                  <CreateTaskDialog
+                    trigger={
+                      <Button
+                        variant="default"
+                        size="sm"
+                        data-testid="button-new-internal-task"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Task
+                      </Button>
+                    }
+                    defaultConnections={{ projectId }}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {projectInternalTasksLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : !projectInternalTasks || projectInternalTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No internal tasks for this project yet.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop Table */}
+                    <div className="hidden md:block border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Priority</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Assigned To</TableHead>
+                            <TableHead>Created</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {projectInternalTasks.map((task: any) => (
+                            <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
+                              <TableCell className="font-medium">
+                                <RouterLink to={`/internal-tasks?task=${task.id}`}>
+                                  <button className="hover:underline text-left" data-testid={`link-task-${task.id}`}>
+                                    {task.title}
+                                  </button>
+                                </RouterLink>
+                              </TableCell>
+                              <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={
+                                    task.priority === 'urgent' ? 'destructive' :
+                                    task.priority === 'high' ? 'default' :
+                                    'secondary'
+                                  }
+                                  data-testid={`badge-priority-${task.id}`}
+                                >
+                                  {task.priority}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    task.status === 'closed' ? 'outline' :
+                                    task.status === 'in_progress' ? 'default' :
+                                    'secondary'
+                                  }
+                                  data-testid={`badge-status-${task.id}`}
+                                >
+                                  {task.status === 'in_progress' ? 'In Progress' : task.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {format(new Date(task.createdAt), 'MMM d, yyyy')}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    data-testid={`button-view-task-${task.id}`}
+                                  >
+                                    View
+                                  </Button>
+                                </RouterLink>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-3">
+                      {projectInternalTasks.map((task: any) => (
+                        <Card key={task.id} data-testid={`card-internal-task-${task.id}`}>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div className="font-medium text-base">{task.title}</div>
+                              
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Type:</span>
+                                  <p className="font-medium">{task.taskType?.name || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Assigned To:</span>
+                                  <p className="font-medium">
+                                    {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Priority:</span>
+                                  <div className="mt-1">
+                                    <Badge 
+                                      variant={
+                                        task.priority === 'urgent' ? 'destructive' :
+                                        task.priority === 'high' ? 'default' :
+                                        'secondary'
+                                      }
+                                      data-testid={`badge-priority-${task.id}`}
+                                    >
+                                      {task.priority}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Status:</span>
+                                  <div className="mt-1">
+                                    <Badge
+                                      variant={
+                                        task.status === 'closed' ? 'outline' :
+                                        task.status === 'in_progress' ? 'default' :
+                                        'secondary'
+                                      }
+                                      data-testid={`badge-status-${task.id}`}
+                                    >
+                                      {task.status === 'in_progress' ? 'In Progress' : task.status}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div className="col-span-2">
+                                  <span className="text-muted-foreground">Created:</span>
+                                  <p className="font-medium">{format(new Date(task.createdAt), 'MMM d, yyyy')}</p>
+                                </div>
+                              </div>
+
+                              <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                                <Button
+                                  variant="outline"
+                                  className="w-full h-11"
+                                  data-testid={`button-view-task-${task.id}`}
+                                >
+                                  View Task
+                                </Button>
+                              </RouterLink>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="progress-notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+            <ProjectProgressNotes 
+              projectId={projectId!} 
+              clientId={project?.clientId || ''} 
+              clientPeople={clientPeople}
+            />
+          </TabsContent>
+            </SwipeableTabsWrapper>
+          ) : (
+            <>
+              <TabsContent value="overview" className="mt-6">
+                <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-6">
+                  <div className="bg-card border border-border rounded-lg p-6">
+                    <ProjectInfo 
+                      project={project} 
+                      user={user} 
+                      currentStage={currentStage}
+                      currentAssignee={currentAssignee}
+                    />
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-6">
+                    <ProjectChronology project={project} />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="messages" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <ProjectMessaging projectId={project.id} project={project} />
+              </TabsContent>
+
+              <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <CheckSquare className="w-5 h-5" />
+                          Internal Tasks
+                        </CardTitle>
+                        <Button
+                          onClick={() => setShowTaskModal(true)}
+                          size="sm"
+                          data-testid="button-create-task"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Task
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {projectInternalTasksLoading ? (
+                        <div className="space-y-4">
+                          {[1, 2, 3].map((i) => (
+                            <Skeleton key={i} className="h-20" />
+                          ))}
+                        </div>
+                      ) : projectInternalTasks && projectInternalTasks.length > 0 ? (
+                        <>
+                          <div className="text-sm text-muted-foreground mb-4">
+                            {projectInternalTasks.length} {projectInternalTasks.length === 1 ? 'task' : 'tasks'}
+                          </div>
+                          <div className="space-y-4">
+                            {projectInternalTasks.map((task) => (
+                              <Card key={task.id} className="hover:shadow-md transition-shadow">
+                                <CardContent className="p-4">
+                                  <div className="space-y-3">
+                                    <div className="flex items-start justify-between gap-4">
+                                      <div className="flex-1 space-y-1">
+                                        <div className="flex items-center gap-2">
+                                          <div className="font-medium text-base">{task.title}</div>
+                                          <Badge variant={
+                                            task.priority === 'urgent' ? 'destructive' :
+                                            task.priority === 'high' ? 'default' :
+                                            task.priority === 'medium' ? 'secondary' :
+                                            'outline'
+                                          } data-testid={`badge-priority-${task.id}`}>
+                                            {task.priority}
+                                          </Badge>
+                                          <Badge variant={
+                                            task.status === 'completed' ? 'default' :
+                                            task.status === 'in_progress' ? 'secondary' :
+                                            'outline'
+                                          } data-testid={`badge-status-${task.id}`}>
+                                            {task.status.replace('_', ' ')}
+                                          </Badge>
+                                        </div>
+                                        {task.description && (
+                                          <p className="text-sm text-muted-foreground line-clamp-2">
+                                            {task.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                      {task.assignedTo && (
+                                        <div className="flex items-center gap-1" data-testid={`text-assigned-${task.id}`}>
+                                          <UserIcon className="w-3 h-3" />
+                                          <span>{task.assignedTo.firstName} {task.assignedTo.lastName}</span>
+                                        </div>
+                                      )}
+                                      {task.dueDate && (
+                                        <div className="flex items-center gap-1" data-testid={`text-due-${task.id}`}>
+                                          <Calendar className="w-3 h-3" />
+                                          <span>Due: {format(new Date(task.dueDate), 'MMM d, yyyy')}</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                      <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
+                                        <Button
+                                          variant="outline"
+                                          className="w-full h-11"
+                                          data-testid={`button-view-task-${task.id}`}
+                                        >
+                                          View Task
+                                        </Button>
+                                      </RouterLink>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-12 text-muted-foreground">
+                          <CheckSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>No internal tasks for this project yet.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+              </TabsContent>
+
+              <TabsContent value="progress-notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <ProjectProgressNotes 
+                  projectId={projectId!} 
+                  clientId={project?.clientId || ''} 
+                  clientPeople={clientPeople}
+                />
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
 
@@ -467,6 +1023,65 @@ export default function ProjectDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Make Inactive Dialog */}
+      <Dialog open={showInactiveDialog} onOpenChange={setShowInactiveDialog}>
+        <DialogContent data-testid="dialog-make-inactive">
+          <DialogHeader>
+            <DialogTitle>Make Project Inactive</DialogTitle>
+            <DialogDescription>
+              Please select a reason for marking this project as inactive. The project will no longer be included in scheduling.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...inactiveForm}>
+            <form onSubmit={inactiveForm.handleSubmit(handleMakeInactive)} className="space-y-4">
+              <FormField
+                control={inactiveForm.control}
+                name="inactiveReason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inactive Reason</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} data-testid="select-inactive-reason">
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a reason" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="created_in_error">Created in Error</SelectItem>
+                        <SelectItem value="no_longer_required">No Longer Required</SelectItem>
+                        <SelectItem value="client_doing_work_themselves">Client Doing Work Themselves</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowInactiveDialog(false);
+                    inactiveForm.reset();
+                  }}
+                  data-testid="button-cancel-inactive"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={makeInactiveMutation.isPending}
+                  data-testid="button-confirm-inactive"
+                >
+                  Make Inactive
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Change Status Modal */}
       <ChangeStatusModal
@@ -525,6 +1140,15 @@ export default function ProjectDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

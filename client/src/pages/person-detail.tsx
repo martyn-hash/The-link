@@ -155,6 +155,7 @@ export default function PersonDetail() {
       personalUtrNumber: "",
       photoIdVerified: false,
       addressVerified: false,
+      receiveNotifications: true,
       linkedinUrl: "",
       twitterUrl: "",
       facebookUrl: "",
@@ -188,6 +189,7 @@ export default function PersonDetail() {
         personalUtrNumber: person.personalUtrNumber || "",
         photoIdVerified: Boolean(person.photoIdVerified),
         addressVerified: Boolean(person.addressVerified),
+        receiveNotifications: Boolean(person.receiveNotifications ?? true),
         linkedinUrl: person.linkedinUrl || "",
         twitterUrl: person.twitterUrl || "",
         facebookUrl: person.facebookUrl || "",
@@ -298,13 +300,13 @@ export default function PersonDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <main className="container mx-auto py-6 space-y-6">
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-64 w-full" />
         </main>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     );
   }
@@ -312,7 +314,7 @@ export default function PersonDetail() {
   if (error || !person) {
     return (
       <div className="min-h-screen bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <main className="container mx-auto py-6">
           <Card>
             <CardContent className="py-12 text-center">
@@ -323,7 +325,7 @@ export default function PersonDetail() {
             </CardContent>
           </Card>
         </main>
-        {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     );
   }
@@ -332,9 +334,9 @@ export default function PersonDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopNavigation />
-      
-      <main className="container mx-auto py-6 space-y-6">
+      <TopNavigation user={user} />
+
+      <main className="page-container py-6 md:py-8 space-y-8">
         {/* Header Section */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -348,11 +350,11 @@ export default function PersonDetail() {
               Back
             </Button>
             <div>
-              <h1 className="text-3xl font-bold" data-testid="text-person-name">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-person-name">
                 {formatPersonName(person.fullName)}
               </h1>
               {person.title && (
-                <p className="text-muted-foreground mt-1" data-testid="text-person-title">{person.title}</p>
+                <p className="text-meta mt-1" data-testid="text-person-title">{person.title}</p>
               )}
             </div>
           </div>
@@ -1044,6 +1046,25 @@ export default function PersonDetail() {
                       </FormItem>
                     )}
                   />
+                  
+                  <FormField
+                    control={editForm.control}
+                    name="receiveNotifications"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-receive-notifications"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Receive email & SMS notifications</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
                 </TabsContent>
                 
                 <TabsContent value="social" className="space-y-4 mt-4">
@@ -1167,14 +1188,12 @@ export default function PersonDetail() {
       </Dialog>
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch 
-          isOpen={mobileSearchOpen} 
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch 
+        isOpen={mobileSearchOpen} 
+        onOpenChange={setMobileSearchOpen}
+      />
 
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
     </div>
   );
 }

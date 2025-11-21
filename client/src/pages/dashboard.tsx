@@ -1,18 +1,29 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-// Navigation handled via window.location.href for reliability
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage } from "@shared/schema";
+import { type ProjectWithRelations, type Client, type Person, type ProjectType, type Service, type KanbanStage, type User } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import DashboardBuilder from "@/components/dashboard-builder";
+import TaskList from "@/components/task-list";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -35,7 +46,8 @@ import {
   Bell,
   Filter,
   BarChart3,
-  Home
+  Home,
+  Eye
 } from "lucide-react";
 
 // Dashboard data interfaces
@@ -81,43 +93,49 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-  // Fetch dashboard data
+  // Fetch dashboard cache (lightweight statistics)
+  const { data: dashboardCache, isLoading: cacheLoading, refetch: refetchCache } = useQuery<{
+    myTasksCount: number;
+    myProjectsCount: number;
+    overdueTasksCount: number;
+    behindScheduleCount: number;
+    lastUpdated: string;
+  }>({
+    queryKey: ["/api/dashboard/cache"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes - cache is pre-computed
+  });
+
+  // Manual refresh mutation
+  const refreshCacheMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/dashboard/cache/refresh");
+    },
+    onSuccess: () => {
+      refetchCache();
+      toast({
+        title: "Success",
+        description: "Dashboard refreshed successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to refresh dashboard",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch dashboard data (only for recently viewed)
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard"],
     enabled: isAuthenticated && !!user,
     retry: false,
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
-
-  // Fetch homescreen dashboard
-  const { data: homescreenDashboard, isLoading: homescreenLoading, error: homescreenError } = useQuery<Dashboard>({
-    queryKey: ["/api/dashboards/homescreen"],
-    enabled: isAuthenticated && !!user,
-    retry: false,
-  });
-
-  // Memoize homescreen dashboard filters to prevent unnecessary re-renders
-  const homescreenFilters = useMemo(() => {
-    if (!homescreenDashboard) return null;
-    
-    const parsedFilters = typeof homescreenDashboard.filters === 'string'
-      ? JSON.parse(homescreenDashboard.filters)
-      : homescreenDashboard.filters;
-    
-    return {
-      serviceFilter: parsedFilters.serviceFilter || "all",
-      taskAssigneeFilter: parsedFilters.taskAssigneeFilter || "all",
-      serviceOwnerFilter: parsedFilters.serviceOwnerFilter || "all",
-      userFilter: parsedFilters.userFilter || "all",
-      showArchived: parsedFilters.showArchived || false,
-      dynamicDateFilter: parsedFilters.dynamicDateFilter || "all",
-      customDateRange: {
-        from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
-        to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
-      },
-    };
-  }, [homescreenDashboard]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -160,7 +178,9 @@ export default function Dashboard() {
     );
   }
 
-  if (dashboardLoading) {
+  const isAnyLoading = dashboardLoading || cacheLoading;
+
+  if (isAnyLoading && !dashboardData) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <TopNavigation user={user} />
@@ -180,121 +200,266 @@ export default function Dashboard() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Main Dashboard Content */}
-        <main className="flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
-          <div className="space-y-6">
+        <main className="flex-1 overflow-auto page-container py-6 md:py-8 pb-20 md:pb-8">
+          <div className="space-y-8">
             {/* Recently Viewed */}
             <RecentlyViewedPanel data={dashboardData} />
 
-            {/* Homescreen Dashboard Section */}
-            <div data-testid="homescreen-dashboard-section">
-              {homescreenLoading ? (
-              <Card>
-                <CardContent className="py-12">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-                    <p className="text-muted-foreground">Loading homescreen dashboard...</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : homescreenDashboard ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Home className="w-6 h-6 text-primary" />
-                  <h3 className="text-xl font-semibold" data-testid="text-homescreen-dashboard-name">
-                    {homescreenDashboard.name}
-                  </h3>
-                  {homescreenDashboard.description && (
-                    <p className="text-sm text-muted-foreground">- {homescreenDashboard.description}</p>
-                  )}
-                </div>
-                {homescreenFilters && (
-                  <DashboardBuilder
-                    filters={homescreenFilters}
-                    widgets={homescreenDashboard.widgets || []}
-                    editMode={false}
-                    currentDashboard={homescreenDashboard}
-                  />
-                )}
-              </div>
-            ) : (
-              <Card>
-                <CardHeader className="text-center">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                    <BarChart3 className="w-6 h-6 text-muted-foreground" />
-                  </div>
-                  <CardTitle data-testid="text-no-homescreen">No homescreen dashboard set</CardTitle>
-                  <CardDescription>
-                    Set a dashboard as your homescreen in the Projects page
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex justify-center">
-                  <Button
-                    onClick={() => window.location.href = '/projects'}
-                    data-testid="button-go-to-projects"
-                  >
-                    Go to Projects
-                  </Button>
-                </CardContent>
-              </Card>
+            {/* Dashboard Summary Cards */}
+            {dashboardCache && (
+              <DashboardSummaryCards 
+                cache={dashboardCache} 
+                onRefresh={() => refreshCacheMutation.mutate()}
+                isRefreshing={refreshCacheMutation.isPending}
+              />
             )}
-            </div>
+
+            {/* Desktop only: My Projects & My Tasks data views */}
+            {!isMobile && (
+              <MyDashboardPanel user={user} />
+            )}
           </div>
         </main>
       </div>
       
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch
-          isOpen={mobileSearchOpen}
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }
 
 // Panel Components
 
-function MyTasksPanel({ data, user }: { data?: DashboardStats; user: any }) {
-  const myTasks = data?.myActiveTasks || [];
+function DashboardSummaryCards({ 
+  cache, 
+  onRefresh, 
+  isRefreshing 
+}: { 
+  cache: {
+    myTasksCount: number;
+    myProjectsCount: number;
+    overdueTasksCount: number;
+    behindScheduleCount: number;
+    lastUpdated: string;
+  };
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}) {
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+
+  const formatLastUpdated = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  const handleCardClick = (cardType: string) => {
+    const params = new URLSearchParams();
+    
+    switch (cardType) {
+      case 'My Tasks':
+        // Filter by current assignee = current user
+        params.set('taskAssigneeFilter', user?.id || '');
+        break;
+      case 'My Projects':
+        // Filter by service owner = current user
+        params.set('serviceOwnerFilter', user?.id || '');
+        break;
+      case 'Overdue Tasks':
+        // Filter by overdue date
+        params.set('dynamicDateFilter', 'overdue');
+        break;
+      case 'Behind Schedule':
+        // Behind schedule projects - we'll use a special filter
+        // This requires custom handling in the projects page
+        params.set('behindSchedule', 'true');
+        break;
+    }
+    
+    setLocation(`/projects?${params.toString()}`);
+  };
+
+  const summaryCards = [
+    {
+      title: "My Tasks",
+      count: cache.myTasksCount,
+      icon: CheckCircle2,
+      color: "text-blue-500",
+      bgColor: "bg-blue-50 dark:bg-blue-950/20",
+      testId: "card-my-tasks"
+    },
+    {
+      title: "My Projects",
+      count: cache.myProjectsCount,
+      icon: FolderOpen,
+      color: "text-violet-500",
+      bgColor: "bg-violet-50 dark:bg-violet-950/20",
+      testId: "card-my-projects"
+    },
+    {
+      title: "Overdue Tasks",
+      count: cache.overdueTasksCount,
+      icon: AlertTriangle,
+      color: "text-red-500",
+      bgColor: "bg-red-50 dark:bg-red-950/20",
+      testId: "card-overdue-tasks"
+    },
+    {
+      title: "Behind Schedule",
+      count: cache.behindScheduleCount,
+      icon: Clock,
+      color: "text-amber-500",
+      bgColor: "bg-amber-50 dark:bg-amber-950/20",
+      testId: "card-behind-schedule"
+    },
+  ];
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-blue-500" />
-          My Tasks
-        </CardTitle>
-        <CardDescription>Tasks assigned to you</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {myTasks.slice(0, 5).map((task) => (
-            <div 
-              key={task.id} 
-              className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/projects/${task.id}`}
-              data-testid={`task-item-${task.id}`}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold tracking-tight">Dashboard Overview</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground" data-testid="text-last-updated">
+            Updated {formatLastUpdated(cache.lastUpdated)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            data-testid="button-refresh-dashboard"
+          >
+            {isRefreshing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <ArrowRight className="h-4 w-4 mr-2 rotate-180" />
+                Refresh
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Card 
+              key={card.title} 
+              className="relative overflow-hidden cursor-pointer hover:shadow-lg transition-shadow" 
+              data-testid={card.testId}
+              onClick={() => handleCardClick(card.title)}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium">{task.client?.name}</span>
-                <Badge variant="outline" className="text-xs">
-                  {task.currentStatus?.replace(/_/g, ' ')}
-                </Badge>
+              <CardHeader className={`pb-2 ${card.bgColor}`}>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {card.title}
+                  </CardTitle>
+                  <Icon className={`h-5 w-5 ${card.color}`} />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className={`text-3xl font-bold ${card.color}`} data-testid={`count-${card.testId}`}>
+                  {card.count}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AttentionNeededPanel({ data }: { 
+  data: {
+    overdueProjects: ProjectWithRelations[];
+    behindScheduleProjects: ProjectWithRelations[];
+    attentionNeeded: ProjectWithRelations[];
+  } 
+}) {
+  return (
+    <Card className="border-orange-200 dark:border-orange-800">
+      <CardHeader className="pb-3 bg-orange-50/50 dark:bg-orange-950/20">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              Attention Needed
+            </CardTitle>
+            <CardDescription>Overdue or behind schedule projects</CardDescription>
+          </div>
+          <Badge variant="destructive">{data.attentionNeeded.length}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {data.attentionNeeded.slice(0, 8).map((project) => {
+            const isOverdue = data.overdueProjects.some(p => p.id === project.id);
+            const isBehindSchedule = data.behindScheduleProjects.some(p => p.id === project.id);
+            
+            return (
+              <div 
+                key={project.id} 
+                className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/30 cursor-pointer transition-colors"
+                onClick={() => window.location.href = `/projects/${project.id}`}
+                data-testid={`attention-needed-project-${project.id}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{project.client?.name}</span>
+                  <div className="flex gap-1">
+                    {isOverdue && (
+                      <Badge variant="destructive" className="text-xs">
+                        Overdue
+                      </Badge>
+                    )}
+                    {isBehindSchedule && (
+                      <Badge variant="secondary" className="text-xs">
+                        Behind Schedule
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
+                {project.dueDate && (
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    {isOverdue ? 'Was due:' : 'Due:'} {new Date(project.dueDate).toLocaleDateString()}
+                  </p>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">{(task as any).projectType?.name || "Unknown Project Type"}</p>
-              {task.dueDate && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Due: {new Date(task.dueDate).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          ))}
-          {myTasks.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No active tasks</p>
+            );
+          })}
+          {data.attentionNeeded.length > 8 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-2 border-orange-200 dark:border-orange-800"
+              onClick={() => window.location.href = '/all-projects'}
+              data-testid="button-view-all-attention-needed"
+            >
+              View All {data.attentionNeeded.length} Projects
+            </Button>
           )}
         </div>
       </CardContent>
@@ -476,56 +641,6 @@ function RecentlyViewedPanel({ data }: { data?: DashboardStats }) {
   );
 }
 
-function MyProjectsPanel({ data }: { data?: DashboardStats }) {
-  const myProjects = data?.myProjects || [];
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <FolderOpen className="w-5 h-5 text-violet-500" />
-          My Projects
-        </CardTitle>
-        <CardDescription>All projects you're involved in</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {myProjects.slice(0, 10).map((project) => (
-            <div 
-              key={project.id} 
-              className="p-3 bg-muted/50 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-              onClick={() => window.location.href = `/projects/${project.id}`}
-              data-testid={`project-item-${project.id}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium">{project.client?.name}</span>
-                <Badge variant="outline" className="text-xs">
-                  {project.currentStatus?.replace(/_/g, ' ')}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{(project as any).projectType?.name || "Unknown Project Type"}</p>
-            </div>
-          ))}
-          {myProjects.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No projects assigned</p>
-          )}
-        </div>
-        {myProjects.length > 10 && (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="w-full mt-3"
-            onClick={() => window.location.href = '/all-projects'}
-            data-testid="button-view-all-projects"
-          >
-            View All {myProjects.length} Projects
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
   const behindScheduleProjects = data?.behindScheduleProjects || [];
 
@@ -567,5 +682,299 @@ function BehindSchedulePanel({ data }: { data?: DashboardStats }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+
+function MyDashboardPanel({ user }: { user: any }) {
+  // State for selected dashboard
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string>("default");
+
+  // Fetch all saved dashboards
+  const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery<Dashboard[]>({
+    queryKey: ["/api/dashboards"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Fetch dashboard metrics
+  const { data: metrics, isLoading: metricsLoading } = useQuery<{
+    myProjectsCount: number;
+    myTasksCount: number;
+    behindScheduleCount: number;
+    lateCount: number;
+  }>({
+    queryKey: ["/api/dashboard/metrics"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Fetch my projects (where user is service owner)
+  const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/dashboard/my-projects"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Fetch my tasks (where user is current assignee)
+  const { data: myTasks = [], isLoading: myTasksLoading } = useQuery<ProjectWithRelations[]>({
+    queryKey: ["/api/dashboard/my-tasks"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  // Get selected dashboard filters
+  const selectedDashboard = dashboards.find(d => d.id === selectedDashboardId);
+  const appliedFilters = useMemo(() => {
+    if (!selectedDashboard || selectedDashboardId === "default") return null;
+    
+    const parsedFilters = typeof selectedDashboard.filters === 'string'
+      ? JSON.parse(selectedDashboard.filters)
+      : selectedDashboard.filters;
+    
+    // Parse date range strings to Date objects
+    if (parsedFilters.customDateRange) {
+      return {
+        ...parsedFilters,
+        customDateRange: {
+          from: parsedFilters.customDateRange.from ? new Date(parsedFilters.customDateRange.from) : undefined,
+          to: parsedFilters.customDateRange.to ? new Date(parsedFilters.customDateRange.to) : undefined,
+        }
+      };
+    }
+    
+    return parsedFilters;
+  }, [selectedDashboard, selectedDashboardId]);
+
+  // Filter projects based on selected dashboard (comprehensive filtering)
+  const applyDashboardFilters = (projects: ProjectWithRelations[]) => {
+    if (!appliedFilters) return projects;
+
+    return projects.filter((project) => {
+      // Service filter (by service/project type)
+      if (appliedFilters.serviceFilter && appliedFilters.serviceFilter !== "all") {
+        if (project.projectTypeId !== appliedFilters.serviceFilter) return false;
+      }
+
+      // Service owner filter
+      if (appliedFilters.serviceOwnerFilter && appliedFilters.serviceOwnerFilter !== "all") {
+        if (project.projectOwnerId !== appliedFilters.serviceOwnerFilter) return false;
+      }
+      
+      // Task assignee filter
+      if (appliedFilters.taskAssigneeFilter && appliedFilters.taskAssigneeFilter !== "all") {
+        if (project.currentAssigneeId !== appliedFilters.taskAssigneeFilter) return false;
+      }
+
+      // User filter (either owner or assignee)
+      if (appliedFilters.userFilter && appliedFilters.userFilter !== "all") {
+        const matchesOwner = project.projectOwnerId === appliedFilters.userFilter;
+        const matchesAssignee = project.currentAssigneeId === appliedFilters.userFilter;
+        if (!matchesOwner && !matchesAssignee) return false;
+      }
+
+      // Archive filter - check the archived flag, not deletedAt
+      if (!appliedFilters.showArchived && project.archived) return false;
+
+      // Dynamic date filter
+      if (appliedFilters.dynamicDateFilter && appliedFilters.dynamicDateFilter !== "all") {
+        const now = new Date();
+        const projectDate = project.createdAt ? new Date(project.createdAt) : null;
+        
+        if (!projectDate) return false;
+
+        switch (appliedFilters.dynamicDateFilter) {
+          case "today":
+            if (projectDate.toDateString() !== now.toDateString()) return false;
+            break;
+          case "yesterday":
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (projectDate.toDateString() !== yesterday.toDateString()) return false;
+            break;
+          case "this_week":
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() - now.getDay());
+            if (projectDate < weekStart) return false;
+            break;
+          case "last_week":
+            const lastWeekStart = new Date(now);
+            lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+            const lastWeekEnd = new Date(lastWeekStart);
+            lastWeekEnd.setDate(lastWeekEnd.getDate() + 7);
+            if (projectDate < lastWeekStart || projectDate >= lastWeekEnd) return false;
+            break;
+          case "this_month":
+            if (projectDate.getMonth() !== now.getMonth() || projectDate.getFullYear() !== now.getFullYear()) return false;
+            break;
+          case "last_month":
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
+            if (projectDate.getMonth() !== lastMonth.getMonth() || projectDate.getFullYear() !== lastMonth.getFullYear()) return false;
+            break;
+          case "this_year":
+            if (projectDate.getFullYear() !== now.getFullYear()) return false;
+            break;
+          case "custom":
+            if (appliedFilters.customDateRange) {
+              const from = appliedFilters.customDateRange.from;
+              const to = appliedFilters.customDateRange.to;
+              if (from && projectDate < from) return false;
+              if (to && projectDate > to) return false;
+            }
+            break;
+        }
+      }
+      
+      return true;
+    });
+  };
+
+  const filteredMyProjects = useMemo(
+    () => applyDashboardFilters(myProjects),
+    [myProjects, appliedFilters]
+  );
+
+  const filteredMyTasks = useMemo(
+    () => applyDashboardFilters(myTasks),
+    [myTasks, appliedFilters]
+  );
+
+  // Recalculate metrics based on filtered data when dashboard is selected
+  const displayMetrics = useMemo(() => {
+    if (!appliedFilters || !metrics) return metrics;
+    
+    // When a dashboard filter is active, recalculate metrics from filtered data
+    const allFilteredProjects = [...filteredMyProjects, ...filteredMyTasks];
+    const uniqueFilteredProjects = Array.from(
+      new Map(allFilteredProjects.map(p => [p.id, p])).values()
+    );
+
+    // Calculate behind schedule from filtered projects
+    // Use a similar heuristic as backend: projects in current stage > 7 days
+    const behindScheduleCount = uniqueFilteredProjects.filter(project => {
+      // Skip archived, inactive, or completed projects
+      if (project.archived || project.inactive || project.currentStatus === "completed") {
+        return false;
+      }
+
+      const chronology = project.chronology || [];
+      if (chronology.length === 0) return false;
+
+      // Sort chronology by timestamp descending (most recent first) and find entry for current status
+      const sortedChronology = [...chronology].sort((a, b) => 
+        new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+      );
+      
+      const lastEntry = sortedChronology.find(entry => entry.toStatus === project.currentStatus);
+      if (!lastEntry || !lastEntry.timestamp) return false;
+
+      // Consider projects stuck in a stage for more than 7 days as "behind schedule"
+      const timeInCurrentStageMs = Date.now() - new Date(lastEntry.timestamp).getTime();
+      const timeInCurrentStageDays = timeInCurrentStageMs / (1000 * 60 * 60 * 24);
+
+      return timeInCurrentStageDays > 7;
+    }).length;
+
+    // Calculate late count from filtered projects (current date > due date)
+    const now = new Date();
+    const lateCount = uniqueFilteredProjects.filter(p => {
+      // Skip archived, inactive, or completed projects
+      if (p.archived || p.inactive || p.currentStatus === "completed") {
+        return false;
+      }
+      if (!p.dueDate) return false;
+      const dueDate = new Date(p.dueDate);
+      return now > dueDate;
+    }).length;
+
+    return {
+      myProjectsCount: filteredMyProjects.length,
+      myTasksCount: filteredMyTasks.length,
+      behindScheduleCount,
+      lateCount,
+    };
+  }, [appliedFilters, metrics, filteredMyProjects, filteredMyTasks]);
+
+  if (metricsLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading dashboard...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Dashboard Selector */}
+      <div className="flex items-center gap-3">
+        <Select 
+          value={selectedDashboardId} 
+          onValueChange={setSelectedDashboardId}
+          data-testid="dashboard-selector"
+        >
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Select a dashboard view" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Default View</SelectItem>
+            {dashboards.map((dashboard) => (
+              <SelectItem key={dashboard.id} value={dashboard.id}>
+                {dashboard.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Reset to Default Button - Only show when non-default dashboard is selected */}
+        {selectedDashboardId !== "default" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedDashboardId("default")}
+            data-testid="button-reset-dashboard"
+          >
+            <Home className="w-4 h-4 mr-2" />
+            Reset to Default
+          </Button>
+        )}
+      </div>
+
+      {/* My Projects Table */}
+      <div data-testid="section-my-projects">
+        <h2 className="text-2xl font-semibold mb-4">My Projects</h2>
+        {myProjectsLoading ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <TaskList projects={filteredMyProjects} user={user} viewType="my-projects" />
+        )}
+      </div>
+
+      {/* My Tasks Table */}
+      <div data-testid="section-my-tasks">
+        <h2 className="text-2xl font-semibold mb-4">My Tasks</h2>
+        {myTasksLoading ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <TaskList projects={filteredMyTasks} user={user} viewType="my-tasks" />
+        )}
+      </div>
+    </div>
   );
 }

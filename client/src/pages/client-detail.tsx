@@ -1,8 +1,7 @@
 import { useParams, Link as RouterLink, useLocation } from "wouter";
 import { useState, useLayoutEffect, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/TiptapEditor';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
@@ -11,8 +10,9 @@ import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode } from "lucide-react";
+import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare, FileSignature, Shield, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +40,11 @@ import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
 import DocumentFolderView from "@/components/DocumentFolderView";
 import { CreateFolderDialog } from "@/components/CreateFolderDialog";
 import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
+import { ClientNotificationsView } from "@/components/ClientNotificationsView";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { EmailThreadViewer } from "@/components/EmailThreadViewer";
+import { CommunicationCard } from "@/components/communication-card";
+import { SignatureRequestsPanel } from "@/components/SignatureRequestsPanel";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -260,22 +265,20 @@ function PortalStatusColumn({
       <div className="flex flex-col gap-2">
         <Button
           variant="outline"
-          size="sm"
           onClick={() => sendInviteMutation.mutate()}
           disabled={sendInviteMutation.isPending}
           data-testid={`button-send-portal-invite-${personId}`}
-          className="w-full text-xs"
+          className="w-full h-11 text-xs"
         >
           {sendInviteMutation.isPending ? "Sending..." : "Send Invite"}
         </Button>
         
         <Button
           variant="outline"
-          size="sm"
           onClick={() => generateQRMutation.mutate()}
           disabled={generateQRMutation.isPending}
           data-testid={`button-generate-qr-${personId}`}
-          className="w-full text-xs"
+          className="w-full h-11 text-xs"
         >
           {generateQRMutation.isPending ? "Generating..." : "Show QR Code"}
         </Button>
@@ -312,27 +315,33 @@ type CommunicationWithRelations = Communication & {
   user: User;
 };
 
-// Quill editor configuration for email
-const emailEditorModules = {
-  toolbar: [
-    [{ 'header': [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline'],
-    [{ 'color': [] }, { 'background': [] }],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    [{ 'align': [] }],
-    ['link'],
-    ['clean']
-  ],
-};
 
-const emailEditorFormats = [
-  'header', 'bold', 'italic', 'underline',
-  'color', 'background', 'list', 'bullet',
-  'align', 'link'
-];
+// Project Link Component - displays project name with link
+function ProjectLink({ projectId }: { projectId: string }) {
+  const [, setLocation] = useLocation();
+  const { data: project } = useQuery<any>({
+    queryKey: ['/api/projects', projectId],
+    enabled: !!projectId,
+  });
+
+  if (!project) {
+    return <span className="text-sm text-muted-foreground">Loading...</span>;
+  }
+
+  return (
+    <button
+      onClick={() => setLocation(`/projects/${projectId}`)}
+      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+      data-testid={`link-project-${projectId}`}
+    >
+      {project.description || project.client?.name || 'Unknown Project'}
+    </button>
+  );
+}
 
 // Communications Timeline Component
 function CommunicationsTimeline({ clientId, user }: { clientId: string; user: any }) {
+  const isMobile = useIsMobile();
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -345,8 +354,14 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   const [isCallingPerson, setIsCallingPerson] = useState(false);
   const [callPersonId, setCallPersonId] = useState<string | undefined>();
   const [callPhoneNumber, setCallPhoneNumber] = useState<string | undefined>();
+  const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
+  const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
+  const [commTypeFilter, setCommTypeFilter] = useState<'all' | 'phone_call' | 'sms' | 'email' | 'message_thread' | 'note' | 'email_thread'>('all');
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  
+  // Projects cache for card view
+  const [projectCache, setProjectCache] = useState<Record<string, any>>({});
 
   // Fetch communications for this client
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
@@ -360,6 +375,23 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
     enabled: !!clientId,
   });
 
+  // Fetch email threads for this client
+  const { data: emailThreadsData, isLoading: isLoadingEmailThreads } = useQuery<{
+    threads: Array<{
+      canonicalConversationId: string;
+      subject: string | null;
+      participants: string[] | null;
+      firstMessageAt: string;
+      lastMessageAt: string;
+      messageCount: number;
+      latestPreview: string | null;
+      latestDirection: 'inbound' | 'outbound' | 'internal' | 'external' | null;
+    }>;
+  }>({
+    queryKey: ['/api/emails/client', clientId],
+    enabled: !!clientId,
+  });
+
   // Fetch client people for person selection
   const { data: clientPeople } = useQuery({
     queryKey: ['/api/clients', clientId, 'people'],
@@ -367,7 +399,7 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
   });
 
   const addCommunicationMutation = useMutation({
-    mutationFn: (data: any) => apiRequest(`/api/communications`, 'POST', data),
+    mutationFn: (data: any) => apiRequest('POST', `/api/communications`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
       setIsAddingCommunication(false);
@@ -554,6 +586,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return <Inbox className="h-4 w-4" />;
       case 'message_thread':
         return <MessageSquare className="h-4 w-4" />;
+      case 'email_thread':
+        return <Mail className="h-4 w-4" />;
       default:
         return <MessageSquare className="h-4 w-4" />;
     }
@@ -575,6 +609,8 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return 'Email Received';
       case 'message_thread':
         return 'Instant Message';
+      case 'email_thread':
+        return 'Email Thread';
       default:
         return 'Communication';
     }
@@ -596,22 +632,48 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
         return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
       case 'message_thread':
         return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
+      case 'email_thread':
+        return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
     }
   };
 
-  // Merge communications and message threads
-  const allItems = [...(communications || []), ...(messageThreads || []).map(thread => ({
-    ...thread,
-    type: 'message_thread',
-    loggedAt: thread.createdAt,
-    content: thread.lastMessage?.content || '',
-  }))].sort((a, b) => 
+  // Merge communications, message threads, and email threads
+  const emailThreads = emailThreadsData?.threads || [];
+  const allItems = [
+    ...(communications || []),
+    ...(messageThreads || []).map(thread => ({
+      ...thread,
+      type: 'message_thread',
+      loggedAt: thread.createdAt,
+      content: thread.lastMessage?.content || '',
+    })),
+    ...emailThreads.map(thread => ({
+      ...thread,
+      id: thread.canonicalConversationId,
+      type: 'email_thread',
+      loggedAt: thread.lastMessageAt,
+      createdAt: thread.firstMessageAt,
+      subject: thread.subject || 'No Subject',
+      content: thread.latestPreview || thread.subject || '',
+      user: null, // Email threads don't have a specific CRM user
+      createdBy: null,
+      projectId: null, // Email threads aren't directly linked to projects in this view
+    }))
+  ].sort((a, b) => 
     new Date(b.loggedAt || b.createdAt).getTime() - new Date(a.loggedAt || a.createdAt).getTime()
   );
 
-  if (isLoading || isLoadingThreads) {
+  // Apply communication type filter
+  const filteredItems = allItems.filter(item => {
+    if (commTypeFilter === 'all') return true;
+    if (commTypeFilter === 'sms') return item.type === 'sms_sent' || item.type === 'sms_received';
+    if (commTypeFilter === 'email') return item.type === 'email_sent' || item.type === 'email_received';
+    return item.type === commTypeFilter;
+  });
+
+  if (isLoading || isLoadingThreads || isLoadingEmailThreads) {
     return (
       <Card>
         <CardHeader>
@@ -639,58 +701,168 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
+      <CardHeader className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
-            Communications Timeline
+            <span className="hidden md:inline">Communications Timeline</span>
+            <span className="md:hidden">Comms</span>
           </CardTitle>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setIsCallingPerson(true)}
-              size="sm"
-              variant="outline"
-              data-testid="button-make-call"
-            >
-              <PhoneCall className="h-4 w-4 mr-2" />
-              Make Call
-            </Button>
-            <Button
-              onClick={() => setIsSendingSMS(true)}
-              size="sm"
-              variant="outline"
-              data-testid="button-send-sms"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send SMS
-            </Button>
-            <Button
-              onClick={() => setIsSendingEmail(true)}
-              size="sm"
-              variant="outline"
-              data-testid="button-send-email"
-            >
-              <Mail className="h-4 w-4 mr-2" />
-              Send Email
-            </Button>
-            <Button
-              onClick={() => setIsCreatingMessage(true)}
-              size="sm"
-              variant="default"
-              data-testid="button-instant-message"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Instant Message
-            </Button>
-            <Button
-              onClick={() => setIsAddingCommunication(true)}
-              size="sm"
-              data-testid="button-add-communication"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Communication
-            </Button>
-          </div>
+          
+          {/* Mobile: Single Dropdown Menu */}
+          {isMobile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" data-testid="button-mobile-actions-menu">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setIsCallingPerson(true)} data-testid="menu-make-call">
+                  <PhoneCall className="h-4 w-4 mr-2" />
+                  Make Call
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSendingSMS(true)} data-testid="menu-send-sms">
+                  <Send className="h-4 w-4 mr-2" />
+                  Send SMS
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSendingEmail(true)} data-testid="menu-send-email">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Email
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsCreatingMessage(true)} data-testid="menu-instant-message">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Instant Message
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsAddingCommunication(true)} data-testid="menu-add-communication">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Add Note
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            /* Desktop: All Buttons */
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setIsCallingPerson(true)}
+                size="sm"
+                variant="outline"
+                data-testid="button-make-call"
+              >
+                <PhoneCall className="h-4 w-4 mr-2" />
+                Make Call
+              </Button>
+              <Button
+                onClick={() => setIsSendingSMS(true)}
+                size="sm"
+                variant="outline"
+                data-testid="button-send-sms"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send SMS
+              </Button>
+              <Button
+                onClick={() => setIsSendingEmail(true)}
+                size="sm"
+                variant="outline"
+                data-testid="button-send-email"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Send Email
+              </Button>
+              <Button
+                onClick={() => setIsCreatingMessage(true)}
+                size="sm"
+                variant="default"
+                data-testid="button-instant-message"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Instant Message
+              </Button>
+              <Button
+                onClick={() => setIsAddingCommunication(true)}
+                size="sm"
+                data-testid="button-add-communication"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Communication
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        {/* Communication Type Filters */}
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <Button
+            variant={commTypeFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('all')}
+            data-testid="button-filter-all"
+            className="flex-shrink-0"
+          >
+            All ({allItems.length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'phone_call' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('phone_call')}
+            data-testid="button-filter-phone-call"
+            className="flex-shrink-0"
+          >
+            <PhoneCall className="h-3 w-3 mr-1" />
+            Calls ({allItems.filter(i => i.type === 'phone_call').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'sms' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('sms')}
+            data-testid="button-filter-sms"
+            className="flex-shrink-0"
+          >
+            <Send className="h-3 w-3 mr-1" />
+            SMS ({allItems.filter(i => i.type === 'sms_sent' || i.type === 'sms_received').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'email' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('email')}
+            data-testid="button-filter-email"
+            className="flex-shrink-0"
+          >
+            <Mail className="h-3 w-3 mr-1" />
+            Emails ({allItems.filter(i => i.type === 'email_sent' || i.type === 'email_received').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'message_thread' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('message_thread')}
+            data-testid="button-filter-message-thread"
+            className="flex-shrink-0"
+          >
+            <MessageSquare className="h-3 w-3 mr-1" />
+            Messages ({allItems.filter(i => i.type === 'message_thread').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'note' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('note')}
+            data-testid="button-filter-note"
+            className="flex-shrink-0"
+          >
+            <FileText className="h-3 w-3 mr-1" />
+            Notes ({allItems.filter(i => i.type === 'note').length})
+          </Button>
+          <Button
+            variant={commTypeFilter === 'email_thread' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCommTypeFilter('email_thread')}
+            data-testid="button-filter-email-thread"
+            className="flex-shrink-0"
+          >
+            <Mail className="h-3 w-3 mr-1" />
+            Email Threads ({allItems.filter(i => i.type === 'email_thread').length})
+          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -700,7 +872,51 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             <p>No communications recorded yet</p>
             <p className="text-sm">Add phone calls, notes, or messages to track client interactions</p>
           </div>
+        ) : isMobile ? (
+          /* Mobile Card View */
+          <div className="space-y-3">
+            {filteredItems.map((item: any) => {
+              const handleView = () => {
+                if (item.type === 'message_thread') {
+                  setLocation(`/messages?thread=${item.id}`);
+                } else if (item.type === 'email_thread') {
+                  setSelectedEmailThreadId(item.id);
+                  setEmailThreadViewerOpen(true);
+                } else {
+                  setSelectedCommunication(item);
+                  setIsViewingCommunication(true);
+                }
+              };
+
+              const handleProjectClick = item.projectId ? () => {
+                setLocation(`/projects/${item.projectId}`);
+              } : undefined;
+
+              return (
+                <CommunicationCard
+                  key={item.id}
+                  id={item.id}
+                  type={item.type}
+                  loggedAt={item.loggedAt}
+                  createdAt={item.createdAt}
+                  subject={item.subject}
+                  content={item.content}
+                  user={item.user}
+                  createdBy={item.createdBy}
+                  projectId={item.projectId}
+                  projectName={projectCache[item.projectId]?.description || projectCache[item.projectId]?.client?.name}
+                  messageCount={item.messageCount}
+                  unreadCount={item.unreadCount}
+                  attachmentCount={item.attachmentCount}
+                  participants={item.participants}
+                  onView={handleView}
+                  onProjectClick={handleProjectClick}
+                />
+              );
+            })}
+          </div>
         ) : (
+          /* Desktop Table View */
           <Table>
             <TableHeader>
               <TableRow>
@@ -708,11 +924,12 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                 <TableHead>Date/Time</TableHead>
                 <TableHead>Subject/Content</TableHead>
                 <TableHead>Created By</TableHead>
+                <TableHead>Connected To</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {allItems.map((item: any) => (
+              {filteredItems.map((item: any) => (
                 <TableRow key={item.id} data-testid={`communication-row-${item.id}`}>
                   <TableCell data-testid={`cell-type-${item.id}`}>
                     <div className="flex items-center gap-2">
@@ -754,6 +971,18 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                             )}
                           </div>
                         </div>
+                      ) : item.type === 'email_thread' ? (
+                        <div>
+                          <div className="font-medium text-sm flex items-center gap-2">
+                            {item.subject || 'No Subject'}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {item.messageCount || 0} message{(item.messageCount || 0) !== 1 ? 's' : ''}
+                            {item.participants && item.participants.length > 0 && (
+                              <span className="ml-2">• {item.participants.length} participant{item.participants.length !== 1 ? 's' : ''}</span>
+                            )}
+                          </div>
+                        </div>
                       ) : (
                         <div className="text-sm truncate">
                           {item.subject && <div className="font-medium">{item.subject}</div>}
@@ -764,12 +993,28 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                   </TableCell>
                   <TableCell data-testid={`cell-user-${item.id}`}>
                     <div className="flex items-center gap-2">
-                      <UserIcon className="w-4 h-4 text-muted-foreground" />
+                      <UserIcon className="w-4 w-4 text-muted-foreground" />
                       <span className="text-sm" data-testid={`text-user-${item.id}`}>
-                        {item.user ? `${item.user.firstName} ${item.user.lastName}` : 
-                         item.createdBy ? `User ${item.createdBy}` : 'System'}
+                        {item.type === 'email_thread' ? (
+                          item.participants && item.participants.length > 0 
+                            ? `${item.participants.length} participant${item.participants.length !== 1 ? 's' : ''}`
+                            : 'Email'
+                        ) : item.user ? (
+                          `${item.user.firstName} ${item.user.lastName}`
+                        ) : item.createdBy ? (
+                          `User ${item.createdBy}`
+                        ) : (
+                          'System'
+                        )}
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell data-testid={`cell-connected-${item.id}`}>
+                    {item.projectId ? (
+                      <ProjectLink projectId={item.projectId} />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {item.type === 'message_thread' ? (
@@ -778,6 +1023,19 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
                         size="sm"
                         onClick={() => setLocation(`/messages?thread=${item.id}`)}
                         data-testid={`button-view-thread-${item.id}`}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Thread
+                      </Button>
+                    ) : item.type === 'email_thread' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedEmailThreadId(item.id);
+                          setEmailThreadViewerOpen(true);
+                        }}
+                        data-testid={`button-view-email-thread-${item.id}`}
                       >
                         <Eye className="h-4 w-4 mr-2" />
                         View Thread
@@ -1111,29 +1369,15 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
             
             <div className="space-y-2">
               <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
-              <ResizablePanelGroup direction="vertical" className="min-h-[300px] border rounded-md">
-                <ResizablePanel defaultSize={100} minSize={40}>
-                  <div data-testid="input-email-content-editor" className="h-full p-0">
-                    <ReactQuill
-                      value={emailContent}
-                      onChange={setEmailContent}
-                      modules={emailEditorModules}
-                      formats={emailEditorFormats}
-                      theme="snow"
-                      placeholder="Enter your email message..."
-                      className="h-full"
-                      style={{ height: '100%' }}
-                    />
-                  </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={0} minSize={0} className="bg-muted/20">
-                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                    Drag to resize editor
-                  </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
-              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address • Drag the handle above to resize editor height</p>
+              <div data-testid="input-email-content-editor">
+                <TiptapEditor
+                  content={emailContent}
+                  onChange={setEmailContent}
+                  placeholder="Enter your email message..."
+                  editorHeight="300px"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
             </div>
             
             <div className="flex justify-end gap-2">
@@ -1321,6 +1565,13 @@ function CommunicationsTimeline({ clientId, user }: { clientId: string; user: an
           setCallPersonId(undefined);
           setCallPhoneNumber(undefined);
         }}
+      />
+
+      {/* Email Thread Viewer Modal */}
+      <EmailThreadViewer
+        threadId={selectedEmailThreadId}
+        open={emailThreadViewerOpen}
+        onOpenChange={setEmailThreadViewerOpen}
       />
     </Card>
   );
@@ -2144,7 +2395,7 @@ function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddSer
                 )}
 
                 {/* Role Assignments Section */}
-                {hasRolesToAssign() && (
+                {hasRolesToAssign() && !isPersonalService && (
                   <div className="space-y-4">
                     <div className="border-t pt-4">
                       <h4 className="font-medium text-sm mb-3">Role Assignments</h4>
@@ -5807,9 +6058,19 @@ function OpenProjectRow({ project, clientId }: { project: ProjectWithRelations; 
       </TableCell>
       
       <TableCell>
-        <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
-          {formatStatus(project.currentStatus)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+            {formatStatus(project.currentStatus)}
+          </Badge>
+          {project.inactive && (
+            <Badge 
+              className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"
+              data-testid={`badge-inactive-${project.id}`}
+            >
+              Inactive
+            </Badge>
+          )}
+        </div>
       </TableCell>
       
       <TableCell>
@@ -5886,9 +6147,19 @@ function CompletedProjectRow({ project, clientId }: { project: ProjectWithRelati
       </TableCell>
       
       <TableCell>
-        <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
-          {formatStatus(project.currentStatus)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={`text-xs ${getStatusColor(project.currentStatus)}`} data-testid={`badge-status-${project.id}`}>
+            {formatStatus(project.currentStatus)}
+          </Badge>
+          {project.inactive && (
+            <Badge 
+              className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"
+              data-testid={`badge-inactive-${project.id}`}
+            >
+              Inactive
+            </Badge>
+          )}
+        </div>
       </TableCell>
       
       <TableCell>
@@ -5926,8 +6197,38 @@ function CompletedProjectRow({ project, clientId }: { project: ProjectWithRelati
 
 // Component to display a list of projects with table layout
 function ProjectsList({ projects, isLoading, clientId, isCompleted = false }: { projects?: ProjectWithRelations[]; isLoading: boolean; clientId?: string; isCompleted?: boolean }) {
+  const isMobile = useIsMobile();
+  const [, setLocation] = useLocation();
+
+  const getStatusColor = (status: string) => {
+    const colors = {
+      no_latest_action: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+      bookkeeping_work_required: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      in_review: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      needs_client_input: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    };
+    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  };
+
+  const formatStatus = (status: string) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
   if (isLoading) {
-    return (
+    return isMobile ? (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <Skeleton className="h-4 w-20 mb-3" />
+              <Skeleton className="h-4 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    ) : (
       <div className="border rounded-lg">
         <Table>
           <TableHeader>
@@ -5969,6 +6270,101 @@ function ProjectsList({ projects, isLoading, clientId, isCompleted = false }: { 
     );
   }
 
+  if (isMobile) {
+    /* Mobile Card View */
+    return (
+      <div className="space-y-3">
+        {projects.map((project) => {
+          const assigneeName = project.currentAssignee 
+            ? `${project.currentAssignee.firstName} ${project.currentAssignee.lastName}`
+            : '-';
+
+          const completionStatusDisplay = project.completionStatus 
+            ? (project.completionStatus === 'completed_successfully' ? 'Successful' : 'Unsuccessful')
+            : '-';
+
+          const completionStatusColor = project.completionStatus === 'completed_successfully'
+            ? 'text-green-600 dark:text-green-400'
+            : project.completionStatus === 'completed_unsuccessfully'
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-muted-foreground';
+
+          const navigateToProject = () => {
+            const url = clientId ? `/projects/${project.id}?from=client&clientId=${clientId}` : `/projects/${project.id}`;
+            setLocation(url);
+          };
+
+          return (
+            <Card key={project.id} data-testid={`card-project-${project.id}`}>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Project Name */}
+                  <div>
+                    <h4 className="font-medium text-base" data-testid={`text-name-${project.id}`}>
+                      {project.description}
+                    </h4>
+                  </div>
+
+                  {/* Status Badge & Completion */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge 
+                      className={`text-xs ${getStatusColor(project.currentStatus)}`} 
+                      data-testid={`badge-status-${project.id}`}
+                    >
+                      {formatStatus(project.currentStatus)}
+                    </Badge>
+                    {project.inactive && (
+                      <Badge 
+                        className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"
+                        data-testid={`badge-inactive-${project.id}`}
+                      >
+                        Inactive
+                      </Badge>
+                    )}
+                    {isCompleted && (
+                      <span className={`text-sm font-medium ${completionStatusColor}`} data-testid={`text-completion-${project.id}`}>
+                        {completionStatusDisplay}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Project Details Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                    <div>
+                      <span className="text-muted-foreground text-xs">Assignee</span>
+                      <p className="font-medium" data-testid={`text-assignee-${project.id}`}>
+                        {assigneeName}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-xs">Due Date</span>
+                      <p className="font-medium" data-testid={`text-duedate-${project.id}`}>
+                        {project.dueDate ? formatDate(project.dueDate) : '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* View Button */}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={navigateToProject}
+                    data-testid={`button-view-${project.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Project
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /* Desktop Table View */
   return (
     <div className="border rounded-lg">
       <Table>
@@ -6047,23 +6443,32 @@ function RelatedPersonRow({
     },
   });
 
-  // Fetch and generate QR code when needed
-  const handleShowQRCode = async () => {
-    try {
-      const response = await fetch(`/api/portal-user/qr-code/${clientPerson.person.id}`);
-      if (!response.ok) throw new Error('Failed to generate QR code');
-      
-      const data = await response.json();
-      setQrCodeDataUrl(data.qrCode);
+  // Generate QR code mutation
+  const generateQRMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/portal-user/generate-qr-code", {
+        personId: clientPerson.person.id,
+        clientId,
+        email: personEmail,
+        name: formatPersonName(clientPerson.person.fullName),
+      });
+    },
+    onSuccess: (data: any) => {
+      setQrCodeDataUrl(data.qrCodeDataUrl);
       setShowQRCode(true);
-    } catch (error) {
+      toast({
+        title: "QR Code Generated",
+        description: "Scan to access portal",
+      });
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to generate QR code",
+        description: error?.message || "Failed to generate QR code",
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
   useEffect(() => {
     refetch();
@@ -6131,7 +6536,8 @@ function RelatedPersonRow({
                   Send App Invite
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={handleShowQRCode}
+                  onClick={() => generateQRMutation.mutate()}
+                  disabled={generateQRMutation.isPending || !hasEmail}
                   data-testid={`action-show-qr-${clientPerson.person.id}`}
                 >
                   <QrCode className="h-4 w-4 mr-2" />
@@ -6271,7 +6677,7 @@ function ClientServiceRow({
 
 export default function ClientDetail() {
   const { id } = useParams();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -6315,63 +6721,10 @@ export default function ClientDetail() {
   
   // DEBUG: Tab jumping investigation
   const [activeTab, setActiveTab] = useState<string>("overview");
+  const [riskView, setRiskView] = useState<'risk' | 'notifications'>('risk');
   const debugMetricsRef = useRef<any[]>([]);
 
-  // Mobile swipe navigation for tabs
-  useEffect(() => {
-    if (!isMobile) return;
-
-    const tabs = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks"];
-    let touchStartX = 0;
-    let touchEndX = 0;
-
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartX = e.changedTouches[0].screenX;
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      touchEndX = e.changedTouches[0].screenX;
-      handleSwipe();
-    };
-
-    const handleSwipe = () => {
-      const swipeThreshold = 50; // Minimum distance for swipe
-      const currentIndex = tabs.indexOf(activeTab);
-      
-      if (touchStartX - touchEndX > swipeThreshold && currentIndex < tabs.length - 1) {
-        // Swipe left - go to next tab
-        setActiveTab(tabs[currentIndex + 1]);
-      } else if (touchEndX - touchStartX > swipeThreshold && currentIndex > 0) {
-        // Swipe right - go to previous tab
-        setActiveTab(tabs[currentIndex - 1]);
-      }
-    };
-
-    const tabsContainer = document.querySelector('[data-tab-content="true"]');
-    if (tabsContainer) {
-      tabsContainer.addEventListener('touchstart', handleTouchStart as any);
-      tabsContainer.addEventListener('touchend', handleTouchEnd as any);
-
-      return () => {
-        tabsContainer.removeEventListener('touchstart', handleTouchStart as any);
-        tabsContainer.removeEventListener('touchend', handleTouchEnd as any);
-      };
-    }
-  }, [isMobile, activeTab]);
-
-  // Scroll active client tab into view on mobile when activeTab changes
-  useEffect(() => {
-    if (!isMobile) return;
-    
-    // Use more specific selector for client tabs only
-    const clientTabsContainer = document.querySelector('[data-client-tabs="main"]');
-    if (clientTabsContainer) {
-      const activeTabButton = clientTabsContainer.querySelector(`[data-testid="tab-${activeTab}"]`);
-      if (activeTabButton) {
-        activeTabButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    }
-  }, [activeTab, isMobile]);
+  // Tab scrolling is now handled by SwipeableTabsWrapper component
 
   // DEBUG: Comprehensive tab interaction logging
   useLayoutEffect(() => {
@@ -6510,6 +6863,7 @@ export default function ClientDetail() {
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!id && !!client,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: "always", // Always refetch to ensure fresh data after mutations
   });
 
   // Fetch task instances for this client
@@ -6518,15 +6872,21 @@ export default function ClientDetail() {
     enabled: !!id && !!client,
   });
 
+  // Fetch internal tasks for this client
+  const { data: clientInternalTasks, isLoading: clientInternalTasksLoading } = useQuery<any[]>({
+    queryKey: [`/api/internal-tasks/client/${id}`],
+    enabled: !!id,
+  });
+
   // Fetch task template categories
   const { data: taskCategories } = useQuery<any[]>({
-    queryKey: ['/api/task-template-categories'],
+    queryKey: ['/api/client-request-template-categories'],
     enabled: isNewRequestDialogOpen,
   });
 
   // Fetch task templates for selected category
-  const { data: taskTemplates } = useQuery<any[]>({
-    queryKey: ['/api/task-templates', { categoryId: selectedCategoryId }],
+  const { data: clientRequestTemplates } = useQuery<any[]>({
+    queryKey: ['/api/client-request-templates', { categoryId: selectedCategoryId }],
     enabled: isNewRequestDialogOpen && !!selectedCategoryId,
   });
 
@@ -6535,6 +6895,7 @@ export default function ClientDetail() {
     mutationFn: async (data: { templateId: string; personId: string }) => {
       return await apiRequest("POST", "/api/task-instances", {
         templateId: data.templateId,
+        customRequestId: null,
         clientId: id,
         personId: data.personId,
         status: "not_started",
@@ -6772,7 +7133,7 @@ export default function ClientDetail() {
   ) || [];
 
   // Documents query and mutation
-  const { data: documents, isLoading: documentsLoading } = useQuery<Document[]>({
+  const { data: clientDocuments, isLoading: documentsLoading } = useQuery<Document[]>({
     queryKey: ['/api/clients', id, 'documents'],
     enabled: !!id,
   });
@@ -6848,27 +7209,26 @@ export default function ClientDetail() {
       <div className="flex-1" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
         {/* Header */}
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center justify-between gap-2">
+        <div className="page-container py-6">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold text-foreground truncate" data-testid="text-client-name">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="text-client-name">
                 {client.name}
               </h1>
-              <p className="text-sm text-muted-foreground flex items-center mt-1 flex-wrap gap-x-2">
+              <div className="flex items-center mt-2 flex-wrap gap-x-3 text-meta">
                 {client.companyNumber && (
-                  <>
-                    <Building2 className="w-4 h-4 mr-1" />
+                  <span className="flex items-center gap-1">
+                    <Building2 className="w-4 h-4" />
                     Company #{client.companyNumber}
-                  </>
+                  </span>
                 )}
                 {client.dateOfCreation && (
-                  <>
-                    {client.companyNumber && <span className="mx-2">•</span>}
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Formed: {new Date(client.dateOfCreation).toLocaleDateString()}
-                  </>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    Formed {new Date(client.dateOfCreation).toLocaleDateString()}
+                  </span>
                 )}
-              </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {client.companyStatus && (
@@ -6885,12 +7245,11 @@ export default function ClientDetail() {
       </div>
 
         {/* Main Content */}
-        <div className="container mx-auto p-4 md:p-6">
+        <div className="page-container py-6 md:py-8">
         <Tabs 
-          defaultValue="overview" 
           value={activeTab} 
           onValueChange={setActiveTab}
-          className="flex flex-col"
+          className="flex flex-col section-spacing"
           data-tab-content="true"
           data-client-tabs="main"
         >
@@ -6904,7 +7263,40 @@ export default function ClientDetail() {
               <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
               <TabsTrigger value="documents" data-testid="tab-documents" className="text-sm py-2">Docs</TabsTrigger>
               <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-sm py-2">Tasks</TabsTrigger>
-              <TabsTrigger value="risk" data-testid="tab-risk" className="text-sm py-2">Risk</TabsTrigger>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTab === "risk" ? "secondary" : "ghost"}
+                    className="text-sm py-2 h-9 px-3 w-full"
+                    data-testid="dropdown-risk-notifications"
+                  >
+                    <span>More...</span>
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("risk");
+                    }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                    data-testid="menu-item-risk"
+                  >
+                    Risk
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("notifications");
+                    }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                    data-testid="menu-item-notifications"
+                  >
+                    Notifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TabsList>
           </div>
 
@@ -7053,26 +7445,68 @@ export default function ClientDetail() {
               >
                 Tasks
               </TabsTrigger>
-              <TabsTrigger 
-                value="risk" 
-                data-testid="tab-risk" 
-                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
-                style={{ width: '80vw' }}
-                onClick={() => {
-                  const container = document.querySelector('.snap-x');
-                  const tab = document.querySelector('[data-testid="tab-risk"]');
-                  if (container && tab) {
-                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                  }
-                }}
-              >
-                Risk
-              </TabsTrigger>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTab === "risk" ? "secondary" : "ghost"}
+                    className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0"
+                    style={{ width: '80vw' }}
+                    data-testid="dropdown-risk-notifications-mobile"
+                  >
+                    <span>More...</span>
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("risk");
+                    }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                    data-testid="menu-item-risk-mobile"
+                  >
+                    Risk
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setActiveTab("risk");
+                      setRiskView("notifications");
+                    }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                    data-testid="menu-item-notifications-mobile"
+                  >
+                    Notifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TabsList>
             </div>
           </div>
 
-          <TabsContent value="overview" className="space-y-6 mt-6">
+          {/* Mobile Section Title - Shows current tab name */}
+          {isMobile && (
+            <div className="mt-4 mb-2">
+              <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
+                {activeTab === "overview" && "Overview"}
+                {activeTab === "services" && "Services"}
+                {activeTab === "projects" && "Projects"}
+                {activeTab === "communications" && "Communications"}
+                {activeTab === "chronology" && "History"}
+                {activeTab === "documents" && "Documents"}
+                {activeTab === "tasks" && "Tasks"}
+                {activeTab === "risk" && (riskView === "risk" ? "Risk Assessment" : "Notifications")}
+              </h2>
+            </div>
+          )}
+
+          <SwipeableTabsWrapper
+            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"]}
+            currentTab={activeTab}
+            onTabChange={setActiveTab}
+            enabled={isMobile}
+          >
+          <TabsContent value="overview" className="space-y-8 mt-6">
             {/* Company Details */}
             <Card>
               <CardHeader>
@@ -7378,7 +7812,7 @@ export default function ClientDetail() {
             )}
           </TabsContent>
 
-          <TabsContent value="services" className="space-y-6 mt-6">
+          <TabsContent value="services" className="space-y-8 mt-6">
             {/* Client Services Section - Show for company clients OR individual clients with company connections */}
             {(() => {
               // Handle legacy data where clientType might be null for companies
@@ -7441,28 +7875,118 @@ export default function ClientDetail() {
                             {activeClientServices.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm text-muted-foreground mb-3">Active Services</h4>
-                                <div className="border rounded-lg">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Service</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Next Start</TableHead>
-                                        <TableHead>Next Due</TableHead>
-                                        <TableHead>Service Owner</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {activeClientServices.map((clientService: EnhancedClientService) => (
-                                        <ClientServiceRow 
-                                          key={clientService.id}
-                                          clientService={clientService}
-                                        />
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
+                                
+                                {isMobile ? (
+                                  /* Mobile Card View */
+                                  <div className="space-y-3">
+                                    {activeClientServices.map((clientService: EnhancedClientService) => (
+                                      <Card key={clientService.id} data-testid={`service-card-${clientService.id}`}>
+                                        <CardContent className="p-4">
+                                          <div className="space-y-3">
+                                            {/* Service Name & Badges */}
+                                            <div>
+                                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className="font-medium" data-testid={`text-service-name-${clientService.id}`}>
+                                                  {clientService.service?.name || 'Service'}
+                                                </span>
+                                                {clientService.service?.isStaticService && (
+                                                  <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`badge-static-${clientService.id}`}>
+                                                    Static
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isPersonalService && (
+                                                  <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`badge-personal-${clientService.id}`}>
+                                                    Personal
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isCompaniesHouseConnected && (
+                                                  <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`badge-ch-${clientService.id}`}>
+                                                    CH
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {clientService.service?.description && (
+                                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                                  {clientService.service.description}
+                                                </p>
+                                              )}
+                                            </div>
+
+                                            {/* Service Details Grid */}
+                                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Frequency</span>
+                                                <p className="font-medium" data-testid={`text-frequency-${clientService.id}`}>
+                                                  {clientService.frequency || '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Service Owner</span>
+                                                <p className="font-medium" data-testid={`text-service-owner-${clientService.id}`}>
+                                                  {clientService.serviceOwner 
+                                                    ? `${clientService.serviceOwner.firstName} ${clientService.serviceOwner.lastName}`
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Start</span>
+                                                <p className="font-medium" data-testid={`text-next-start-${clientService.id}`}>
+                                                  {clientService.nextStartDate 
+                                                    ? formatDate(clientService.nextStartDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Due</span>
+                                                <p className="font-medium" data-testid={`text-next-due-${clientService.id}`}>
+                                                  {clientService.nextDueDate 
+                                                    ? formatDate(clientService.nextDueDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {/* View Button */}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="w-full mt-2"
+                                              onClick={() => setLocation(`/client-service/${clientService.id}`)}
+                                              data-testid={`button-view-service-${clientService.id}`}
+                                            >
+                                              <Eye className="h-4 w-4 mr-2" />
+                                              View Details
+                                            </Button>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  /* Desktop Table View */
+                                  <div className="border rounded-lg">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Service</TableHead>
+                                          <TableHead>Frequency</TableHead>
+                                          <TableHead>Next Start</TableHead>
+                                          <TableHead>Next Due</TableHead>
+                                          <TableHead>Service Owner</TableHead>
+                                          <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {activeClientServices.map((clientService: EnhancedClientService) => (
+                                          <ClientServiceRow 
+                                            key={clientService.id}
+                                            clientService={clientService}
+                                          />
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                )}
                               </div>
                             )}
                             
@@ -7470,28 +7994,118 @@ export default function ClientDetail() {
                             {inactiveClientServices.length > 0 && (
                               <div>
                                 <h4 className="font-medium text-sm text-muted-foreground mb-3">Inactive Services</h4>
-                                <div className="border rounded-lg opacity-60">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Service</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Next Start</TableHead>
-                                        <TableHead>Next Due</TableHead>
-                                        <TableHead>Service Owner</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {inactiveClientServices.map((clientService: EnhancedClientService) => (
-                                        <ClientServiceRow 
-                                          key={clientService.id}
-                                          clientService={clientService}
-                                        />
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
+                                
+                                {isMobile ? (
+                                  /* Mobile Card View */
+                                  <div className="space-y-3 opacity-60">
+                                    {inactiveClientServices.map((clientService: EnhancedClientService) => (
+                                      <Card key={clientService.id} data-testid={`service-card-${clientService.id}`}>
+                                        <CardContent className="p-4">
+                                          <div className="space-y-3">
+                                            {/* Service Name & Badges */}
+                                            <div>
+                                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className="font-medium" data-testid={`text-service-name-${clientService.id}`}>
+                                                  {clientService.service?.name || 'Service'}
+                                                </span>
+                                                {clientService.service?.isStaticService && (
+                                                  <Badge variant="secondary" className="bg-gray-500 text-white text-xs" data-testid={`badge-static-${clientService.id}`}>
+                                                    Static
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isPersonalService && (
+                                                  <Badge variant="secondary" className="bg-purple-500 text-white text-xs" data-testid={`badge-personal-${clientService.id}`}>
+                                                    Personal
+                                                  </Badge>
+                                                )}
+                                                {clientService.service?.isCompaniesHouseConnected && (
+                                                  <Badge variant="secondary" className="bg-blue-500 text-white text-xs" data-testid={`badge-ch-${clientService.id}`}>
+                                                    CH
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {clientService.service?.description && (
+                                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                                  {clientService.service.description}
+                                                </p>
+                                              )}
+                                            </div>
+
+                                            {/* Service Details Grid */}
+                                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Frequency</span>
+                                                <p className="font-medium" data-testid={`text-frequency-${clientService.id}`}>
+                                                  {clientService.frequency || '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Service Owner</span>
+                                                <p className="font-medium" data-testid={`text-service-owner-${clientService.id}`}>
+                                                  {clientService.serviceOwner 
+                                                    ? `${clientService.serviceOwner.firstName} ${clientService.serviceOwner.lastName}`
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Start</span>
+                                                <p className="font-medium" data-testid={`text-next-start-${clientService.id}`}>
+                                                  {clientService.nextStartDate 
+                                                    ? formatDate(clientService.nextStartDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-muted-foreground text-xs">Next Due</span>
+                                                <p className="font-medium" data-testid={`text-next-due-${clientService.id}`}>
+                                                  {clientService.nextDueDate 
+                                                    ? formatDate(clientService.nextDueDate)
+                                                    : '-'}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {/* View Button */}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="w-full mt-2"
+                                              onClick={() => setLocation(`/client-service/${clientService.id}`)}
+                                              data-testid={`button-view-service-${clientService.id}`}
+                                            >
+                                              <Eye className="h-4 w-4 mr-2" />
+                                              View Details
+                                            </Button>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  /* Desktop Table View */
+                                  <div className="border rounded-lg opacity-60">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Service</TableHead>
+                                          <TableHead>Frequency</TableHead>
+                                          <TableHead>Next Start</TableHead>
+                                          <TableHead>Next Due</TableHead>
+                                          <TableHead>Service Owner</TableHead>
+                                          <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {inactiveClientServices.map((clientService: EnhancedClientService) => (
+                                          <ClientServiceRow 
+                                            key={clientService.id}
+                                            clientService={clientService}
+                                          />
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -7940,7 +8554,7 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ProjectsList 
-                  projects={clientProjects?.filter(p => !p.completionStatus)} 
+                  projects={clientProjects?.filter(p => !p.completionStatus && !p.inactive)} 
                   isLoading={projectsLoading}
                   clientId={id}
                   isCompleted={false}
@@ -7958,7 +8572,7 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <ProjectsList 
-                  projects={clientProjects?.filter(p => p.completionStatus)} 
+                  projects={clientProjects?.filter(p => p.completionStatus || p.inactive)} 
                   isLoading={projectsLoading}
                   clientId={id}
                   isCompleted={true}
@@ -7967,11 +8581,11 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="communications" className="space-y-6 mt-6">
+          <TabsContent value="communications" className="space-y-8 mt-6">
             <CommunicationsTimeline clientId={id} user={user} />
           </TabsContent>
 
-          <TabsContent value="chronology" className="space-y-6 mt-6">
+          <TabsContent value="chronology" className="space-y-8 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -7985,7 +8599,7 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="documents" className="space-y-6 mt-6">
+          <TabsContent value="documents" className="space-y-8 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -7994,20 +8608,247 @@ export default function ClientDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <DocumentFolderView 
-                  clientId={id} 
-                  renderActions={(currentFolderId) => (
-                    <>
-                      <CreateFolderDialog clientId={id} />
-                      <DocumentUploadDialog clientId={id} source="direct upload" folderId={currentFolderId} />
-                    </>
-                  )}
-                />
+                {/* Nested Tabs for Client Docs vs Signed Docs */}
+                <Tabs defaultValue="client-docs" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="client-docs" data-testid="tab-client-docs">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Client Docs
+                    </TabsTrigger>
+                    <TabsTrigger value="signed-docs" data-testid="tab-signed-docs">
+                      <FileSignature className="w-4 h-4 mr-2" />
+                      Signed Docs
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Client Docs Tab - Regular documents */}
+                  <TabsContent value="client-docs" className="space-y-4">
+                    <DocumentFolderView 
+                      clientId={id}
+                      filterOutSignatureRequests={true}
+                      renderActions={(currentFolderId) => (
+                        <>
+                          <CreateFolderDialog clientId={id} />
+                          <DocumentUploadDialog clientId={id} source="direct upload" folderId={currentFolderId} />
+                        </>
+                      )}
+                    />
+                  </TabsContent>
+
+                  {/* Signed Docs Tab - Signature request documents + E-Signatures section */}
+                  <TabsContent value="signed-docs" className="space-y-6">
+                    {/* Create Signature Request Button */}
+                    <div className="flex justify-end">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => navigate(`/clients/${id}/signature-requests/new`)}
+                        data-testid="button-create-signature-request"
+                      >
+                        <PenLine className="w-4 h-4 mr-2" />
+                        Create Signature Request
+                      </Button>
+                    </div>
+
+                    {/* E-Signature Requests Section */}
+                    <div>
+                      <h3 className="text-sm font-medium mb-3 text-muted-foreground">E-Signature Requests</h3>
+                      <SignatureRequestsPanel clientId={id} />
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="tasks" className="space-y-6 mt-6">
+          <TabsContent value="tasks" className="space-y-8 mt-6">
+            {/* Internal Tasks Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5" />
+                    Internal Tasks
+                  </CardTitle>
+                  <CreateTaskDialog
+                    trigger={
+                      <Button
+                        variant="default"
+                        size="sm"
+                        data-testid="button-new-internal-task"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Task
+                      </Button>
+                    }
+                    defaultConnections={{ clientId: id }}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {clientInternalTasksLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : !clientInternalTasks || clientInternalTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No internal tasks for this client yet.</p>
+                  </div>
+                ) : isMobile ? (
+                  /* Mobile Card View */
+                  <div className="space-y-3">
+                    {clientInternalTasks.map((task: any) => (
+                      <Card key={task.id} data-testid={`card-internal-task-${task.id}`}>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {/* Task Title & Type */}
+                            <div>
+                              <RouterLink href={`/internal-tasks?task=${task.id}`}>
+                                <a className="font-medium text-base hover:underline" data-testid={`link-task-${task.id}`}>
+                                  {task.title}
+                                </a>
+                              </RouterLink>
+                              {task.taskType?.name && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {task.taskType.name}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Priority & Status Badges */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge 
+                                variant={
+                                  task.priority === 'urgent' ? 'destructive' :
+                                  task.priority === 'high' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-priority-${task.id}`}
+                              >
+                                {task.priority}
+                              </Badge>
+                              <Badge 
+                                variant={
+                                  task.status === 'closed' ? 'outline' :
+                                  task.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${task.id}`}
+                              >
+                                {task.status === 'in_progress' ? 'In Progress' : task.status}
+                              </Badge>
+                            </div>
+
+                            {/* Task Details Grid */}
+                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                              <div>
+                                <span className="text-muted-foreground text-xs">Assigned To</span>
+                                <p className="font-medium">
+                                  {task.assignee?.firstName} {task.assignee?.lastName}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground text-xs">Due Date</span>
+                                <p className="font-medium">
+                                  {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* View Button */}
+                            <RouterLink href={`/internal-tasks/${task.id}?from=client&clientId=${id}`}>
+                              <Button
+                                variant="outline"
+                                className="w-full h-11 mt-2"
+                                data-testid={`button-view-task-${task.id}`}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </Button>
+                            </RouterLink>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  /* Desktop Table View */
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Assigned To</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Due Date</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {clientInternalTasks.map((task: any) => (
+                          <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
+                            <TableCell className="font-medium">
+                              <RouterLink href={`/internal-tasks?task=${task.id}`}>
+                                <a className="hover:underline" data-testid={`link-task-${task.id}`}>
+                                  {task.title}
+                                </a>
+                              </RouterLink>
+                            </TableCell>
+                            <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  task.priority === 'urgent' ? 'destructive' :
+                                  task.priority === 'high' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-priority-${task.id}`}
+                              >
+                                {task.priority}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {task.assignee?.firstName} {task.assignee?.lastName}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  task.status === 'closed' ? 'outline' :
+                                  task.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${task.id}`}
+                              >
+                                {task.status === 'in_progress' ? 'In Progress' : task.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <RouterLink href={`/internal-tasks/${task.id}?from=client&clientId=${id}`}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  data-testid={`button-view-task-${task.id}`}
+                                >
+                                  View
+                                </Button>
+                              </RouterLink>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Client Requests Section */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -8036,7 +8877,96 @@ export default function ClientDetail() {
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">No client requests yet. Click "New Client Request" to create one.</p>
                   </div>
+                ) : isMobile ? (
+                  /* Mobile Card View */
+                  <div className="space-y-3">
+                    {taskInstances.map((instance: any) => (
+                      <Card key={instance.id} data-testid={`card-request-${instance.id}`}>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {/* Request Name & Category */}
+                            <div>
+                              <h4 className="font-medium text-base" data-testid={`text-name-${instance.id}`}>
+                                {instance.template?.name || instance.customRequest?.name || 'Untitled Request'}
+                              </h4>
+                              {instance.categoryName && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {instance.categoryName}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Status Badge */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge 
+                                variant={
+                                  instance.status === 'submitted' ? 'outline' : 
+                                  instance.status === 'approved' ? 'default' : 
+                                  instance.status === 'in_progress' ? 'default' :
+                                  'secondary'
+                                }
+                                data-testid={`badge-status-${instance.id}`}
+                              >
+                                {instance.status === 'not_started' ? 'Not Started' :
+                                 instance.status === 'in_progress' ? 'In Progress' :
+                                 instance.status === 'submitted' ? 'Submitted' :
+                                 instance.status === 'approved' ? 'Approved' :
+                                 instance.status}
+                              </Badge>
+                            </div>
+
+                            {/* Progress Bar (if in progress) */}
+                            {instance.status === 'in_progress' && instance.progress && (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>Progress</span>
+                                  <span>
+                                    {instance.progress.completed}/{instance.progress.total} ({instance.progress.percentage}%)
+                                  </span>
+                                </div>
+                                <Progress value={instance.progress.percentage} className="h-2" />
+                              </div>
+                            )}
+
+                            {/* Request Details Grid */}
+                            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
+                              <div>
+                                <span className="text-muted-foreground text-xs">Assigned To</span>
+                                <p className="font-medium" data-testid={`text-assignee-${instance.id}`}>
+                                  {instance.relatedPerson ? formatPersonName(instance.relatedPerson.fullName) : '-'}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground text-xs">Created</span>
+                                <p className="font-medium" data-testid={`text-created-${instance.id}`}>
+                                  {formatDate(instance.createdAt)}
+                                </p>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground text-xs">Due Date</span>
+                                <p className="font-medium">
+                                  {instance.dueDate ? formatDate(instance.dueDate) : '-'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* View Button */}
+                            <Button
+                              variant="default"
+                              className="w-full h-11 mt-2"
+                              onClick={() => setLocation(`/task-instances/${instance.id}`)}
+                              data-testid={`button-view-${instance.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Request
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
+                  /* Desktop Table View */
                   <div className="border rounded-lg">
                     <Table>
                       <TableHeader>
@@ -8128,8 +9058,13 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-6">
-            <RiskAssessmentTab clientId={id} />
+            {riskView === "risk" ? (
+              <RiskAssessmentTab clientId={id!} />
+            ) : (
+              <ClientNotificationsView clientId={id!} />
+            )}
           </TabsContent>
+          </SwipeableTabsWrapper>
         </Tabs>
         </div>
       </div>
@@ -8266,7 +9201,7 @@ export default function ClientDetail() {
                         <SelectValue placeholder="Select a template" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(taskTemplates || []).map((template) => (
+                        {(clientRequestTemplates || []).map((template) => (
                           <SelectItem key={template.id} value={template.id}>
                             {template.name}
                           </SelectItem>
@@ -8399,15 +9334,13 @@ export default function ClientDetail() {
       </Dialog>
 
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch
-          isOpen={mobileSearchOpen}
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { ArrowLeft, CheckCircle, AlertCircle, FileText } from "lucide-react";
@@ -51,6 +52,7 @@ export default function TaskSubmissionDetail() {
   const [, params] = useRoute("/task-submissions/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const submissionId = params?.id;
 
   // Fetch submission details
@@ -151,7 +153,7 @@ export default function TaskSubmissionDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="p-8 space-y-6">
           <Skeleton className="h-12 w-3/4" />
           <Card>
@@ -172,7 +174,7 @@ export default function TaskSubmissionDetail() {
   if (error || !submission) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="p-8">
           <Card>
             <CardContent className="py-12">
@@ -202,14 +204,14 @@ export default function TaskSubmissionDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background">
       <TopNavigation />
-      <div className="p-8 space-y-6">
-        {/* Header */}
-        <div>
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => setLocation('/task-submissions')}
             className="mb-4"
             data-testid="button-back"
@@ -219,11 +221,11 @@ export default function TaskSubmissionDetail() {
           </Button>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="text-template-name">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-template-name">
                 {submission.template.name}
               </h1>
               {submission.template.description && (
-                <p className="text-gray-500 dark:text-gray-400 mt-2">
+                <p className="text-meta mt-2">
                   {submission.template.description}
                 </p>
               )}
@@ -236,6 +238,9 @@ export default function TaskSubmissionDetail() {
             </Badge>
           </div>
         </div>
+      </div>
+
+      <div className="page-container py-6 md:py-8 space-y-8">
 
         {/* Submission Info */}
         <Card>

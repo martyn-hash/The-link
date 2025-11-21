@@ -11,12 +11,57 @@ interface NextDateResult {
 }
 
 /**
+ * Safely increment a date by N months, handling month-end edge cases correctly.
+ * This prevents overflow issues where incrementing "31 Oct" by 1 month would
+ * overflow to "1 Dec" instead of "30 Nov".
+ * 
+ * Strategy: Always attempt to preserve the day-of-month (29, 30, or 31) across
+ * months. If that day doesn't exist in the target month, use the last available
+ * day, but remember the intended day for future months.
+ * - 31 Oct → 30 Nov (31 doesn't exist) → 31 Dec (revert to 31)
+ * - 30 Jan → 28 Feb (30 doesn't exist) → 30 Mar (revert to 30)
+ * 
+ * @param date The date to increment (modified in place)
+ * @param monthsToAdd Number of months to add
+ * @param intendedDay Optional: The day-of-month the service was originally scheduled for
+ */
+function incrementMonthSafely(date: Date, monthsToAdd: number, intendedDay?: number): void {
+  const originalDay = date.getUTCDate();
+  const originalMonth = date.getUTCMonth();
+  const originalYear = date.getUTCFullYear();
+  
+  // Use the intended day if provided (for tracking across truncations),
+  // otherwise use the current day
+  const targetDay = intendedDay || originalDay;
+  
+  const targetMonth = originalMonth + monthsToAdd;
+  const targetYear = originalYear + Math.floor(targetMonth / 12);
+  const normalizedMonth = ((targetMonth % 12) + 12) % 12;
+  
+  // Set to day 1 first to prevent overflow
+  date.setUTCDate(1);
+  date.setUTCFullYear(targetYear);
+  date.setUTCMonth(normalizedMonth);
+  
+  // Get the last day of the target month
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate();
+  
+  // Use the target day if it exists in the target month, otherwise use the last day
+  const finalDay = Math.min(targetDay, lastDayOfTargetMonth);
+  date.setUTCDate(finalDay);
+}
+
+/**
  * Calculate the next service dates based on frequency
+ * @param intendedStartDay Optional: The intended day-of-month (29-31) for start date
+ * @param intendedDueDay Optional: The intended day-of-month (29-31) for due date
  */
 export function calculateNextServiceDates(
   currentStartDate: Date,
   currentDueDate: Date,
-  frequency: ServiceFrequency
+  frequency: ServiceFrequency,
+  intendedStartDay?: number | null,
+  intendedDueDay?: number | null
 ): NextDateResult {
   const nextStartDate = new Date(currentStartDate);
   const nextDueDate = new Date(currentDueDate);
@@ -42,19 +87,23 @@ export function calculateNextServiceDates(
       break;
 
     case "monthly":
-      nextStartDate.setUTCMonth(nextStartDate.getUTCMonth() + 1);
-      nextDueDate.setUTCMonth(nextDueDate.getUTCMonth() + 1);
-      // Handle end-of-month edge cases
-      handleEndOfMonthEdgeCases(nextStartDate, currentStartDate);
-      handleEndOfMonthEdgeCases(nextDueDate, currentDueDate);
+      // Use provided intended days, or detect from current date if not provided
+      const startIntendedDay = intendedStartDay ?? 
+        (currentStartDate.getUTCDate() >= 29 ? currentStartDate.getUTCDate() : undefined);
+      const dueIntendedDay = intendedDueDay ?? 
+        (currentDueDate.getUTCDate() >= 29 ? currentDueDate.getUTCDate() : undefined);
+      incrementMonthSafely(nextStartDate, 1, startIntendedDay);
+      incrementMonthSafely(nextDueDate, 1, dueIntendedDay);
       break;
 
     case "quarterly":
-      nextStartDate.setUTCMonth(nextStartDate.getUTCMonth() + 3);
-      nextDueDate.setUTCMonth(nextDueDate.getUTCMonth() + 3);
-      // Handle end-of-month edge cases
-      handleEndOfMonthEdgeCases(nextStartDate, currentStartDate);
-      handleEndOfMonthEdgeCases(nextDueDate, currentDueDate);
+      // Use provided intended days, or detect from current date if not provided
+      const qStartIntendedDay = intendedStartDay ?? 
+        (currentStartDate.getUTCDate() >= 29 ? currentStartDate.getUTCDate() : undefined);
+      const qDueIntendedDay = intendedDueDay ?? 
+        (currentDueDate.getUTCDate() >= 29 ? currentDueDate.getUTCDate() : undefined);
+      incrementMonthSafely(nextStartDate, 3, qStartIntendedDay);
+      incrementMonthSafely(nextDueDate, 3, qDueIntendedDay);
       break;
 
     case "annually":
@@ -70,27 +119,6 @@ export function calculateNextServiceDates(
   }
 
   return { nextStartDate, nextDueDate };
-}
-
-/**
- * Handle end-of-month edge cases for monthly/quarterly frequencies
- * If the original date was the last day of a month, keep it as the last day
- */
-function handleEndOfMonthEdgeCases(dateToAdjust: Date, originalDate: Date): void {
-  const originalDay = originalDate.getUTCDate();
-  const originalMonth = originalDate.getUTCMonth();
-  const originalYear = originalDate.getUTCFullYear();
-  
-  // Check if original date was the last day of its month
-  const lastDayOfOriginalMonth = new Date(originalYear, originalMonth + 1, 0).getUTCDate();
-  
-  if (originalDay === lastDayOfOriginalMonth) {
-    // Set to last day of the new month
-    const newMonth = dateToAdjust.getUTCMonth();
-    const newYear = dateToAdjust.getUTCFullYear();
-    const lastDayOfNewMonth = new Date(newYear, newMonth + 1, 0).getUTCDate();
-    dateToAdjust.setUTCDate(lastDayOfNewMonth);
-  }
 }
 
 /**

@@ -90,7 +90,7 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: true, // Refetch when user returns to tab
       refetchOnReconnect: true, // Refetch when network reconnects
-      staleTime: 5000, // Data becomes stale after 5 seconds
+      staleTime: 30000, // Data becomes stale after 30 seconds
       // Smart retry logic: retry on server errors, but not on client errors
       retry: (failureCount, error) => {
         // Don't retry on client errors (4xx except 401 which might be session timeout)

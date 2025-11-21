@@ -1,34 +1,31 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import { useSwipeable } from 'react-swipeable';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { isUnauthorizedError } from '@/lib/authUtils';
 import TopNavigation from '@/components/top-navigation';
 import BottomNav from '@/components/bottom-nav';
+import SuperSearch from '@/components/super-search';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Separator } from '@/components/ui/separator';
 import {
   MessageCircle,
-  Clock,
-  CheckCircle,
-  XCircle,
   Send,
   User,
   Building2,
-  AlertCircle,
   Archive,
   ArchiveRestore,
   Paperclip,
@@ -40,49 +37,71 @@ import {
   FileAudio,
   Image as ImageIcon,
   RefreshCw,
-  ClipboardList,
+  ExternalLink,
+  Users,
+  FolderKanban,
+  Plus,
+  Mail,
+  Check,
+  Reply,
+  Smile,
   Filter,
-  Calendar
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
+import { EmailThreadViewer } from '@/components/EmailThreadViewer';
+import { InternalChatView, type StaffMessageThread } from '@/components/InternalChatView';
+import DOMPurify from 'isomorphic-dompurify';
 
-interface MessageThread {
+interface ProjectMessageThread {
+  threadType: 'project';
   id: string;
-  clientPortalUserId: string;
+  projectId: string;
   topic: string;
-  subject: string;
-  status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'archived';
+  status: string;
   isArchived: boolean;
-  archivedAt: string | null;
-  archivedBy: string | null;
   createdAt: string;
   updatedAt: string;
-  lastMessageByStaff?: boolean; // Track if last message was from staff
-  lastMessageContent?: string | null; // Preview of last message
-  lastMessageSenderName?: string | null; // Name of last message sender
-  hasUnreadMessages?: boolean; // Whether there are unread messages from clients
-  clientPortalUser?: {
+  lastMessageAt: string;
+  project: {
+    id: string;
+    description: string;
+    clientId: string;
+  };
+  client: {
+    id: string;
+    name: string;
+  };
+  unreadCount: number;
+  lastMessage: {
+    content: string;
+    createdAt: string;
+    userId: string | null;
+  } | null;
+  participants: Array<{
     id: string;
     email: string;
-    clientId: string;
-    personId?: string;
-    client?: {
-      id: string;
-      name: string;
-    };
-  };
-  _count?: {
-    messages: number;
-  };
+    firstName: string | null;
+    lastName: string | null;
+  }>;
 }
 
-interface Message {
+type MessageThread = ProjectMessageThread;
+
+interface UserType {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+interface ProjectMessage {
   id: string;
   threadId: string;
   userId: string | null;
-  clientPortalUserId: string | null;
   content: string;
   attachments?: Array<{
     fileName: string;
@@ -90,7 +109,6 @@ interface Message {
     fileSize: number;
     objectPath: string;
   }> | null;
-  isRead: boolean;
   createdAt: string;
   user?: {
     id: string;
@@ -98,35 +116,204 @@ interface Message {
     firstName: string | null;
     lastName: string | null;
   };
-  clientPortalUser?: {
-    id: string;
-    email: string;
-  };
 }
 
-const statusConfig = {
-  open: { label: 'Open', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', icon: MessageCircle },
-  in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200', icon: Clock },
-  resolved: { label: 'Resolved', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200', icon: CheckCircle },
-  closed: { label: 'Closed', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200', icon: XCircle },
-  archived: { label: 'Archived', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200', icon: Archive },
-};
+interface EmailThread {
+  canonicalConversationId: string;
+  subject: string | null;
+  participants: string[];
+  messageCount: number;
+  hasUnread: boolean;
+  lastMessageAt: string;
+  firstMessageAt: string;
+  latestPreview: string | null;
+  clientId: string | null;
+  clientName: string | null;
+}
+
+// Separate component to avoid hooks-in-loop issue
+interface ThreadListItemProps {
+  thread: MessageThread;
+  isActive: boolean;
+  isMobile: boolean;
+  isSwipedLeft: boolean;
+  isSwipedRight: boolean;
+  onSwipedLeft: () => void;
+  onSwipedRight: () => void;
+  onReplyAction: () => void;
+  onArchiveAction: () => void;
+  onClick: () => void;
+}
+
+function ThreadListItem({
+  thread,
+  isActive,
+  isMobile,
+  isSwipedLeft,
+  isSwipedRight,
+  onSwipedLeft,
+  onSwipedRight,
+  onReplyAction,
+  onArchiveAction,
+  onClick
+}: ThreadListItemProps) {
+  // Use ref for immediate updates (state is too slow)
+  const isSwipingRef = useRef(false);
+  const swipeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Always call hook (React rules of hooks)
+  const swipeHandlers = useSwipeable({
+    onSwiping: () => {
+      isSwipingRef.current = true;
+      if (swipeTimeoutRef.current) {
+        clearTimeout(swipeTimeoutRef.current);
+      }
+    },
+    onSwipedLeft: () => {
+      onSwipedLeft();
+      // Keep swiping flag true briefly to prevent click
+      swipeTimeoutRef.current = setTimeout(() => {
+        isSwipingRef.current = false;
+      }, 300);
+    },
+    onSwipedRight: () => {
+      onSwipedRight();
+      // Keep swiping flag true briefly to prevent click
+      swipeTimeoutRef.current = setTimeout(() => {
+        isSwipingRef.current = false;
+      }, 300);
+    },
+    preventScrollOnSwipe: true,
+    trackMouse: false,
+    delta: 50,
+  });
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Don't open thread if currently swiping or just swiped
+    if (isSwipingRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    onClick();
+  };
+
+  return (
+    <div
+      {...(isMobile ? swipeHandlers : {})}
+      className="relative overflow-hidden"
+      data-testid={`thread-container-${thread.id}`}
+    >
+      {/* Swipe action buttons */}
+      {isSwipedLeft && (
+        <div className="absolute inset-y-0 right-0 flex items-center bg-blue-500 px-4 z-10">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onReplyAction}
+            className="text-white hover:bg-blue-600"
+            data-testid={`button-swipe-reply-${thread.id}`}
+          >
+            <Reply className="w-5 h-5" />
+          </Button>
+        </div>
+      )}
+      {isSwipedRight && (
+        <div className="absolute inset-y-0 left-0 flex items-center bg-purple-500 px-4 z-10">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onArchiveAction}
+            className="text-white hover:bg-purple-600"
+            data-testid={`button-swipe-archive-${thread.id}`}
+          >
+            {thread.isArchived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
+          </Button>
+        </div>
+      )}
+
+      <button
+        onClick={handleClick}
+        className={`w-full text-left p-2 hover:bg-muted/50 transition-all ${
+          isActive ? 'bg-muted' : ''
+        } ${isSwipedLeft ? 'translate-x-[-80px]' : isSwipedRight ? 'translate-x-[80px]' : ''}`}
+        data-testid={`thread-item-${thread.id}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            {thread.threadType === 'project' ? (
+              <div className="flex items-center gap-2 mb-0.5">
+                <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground truncate">
+                  {thread.project.description}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-0.5">
+                <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground truncate">
+                  {thread.participants.map(p => 
+                    [p.firstName, p.lastName].filter(Boolean).join(' ') || p.email
+                  ).join(', ')}
+                </span>
+              </div>
+            )}
+            <p className="font-semibold text-sm mt-0.5 truncate">
+              {thread.topic}
+            </p>
+            {thread.lastMessage && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                {thread.lastMessage.content}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+            </span>
+            {thread.unreadCount > 0 && (
+              <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
 
 export default function Messages() {
-  console.log('[Messages] ===== STAFF MESSAGES PAGE LOADED - VERSION 2.0 =====');
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [archiveFilter, setArchiveFilter] = useState<'all' | 'open' | 'archived'>('open');
-  const [readFilter, setReadFilter] = useState<'all' | 'unread'>('all');
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const [archiveFilter, setArchiveFilter] = useState<'open' | 'archived'>('open');
   const [newMessage, setNewMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [previewImage, setPreviewImage] = useState<{ url: string; fileName: string } | null>(null);
+  const [threadSearchTerm, setThreadSearchTerm] = useState('');
+  const [showMobileThreadView, setShowMobileThreadView] = useState(false);
+  const [activeTab, setActiveTab] = useState('internal');
+  const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
+  const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
+  const [emailFilter, setEmailFilter] = useState<'my' | 'all'>('my');
+  const [clientFilter, setClientFilter] = useState<string>('all');
+  const [readStatusFilter, setReadStatusFilter] = useState<'all' | 'read' | 'unread'>('all');
+
+  // Mobile-specific state
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showMobileFilterMenu, setShowMobileFilterMenu] = useState(false);
+  const [swipedThreadId, setSwipedThreadId] = useState<string | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+
+  // Message interaction state
+  const [replyToMessage, setReplyToMessage] = useState<ProjectMessage | null>(null);
+  const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showMessageContextMenu, setShowMessageContextMenu] = useState(false);
+  const [shouldFocusComposer, setShouldFocusComposer] = useState(false);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -136,138 +323,126 @@ export default function Messages() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
   const isCancelledRef = useRef(false);
-  
-  // Task creation modal state
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
-  // New message modal state
-  const [showNewMessageModal, setShowNewMessageModal] = useState(false);
-  const [newThreadSubject, setNewThreadSubject] = useState('');
-  const [clientSearch, setClientSearch] = useState('');
-  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
+  // Expand/collapse message state
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [showAttachmentsGallery, setShowAttachmentsGallery] = useState(false);
 
-  // Thread list search state
-  const [threadSearchTerm, setThreadSearchTerm] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
+  // Fetch client-staff message threads (Client Chat)
+  const { data: clientStaffThreads, isLoading: clientStaffThreadsLoading } = useQuery<any[]>({
+    queryKey: ['/api/internal/messages/threads', { includeArchived: archiveFilter === 'archived' }],
+    queryFn: async () => {
+      const response = await fetch(`/api/internal/messages/threads`, {
+        credentials: 'include'
       });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-    }
-  }, [isAuthenticated, authLoading, toast]);
-
-  // Mark messages as read when a thread is selected
-  useEffect(() => {
-    if (selectedThreadId) {
-      markAsReadMutation.mutate(selectedThreadId);
-    }
-  }, [selectedThreadId]);
-
-  const { data: allThreads, isLoading: threadsLoading } = useQuery<MessageThread[]>({
-    queryKey: ['/api/internal/messages/threads'],
+      if (!response.ok) throw new Error('Failed to fetch client-staff threads');
+      return response.json();
+    },
     enabled: isAuthenticated && !!user,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
-  const threads = allThreads?.filter(thread => {
-    const isArchived = thread.isArchived === true;
-    
-    // Archive filter
-    if (archiveFilter === 'open' && isArchived) return false;
-    if (archiveFilter === 'archived' && !isArchived) return false;
-    
-    // Read/Unread filter
-    if (readFilter === 'unread' && !thread.hasUnreadMessages) return false;
-    
-    // Date range filter
-    if (dateFrom) {
-      const threadDate = new Date(thread.updatedAt);
-      const fromDate = new Date(dateFrom);
-      if (threadDate < fromDate) return false;
-    }
-    if (dateTo) {
-      const threadDate = new Date(thread.updatedAt);
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999); // End of day
-      if (threadDate > toDate) return false;
-    }
-    
-    // Enhanced search: client name, person email, message content
-    if (threadSearchTerm.trim()) {
-      const searchLower = threadSearchTerm.toLowerCase();
-      const clientName = thread.clientPortalUser?.client?.name || '';
-      const personEmail = thread.clientPortalUser?.email || '';
-      const messageContent = thread.lastMessageContent || '';
-      
-      const matches = 
-        clientName.toLowerCase().includes(searchLower) ||
-        personEmail.toLowerCase().includes(searchLower) ||
-        messageContent.toLowerCase().includes(searchLower);
-      
-      if (!matches) return false;
-    }
-    
-    return true;
+  // Fetch standalone staff message threads (Internal Chat)
+  const { data: staffThreads, isLoading: staffThreadsLoading } = useQuery<StaffMessageThread[]>({
+    queryKey: ['/api/staff-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
+    queryFn: async () => {
+      const response = await fetch(`/api/staff-messages/my-threads?includeArchived=${archiveFilter === 'archived'}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch staff threads');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
   });
 
-  const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
-    queryKey: ['/api/internal/messages/threads', selectedThreadId, 'messages'],
+  // Fetch project message threads (Internal Chat - project discussions)
+  const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
+    queryKey: ['/api/project-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
+    queryFn: async () => {
+      const response = await fetch(`/api/project-messages/my-threads?includeArchived=${archiveFilter === 'archived'}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch project threads');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+  });
+
+  // Fetch email threads (Client Emails)
+  const { data: emailThreadsData, isLoading: emailThreadsLoading } = useQuery<{ threads: EmailThread[] }>({
+    queryKey: ['/api/emails/my-threads', { myEmailsOnly: emailFilter === 'my' }],
+    queryFn: async () => {
+      const myEmailsOnly = emailFilter === 'my';
+      const response = await fetch(`/api/emails/my-threads?myEmailsOnly=${myEmailsOnly}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch email threads');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+  });
+
+  const emailThreads = emailThreadsData?.threads || [];
+
+  // Process client-staff threads for display
+  const clientChatThreads = (clientStaffThreads || [])
+    .filter(t => !archiveFilter || (archiveFilter === 'archived' ? t.isArchived : !t.isArchived))
+    .map(t => ({
+      id: t.id,
+      topic: t.subject,
+      lastMessageAt: t.lastMessageAt,
+      hasUnreadMessages: t.hasUnreadMessages,
+      isArchived: t.isArchived,
+      clientName: t.clientPortalUser?.client?.name || 'Unknown Client',
+      lastMessageContent: t.lastMessageContent,
+    }))
+    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+
+  const threadsLoading = clientStaffThreadsLoading || staffThreadsLoading || projectThreadsLoading || emailThreadsLoading;
+
+  // Calculate unread counts
+  // Internal Chat includes BOTH standalone staff threads AND project message threads
+  // Count the NUMBER OF THREADS with unread messages (not total messages)
+  const internalUnreadCount = 
+    (staffThreads || []).filter(thread => thread.unreadCount > 0).length +
+    (projectThreads || []).filter(thread => thread.unreadCount > 0).length;
+  const clientUnreadCount = clientChatThreads.filter(thread => thread.hasUnreadMessages).length;
+  const emailUnreadCount = emailThreads.filter(thread => thread.hasUnread).length;
+
+  // Fetch messages for selected thread (project threads only)
+  const { data: messages, isLoading: messagesLoading} = useQuery<ProjectMessage[]>({
+    queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'],
+    queryFn: async () => {
+      const response = await fetch(`/api/internal/project-messages/threads/${selectedThreadId}/messages`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return response.json();
+    },
     enabled: !!selectedThreadId && isAuthenticated,
-    refetchInterval: 3000,
+    refetchInterval: 10000,
   });
 
-  const { data: unreadCount } = useQuery<{ count: number }>({
-    queryKey: ['/api/internal/messages/unread-count'],
-    enabled: isAuthenticated && !!user,
-    refetchInterval: 5000,
-  });
-
-  // Fetch task templates for task creation
-  const { data: taskTemplates } = useQuery<Array<{ id: string; name: string; status: string }>>({
-    queryKey: ['/api/task-templates'],
-    enabled: showTaskModal,
-  });
-
-  // Fetch clients for new message search
-  const { data: clients } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ['/api/clients', { search: clientSearch }],
-    enabled: showNewMessageModal && clientSearch.length >= 2,
-  });
-
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ threadId, status }: { threadId: string; status: string }) =>
-      apiRequest('PATCH', `/api/internal/messages/threads/${threadId}/status`, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads'] });
-      toast({
-        title: "Success",
-        description: "Thread status updated",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update thread status",
-        variant: "destructive",
-      });
-    },
-  });
-
+  // Mutations
   const sendMessageMutation = useMutation({
-    mutationFn: (data: { content: string; attachments?: any[] }) =>
-      apiRequest('POST', `/api/internal/messages/threads/${selectedThreadId}/messages`, data),
+    mutationFn: (data: { content: string; attachments?: any[] }) => {
+      return apiRequest('POST', `/api/internal/project-messages/threads/${selectedThreadId}/messages`, data);
+    },
     onSuccess: () => {
       setNewMessage('');
       setSelectedFiles([]);
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads', selectedThreadId, 'messages'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads'] });
+      setRecordedAudio(null);
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
       toast({
         title: "Success",
         description: "Message sent",
@@ -283,10 +458,11 @@ export default function Messages() {
   });
 
   const archiveThreadMutation = useMutation({
-    mutationFn: (threadId: string) =>
-      apiRequest('PUT', `/api/internal/messages/threads/${threadId}/archive`),
+    mutationFn: (threadId: string) => {
+      return apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/archive`);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
       setSelectedThreadId(null);
       toast({
         title: "Success",
@@ -303,10 +479,11 @@ export default function Messages() {
   });
 
   const unarchiveThreadMutation = useMutation({
-    mutationFn: (threadId: string) =>
-      apiRequest('PUT', `/api/internal/messages/threads/${threadId}/unarchive`),
+    mutationFn: (threadId: string) => {
+      return apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/unarchive`);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
       toast({
         title: "Success",
         description: "Thread restored",
@@ -321,108 +498,109 @@ export default function Messages() {
     },
   });
 
-  const createTaskMutation = useMutation({
-    mutationFn: (data: { templateId: string; clientId: string; personId?: string | null }) =>
-      apiRequest('POST', '/api/task-instances', {
-        ...data,
-        customRequestId: null, // Required by schema - either templateId or customRequestId must be provided
-      }),
-    onSuccess: () => {
-      setShowTaskModal(false);
-      setSelectedTemplate('');
-      toast({
-        title: "Success",
-        description: "Client request created successfully",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create client request",
-        variant: "destructive",
-      });
-    },
-  });
-
   const markAsReadMutation = useMutation({
-    mutationFn: (threadId: string) =>
-      apiRequest('PUT', `/api/internal/messages/threads/${threadId}/mark-read`),
+    mutationFn: ({ threadId, lastMessageId }: { threadId: string; lastMessageId: string }) => {
+      return apiRequest('PUT', `/api/internal/project-messages/threads/${threadId}/mark-read`, { lastReadMessageId: lastMessageId });
+    },
     onSuccess: () => {
-      // Invalidate unread count to refresh the badge
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
     },
   });
 
-  const createThreadMutation = useMutation({
-    mutationFn: (data: { subject: string; clientId: string }) =>
-      apiRequest('POST', '/api/internal/messages/threads', data),
-    onSuccess: (newThread: MessageThread) => {
-      setShowNewMessageModal(false);
-      setNewThreadSubject('');
-      setClientSearch('');
-      setSelectedClient(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/internal/messages/threads'] });
-      // Select the newly created thread
-      setSelectedThreadId(newThread.id);
-      toast({
-        title: "Success",
-        description: "New conversation started",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create conversation",
-        variant: "destructive",
-      });
-    },
-  });
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    handleFilesSelected(files);
-  };
-
-  const handleFilesSelected = (files: File[]) => {
-    // Check if adding these files would exceed the limit
-    if (selectedFiles.length + files.length > 5) {
-      toast({
-        title: "Too many files",
-        description: "You can only attach up to 5 files per message",
-        variant: "destructive",
+  // Mark messages as read when viewing a thread
+  useEffect(() => {
+    if (selectedThreadId && messages && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      markAsReadMutation.mutate({
+        threadId: selectedThreadId,
+        lastMessageId: lastMessage.id,
       });
-      return;
     }
+  }, [selectedThreadId, messages]);
 
-    const validFiles = files.filter(file => {
-      const isValid = file.size <= 25 * 1024 * 1024; // 25MB limit
-      if (!isValid) {
-        toast({
-          title: "File too large",
-          description: `${file.name} exceeds 25MB limit`,
-          variant: "destructive",
-        });
+  // Reset swipe state when filter menu or search opens
+  useEffect(() => {
+    if (showMobileFilterMenu || mobileSearchOpen) {
+      setSwipedThreadId(null);
+      setSwipeDirection(null);
+    }
+  }, [showMobileFilterMenu, mobileSearchOpen]);
+
+  // Focus message input when replying (via swipe or context menu)
+  useEffect(() => {
+    if (shouldFocusComposer && messageInputRef.current) {
+      messageInputRef.current.focus();
+      setShouldFocusComposer(false); // Reset flag after focusing
+    }
+  }, [shouldFocusComposer]);
+
+  // Helper functions
+  const getUserDisplayName = (user: { firstName: string | null; lastName: string | null; email: string }) => {
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    return user.email;
+  };
+
+  const getUserInitials = (user: { firstName: string | null; lastName: string | null; email: string }) => {
+    if (user.firstName && user.lastName) {
+      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
+    }
+    return user.email.charAt(0).toUpperCase();
+  };
+
+  // Check if a message content is long enough to need expand/collapse
+  const isMessageLong = (content: string): boolean => {
+    // Check character count
+    if (content.length > 500) return true;
+    
+    // Parse HTML to check for tall-rendering content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Check for tables (often render tall)
+    if (doc.querySelectorAll('table').length > 0) return true;
+    
+    // Check for images
+    if (doc.querySelectorAll('img').length > 0) return true;
+    
+    // Check for many paragraphs or list items (>5)
+    const blockCount = doc.querySelectorAll('p, li').length;
+    if (blockCount > 5) return true;
+    
+    return false;
+  };
+
+  // Toggle message expansion
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
       }
-      return isValid;
+      return newSet;
     });
-    setSelectedFiles(prev => [...prev, ...validFiles]);
   };
 
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
+  // Collect all attachments from all messages in the thread
+  const allAttachments = useMemo(() => {
+    if (!messages) return [];
+    return messages
+      .filter(m => m.attachments && m.attachments.length > 0)
+      .flatMap(m => m.attachments || []);
+  }, [messages]);
 
   const uploadFiles = async (files: File[]) => {
     const uploadedAttachments = [];
-    const totalFiles = files.length;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (const file of files) {
       try {
-        // Update progress
-        const progressPercent = Math.round((i / totalFiles) * 100);
-        setUploadProgress(progressPercent);
-
         const uploadUrlResponse = await apiRequest('POST', '/api/internal/messages/attachments/upload-url', {
           fileName: file.name,
           fileType: file.type,
@@ -445,73 +623,51 @@ export default function Messages() {
           fileSize: file.size,
           objectPath,
         });
-
-        // Update progress after each file
-        const newProgressPercent = Math.round(((i + 1) / totalFiles) * 100);
-        setUploadProgress(newProgressPercent);
       } catch (error) {
         console.error('Error uploading file:', file.name, error);
         throw new Error(`Failed to upload ${file.name}`);
       }
     }
-
     return uploadedAttachments;
   };
 
-  const handleCreateTask = () => {
-    if (!selectedTemplate || !selectedThread) return;
-
-    const clientId = selectedThread.clientPortalUser?.clientId;
-    const personId = selectedThread.clientPortalUser?.personId;
-
-    if (!clientId) {
-      toast({
-        title: "Error",
-        description: "Unable to determine client for this thread",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createTaskMutation.mutate({
-      templateId: selectedTemplate,
-      clientId,
-      personId,
-    });
-  };
-
-  const handleCreateNewThread = () => {
-    if (!newThreadSubject.trim() || !selectedClient) {
-      toast({
-        title: "Error",
-        description: "Please enter a subject and select a client",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createThreadMutation.mutate({
-      subject: newThreadSubject,
-      clientId: selectedClient.id,
-    });
-  };
-
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && selectedFiles.length === 0) return;
+    if (!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) return;
 
     try {
       setUploadingFiles(true);
-      setUploadProgress(0);
       let attachments: Array<{ fileName: string; fileType: string; fileSize: number; objectPath: string; }> = [];
 
       if (selectedFiles.length > 0) {
         attachments = await uploadFiles(selectedFiles);
       }
 
-      sendMessageMutation.mutate({
-        content: newMessage || '(Attachment)',
+      if (recordedAudio) {
+        const fileName = `voice-note-${Date.now()}.mp4`;
+        const audioFile = Object.assign(recordedAudio, {
+          name: fileName,
+          lastModified: Date.now()
+        });
+        const voiceAttachments = await uploadFiles([audioFile as File]);
+        attachments = [...attachments, ...voiceAttachments];
+      }
+
+      // Include reply-to metadata if set (requires backend support)
+      const payload: any = {
+        content: newMessage || (recordedAudio ? '(Voice Note)' : '(Attachment)'),
         attachments: attachments.length > 0 ? attachments : undefined,
-      });
+      };
+
+      // Add reply-to reference if user is replying to a message
+      // Note: Backend API needs to support replyToMessageId field
+      if (replyToMessage) {
+        payload.replyToMessageId = replyToMessage.id;
+      }
+
+      sendMessageMutation.mutate(payload);
+      
+      // Clear reply-to after sending
+      clearReplyTo();
     } catch (error: any) {
       toast({
         title: "Upload failed",
@@ -520,16 +676,13 @@ export default function Messages() {
       });
     } finally {
       setUploadingFiles(false);
-      setUploadProgress(0);
     }
   };
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'audio/mp4'
-      });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
       
       const audioChunks: Blob[] = [];
       isCancelledRef.current = false;
@@ -541,15 +694,12 @@ export default function Messages() {
       };
       
       recorder.onstop = () => {
-        // Only create audio blob if not cancelled
         if (!isCancelledRef.current && audioChunks.length > 0) {
           const audioBlob = new Blob(audioChunks, { type: 'audio/mp4' });
           setRecordedAudio(audioBlob);
           const url = URL.createObjectURL(audioBlob);
           setAudioUrl(url);
         }
-        
-        // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
       };
       
@@ -558,7 +708,6 @@ export default function Messages() {
       setIsRecording(true);
       setRecordingTime(0);
       
-      // Start timer
       const interval = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -587,9 +736,7 @@ export default function Messages() {
 
   const cancelRecording = () => {
     if (mediaRecorder && isRecording) {
-      // Mark as cancelled BEFORE stopping
       isCancelledRef.current = true;
-      
       mediaRecorder.stop();
       setIsRecording(false);
       
@@ -599,7 +746,6 @@ export default function Messages() {
       }
     }
     
-    // Clean up state
     setRecordedAudio(null);
     setRecordingTime(0);
     if (audioUrl) {
@@ -608,70 +754,12 @@ export default function Messages() {
     }
   };
 
-  const discardRecording = () => {
+  const deleteRecording = () => {
     setRecordedAudio(null);
     setRecordingTime(0);
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
-    }
-  };
-
-  const reRecord = async () => {
-    // Discard current recording
-    discardRecording();
-    // Start a new recording
-    await startRecording();
-  };
-
-  const sendVoiceNote = async () => {
-    if (!recordedAudio) return;
-
-    try {
-      setUploadingFiles(true);
-
-      // Convert blob to file-like object for browser compatibility
-      const fileName = `voice-note-${Date.now()}.mp4`;
-
-      // Create a File-like object that works in all browsers
-      // Some browsers don't support the File constructor, so we extend the Blob
-      const audioFile = Object.assign(recordedAudio, {
-        name: fileName,
-        lastModified: Date.now()
-      });
-
-      // Verify file has size
-      console.log('Voice note file:', {
-        name: (audioFile as any).name,
-        size: audioFile.size,
-        type: audioFile.type,
-        lastModified: (audioFile as any).lastModified
-      });
-
-      if (!audioFile.size || audioFile.size === 0) {
-        throw new Error('Voice note has no audio data');
-      }
-
-      // Upload the audio file
-      const attachments = await uploadFiles([audioFile as File]);
-
-      // Send as message
-      sendMessageMutation.mutate({
-        content: '(Voice Note)',
-        attachments
-      });
-
-      // Clean up
-      discardRecording();
-    } catch (error: any) {
-      console.error('Voice note upload error:', error);
-      toast({
-        title: 'Failed to send voice note',
-        description: error.message || 'Unable to upload audio. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setUploadingFiles(false);
     }
   };
 
@@ -680,6 +768,138 @@ export default function Messages() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Swipe handling for thread items
+  const handleSwipeLeft = (threadId: string) => {
+    setSwipedThreadId(threadId);
+    setSwipeDirection('left');
+  };
+
+  const handleSwipeRight = (threadId: string) => {
+    setSwipedThreadId(threadId);
+    setSwipeDirection('right');
+  };
+
+  const handleReplyAction = (thread: MessageThread) => {
+    setSelectedThreadId(thread.id);
+    setSwipedThreadId(null);
+    setSwipeDirection(null);
+    setShouldFocusComposer(true); // Focus input when replying via swipe
+    if (isMobile) {
+      setShowMobileThreadView(true);
+    }
+  };
+
+  const handleArchiveAction = (thread: MessageThread) => {
+    // Archive/unarchive for project threads only
+    const url = thread.isArchived 
+      ? `/api/internal/project-messages/threads/${thread.id}/unarchive`
+      : `/api/internal/project-messages/threads/${thread.id}/archive`;
+
+    apiRequest('PUT', url)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/project-messages/my-threads'] });
+        toast({
+          title: "Success",
+          description: thread.isArchived ? "Thread restored" : "Thread archived",
+        });
+      })
+      .catch((error: Error) => {
+        toast({
+          title: "Error",
+          description: error.message || `Failed to ${thread.isArchived ? 'restore' : 'archive'} thread`,
+          variant: "destructive",
+        });
+      });
+
+    setSwipedThreadId(null);
+    setSwipeDirection(null);
+  };
+
+  // Long press handling for message context menu (react/reply)
+  const handleMessageTouchStart = (event: React.TouchEvent, messageId: string) => {
+    longPressTimer.current = setTimeout(() => {
+      setLongPressedMessageId(messageId);
+      setShowMessageContextMenu(true);
+      // Prevent context menu or text selection only after confirming long press
+      if (navigator.vibrate) {
+        navigator.vibrate(50); // Haptic feedback on long-press
+      }
+    }, 500); // 500ms long press
+  };
+
+  const handleMessageTouchEnd = (event: React.TouchEvent) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleMessageTouchMove = (event: React.TouchEvent) => {
+    // Cancel long press if user moves finger (scrolling)
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleMessageContextMenu = (event: React.MouseEvent) => {
+    // Prevent browser's default context menu
+    event.preventDefault();
+  };
+
+  const handleContextMenuReact = () => {
+    setShowMessageContextMenu(false);
+    setShowReactionPicker(true);
+  };
+
+  const handleContextMenuReply = () => {
+    const message = messages?.find(m => m.id === longPressedMessageId);
+    if (message) {
+      handleReplyToMessage(message);
+      setShouldFocusComposer(true); // Focus input when replying
+    }
+    setShowMessageContextMenu(false);
+    setLongPressedMessageId(null);
+  };
+
+  const handleReaction = (emoji: string) => {
+    // TODO: Backend API support needed for persisting reactions
+    // Would typically POST to /api/.../messages/{messageId}/reactions
+    // with { emoji, userId } and store in reactions table
+    
+    // For now, provide user feedback that the feature is recognized
+    toast({
+      title: "Reaction feature",
+      description: `You selected ${emoji} - Backend API support needed for persistence`,
+    });
+    
+    setShowReactionPicker(false);
+    setLongPressedMessageId(null);
+  };
+
+  // Reply to message handling
+  const handleReplyToMessage = (message: ProjectMessage) => {
+    setReplyToMessage(message);
+  };
+
+  const clearReplyTo = () => {
+    setReplyToMessage(null);
+  };
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+    }
+  }, [isAuthenticated, authLoading, toast]);
 
   if (authLoading) {
     return (
@@ -692,735 +912,669 @@ export default function Messages() {
     );
   }
 
-  const selectedThread = threads?.find(t => t.id === selectedThreadId);
+  // Filter client-staff threads based on search
+  const filteredClientThreads = clientChatThreads.filter(thread => {
+    if (threadSearchTerm.trim()) {
+      const searchLower = threadSearchTerm.toLowerCase();
+      const topicMatch = thread.topic.toLowerCase().includes(searchLower);
+      const clientMatch = thread.clientName.toLowerCase().includes(searchLower);
+      const messageMatch = thread.lastMessageContent?.toLowerCase().includes(searchLower);
+      return topicMatch || clientMatch || messageMatch;
+    }
+    return true;
+  });
+
+  // Get unique clients from email threads for filter dropdown
+  const uniqueClients = Array.from(
+    new Map(
+      emailThreads
+        .filter(t => t.clientId && t.clientName)
+        .map(t => [t.clientId, { id: t.clientId, name: t.clientName }])
+    ).values()
+  ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  // Filter email threads based on search, client, and read status
+  const filteredEmailThreads = emailThreads.filter(thread => {
+    // Search filter
+    if (threadSearchTerm.trim()) {
+      const searchLower = threadSearchTerm.toLowerCase();
+      const subjectMatch = thread.subject?.toLowerCase().includes(searchLower);
+      const participantMatch = thread.participants.some(p => p.toLowerCase().includes(searchLower));
+      const clientMatch = thread.clientName?.toLowerCase().includes(searchLower);
+      const previewMatch = thread.latestPreview?.toLowerCase().includes(searchLower);
+      if (!(subjectMatch || participantMatch || clientMatch || previewMatch)) {
+        return false;
+      }
+    }
+    
+    // Client filter
+    if (clientFilter !== 'all' && thread.clientId !== clientFilter) {
+      return false;
+    }
+    
+    // Read status filter
+    if (readStatusFilter === 'read' && thread.hasUnread) {
+      return false;
+    }
+    if (readStatusFilter === 'unread' && !thread.hasUnread) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  const selectedClientThread = clientChatThreads.find(t => t.id === selectedThreadId);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Page-level navigation - visible across all tabs. InternalChatView suppresses its own navigation when embedded (showNavigation={false}) */}
       <TopNavigation user={user} />
-
-      <main className="container mx-auto px-4 pt-6 pb-4 flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">
-            Client Messages
-          </h1>
-          <div className="flex items-center gap-3">
-            {unreadCount && unreadCount.count > 0 && (
-              <Badge variant="destructive" className="text-lg px-3 py-1" data-testid="badge-unread-count">
-                {unreadCount.count} unread
-              </Badge>
-            )}
-            <Button 
-              onClick={() => setShowNewMessageModal(true)}
-              className="gap-2"
-              data-testid="button-new-message"
-            >
-              <MessageCircle className="h-4 w-4" />
-              New Message
-            </Button>
+      
+      {/* Header */}
+      <header className="bg-card border-b border-border page-container py-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="page-title">
+              Messages
+            </h2>
           </div>
+          
+          {/* Desktop Tabs - on same line as title */}
+          {!isMobile && (
+            <div className="flex-shrink-0">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid grid-cols-3">
+                  <TabsTrigger value="internal" className="relative" data-testid="tab-internal-chat">
+                    Internal Chat
+                    {internalUnreadCount > 0 && (
+                      <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-internal-unread">
+                        {internalUnreadCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="client" className="relative" data-testid="tab-client-chat">
+                    Client Chat
+                    {clientUnreadCount > 0 && (
+                      <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-client-unread">
+                        {clientUnreadCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="emails" className="relative" data-testid="tab-client-emails">
+                    Client Emails
+                    {emailUnreadCount > 0 && (
+                      <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="destructive" data-testid="badge-email-unread">
+                        {emailUnreadCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
         </div>
+      </header>
 
-        {/* Streamlined Thread List */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
-          {/* Thread List */}
-          <Card className="lg:col-span-1 flex flex-col overflow-hidden">
-            <CardHeader className="pb-3 flex-shrink-0">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex-1">
-                  <Input 
+      <div className="flex-1 overflow-hidden">
+        <div className="page-container py-6 md:py-8 space-y-8 h-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+
+            <div className="flex-1 flex gap-4 overflow-hidden">
+              {/* Internal Chat View - uses dedicated /internal-chat layout */}
+              {activeTab === 'internal' && (
+                <InternalChatView showNavigation={false} className="flex-1" />
+              )}
+              
+              {/* Thread List for Client Chat and Emails tabs */}
+              {activeTab !== 'internal' && (
+              <>
+              <Card className="w-full md:w-80 flex flex-col">
+                <CardHeader className="space-y-3 pb-3">
+                  <Input
+                    placeholder={
+                      isMobile
+                        ? activeTab === 'emails'
+                          ? 'Search Client Emails...'
+                          : activeTab === 'client'
+                          ? 'Search Client Messages...'
+                          : 'Search Internal Messages...'
+                        : 'Search threads...'
+                    }
                     value={threadSearchTerm}
                     onChange={(e) => setThreadSearchTerm(e.target.value)}
-                    placeholder="Search"
-                    className="w-full"
-                    data-testid="input-thread-search"
+                    data-testid="input-search-threads"
                   />
-                </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon" className="ml-2" data-testid="button-filter">
-                      <Filter className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="end">
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium mb-3">Filters</h4>
+                  {activeTab === 'emails' ? (
+                    <>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={emailFilter === 'my' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEmailFilter('my')}
+                          data-testid="button-filter-my-emails"
+                        >
+                          My Emails
+                        </Button>
+                        <Button
+                          variant={emailFilter === 'all' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEmailFilter('all')}
+                          data-testid="button-filter-all-emails"
+                        >
+                          All Team Emails
+                        </Button>
                       </div>
                       
-                      <Separator />
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Status</Label>
-                        <RadioGroup value={archiveFilter} onValueChange={(value) => setArchiveFilter(value as 'all' | 'open' | 'archived')}>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="all" id="status-all" />
-                            <Label htmlFor="status-all" className="font-normal cursor-pointer">All</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="open" id="status-open" />
-                            <Label htmlFor="status-open" className="font-normal cursor-pointer">Open</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="archived" id="status-archived" />
-                            <Label htmlFor="status-archived" className="font-normal cursor-pointer">Archived</Label>
-                          </div>
-                        </RadioGroup>
+                      <div className="flex gap-2">
+                        <Select value={clientFilter} onValueChange={setClientFilter}>
+                          <SelectTrigger className="h-9 text-sm" data-testid="select-client-filter">
+                            <SelectValue placeholder="All Clients" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Clients</SelectItem>
+                            {uniqueClients.map(client => (
+                              <SelectItem key={client.id} value={client.id!}>
+                                {client.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       
-                      <Separator />
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Read Status</Label>
-                        <RadioGroup value={readFilter} onValueChange={(value) => setReadFilter(value as 'all' | 'unread')}>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="all" id="read-all" />
-                            <Label htmlFor="read-all" className="font-normal cursor-pointer">All</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="unread" id="read-unread" />
-                            <Label htmlFor="read-unread" className="font-normal cursor-pointer">Unread only</Label>
-                          </div>
-                        </RadioGroup>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={readStatusFilter === 'all' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setReadStatusFilter('all')}
+                          data-testid="button-filter-all-status"
+                        >
+                          All
+                        </Button>
+                        <Button
+                          variant={readStatusFilter === 'unread' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setReadStatusFilter('unread')}
+                          data-testid="button-filter-unread"
+                        >
+                          Unread
+                        </Button>
+                        <Button
+                          variant={readStatusFilter === 'read' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setReadStatusFilter('read')}
+                          data-testid="button-filter-read"
+                        >
+                          Read
+                        </Button>
                       </div>
-                      
-                      <Separator />
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Date Range</Label>
-                        <div className="space-y-2">
-                          <div>
-                            <Label htmlFor="date-from" className="text-xs text-muted-foreground">From</Label>
-                            <Input 
-                              id="date-from"
-                              type="date"
-                              value={dateFrom}
-                              onChange={(e) => setDateFrom(e.target.value)}
-                              className="w-full"
-                              data-testid="input-date-from"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="date-to" className="text-xs text-muted-foreground">To</Label>
-                            <Input 
-                              id="date-to"
-                              type="date"
-                              value={dateTo}
-                              onChange={(e) => setDateTo(e.target.value)}
-                              className="w-full"
-                              data-testid="input-date-to"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {(archiveFilter !== 'open' || readFilter !== 'all' || dateFrom || dateTo) && (
-                        <>
-                          <Separator />
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="w-full"
-                            onClick={() => {
-                              setArchiveFilter('open');
-                              setReadFilter('all');
-                              setDateFrom('');
-                              setDateTo('');
-                            }}
-                            data-testid="button-clear-filters"
-                          >
-                            Clear Filters
-                          </Button>
-                        </>
-                      )}
+                    </>
+                  ) : !isMobile ? (
+                    <div className="flex gap-2">
+                      <Button
+                        variant={archiveFilter === 'open' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setArchiveFilter('open')}
+                        data-testid="button-filter-open"
+                      >
+                        Active
+                      </Button>
+                      <Button
+                        variant={archiveFilter === 'archived' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setArchiveFilter('archived')}
+                        data-testid="button-filter-archived"
+                      >
+                        Archived
+                      </Button>
                     </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden">
-              <div className="overflow-y-auto h-full">
-                {threadsLoading ? (
-                  <div className="p-4 space-y-3">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-20 w-full" />
-                    ))}
-                  </div>
-                ) : threads && threads.length > 0 ? (
-                  <div className="divide-y">
-                    {threads.map((thread) => {
-                      const messagePreview = thread.lastMessageContent 
-                        ? thread.lastMessageContent.substring(0, 60) + (thread.lastMessageContent.length > 60 ? '...' : '')
-                        : 'No messages yet';
-                      
-                      return (
+                  ) : null}
+                </CardHeader>
+                <CardContent className="flex-1 overflow-y-auto p-0">
+                  {threadsLoading ? (
+                    <div className="p-4 space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-14 w-full" />
+                      ))}
+                    </div>
+                  ) : activeTab === 'emails' ? (
+                    filteredEmailThreads && filteredEmailThreads.length > 0 ? (
+                      <div className="divide-y divide-border">
+                        {filteredEmailThreads.map((thread) => (
+                          <button
+                            key={thread.canonicalConversationId}
+                            onClick={() => {
+                              setSelectedEmailThreadId(thread.canonicalConversationId);
+                              setEmailThreadViewerOpen(true);
+                            }}
+                            className="w-full text-left p-2 hover:bg-muted/50 transition-colors"
+                            data-testid={`email-thread-item-${thread.canonicalConversationId}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {thread.clientName && (
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                    <span className="text-sm text-muted-foreground truncate">
+                                      {thread.clientName}
+                                    </span>
+                                  </div>
+                                )}
+                                <p className="font-semibold text-sm mt-0.5 truncate">
+                                  {thread.subject || 'No Subject'}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {thread.latestPreview || `${thread.messageCount} message${thread.messageCount !== 1 ? 's' : ''}`}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Mail className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                  <span className="text-xs text-muted-foreground truncate">
+                                    {thread.participants.slice(0, 2).join(', ')}
+                                    {thread.participants.length > 2 && ` +${thread.participants.length - 2} more`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+                                </span>
+                                {thread.hasUnread && (
+                                  <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.canonicalConversationId}`} />
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-muted-foreground">
+                        <Mail className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>No email threads found</p>
+                      </div>
+                    )
+                  ) : filteredClientThreads && filteredClientThreads.length > 0 ? (
+                    <div className="divide-y divide-border">
+                      {filteredClientThreads.map((thread) => (
                         <button
                           key={thread.id}
-                          onClick={() => setSelectedThreadId(thread.id)}
-                          className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors relative ${
-                            selectedThreadId === thread.id ? 'bg-accent' : ''
-                          } ${thread.hasUnreadMessages ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''}`}
-                          data-testid={`thread-${thread.id}`}
+                          onClick={() => {
+                            setSelectedThreadId(thread.id);
+                            if (isMobile) {
+                              setShowMobileThreadView(true);
+                            }
+                          }}
+                          className={`w-full text-left p-2 hover:bg-muted/50 transition-colors ${
+                            selectedThreadId === thread.id ? 'bg-muted' : ''
+                          }`}
+                          data-testid={`client-thread-item-${thread.id}`}
                         >
-                          {thread.hasUnreadMessages && (
-                            <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full" data-testid={`unread-indicator-${thread.id}`}></div>
-                          )}
-                          <div className="flex items-start justify-between gap-2 mb-0.5">
-                            <h3 className={`text-sm truncate ${thread.hasUnreadMessages ? 'font-bold' : 'font-semibold'}`} data-testid={`thread-topic-${thread.id}`}>
-                              {thread.subject || thread.topic}
-                            </h3>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                              {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true }).replace('about ', '')}
-                            </span>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm text-muted-foreground truncate">
+                                  {thread.clientName}
+                                </span>
+                              </div>
+                              <p className="font-semibold text-sm mt-0.5 truncate">
+                                {thread.topic}
+                              </p>
+                              {thread.lastMessageContent && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {thread.lastMessageContent}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+                              </span>
+                              {thread.hasUnreadMessages && (
+                                <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+                              )}
+                            </div>
                           </div>
-                          <p className={`text-xs text-muted-foreground truncate mb-0.5 ${thread.hasUnreadMessages ? 'font-semibold' : ''}`} data-testid={`thread-client-${thread.id}`}>
-                            {thread.clientPortalUser?.client?.name || thread.clientPortalUser?.email}
-                          </p>
-                          {thread.lastMessageSenderName && (
-                            <p className={`text-xs truncate ${thread.hasUnreadMessages ? 'font-medium text-foreground' : 'text-muted-foreground'}`} data-testid={`thread-preview-${thread.id}`}>
-                              <span className="font-medium">{thread.lastMessageSenderName}:</span> {messagePreview}
-                            </p>
-                          )}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No client threads found</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Message View - Hidden on mobile */}
+              {!isMobile && activeTab === 'client' && (
+              <Card className="flex-1 flex flex-col" data-testid="message-view-card">
+                {selectedThreadId && selectedClientThread ? (
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium mb-1">Client Thread: {selectedClientThread.topic}</p>
+                      <p className="text-sm">Client: {selectedClientThread.clientName}</p>
+                      <p className="text-xs mt-4">Message view for client threads coming soon</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No conversations found</p>
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>Select a thread to view messages</p>
+                    </div>
+                  </div>
+                )}
+              </Card>
+              )}
+              
+              </>
+              )}
+            </div>
+          </Tabs>
+        </div>
+      </div>
+      
+      {/* FAB for mobile - filter menu */}
+      {isMobile && (
+        <div className="fixed bottom-24 right-6 z-50">
+          <Popover open={showMobileFilterMenu} onOpenChange={setShowMobileFilterMenu}>
+            <PopoverTrigger asChild>
+              <Button
+                size="lg"
+                className="rounded-full shadow-lg h-14 w-14 p-0"
+                data-testid="button-mobile-filter-fab"
+              >
+                <Filter className="h-6 w-6" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-4" align="end" data-testid="popover-mobile-filter">
+              <div className="space-y-3">
+                <div className="font-semibold mb-2">Filter Messages</div>
+                
+                {/* View type selection */}
+                <div className="space-y-2">
+                  <Label className="text-sm">Message Type</Label>
+                  <Select value={activeTab} onValueChange={(value) => {
+                    setActiveTab(value);
+                    setShowMobileFilterMenu(false);
+                  }}>
+                    <SelectTrigger data-testid="select-message-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Internal Chat</SelectItem>
+                      <SelectItem value="client">Client Chat</SelectItem>
+                      <SelectItem value="emails">Client Emails</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Archive filter */}
+                {activeTab !== 'emails' && (
+                  <div className="space-y-2">
+                    <Label className="text-sm">Status</Label>
+                    <Select value={archiveFilter} onValueChange={(value: 'open' | 'archived') => setArchiveFilter(value)}>
+                      <SelectTrigger data-testid="select-archive-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Active</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Message View */}
-          <Card className="lg:col-span-2 flex flex-col overflow-hidden">
-            {selectedThread ? (
-              <>
-                <CardHeader className="border-b flex-shrink-0">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle data-testid="text-selected-thread-topic">{selectedThread.topic}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1" data-testid="text-selected-thread-client">
-                        {selectedThread.clientPortalUser?.client?.name || selectedThread.clientPortalUser?.email}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {!selectedThread.isArchived && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => archiveThreadMutation.mutate(selectedThread.id)}
-                          disabled={archiveThreadMutation.isPending}
-                          data-testid="button-archive"
-                        >
-                          <Archive className="h-4 w-4 mr-2" />
-                          Archive
-                        </Button>
-                      )}
-                      {selectedThread.isArchived && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => unarchiveThreadMutation.mutate(selectedThread.id)}
-                          disabled={unarchiveThreadMutation.isPending}
-                          data-testid="button-unarchive"
-                        >
-                          <ArchiveRestore className="h-4 w-4 mr-2" />
-                          Restore
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4" data-testid="messages-container">
-                    {messagesLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <Skeleton key={i} className="h-20 w-full" />
-                      ))
-                    ) : messages && messages.length > 0 ? (
-                      messages.map((message) => {
-                        const isStaff = !!message.userId;
-                        return (
-                          <div
-                            key={message.id}
-                            className={`flex gap-3 ${isStaff ? 'flex-row-reverse' : ''}`}
-                            data-testid={`message-${message.id}`}
-                          >
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback>
-                                {isStaff ? (
-                                  <User className="h-4 w-4" />
-                                ) : (
-                                  <Building2 className="h-4 w-4" />
-                                )}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className={`flex-1 ${isStaff ? 'text-right' : ''}`}>
-                              <div className="text-xs text-muted-foreground mb-1">
-                                <span data-testid={`message-sender-${message.id}`}>
-                                  {isStaff
-                                    ? `${message.user?.firstName || ''} ${message.user?.lastName || ''}`.trim() || message.user?.email
-                                    : message.clientPortalUser?.email}
-                                </span>
-                                {' • '}
-                                {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                              </div>
-                              <div>
-                                <div
-                                  className={`inline-block p-3 rounded-lg ${
-                                    isStaff
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'bg-muted'
-                                  }`}
-                                  data-testid={`message-content-${message.id}`}
-                                >
-                                  {message.content}
-                                </div>
-                                {message.attachments && message.attachments.length > 0 && (
-                                  <div className="mt-2 space-y-2">
-                                    {message.attachments.map((attachment, idx) => {
-                                      const isImage = attachment.fileType.startsWith('image/');
-                                      const isAudio = attachment.fileType.startsWith('audio/');
-                                      // Use the authorized endpoint for staff to access attachments
-                                      const objectUrl = attachment.objectPath.replace('/objects/', `/api/internal/messages/attachments/`) + `?threadId=${selectedThreadId}`;
-                                      
-                                      if (isImage) {
-                                        return (
-                                          <div key={idx} className="mt-2">
-                                            <button
-                                              onClick={() => setPreviewImage({ url: objectUrl, fileName: attachment.fileName })}
-                                              className="block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity cursor-pointer"
-                                              data-testid={`image-attachment-${idx}`}
-                                            >
-                                              <img 
-                                                src={objectUrl} 
-                                                alt={attachment.fileName}
-                                                className="max-w-full h-auto max-h-64 object-contain bg-gray-100 dark:bg-gray-800"
-                                                loading="lazy"
-                                              />
-                                            </button>
-                                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                              <ImageIcon className="h-3 w-3" />
-                                              <span className="truncate">{attachment.fileName}</span>
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                      
-                                      if (isAudio) {
-                                        return (
-                                          <div key={idx} className="p-3 rounded-lg bg-muted">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <FileAudio className="h-4 w-4" />
-                                              <span className="text-xs flex-1 truncate">{attachment.fileName}</span>
-                                            </div>
-                                            <audio 
-                                              src={objectUrl} 
-                                              controls 
-                                              className="w-full max-w-xs"
-                                              preload="metadata"
-                                              data-testid={`audio-attachment-${idx}`}
-                                            />
-                                          </div>
-                                        );
-                                      }
-                                      
-                                      return (
-                                        <a
-                                          key={idx}
-                                          href={objectUrl}
-                                          download={attachment.fileName}
-                                          className="flex items-center gap-2 p-2 rounded bg-muted hover:bg-muted/80 transition-colors text-sm max-w-xs"
-                                          data-testid={`attachment-${message.id}-${idx}`}
-                                        >
-                                          <File className="h-4 w-4 flex-shrink-0" />
-                                          <span className="truncate">{attachment.fileName}</span>
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center text-muted-foreground py-8">
-                        <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>No messages yet</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="border-t p-4 flex-shrink-0">
-                    {/* Upload Progress */}
-                    {uploadingFiles && uploadProgress > 0 && (
-                      <div className="mb-3 space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Uploading files...</span>
-                          <span className="font-medium">{uploadProgress}%</span>
-                        </div>
-                        <Progress value={uploadProgress} className="h-2" />
-                      </div>
-                    )}
-
-                    {/* File Upload Zone */}
-                    {!isRecording && !recordedAudio && selectedFiles.length < 5 && (
-                      <div className="mb-3">
-                        <FileUploadZone
-                          onFilesSelected={handleFilesSelected}
-                          maxFiles={5 - selectedFiles.length}
-                          maxSize={25 * 1024 * 1024}
-                          acceptedTypes={['image/*', '.pdf', 'audio/*', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']}
-                        />
-                      </div>
-                    )}
-
-                    {/* Attachment List */}
-                    {selectedFiles.length > 0 && (
-                      <div className="mb-3">
-                        <AttachmentList
-                          attachments={selectedFiles}
-                          onRemove={removeFile}
-                        />
-                      </div>
-                    )}
-                    
-                    {/* Recording indicator */}
-                    {isRecording && (
-                      <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                              <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-ping opacity-75" />
-                            </div>
-                            <span className="text-sm font-medium text-red-700 dark:text-red-300">
-                              Recording... {formatTime(recordingTime)}
-                            </span>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={cancelRecording}
-                              data-testid="button-cancel-recording"
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Cancel
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={stopRecording}
-                              data-testid="button-stop-recording"
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              <Square className="h-4 w-4 mr-1" />
-                              Stop
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Recorded audio preview */}
-                    {recordedAudio && !isRecording && (
-                      <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <FileAudio className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Voice Note</p>
-                              <p className="text-xs text-blue-600 dark:text-blue-400">{formatTime(recordingTime)}</p>
-                              {audioUrl && (
-                                <audio src={audioUrl} controls className="mt-2 w-full max-w-xs" data-testid="audio-preview" />
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 flex-shrink-0">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={reRecord}
-                              title="Re-record"
-                              data-testid="button-rerecord"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={discardRecording}
-                              title="Discard"
-                              data-testid="button-discard-recording"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={sendVoiceNote}
-                              disabled={uploadingFiles}
-                              data-testid="button-send-voice-note"
-                              className="bg-blue-600 hover:bg-blue-700"
-                            >
-                              {uploadingFiles ? (
-                                <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                              ) : (
-                                <>
-                                  <Send className="h-4 w-4 mr-1" />
-                                  Send
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="flex gap-2">
-                      <Textarea
-                        placeholder="Type your message..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey && !uploadingFiles && !isRecording && !recordedAudio) {
-                            e.preventDefault();
-                            handleSendMessage();
-                          }
-                        }}
-                        disabled={isRecording || !!recordedAudio || uploadingFiles}
-                        className="flex-1"
-                        rows={3}
-                        data-testid="input-message"
-                      />
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setShowTaskModal(true)}
-                          disabled={isRecording || !!recordedAudio || uploadingFiles}
-                          data-testid="button-create-task"
-                          title="Create task from message"
-                        >
-                          <ClipboardList className="h-4 w-4" />
-                        </Button>
-                        <label htmlFor="file-upload">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            asChild
-                            disabled={isRecording || !!recordedAudio || uploadingFiles}
-                            data-testid="button-attach-file"
-                          >
-                            <span className="cursor-pointer">
-                              <Paperclip className="h-4 w-4" />
-                            </span>
-                          </Button>
-                        </label>
-                        <input
-                          id="file-upload"
-                          type="file"
-                          multiple
-                          accept="image/*,.pdf,audio/*,.doc,.docx,.xls,.xlsx,.txt,.csv"
-                          onChange={handleFileSelect}
-                          className="hidden"
-                          disabled={isRecording || !!recordedAudio}
-                          data-testid="input-file-upload"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={startRecording}
-                          disabled={isRecording || !!recordedAudio || uploadingFiles}
-                          data-testid="button-start-recording"
-                        >
-                          <Mic className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          onClick={handleSendMessage}
-                          disabled={(!newMessage.trim() && selectedFiles.length === 0) || uploadingFiles || sendMessageMutation.isPending || isRecording || !!recordedAudio}
-                          data-testid="button-send-message"
-                        >
-                          {uploadingFiles ? (
-                            <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                          ) : (
-                            <Send className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </>
-            ) : (
-              <CardContent className="flex items-center justify-center h-[500px]">
-                <div className="text-center text-muted-foreground">
-                  <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">Select a conversation to view messages</p>
-                </div>
-              </CardContent>
-            )}
-          </Card>
+            </PopoverContent>
+          </Popover>
         </div>
-      </main>
+      )}
 
-      <BottomNav onSearchClick={() => {}} />
+      <BottomNav user={user} onSearchClick={() => setMobileSearchOpen(true)} />
 
-      {/* New Message Modal */}
-      <Dialog open={showNewMessageModal} onOpenChange={setShowNewMessageModal}>
-        <DialogContent data-testid="dialog-new-message">
-          <DialogHeader>
-            <DialogTitle>New Message</DialogTitle>
-            <DialogDescription>
-              Start a new conversation with a client
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Subject</label>
-              <Input 
-                value={newThreadSubject}
-                onChange={(e) => setNewThreadSubject(e.target.value)}
-                placeholder="Enter message subject"
-                data-testid="input-thread-subject"
-              />
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
+
+      {/* Mobile Thread View Dialog - Disabled for client tab (client threads not fully implemented yet) */}
+      {isMobile && selectedThreadId && activeTab !== 'client' && (
+        <Dialog open={showMobileThreadView} onOpenChange={setShowMobileThreadView}>
+          <DialogContent className="max-w-full h-[90vh] p-0 flex flex-col">
+            <DialogHeader className="border-b p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedThread.client.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedThread.project.description}
+                    </span>
+                  </div>
+                  <DialogTitle>{selectedThread.topic}</DialogTitle>
+                  <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                    <Users className="w-4 h-4" />
+                    <span>
+                      {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messagesLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : messages && messages.length > 0 ? (
+                messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${
+                      message.userId === user?.id ? 'flex-row-reverse' : ''
+                    }`}
+                  >
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                      <AvatarFallback>
+                        {message.user
+                          ? `${message.user.firstName?.[0] || ''}${message.user.lastName?.[0] || ''}`
+                          : 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className={`flex-1 space-y-1 ${message.userId === user?.id ? 'text-right' : ''}`}>
+                      <div className="flex items-center gap-2 text-sm">
+                        {message.userId === user?.id ? (
+                          <>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                            </span>
+                            <span className="font-medium">You</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium">
+                              {message.user ? getUserDisplayName(message.user) : 'Unknown User'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <div
+                        className={`inline-block rounded-lg px-3 py-2 ${
+                          message.userId === user?.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                      </div>
+                      {message.attachments && message.attachments.length > 0 && (
+                        <AttachmentList attachments={message.attachments} readonly={true} />
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>No messages yet</p>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
             </div>
-            <div>
-              <label className="text-sm font-medium">Client</label>
-              <Input 
-                value={selectedClient ? selectedClient.name : clientSearch}
-                onChange={(e) => {
-                  setClientSearch(e.target.value);
-                  setSelectedClient(null);
-                }}
-                placeholder="Search for a client..."
-                data-testid="input-client-search"
-              />
-              {clientSearch.length >= 2 && !selectedClient && clients && clients.length > 0 && (
-                <div className="mt-2 border rounded-md max-h-48 overflow-y-auto">
-                  {clients.map((client) => (
-                    <button
-                      key={client.id}
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setClientSearch(client.name);
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
-                      data-testid={`client-option-${client.id}`}
-                    >
-                      {client.name}
-                    </button>
+
+            <div className="border-t p-4 space-y-2">
+              {selectedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-muted px-2 py-1 rounded text-sm">
+                      <File className="w-4 h-4" />
+                      <span className="max-w-[150px] truncate">{file.name}</span>
+                      <button
+                        onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
-              {clientSearch.length >= 2 && !selectedClient && clients && clients.length === 0 && (
-                <p className="text-sm text-muted-foreground mt-2">No clients found</p>
+
+              {recordedAudio && audioUrl && (
+                <div className="bg-muted p-2 rounded flex items-center gap-2">
+                  <VoiceNotePlayer audioUrl={audioUrl} />
+                  <button
+                    onClick={() => {
+                      setRecordedAudio(null);
+                      setAudioUrl(null);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               )}
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setShowNewMessageModal(false);
-                  setNewThreadSubject('');
-                  setClientSearch('');
-                  setSelectedClient(null);
-                }}
-                data-testid="button-cancel-new-message"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleCreateNewThread}
-                disabled={!newThreadSubject.trim() || !selectedClient || createThreadMutation.isPending}
-                data-testid="button-create-thread"
-              >
-                {createThreadMutation.isPending ? 'Creating...' : 'Start Conversation'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* Task Creation Modal */}
-      <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
-        <DialogContent data-testid="dialog-create-task">
-          <DialogHeader>
-            <DialogTitle>Create Client Request</DialogTitle>
-            <DialogDescription>
-              Select a task template to create a new client request for {selectedThread?.clientPortalUser?.client?.name || 'this client'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Task Template</label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger data-testid="select-task-template">
-                  <SelectValue placeholder="Select a template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {taskTemplates?.filter(t => t.status === 'active').map((template) => (
-                    <SelectItem key={template.id} value={template.id} data-testid={`template-${template.id}`}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setShowTaskModal(false); setSelectedTemplate(''); }} data-testid="button-cancel-task">
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleCreateTask}
-                disabled={!selectedTemplate || createTaskMutation.isPending}
-                data-testid="button-confirm-create-task"
-              >
-                {createTaskMutation.isPending ? 'Creating...' : 'Create Request'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+              <div className="flex gap-2">
+                <Textarea
+                  ref={messageInputRef}
+                  placeholder="Type a message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  className="flex-1 min-h-[60px] resize-none"
+                  disabled={uploadingFiles}
+                />
 
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setPreviewImage(null)}
-          data-testid="image-preview-modal"
-        >
-          <div className="relative max-w-7xl max-h-full">
-            <button
-              className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2 hover:bg-black/70"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPreviewImage(null);
-              }}
-              data-testid="button-close-preview"
-            >
-              <X className="h-6 w-6" />
-            </button>
-            <img 
-              src={previewImage.url}
-              alt={previewImage.fileName}
-              className="max-w-full max-h-[90vh] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <p className="text-white text-center mt-2">{previewImage.fileName}</p>
-          </div>
-        </div>
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={(!newMessage.trim() && selectedFiles.length === 0 && !recordedAudio) || uploadingFiles || sendMessageMutation.isPending}
+                  size="sm"
+                >
+                  {uploadingFiles || sendMessageMutation.isPending ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Email Thread Viewer Modal */}
+      {selectedEmailThreadId && (
+        <EmailThreadViewer
+          threadId={selectedEmailThreadId}
+          open={emailThreadViewerOpen}
+          onOpenChange={(open) => {
+            setEmailThreadViewerOpen(open);
+            if (!open) {
+              setSelectedEmailThreadId(null);
+            }
+          }}
+        />
+      )}
+
+      {/* Message Context Menu - appears on long press */}
+      {showMessageContextMenu && longPressedMessageId && (
+        <Dialog open={showMessageContextMenu} onOpenChange={setShowMessageContextMenu}>
+          <DialogContent className="sm:max-w-[300px]" data-testid="dialog-message-context-menu">
+            <DialogHeader>
+              <DialogTitle>Message Options</DialogTitle>
+              <DialogDescription>
+                Choose an action for this message
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 py-4">
+              <Button
+                variant="outline"
+                onClick={handleContextMenuReply}
+                className="justify-start"
+                data-testid="button-context-reply"
+              >
+                <Reply className="w-4 h-4 mr-2" />
+                Reply to Message
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleContextMenuReact}
+                className="justify-start"
+                data-testid="button-context-react"
+              >
+                <Smile className="w-4 h-4 mr-2" />
+                Add Reaction
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Reaction Picker Modal - appears after selecting "Add Reaction" */}
+      {showReactionPicker && longPressedMessageId && (
+        <Dialog open={showReactionPicker} onOpenChange={setShowReactionPicker}>
+          <DialogContent className="sm:max-w-[400px]" data-testid="dialog-reaction-picker">
+            <DialogHeader>
+              <DialogTitle>React to Message</DialogTitle>
+              <DialogDescription>
+                Choose an emoji reaction
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-5 gap-3 py-4">
+              {['👍', '❤️', '😂', '😮', '😢', '🙏', '👏', '🔥', '🎉', '✅'].map((emoji) => (
+                <Button
+                  key={emoji}
+                  variant="outline"
+                  size="lg"
+                  onClick={() => handleReaction(emoji)}
+                  className="text-3xl h-16 hover:scale-110 transition-transform"
+                  data-testid={`button-reaction-${emoji}`}
+                >
+                  {emoji}
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

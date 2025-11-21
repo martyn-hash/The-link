@@ -1,5 +1,8 @@
 import { Link, useLocation } from "wouter";
-import { Home, FolderOpen, Search, User } from "lucide-react";
+import { Home, FolderOpen, Search, MessageCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import type { MouseEvent } from "react";
 import type { User as UserType } from "@shared/schema";
 
 interface BottomNavProps {
@@ -7,8 +10,49 @@ interface BottomNavProps {
   onSearchClick: () => void;
 }
 
+interface ProjectMessageThread {
+  unreadCount: number;
+}
+
+interface StaffMessageThread {
+  unreadCount: number;
+}
+
 export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
   const [location] = useLocation();
+
+  // Fetch project message threads (Client Chat) unread count
+  const { data: projectThreads } = useQuery<ProjectMessageThread[]>({
+    queryKey: ['/api/project-messages/my-threads', { includeArchived: false }],
+    queryFn: async () => {
+      const response = await fetch('/api/project-messages/my-threads?includeArchived=false', {
+        credentials: 'include'
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+
+  // Fetch staff message threads (Internal Chat) unread count
+  const { data: staffThreads } = useQuery<StaffMessageThread[]>({
+    queryKey: ['/api/staff-messages/my-threads', { includeArchived: false }],
+    queryFn: async () => {
+      const response = await fetch('/api/staff-messages/my-threads?includeArchived=false', {
+        credentials: 'include'
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+
+  // Calculate total unread count
+  const totalUnreadCount = 
+    (projectThreads?.reduce((sum, thread) => sum + thread.unreadCount, 0) || 0) +
+    (staffThreads?.reduce((sum, thread) => sum + thread.unreadCount, 0) || 0);
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -35,16 +79,17 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
       label: "Search", 
       icon: Search,
       testId: "bottom-nav-search",
-      onClick: (e: React.MouseEvent) => {
+      onClick: (e: MouseEvent) => {
         e.preventDefault();
         onSearchClick();
       }
     },
     { 
-      href: "/profile", 
-      label: "Profile", 
-      icon: User,
-      testId: "bottom-nav-profile"
+      href: "/messages", 
+      label: "Messages", 
+      icon: MessageCircle,
+      testId: "bottom-nav-messages",
+      badge: totalUnreadCount
     },
   ];
 
@@ -63,7 +108,7 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
             >
               <button
                 className={`
-                  flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]
+                  relative flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]
                   ${active 
                     ? 'text-primary' 
                     : 'text-muted-foreground hover:text-foreground'
@@ -71,7 +116,18 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
                 `}
                 data-testid={item.testId}
               >
-                <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
+                <div className="relative">
+                  {/* Show numeric badge instead of icon for Messages when there are unread */}
+                  {item.label === 'Messages' && item.badge && item.badge > 0 ? (
+                    <div className="h-5 w-5 flex items-center justify-center">
+                      <span className={`text-sm font-bold ${active ? 'text-primary' : 'text-destructive'}`}>
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    </div>
+                  ) : (
+                    <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
+                  )}
+                </div>
                 <span className="text-xs font-medium">{item.label}</span>
               </button>
             </Link>

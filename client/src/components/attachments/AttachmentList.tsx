@@ -3,8 +3,16 @@
  * Displays a list of file attachments with actions
  */
 
-import { File as FileIcon, Image as ImageIcon, FileAudio, FileText, X, Eye, Download } from 'lucide-react';
+import { useState } from 'react';
+import { File as FileIcon, Image as ImageIcon, FileAudio, FileText, X, Eye, Download, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { AttachmentPreview, type AttachmentData } from './AttachmentPreview';
 
 interface Attachment {
   fileName: string;
@@ -20,6 +28,7 @@ interface AttachmentListProps {
   onPreview?: (attachment: Attachment, index: number) => void;
   readonly?: boolean;
   className?: string;
+  threadId?: string; // For project message attachments
 }
 
 export function AttachmentList({
@@ -28,7 +37,10 @@ export function AttachmentList({
   onPreview,
   readonly = false,
   className = '',
+  threadId,
 }: AttachmentListProps) {
+  const [previewFile, setPreviewFile] = useState<{ attachment: Attachment; url: string } | null>(null);
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -47,6 +59,12 @@ export function AttachmentList({
     if (fileType === 'application/pdf') {
       return <FileText className="h-5 w-5" />;
     }
+    if (fileType.includes('spreadsheet') || fileType.includes('excel')) {
+      return <FileSpreadsheet className="h-5 w-5" />;
+    }
+    if (fileType.includes('word') || fileType.includes('document')) {
+      return <FileText className="h-5 w-5" />;
+    }
     return <FileIcon className="h-5 w-5" />;
   };
 
@@ -59,6 +77,44 @@ export function AttachmentList({
       };
     }
     return item;
+  };
+
+  const getAttachmentUrl = (attachment: Attachment): string | null => {
+    if (attachment.url) return attachment.url;
+    if (attachment.objectPath && threadId) {
+      return `/api/internal/project-messages/attachments${attachment.objectPath}?threadId=${threadId}`;
+    }
+    return null;
+  };
+
+  const handleDownload = (attachment: Attachment) => {
+    const url = getAttachmentUrl(attachment);
+    if (!url) return;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.fileName;
+    link.setAttribute('target', '_blank');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePreview = (attachment: Attachment) => {
+    const url = getAttachmentUrl(attachment);
+    if (!url) return;
+    setPreviewFile({ attachment, url });
+  };
+
+  const canPreview = (fileType: string): boolean => {
+    return (
+      fileType.startsWith('image/') || 
+      fileType === 'application/pdf' ||
+      fileType.includes('word') ||
+      fileType.includes('document') ||
+      fileType.includes('spreadsheet') ||
+      fileType.includes('excel')
+    );
   };
 
   if (attachments.length === 0) {
@@ -91,29 +147,29 @@ export function AttachmentList({
 
             {/* Actions */}
             <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Preview button (for images and supported types) */}
-              {!readonly && onPreview && (isImage || attachment.fileType === 'application/pdf') && (
+              {/* Preview button (for images and PDFs in readonly mode) */}
+              {readonly && canPreview(attachment.fileType) && getAttachmentUrl(attachment) && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => onPreview(attachment, index)}
+                  onClick={() => handlePreview(attachment)}
                   title="Preview"
+                  data-testid={`button-preview-${index}`}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
               )}
 
               {/* Download button (for readonly mode) */}
-              {readonly && attachment.url && (
+              {readonly && getAttachmentUrl(attachment) && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  asChild
+                  onClick={() => handleDownload(attachment)}
                   title="Download"
+                  data-testid={`button-download-${index}`}
                 >
-                  <a href={attachment.url} download={attachment.fileName}>
-                    <Download className="h-4 w-4" />
-                  </a>
+                  <Download className="h-4 w-4" />
                 </Button>
               )}
 
@@ -133,6 +189,19 @@ export function AttachmentList({
           </div>
         );
       })}
+
+      {/* Preview Dialog - Use unified AttachmentPreview for all file types */}
+      {previewFile && (
+        <AttachmentPreview
+          attachment={{
+            ...previewFile.attachment,
+            url: previewFile.url, // Pass the resolved URL for previews/downloads
+            threadId,
+          } as AttachmentData}
+          onClose={() => setPreviewFile(null)}
+          open={!!previewFile}
+        />
+      )}
     </div>
   );
 }

@@ -174,6 +174,53 @@ export class ObjectStorageService {
     return uploadURL;
   }
 
+  // Gets a signed download URL for viewing/downloading an object (e.g., PDF)
+  // Accepts normalized objectPath format (e.g., /objects/uploads/<id>)
+  async getSignedDownloadURL(objectPath: string, ttlSec: number = 900): Promise<string> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+
+    // Extract the entity ID from normalized path
+    const parts = objectPath.slice(1).split("/");
+    if (parts.length < 2) {
+      throw new ObjectNotFoundError();
+    }
+
+    const entityId = parts.slice(1).join("/");
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir) {
+      throw new Error(
+        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' tool."
+      );
+    }
+    if (!entityDir.endsWith("/")) {
+      entityDir = `${entityDir}/`;
+    }
+    
+    // Expand to full object path in private directory
+    const fullObjectPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(fullObjectPath);
+
+    // Verify object exists before signing
+    const bucket = objectStorageClient.bucket(bucketName);
+    const objectFile = bucket.file(objectName);
+    const [exists] = await objectFile.exists();
+    if (!exists) {
+      throw new ObjectNotFoundError();
+    }
+
+    // Sign URL for GET method with TTL (15 minutes default)
+    const downloadURL = await signObjectURL({
+      bucketName,
+      objectName,
+      method: "GET",
+      ttlSec,
+    });
+
+    return downloadURL;
+  }
+
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {
@@ -257,9 +304,94 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  // Creates a path for a signed document in the private directory
+  createSignedDocumentPath(signatureRequestId: string, fileName: string): string {
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return `/objects/signed-documents/${signatureRequestId}/${timestamp}-${sanitizedFileName}`;
+  }
+
+  // Uploads a signed document to object storage and returns the normalized path and filename
+  async uploadSignedDocument(
+    signatureRequestId: string,
+    originalFileName: string,
+    pdfBytes: Buffer,
+    ownerId?: string
+  ): Promise<{ objectPath: string; fileName: string }> {
+    // Create the object path (this will sanitize and add timestamp)
+    const objectPath = this.createSignedDocumentPath(signatureRequestId, originalFileName);
+    
+    // Extract the actual filename from the path (e.g., "timestamp-file.pdf" from "/objects/signed-documents/req-id/timestamp-file.pdf")
+    const fileName = objectPath.split('/').pop() || originalFileName;
+    
+    // Convert /objects/... path to full bucket path
+    const privateDir = this.getPrivateObjectDir();
+    const entityId = objectPath.slice('/objects/'.length); // e.g., "signed-documents/req-id/timestamp-file.pdf"
+    const fullPath = `${privateDir}/${entityId}`;
+    
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    
+    // Upload the PDF bytes
+    await file.save(pdfBytes, {
+      contentType: 'application/pdf',
+      metadata: {
+        contentType: 'application/pdf',
+      },
+    });
+    
+    // Set ACL policy if owner is provided
+    if (ownerId) {
+      await setObjectAclPolicy(file, {
+        owner: ownerId,
+        visibility: 'private',
+      });
+    }
+    
+    return { objectPath, fileName };
+  }
+
+  /**
+   * Static method to generate a signed download URL for an object
+   * @param objectPath Normalized object path (e.g., /objects/uploads/<id>)
+   * @param ttlSec Time-to-live in seconds (default: 900 = 15 minutes)
+   * @returns Signed URL string
+   */
+  static async generateSignedUrl(objectPath: string, ttlSec: number = 900): Promise<string> {
+    const service = new ObjectStorageService();
+    return service.getSignedDownloadURL(objectPath, ttlSec);
+  }
+
+  /**
+   * Downloads an object from storage into a Buffer
+   * Enforces ACL checks via getObjectEntityFile
+   * @param objectPath Normalized object path (e.g., /objects/signed-documents/...)
+   * @returns Buffer containing the file data
+   * @throws ObjectNotFoundError if object doesn't exist
+   */
+  async downloadObjectToBuffer(objectPath: string): Promise<Buffer> {
+    try {
+      // Get file object (enforces ACL checks)
+      const file = await this.getObjectEntityFile(objectPath);
+      
+      // Download file to buffer
+      const [buffer] = await file.download();
+      
+      console.log(`[ObjectStorage] Downloaded ${objectPath} (${(buffer.length / 1024).toFixed(1)} KB)`);
+      return buffer;
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        throw error;
+      }
+      console.error(`[ObjectStorage] Error downloading ${objectPath}:`, error);
+      throw new Error(`Failed to download object: ${objectPath}`);
+    }
+  }
 }
 
-function parseObjectPath(path: string): {
+export function parseObjectPath(path: string): {
   bucketName: string;
   objectName: string;
 } {

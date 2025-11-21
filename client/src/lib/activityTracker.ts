@@ -1,5 +1,5 @@
 // Activity tracking utility for monitoring user interactions
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // Track when a user views an entity
 export async function trackActivity(entityType: 'client' | 'project' | 'person' | 'communication', entityId: string) {
@@ -8,9 +8,15 @@ export async function trackActivity(entityType: 'client' | 'project' | 'person' 
       entityType,
       entityId,
     });
+    
+    // Use refetchQueries to force immediate refetch if dashboard is mounted
+    // This handles the case where user uses browser back button and dashboard never unmounts
+    queryClient.refetchQueries({ 
+      queryKey: ["/api/dashboard"],
+      type: 'active' // Only refetch if query has active observers (dashboard is mounted)
+    });
   } catch (error) {
-    // Don't log to console to avoid spamming - activity tracking is non-critical
-    // console.warn('Failed to track activity:', error);
+    // Activity tracking is non-critical, silently fail
   }
 }
 

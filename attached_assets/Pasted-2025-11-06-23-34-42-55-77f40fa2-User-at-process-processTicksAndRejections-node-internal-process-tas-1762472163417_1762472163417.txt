@@ -1,0 +1,184 @@
+2025-11-06 23:34:42.55
+77f40fa2
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-06 23:34:42.55
+77f40fa2
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-11-06 23:34:42.55
+77f40fa2
+User
+at async DatabaseStorage.createLoginAttempt (file:///home/runner/workspace/dist/index.js:5342:30)
+2025-11-06 23:34:42.55
+77f40fa2
+User
+at async file:///home/runner/workspace/dist/index.js:14911:7 {
+2025-11-06 23:34:42.55
+77f40fa2
+User
+length: 113,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+severity: 'ERROR',
+2025-11-06 23:34:42.55
+77f40fa2
+User
+code: '42P01',
+2025-11-06 23:34:42.55
+77f40fa2
+User
+detail: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+hint: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+position: '13',
+2025-11-06 23:34:42.55
+77f40fa2
+User
+internalPosition: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+internalQuery: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+where: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+schema: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+table: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+column: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+dataType: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+constraint: undefined,
+2025-11-06 23:34:42.55
+77f40fa2
+User
+file: 'parse_relation.c',
+2025-11-06 23:34:42.55
+77f40fa2
+User
+line: '1449',
+2025-11-06 23:34:42.55
+77f40fa2
+User
+routine: 'parserOpenTable'
+2025-11-06 23:34:42.55
+77f40fa2
+User
+}
+2025-11-06 23:35:16.96
+77f40fa2
+User
+Login error: error: relation "login_attempts" does not exist
+2025-11-06 23:35:16.96
+77f40fa2
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2025-11-06 23:35:16.96
+77f40fa2
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-06 23:35:16.96
+77f40fa2
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-11-06 23:35:16.96
+77f40fa2
+User
+at async DatabaseStorage.createLoginAttempt (file:///home/runner/workspace/dist/index.js:5342:30)
+2025-11-06 23:35:16.96
+77f40fa2
+User
+at async file:///home/runner/workspace/dist/index.js:14911:7 {
+2025-11-06 23:35:16.96
+77f40fa2
+User
+length: 113,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+severity: 'ERROR',
+2025-11-06 23:35:16.96
+77f40fa2
+User
+code: '42P01',
+2025-11-06 23:35:16.96
+77f40fa2
+User
+detail: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+hint: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+position: '13',
+2025-11-06 23:35:16.96
+77f40fa2
+User
+internalPosition: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+internalQuery: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+where: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+schema: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+table: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+column: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+dataType: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+constraint: undefined,
+2025-11-06 23:35:16.96
+77f40fa2
+User
+file: 'parse_relation.c',
+2025-11-06 23:35:16.96
+77f40fa2
+User
+line: '1449',
+2025-11-06 23:35:16.96
+77f40fa2
+User
+routine: 'parserOpenTable'
+2025-11-06 23:35:16.96
+77f40fa2
+User
+}

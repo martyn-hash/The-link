@@ -1,0 +1,158 @@
+{
+  "goal": "Refresh The Link UI to look like a modern 2025 SaaS app (Linear / Stripe / Notion feel) using only App Theme settings plus light component tweaks. Do NOT change business logic or layouts; only adjust styling, spacing, and typography.",
+  "context": {
+    "app": "The Link",
+    "tech": "Replit App Theme (Beta) + React",
+    "current_ui_issues": [
+      "Overall look is closer to a 2018 admin template than a modern SaaS product.",
+      "Cards and sections feel heavy and boxy with low contrast against the page background.",
+      "Typography and spacing are tight, which makes pages feel dense rather than airy.",
+      "Buttons and forms work but lack a clear, modern visual hierarchy.",
+      "Tabs and navigation look functional but not polished (no pill shapes, minimal hover/active feedback)."
+    ],
+    "design_principles": [
+      "Use Growth Accountants brand colours as the core palette.",
+      "Improve hierarchy with spacing, contrast, and typography rather than extra lines or boxes.",
+      "Prefer softer shapes (rounded corners) and subtle shadows to create depth.",
+      "Everything must remain accessible and readable (good contrast)."
+    ],
+    "brand_palette": {
+      "primary_blue": "#0F7195",
+      "dark_blue": "#0D343F",
+      "light_green": "#77C044",
+      "dark_green": "#2C763A",
+      "purple": "#7A3169",
+      "yellow": "#FED402"
+    }
+  },
+  "theme_changes": {
+    "foundation": {
+      "colors": {
+        "background_color": "#F8FAFC",
+        "text_color": "#0F172A",
+        "muted_background_color": "#E5E7EB",
+        "muted_text_color": "#475569"
+      },
+      "typography": {
+        "sans_serif_font": "DM Sans",
+        "serif_font": "inherit",
+        "monospace_font": "JetBrains Mono",
+        "base_font_size_px": 14,
+        "heading_scale": {
+          "h1": 1.6,
+          "h2": 1.4,
+          "h3": 1.25
+        }
+      },
+      "shape_and_spacing": {
+        "border_radius_rem": 1.0,
+        "base_spacing_unit_px": 8
+      }
+    },
+    "components": {
+      "actions": {
+        "primary_background": "#0F7195",
+        "primary_text": "#FFFFFF",
+        "secondary_background": "#0D343F",
+        "secondary_text": "#FFFFFF",
+        "accent_background": "#7A3169",
+        "accent_text": "#FFFFFF",
+        "destructive_background": "#DC2626",
+        "destructive_text": "#FFFFFF",
+        "hover_darkening_factor": 0.1,
+        "border_radius_rem": 999,
+        "font_weight": 600
+      },
+      "forms": {
+        "input_background": "#FFFFFF",
+        "input_text": "#0F172A",
+        "placeholder_text": "#9CA3AF",
+        "border": "#E5E7EB",
+        "border_radius_rem": 0.75,
+        "focus_border": "#0F7195",
+        "focus_ring_color": "rgba(15,113,149,0.25)",
+        "focus_ring_width_px": 3
+      },
+      "containers": {
+        "card_background": "#FFFFFF",
+        "card_text": "#0F172A",
+        "card_border": "#E5E7EB",
+        "card_border_radius_rem": 1.0,
+        "card_shadow": "0 4px 12px rgba(0,0,0,0.08)",
+        "card_padding_px": 24,
+        "popover_background": "#FFFFFF",
+        "popover_text": "#0F172A",
+        "popover_shadow": "0 10px 30px rgba(15,23,42,0.18)",
+        "section_vertical_gap_px": 32
+      },
+      "charts": {
+        "chart_1": "#0F7195",
+        "chart_2": "#77C044",
+        "chart_3": "#7A3169",
+        "chart_4": "#FED402",
+        "chart_5": "#0D343F"
+      }
+    }
+  },
+  "component_and_layout_changes": {
+    "global_page_layout": [
+      "Wrap main page content in a max-width container (e.g. max-w-screen-xl) and center it with horizontal padding to avoid full-bleed content on large monitors.",
+      "Increase vertical spacing between major sections (cards/blocks) to 32px.",
+      "Ensure page background uses the theme background token (now #F8FAFC)."
+    ],
+    "cards_and_sections": [
+      "Locate the reusable card/section wrapper component used for panels like 'Company Details', 'Location', 'Related People', etc.",
+      "Update it to use the container card tokens from the App Theme instead of hard-coded values.",
+      "Apply styles such as: rounded-xl, border, subtle shadow (matching theme), padding: 24px, and a slightly increased gap between internal elements.",
+      "Ensure cards do not visually touch; add at least 24–32px gap between sibling cards."
+    ],
+    "top_bar_and_page_headers": [
+      "For the main page title (e.g. client name), use font-size equivalent to text-2xl and font-semibold.",
+      "Add a small subtitle / meta row below the title (company number, formed date, status) in muted text colour and slightly smaller font.",
+      "Keep the main header area relatively clean, with plenty of white space above and below."
+    ],
+    "tabs_navigation": [
+      "Update main tabs (Overview, Services, Projects, Comms, History, Docs, Tasks, etc.) to use pill-shaped buttons:",
+      "– Use rounded-full",
+      "– Horizontal padding ~12–16px, vertical padding ~6–8px",
+      "– Default state: transparent background, muted text",
+      "– Hover: light background using muted background token and stronger text colour",
+      "– Active tab: filled pill using primary background (#0F7195) with white text",
+      "Add a smooth transition to background and text colour (150–200ms)."
+    ],
+    "tables_and_lists": [
+      "For tables like 'Related People', ensure row height is at least 44px to feel less cramped.",
+      "Use zebra striping with a very soft tint of the muted background (#F3F4F6 equivalent) OR subtle bottom borders only.",
+      "Ensure table header row has slightly bolder weight and uses the muted text colour token."
+    ],
+    "forms_and_inputs": [
+      "Apply consistent styles to all text inputs, selects, and textareas using the form tokens:",
+      "– White background",
+      "– Border #E5E7EB",
+      "– Rounded-lg / border-radius-rem 0.75",
+      "– On focus: border changes to primary (#0F7195) and a subtle ring appears",
+      "Increase vertical padding so inputs feel more tappable (e.g. 10–12px)."
+    ],
+    "micro_interactions": [
+      "Enable a global transition for common interactive elements (buttons, tabs, cards, links) using transition-all with duration 150ms.",
+      "On card hover (if appropriate for that view), apply a very subtle scale-up (e.g. scale 1.01) and slightly stronger shadow.",
+      "On primary buttons, slightly darken background on hover and reduce opacity when disabled."
+    ]
+  },
+  "accessibility": {
+    "requirements": [
+      "Maintain WCAG AA contrast ratios for all text on coloured backgrounds.",
+      "Do not use text only in light grey on white; reserve muted text for secondary information with adequate contrast.",
+      "Ensure focus outlines are clearly visible on all interactive elements, using the primary colour focus ring."
+    ]
+  },
+  "acceptance_criteria": [
+    "Page background is a light, neutral colour distinct from card backgrounds.",
+    "Cards and main sections appear as floating panels with rounded corners, soft shadows, and clear separation from the page.",
+    "Tabs are pill-shaped with clear hover and active states using the brand primary colour.",
+    "Buttons use Growth Accountants’ palette (primary blue, dark blue, accent purple) and have consistent hover/disabled states.",
+    "Inputs and form controls share a unified modern style with focus rings in the primary blue.",
+    "Overall layout feels more spacious with increased vertical spacing and improved typography hierarchy.",
+    "No functional behaviour of The Link is changed; only visual styling and spacing are updated."
+  ]
+}

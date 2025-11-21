@@ -10,6 +10,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 const CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes (same as backend)
 
@@ -171,11 +172,14 @@ export default function PortalLogin() {
     <div className="min-h-screen bg-gradient-to-br from-[#0A7BBF]/10 via-white to-[#76CA23]/10 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md border-[#0A7BBF]/20">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-[#0A7BBF] to-[#0869A3] rounded-full flex items-center justify-center shadow-lg">
-            <MessageCircle className="h-8 w-8 text-white" />
-          </div>
-          <CardTitle className="text-2xl bg-gradient-to-r from-[#0A7BBF] to-[#0869A3] bg-clip-text text-transparent">
-            Client Portal Login
+          <img 
+            src={logoPath} 
+            alt="Growth Accountants" 
+            className="h-16 mx-auto mb-4"
+            data-testid="img-logo"
+          />
+          <CardTitle className="text-2xl font-bold text-[#0A7BBF] dark:text-[#76CA23]">
+            The Link
           </CardTitle>
           <CardDescription>
             Enter your email and we'll send you a login code

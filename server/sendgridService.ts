@@ -92,7 +92,10 @@ export async function sendProjectMessageReminderEmail(summary: UnreadProjectMess
     
     const msg = {
       to: summary.email,
-      from: fromEmail,
+      from: {
+        email: fromEmail,
+        name: 'The Link'
+      },
       subject: `You have ${totalUnread} unread ${messagePlural} in ${summary.threads.length} project ${threadPlural}`,
       text: `Hi ${userName},\n\nYou have ${totalUnread} unread ${messagePlural} in ${summary.threads.length} project ${threadPlural}:\n\n${threadList}\n\nBest regards,\nThe Link Team`,
       html: `

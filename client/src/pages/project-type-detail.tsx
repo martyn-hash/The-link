@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { TiptapEditor } from '@/components/TiptapEditor';
+import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -11,7 +13,17 @@ import type {
   ChangeReason, 
   StageApproval,
   StageApprovalField,
-  WorkRole
+  WorkRole,
+  Service,
+  User,
+  ProjectTypeNotification,
+  InsertProjectTypeNotification,
+  UpdateProjectTypeNotification,
+  ClientRequestReminder,
+  InsertClientRequestReminder,
+  UpdateClientRequestReminder,
+  ClientRequestTemplate,
+  PreviewCandidatesResponse
 } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
@@ -26,9 +38,24 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, ArrowLeft, Settings, Layers, List, ShieldCheck, Bell, Calendar, Workflow, RefreshCcw, Loader2, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
+import { NotificationPreviewDialog } from "@/components/NotificationPreviewDialog";
+import { ClientPersonSelectionModal } from "@/components/ClientPersonSelectionModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface EditingStage {
   id?: string;
@@ -50,6 +77,7 @@ interface EditingReason {
   description: string;
   showCountInProject: boolean;
   countLabel: string;
+  stageApprovalId?: string;
 }
 
 interface EditingStageApproval {
@@ -89,6 +117,7 @@ const DEFAULT_REASON: EditingReason = {
   description: "",
   showCountInProject: false,
   countLabel: "",
+  stageApprovalId: undefined,
 };
 
 const DEFAULT_STAGE_APPROVAL: EditingStageApproval = { name: "", description: "" };
@@ -109,6 +138,27 @@ const STAGE_COLORS = [
   "#22c55e", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"
 ];
 
+// Character limit helper component
+function CharacterCounter({ current, max, className = "" }: { current: number; max: number; className?: string }) {
+  const isOverLimit = current > max;
+  const percentage = (current / max) * 100;
+  
+  let colorClass = "text-muted-foreground";
+  if (isOverLimit) {
+    colorClass = "text-red-600 font-semibold";
+  } else if (percentage > 80) {
+    colorClass = "text-yellow-600 font-semibold";
+  } else if (percentage > 50) {
+    colorClass = "text-blue-600";
+  }
+  
+  return (
+    <span className={`text-xs ${colorClass} ${className}`} data-testid="character-counter">
+      {current}/{max}
+    </span>
+  );
+}
+
 // Custom field form component
 function CustomFieldForm({ 
   reasonId, 
@@ -124,9 +174,10 @@ function CustomFieldForm({
   existingFields: any[];
 }) {
   const [fieldName, setFieldName] = useState("");
-  const [fieldType, setFieldType] = useState<"number" | "short_text" | "long_text" | "multi_select">("short_text");
+  const [fieldType, setFieldType] = useState<"boolean" | "number" | "short_text" | "long_text" | "multi_select">("short_text");
   const [isRequired, setIsRequired] = useState(false);
   const [placeholder, setPlaceholder] = useState("");
+  const [description, setDescription] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
 
   const handleSubmit = () => {
@@ -140,6 +191,7 @@ function CustomFieldForm({
       fieldType,
       isRequired,
       placeholder: placeholder.trim() || undefined,
+      description: description.trim() || undefined,
       options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
       order: existingFields.length
     };
@@ -189,6 +241,7 @@ function CustomFieldForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="boolean">Boolean (Yes/No)</SelectItem>
               <SelectItem value="short_text">Short Text</SelectItem>
               <SelectItem value="long_text">Long Text</SelectItem>
               <SelectItem value="number">Number</SelectItem>
@@ -206,6 +259,18 @@ function CustomFieldForm({
           onChange={(e) => setPlaceholder(e.target.value)}
           placeholder="Enter placeholder text"
           data-testid="input-custom-field-placeholder"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="field-description">Description (Optional)</Label>
+        <Textarea
+          id="field-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Enter help text or description for this field"
+          rows={2}
+          data-testid="textarea-custom-field-description"
         />
       </div>
 
@@ -298,6 +363,7 @@ function ApprovalFieldForm({
   editingField?: any;
 }) {
   const [fieldName, setFieldName] = useState(editingField?.fieldName || "");
+  const [description, setDescription] = useState(editingField?.description || "");
   const [fieldType, setFieldType] = useState<"boolean" | "number" | "long_text" | "multi_select">(editingField?.fieldType || "boolean");
   const [isRequired, setIsRequired] = useState(editingField?.isRequired || false);
   const [placeholder, setPlaceholder] = useState(editingField?.placeholder || "");
@@ -329,6 +395,7 @@ function ApprovalFieldForm({
     const fieldData = {
       stageApprovalId,
       fieldName: fieldName.trim(),
+      description: description.trim() || undefined,
       fieldType,
       isRequired,
       placeholder: placeholder.trim() || undefined,
@@ -404,6 +471,18 @@ function ApprovalFieldForm({
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="approval-field-description">Description (Optional)</Label>
+        <Textarea
+          id="approval-field-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Enter help text or description for this field"
+          data-testid="textarea-approval-field-description"
+          rows={2}
+        />
       </div>
 
       <div className="space-y-2">
@@ -544,10 +623,778 @@ function ApprovalFieldForm({
   );
 }
 
+// Project Notification Form Component
+function ProjectNotificationForm({ 
+  onCancel, 
+  createMutation,
+  clientRequestTemplates
+}: {
+  onCancel: () => void;
+  createMutation: any;
+  clientRequestTemplates: ClientRequestTemplate[];
+}) {
+  const [notificationType, setNotificationType] = useState<"email" | "sms" | "push">("email");
+  const [dateReference, setDateReference] = useState<"start_date" | "due_date">("due_date");
+  const [offsetType, setOffsetType] = useState<"before" | "on" | "after">("before");
+  const [offsetDays, setOffsetDays] = useState(7);
+  const [emailTitle, setEmailTitle] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [smsContent, setSmsContent] = useState("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
+  const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
+
+  const handleSubmit = () => {
+    const data: any = {
+      category: 'project',
+      notificationType,
+      dateReference,
+      offsetType,
+      offsetDays,
+      clientRequestTemplateId: clientRequestTemplateId || null,
+    };
+
+    if (notificationType === 'email') {
+      data.emailTitle = emailTitle;
+      data.emailBody = emailBody;
+    } else if (notificationType === 'sms') {
+      data.smsContent = smsContent;
+    } else if (notificationType === 'push') {
+      data.pushTitle = pushTitle;
+      data.pushBody = pushBody;
+    }
+
+    createMutation.mutate(data);
+  };
+
+  const canSubmit = () => {
+    if (notificationType === 'email') return emailTitle && emailBody;
+    if (notificationType === 'sms') return smsContent && smsContent.length <= 160;
+    if (notificationType === 'push') return pushTitle && pushTitle.length <= 50 && pushBody && pushBody.length <= 120;
+    return false;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Add Project Notification</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Notification Type</Label>
+            <Select value={notificationType} onValueChange={(v: any) => setNotificationType(v)}>
+              <SelectTrigger data-testid="select-notification-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="push">Push Notification</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Date Reference</Label>
+            <Select value={dateReference} onValueChange={(v: any) => setDateReference(v)}>
+              <SelectTrigger data-testid="select-date-reference">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="start_date">Project Start Date</SelectItem>
+                <SelectItem value="due_date">Project Due Date</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Timing</Label>
+            <Select value={offsetType} onValueChange={(v: any) => setOffsetType(v)}>
+              <SelectTrigger data-testid="select-offset-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="before">Before</SelectItem>
+                <SelectItem value="on">On</SelectItem>
+                <SelectItem value="after">After</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {offsetType !== 'on' && (
+            <div className="space-y-2">
+              <Label>Days</Label>
+              <Input
+                type="number"
+                value={offsetDays}
+                onChange={(e) => setOffsetDays(parseInt(e.target.value) || 0)}
+                min={0}
+                data-testid="input-offset-days"
+              />
+            </div>
+          )}
+        </div>
+
+        {(notificationType === 'email' || notificationType === 'push') && (
+          <div className="space-y-2">
+            <Label>Link to Client Request Template (Optional)</Label>
+            <Select value={clientRequestTemplateId || 'none'} onValueChange={(value) => setClientRequestTemplateId(value === 'none' ? '' : value)}>
+              <SelectTrigger data-testid="select-client-request-template">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="rounded-lg border bg-muted/50 p-3">
+          <p className="text-sm text-muted-foreground mb-2">
+            You can personalize your notification using dynamic variables that will be automatically replaced with real data.
+          </p>
+          <NotificationVariableGuide channel={notificationType} />
+        </div>
+
+        {notificationType === 'email' && (
+          <>
+            <div className="space-y-2">
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTitle}
+                onChange={(e) => setEmailTitle(e.target.value)}
+                placeholder="Enter email subject"
+                data-testid="input-email-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Body</Label>
+              <div data-testid="richtext-email-body">
+                <TiptapEditor
+                  content={emailBody}
+                  onChange={setEmailBody}
+                  placeholder="Enter email body"
+                  editorHeight="250px"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {notificationType === 'sms' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>SMS Content</Label>
+              <CharacterCounter current={smsContent.length} max={160} />
+            </div>
+            <Textarea
+              value={smsContent}
+              onChange={(e) => setSmsContent(e.target.value)}
+              placeholder="Enter SMS message (max 160 characters)"
+              rows={4}
+              data-testid="textarea-sms-content"
+            />
+          </div>
+        )}
+
+        {notificationType === 'push' && (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Title</Label>
+                <CharacterCounter current={pushTitle.length} max={50} />
+              </div>
+              <Input
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                placeholder="Enter push notification title (max 50 characters)"
+                data-testid="input-push-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Body</Label>
+                <CharacterCounter current={pushBody.length} max={120} />
+              </div>
+              <Textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                placeholder="Enter push notification body (max 120 characters)"
+                rows={3}
+                data-testid="textarea-push-body"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onCancel} data-testid="button-cancel-notification">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-date-notification">
+            Create Notification
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Stage Notification Form Component
+function StageNotificationForm({ 
+  onCancel, 
+  createMutation,
+  stages,
+  clientRequestTemplates
+}: {
+  onCancel: () => void;
+  createMutation: any;
+  stages: KanbanStage[];
+  clientRequestTemplates: ClientRequestTemplate[];
+}) {
+  const [notificationType, setNotificationType] = useState<"email" | "sms" | "push">("email");
+  const [stageId, setStageId] = useState("");
+  const [stageTrigger, setStageTrigger] = useState<"entry" | "exit">("entry");
+  const [emailTitle, setEmailTitle] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [smsContent, setSmsContent] = useState("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
+  const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
+
+  const handleSubmit = () => {
+    const data: any = {
+      category: 'stage',
+      notificationType,
+      stageId,
+      stageTrigger,
+      clientRequestTemplateId: clientRequestTemplateId || null,
+    };
+
+    if (notificationType === 'email') {
+      data.emailTitle = emailTitle;
+      data.emailBody = emailBody;
+    } else if (notificationType === 'sms') {
+      data.smsContent = smsContent;
+    } else if (notificationType === 'push') {
+      data.pushTitle = pushTitle;
+      data.pushBody = pushBody;
+    }
+
+    createMutation.mutate(data);
+  };
+
+  const canSubmit = () => {
+    if (!stageId) return false;
+    if (notificationType === 'email') return emailTitle && emailBody;
+    if (notificationType === 'sms') return smsContent && smsContent.length <= 160;
+    if (notificationType === 'push') return pushTitle && pushTitle.length <= 50 && pushBody && pushBody.length <= 120;
+    return false;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Add Stage Notification</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Notification Type</Label>
+            <Select value={notificationType} onValueChange={(v: any) => setNotificationType(v)}>
+              <SelectTrigger data-testid="select-stage-notification-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="push">Push Notification</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Stage</Label>
+            <Select value={stageId} onValueChange={setStageId}>
+              <SelectTrigger data-testid="select-stage">
+                <SelectValue placeholder="Select stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {stages.map(stage => (
+                  <SelectItem key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Trigger</Label>
+          <Select value={stageTrigger} onValueChange={(v: any) => setStageTrigger(v)}>
+            <SelectTrigger data-testid="select-stage-trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entry">When project enters this stage</SelectItem>
+              <SelectItem value="exit">When project exits this stage</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {(notificationType === 'email' || notificationType === 'push') && (
+          <div className="space-y-2">
+            <Label>Link to Client Request Template (Optional)</Label>
+            <Select value={clientRequestTemplateId || 'none'} onValueChange={(value) => setClientRequestTemplateId(value === 'none' ? '' : value)}>
+              <SelectTrigger data-testid="select-stage-client-request-template">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="rounded-lg border bg-muted/50 p-3">
+          <p className="text-sm text-muted-foreground mb-2">
+            You can personalize your notification using dynamic variables that will be automatically replaced with real data.
+          </p>
+          <NotificationVariableGuide channel={notificationType} />
+        </div>
+
+        {notificationType === 'email' && (
+          <>
+            <div className="space-y-2">
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTitle}
+                onChange={(e) => setEmailTitle(e.target.value)}
+                placeholder="Enter email subject"
+                data-testid="input-stage-email-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Body</Label>
+              <div data-testid="richtext-stage-email-body">
+                <TiptapEditor
+                  content={emailBody}
+                  onChange={setEmailBody}
+                  placeholder="Enter email body"
+                  editorHeight="250px"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {notificationType === 'sms' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>SMS Content</Label>
+              <CharacterCounter current={smsContent.length} max={160} />
+            </div>
+            <Textarea
+              value={smsContent}
+              onChange={(e) => setSmsContent(e.target.value)}
+              placeholder="Enter SMS message (max 160 characters)"
+              rows={4}
+              data-testid="textarea-stage-sms-content"
+            />
+          </div>
+        )}
+
+        {notificationType === 'push' && (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Title</Label>
+                <CharacterCounter current={pushTitle.length} max={50} />
+              </div>
+              <Input
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                placeholder="Enter push notification title (max 50 characters)"
+                data-testid="input-stage-push-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Body</Label>
+                <CharacterCounter current={pushBody.length} max={120} />
+              </div>
+              <Textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                placeholder="Enter push notification body (max 120 characters)"
+                rows={3}
+                data-testid="textarea-stage-push-body"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onCancel} data-testid="button-cancel-stage-notification">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-stage-notification">
+            Create Notification
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Notification Row Component (Table-based view following data_view_guidelines.md)
+function NotificationRow({
+  notification,
+  projectTypeId,
+  stages,
+  clientRequestTemplates,
+  onDelete,
+}: {
+  notification: ProjectTypeNotification;
+  projectTypeId: string;
+  stages: KanbanStage[];
+  clientRequestTemplates: ClientRequestTemplate[];
+  onDelete: (id: string) => void;
+}) {
+  const [, navigate] = useLocation();
+  const [selectionModalOpen, setSelectionModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  
+  // Fetch preview candidates when selection modal opens
+  // Set staleTime: 0 and refetchOnMount: 'always' to ensure fresh SMS eligibility data
+  const candidatesQuery = useQuery<PreviewCandidatesResponse>({
+    queryKey: ['/api/project-types', projectTypeId, 'notifications', notification.id, 'preview-candidates'],
+    enabled: selectionModalOpen,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+  });
+  
+  const previewMutation = useMutation({
+    mutationFn: async ({ clientId, projectId, personId }: { clientId?: string; projectId?: string; personId?: string }) => {
+      const params = new URLSearchParams();
+      if (clientId) params.append('clientId', clientId);
+      if (projectId) params.append('projectId', projectId);
+      if (personId) params.append('personId', personId);
+      
+      const url = `/api/project-types/${projectTypeId}/notifications/${notification.id}/preview${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch preview');
+      return res.json();
+    },
+  });
+  
+  const handlePreviewClick = async () => {
+    setSelectionModalOpen(true);
+  };
+  
+  const handleClientPersonSelect = (clientId: string, projectId: string, personId: string) => {
+    // Close selection modal
+    setSelectionModalOpen(false);
+    
+    // Call preview with selected params
+    previewMutation.mutate({ clientId, projectId, personId });
+    
+    // Open preview dialog
+    setPreviewOpen(true);
+  };
+  
+  const getTriggerSummary = () => {
+    if (notification.category === 'project') {
+      const offsetLabel = notification.offsetType === 'on' ? 'On' : 
+        `${notification.offsetDays} day${notification.offsetDays !== 1 ? 's' : ''} ${notification.offsetType}`;
+      const dateRef = notification.dateReference === 'start_date' ? 'start date' : 'due date';
+      return `${offsetLabel} ${dateRef}`;
+    } else {
+      const stage = stages.find(s => s.id === notification.stageId);
+      const trigger = notification.stageTrigger === 'entry' ? 'enters' : 'exits';
+      return `When ${trigger} "${stage?.name || 'Unknown'}"`;
+    }
+  };
+
+  const getContentPreview = () => {
+    if (notification.notificationType === 'email') {
+      return notification.emailTitle || '-';
+    } else if (notification.notificationType === 'sms') {
+      return notification.smsContent || '-';
+    } else {
+      return notification.pushTitle || '-';
+    }
+  };
+
+  const getFullContent = () => {
+    if (notification.notificationType === 'email') {
+      return notification.emailBody ? 
+        `${notification.emailTitle}\n\n${notification.emailBody.replace(/<[^>]*>/g, '')}` : 
+        notification.emailTitle;
+    } else if (notification.notificationType === 'sms') {
+      return notification.smsContent;
+    } else {
+      return `${notification.pushTitle}\n${notification.pushBody}`;
+    }
+  };
+
+  const linkedTemplate = clientRequestTemplates.find(t => t.id === notification.clientRequestTemplateId);
+
+  return (
+    <TableRow data-testid={`row-notification-${notification.id}`}>
+      <TableCell className="font-medium">
+        <Badge 
+          variant="outline" 
+          className="uppercase"
+          data-testid={`badge-type-${notification.id}`}
+        >
+          {notification.notificationType}
+        </Badge>
+      </TableCell>
+      
+      <TableCell>
+        <span className="text-sm" data-testid={`text-trigger-${notification.id}`}>
+          {getTriggerSummary()}
+        </span>
+      </TableCell>
+      
+      <TableCell>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-sm truncate max-w-xs block cursor-help" data-testid={`text-content-${notification.id}`}>
+                {getContentPreview()}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-md">
+              <p className="whitespace-pre-wrap text-sm">{getFullContent()}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </TableCell>
+      
+      <TableCell>
+        {linkedTemplate ? (
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-sm"
+            onClick={() => navigate(`/admin/client-request-templates`)}
+            data-testid={`button-template-${notification.id}`}
+          >
+            {linkedTemplate.name}
+          </Button>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/settings/project-types/${projectTypeId}/notifications/${notification.id}/edit`)}
+            data-testid={`button-edit-${notification.id}`}
+          >
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handlePreviewClick}
+            data-testid={`button-preview-${notification.id}`}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Preview
+          </Button>
+          <ClientPersonSelectionModal
+            open={selectionModalOpen}
+            onOpenChange={setSelectionModalOpen}
+            candidates={candidatesQuery.data?.candidates || []}
+            hasEligibleCandidates={candidatesQuery.data?.hasEligibleCandidates || false}
+            message={candidatesQuery.data?.message}
+            isLoading={candidatesQuery.isLoading}
+            onSelect={handleClientPersonSelect}
+          />
+          <NotificationPreviewDialog
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            previewData={previewMutation.data || null}
+            isLoading={previewMutation.isPending}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(notification.id)}
+            data-testid={`button-delete-${notification.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// Reminder Form Component
+function ReminderForm({
+  notificationId,
+  onCancel,
+  createMutation
+}: {
+  notificationId: string;
+  onCancel: () => void;
+  createMutation: any;
+}) {
+  const [notificationType, setNotificationType] = useState<"email" | "push">("email");
+  const [daysAfter, setDaysAfter] = useState(7);
+  const [emailTitle, setEmailTitle] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
+
+  const handleSubmit = () => {
+    const data: any = {
+      notificationId,
+      notificationType,
+      daysAfterCreation: daysAfter,
+    };
+
+    if (notificationType === 'email') {
+      data.emailTitle = emailTitle;
+      data.emailBody = emailBody;
+    } else {
+      data.pushTitle = pushTitle;
+      data.pushBody = pushBody;
+    }
+
+    createMutation.mutate(data);
+  };
+
+  const canSubmit = () => {
+    if (notificationType === 'email') return emailTitle && emailBody;
+    if (notificationType === 'push') return pushTitle && pushTitle.length <= 50 && pushBody && pushBody.length <= 120;
+    return false;
+  };
+
+  return (
+    <Card className="mt-2">
+      <CardContent className="pt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Notification Type</Label>
+            <Select value={notificationType} onValueChange={(v: any) => setNotificationType(v)}>
+              <SelectTrigger data-testid="select-reminder-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="push">Push Notification</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Days After Request Created</Label>
+            <Input
+              type="number"
+              value={daysAfter}
+              onChange={(e) => setDaysAfter(parseInt(e.target.value) || 0)}
+              min={1}
+              data-testid="input-reminder-days-after"
+            />
+          </div>
+        </div>
+
+        {notificationType === 'email' && (
+          <>
+            <div className="space-y-2">
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTitle}
+                onChange={(e) => setEmailTitle(e.target.value)}
+                placeholder="Enter email subject"
+                data-testid="input-reminder-email-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Body</Label>
+              <div data-testid="richtext-reminder-email-body">
+                <TiptapEditor
+                  content={emailBody}
+                  onChange={setEmailBody}
+                  placeholder="Enter email body"
+                  editorHeight="250px"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {notificationType === 'push' && (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Title</Label>
+                <CharacterCounter current={pushTitle.length} max={50} />
+              </div>
+              <Input
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                placeholder="Enter push notification title (max 50 characters)"
+                data-testid="input-reminder-push-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Push Notification Body</Label>
+                <CharacterCounter current={pushBody.length} max={120} />
+              </div>
+              <Textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                placeholder="Enter push notification body (max 120 characters)"
+                rows={3}
+                data-testid="textarea-reminder-push-body"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" size="sm" onClick={onCancel} data-testid="button-cancel-reminder">
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit()} data-testid="button-save-reminder">
+            Add Reminder
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ProjectTypeDetail() {
   const { id: projectTypeId } = useParams();
   const [location, navigate] = useLocation();
-  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -569,6 +1416,18 @@ export default function ProjectTypeDetail() {
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [isAddingCustomField, setIsAddingCustomField] = useState(false);
   const [isAddingApprovalField, setIsAddingApprovalField] = useState(false);
+  
+  // State for settings (service linkage)
+  const [isEditingServiceLinkage, setIsEditingServiceLinkage] = useState(false);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  
+  // State for notifications
+  const [isAddingProjectNotification, setIsAddingProjectNotification] = useState(false);
+  const [isAddingStageNotification, setIsAddingStageNotification] = useState(false);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [editingNotification, setEditingNotification] = useState<ProjectTypeNotification | null>(null);
+  const [addingReminderForNotification, setAddingReminderForNotification] = useState<string | null>(null);
+  const [editingReminder, setEditingReminder] = useState<ClientRequestReminder | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -629,6 +1488,18 @@ export default function ProjectTypeDetail() {
     queryKey: ["/api/users"],
     enabled: !!projectType && !projectType.serviceId && isAuthenticated && !!user,
   });
+  
+  // Fetch notifications for this project type
+  const { data: notifications, isLoading: notificationsLoading } = useQuery<ProjectTypeNotification[]>({
+    queryKey: ["/api/project-types", projectTypeId, "notifications"],
+    enabled: !!projectTypeId && isAuthenticated && !!user,
+  });
+  
+  // Fetch client request templates
+  const { data: clientRequestTemplates } = useQuery<ClientRequestTemplate[]>({
+    queryKey: ["/api/client-request-templates"],
+    enabled: isAuthenticated && !!user,
+  });
 
   // Use service-specific roles for service-linked project types, or users for non-service types
   const availableRoles = projectType?.serviceId
@@ -683,6 +1554,11 @@ export default function ProjectTypeDetail() {
     refetchOnWindowFocus: false,
   });
 
+  // Fetch all services for settings tab (service linkage)
+  const { data: allServices } = useQuery<Service[]>({
+    queryKey: ["/api/services"],
+    enabled: isAuthenticated && !!user,
+  });
 
   // Handle unauthorized errors only - project not found is handled inline
   useEffect(() => {
@@ -899,6 +1775,61 @@ export default function ProjectTypeDetail() {
       });
     },
   });
+
+  // Project type settings mutations
+  const updateProjectTypeServiceLinkageMutation = useMutation({
+    mutationFn: async (serviceId: string | null) => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      // Explicitly pass null when removing service linkage, not undefined
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, { 
+        serviceId: serviceId 
+      });
+    },
+    onSuccess: () => {
+      toast({ 
+        title: "Success", 
+        description: "Service linkage updated successfully. Please review your stage assignments." 
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId, "stages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId, "roles"] });
+      setIsEditingServiceLinkage(false);
+      setSelectedServiceId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update service linkage",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Notifications active toggle mutation
+  const toggleNotificationsActiveMutation = useMutation({
+    mutationFn: async (notificationsActive: boolean) => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, { 
+        notificationsActive 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
+      toast({ 
+        title: "Success", 
+        description: "Notifications setting updated successfully" 
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update notifications setting",
+        variant: "destructive",
+      });
+    },
+  });
   
   // Custom field mutations
   const createCustomFieldMutation = useMutation({
@@ -1100,6 +2031,146 @@ export default function ProjectTypeDetail() {
       });
     },
   });
+  
+  // Notification mutations
+  const createNotificationMutation = useMutation({
+    mutationFn: async (notification: InsertProjectTypeNotification) => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      return await apiRequest("POST", `/api/project-types/${projectTypeId}/notifications`, notification);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Notification created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setIsAddingProjectNotification(false);
+      setIsAddingStageNotification(false);
+      setEditingNotification(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const updateNotificationMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateProjectTypeNotification & { id: string }) => {
+      return await apiRequest("PATCH", `/api/notifications/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Notification updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setEditingNotification(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteNotificationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/notifications/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Notification deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete notification",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const rescheduleNotificationsMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectTypeId) throw new Error("No project type selected");
+      return await apiRequest("POST", `/api/project-types/${projectTypeId}/reschedule-notifications`);
+    },
+    onSuccess: (data: any) => {
+      setShowRescheduleDialog(false);
+      const description = data.errors > 0
+        ? `${data.scheduled} scheduled, ${data.skipped} skipped, ${data.errors} failed of ${data.total} service(s)`
+        : `${data.scheduled} scheduled, ${data.skipped} skipped of ${data.total} service(s)`;
+      
+      toast({ 
+        title: "Notifications re-scheduled", 
+        description,
+        variant: data.errors > 0 ? "destructive" : "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+    },
+    onError: (error: any) => {
+      setShowRescheduleDialog(false);
+      toast({
+        title: "Re-schedule failed",
+        description: error.message || "Failed to re-schedule notifications",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Reminder mutations
+  const createReminderMutation = useMutation({
+    mutationFn: async ({ notificationId, ...reminder }: InsertClientRequestReminder & { notificationId: string }) => {
+      return await apiRequest("POST", `/api/notifications/${notificationId}/reminders`, reminder);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Reminder created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setAddingReminderForNotification(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create reminder",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const updateReminderMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateClientRequestReminder & { id: string }) => {
+      return await apiRequest("PATCH", `/api/reminders/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Reminder updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+      setEditingReminder(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update reminder",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const deleteReminderMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/reminders/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Reminder deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "notifications"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete reminder",
+        variant: "destructive",
+      });
+    },
+  });
 
   if (authLoading || !user) {
     return (
@@ -1117,17 +2188,19 @@ export default function ProjectTypeDetail() {
       <div className="min-h-screen bg-background flex flex-col">
         <TopNavigation user={user} />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="border-b border-border bg-card p-6">
-            <div className="space-y-4">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-10 w-full max-w-md" />
+          <div className="border-b border-border bg-card">
+            <div className="page-container py-6 md:py-8">
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-10 w-full max-w-md" />
+              </div>
             </div>
           </div>
-          <div className="flex-1 p-6">
-            <div className="space-y-6">
+          <div className="flex-1 page-container py-6 md:py-8">
+            <div className="space-y-8">
               <Skeleton className="h-12 w-full" />
-              <div className="grid gap-4">
+              <div className="grid gap-6">
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-32 w-full" />
@@ -1269,7 +2342,7 @@ export default function ProjectTypeDetail() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with breadcrumbs */}
         <div className="border-b border-border bg-card">
-          <div className="p-6">
+          <div className="page-container py-6 md:py-8">
             {/* Breadcrumb */}
             <Breadcrumb className="mb-4">
               <BreadcrumbList>
@@ -1292,7 +2365,7 @@ export default function ProjectTypeDetail() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl font-semibold text-foreground flex items-center" data-testid="text-project-type-name">
+                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground flex items-center" data-testid="text-project-type-name">
                     <Settings className="w-6 h-6 mr-3 text-primary" />
                     {projectType.name}
                   </h1>
@@ -1365,7 +2438,7 @@ export default function ProjectTypeDetail() {
         <div className="flex-1 overflow-auto">
           <Tabs defaultValue="stages" className="h-full">
             <div className="border-b border-border bg-card px-6">
-              <TabsList className="grid w-full max-w-md grid-cols-3">
+              <TabsList className="grid w-full max-w-3xl grid-cols-5">
                 <TabsTrigger value="stages" className="flex items-center" data-testid="tab-stages">
                   <Layers className="w-4 h-4 mr-2" />
                   Kanban Stages
@@ -1378,11 +2451,19 @@ export default function ProjectTypeDetail() {
                   <ShieldCheck className="w-4 h-4 mr-2" />
                   Stage Approvals
                 </TabsTrigger>
+                <TabsTrigger value="notifications" className="flex items-center" data-testid="tab-notifications">
+                  <Bell className="w-4 h-4 mr-2" />
+                  Notifications
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="flex items-center" data-testid="tab-settings">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Kanban Stages Tab */}
-            <TabsContent value="stages" className="p-6 space-y-6">
+            <TabsContent value="stages" className="page-container py-6 md:py-8 space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Kanban Stages</h2>
@@ -1751,7 +2832,7 @@ export default function ProjectTypeDetail() {
             </TabsContent>
 
             {/* Change Reasons Tab */}
-            <TabsContent value="reasons" className="p-6 space-y-6">
+            <TabsContent value="reasons" className="page-container py-6 md:py-8 space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Change Reasons</h2>
@@ -1788,10 +2869,18 @@ export default function ProjectTypeDetail() {
                   {reasons.map((reason) => (
                     <Card key={reason.id} data-testid={`card-reason-${reason.id}`}>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <div>
-                          <CardTitle className="text-base" data-testid={`text-reason-name-${reason.id}`}>
-                            {reason.reason}
-                          </CardTitle>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-base" data-testid={`text-reason-name-${reason.id}`}>
+                              {reason.reason}
+                            </CardTitle>
+                            {reason.stageApprovalId && (
+                              <Badge variant="secondary" className="text-xs">
+                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                Has Approval
+                              </Badge>
+                            )}
+                          </div>
                           {reason.description && (
                             <p className="text-sm text-muted-foreground mt-1" data-testid={`text-reason-description-${reason.id}`}>
                               {reason.description}
@@ -1806,7 +2895,8 @@ export default function ProjectTypeDetail() {
                               ...reason,
                               description: reason.description || "",
                               showCountInProject: reason.showCountInProject || false,
-                              countLabel: reason.countLabel || ""
+                              countLabel: reason.countLabel || "",
+                              stageApprovalId: reason.stageApprovalId || undefined
                             })}
                             data-testid={`button-edit-reason-${reason.id}`}
                           >
@@ -1904,6 +2994,45 @@ export default function ProjectTypeDetail() {
                           />
                         </div>
                       )}
+
+                      {/* Stage Approval Selection */}
+                      <div className="space-y-2">
+                        <Label htmlFor="reason-stage-approval">Stage Approval (Optional)</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Assign a specific approval questionnaire to this reason. If set, this takes precedence over the stage's approval.
+                        </p>
+                        <Select
+                          value={editingReason?.stageApprovalId || "none"}
+                          onValueChange={(value) => setEditingReason(prev => ({ 
+                            ...prev!, 
+                            stageApprovalId: value === "none" ? undefined : value 
+                          }))}
+                        >
+                          <SelectTrigger data-testid="select-reason-stage-approval">
+                            <SelectValue placeholder="No approval" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No approval</SelectItem>
+                            {stageApprovalsLoading ? (
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : stageApprovals && stageApprovals.length > 0 ? (
+                              stageApprovals.map(approval => (
+                                <SelectItem key={approval.id} value={approval.id}>
+                                  {approval.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-approvals" disabled>No approvals configured</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {editingReason?.stageApprovalId && (
+                          <Badge variant="secondary" className="mt-2">
+                            <ShieldCheck className="w-3 h-3 mr-1" />
+                            This reason has its own approval (overrides stage-level approval)
+                          </Badge>
+                        )}
+                      </div>
 
                       {/* Custom Fields Section */}
                       <div className="space-y-2">
@@ -2007,7 +3136,7 @@ export default function ProjectTypeDetail() {
             </TabsContent>
 
             {/* Stage Approvals Tab */}
-            <TabsContent value="approvals" className="p-6 space-y-6">
+            <TabsContent value="approvals" className="page-container py-6 md:py-8 space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Stage Approvals</h2>
@@ -2262,6 +3391,380 @@ export default function ProjectTypeDetail() {
                   </CardContent>
                 </Card>
               )}
+            </TabsContent>
+            
+            {/* Notifications Tab */}
+            <TabsContent value="notifications" className="p-6 space-y-8">
+              <div>
+                <h2 className="text-2xl font-semibold mb-2">Notification Management</h2>
+                <p className="text-muted-foreground">
+                  Configure automated client notifications for this project type
+                </p>
+              </div>
+              
+              {/* Notifications Master Toggle */}
+              <Card className={projectType?.notificationsActive === false ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20" : ""}>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Bell className="h-5 w-5" />
+                        <h3 className="font-semibold">Automated Notifications</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {projectType?.notificationsActive === false 
+                          ? "⚠️ All notifications are currently disabled for this project type. No emails, SMS, or push notifications will be sent to clients."
+                          : "When enabled, clients will automatically receive configured notifications via email, SMS, and push notifications."}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">
+                        {projectType?.notificationsActive === false ? "Disabled" : "Enabled"}
+                      </span>
+                      <Switch
+                        checked={projectType?.notificationsActive !== false}
+                        onCheckedChange={(checked) => toggleNotificationsActiveMutation.mutate(checked)}
+                        disabled={toggleNotificationsActiveMutation.isPending}
+                        data-testid="switch-notifications-active"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Section 1: Project Notifications (Date-based) */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Calendar className="w-5 h-5 mr-2" />
+                      Project Notifications
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Date-based notifications triggered relative to project start or due dates</p>
+                  </div>
+                  <Button
+                    onClick={() => setIsAddingProjectNotification(true)}
+                    data-testid="button-add-project-notification"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Project Notification
+                  </Button>
+                </div>
+
+                {isAddingProjectNotification && (
+                  <ProjectNotificationForm
+                    onCancel={() => setIsAddingProjectNotification(false)}
+                    createMutation={createNotificationMutation}
+                    clientRequestTemplates={clientRequestTemplates || []}
+                  />
+                )}
+
+                {notifications?.some(n => n.category === 'project') ? (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Trigger</TableHead>
+                          <TableHead>Content</TableHead>
+                          <TableHead>Template</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {notifications.filter(n => n.category === 'project').map(notification => (
+                          <NotificationRow
+                            key={notification.id}
+                            notification={notification}
+                            projectTypeId={projectTypeId}
+                            stages={stages || []}
+                            clientRequestTemplates={clientRequestTemplates || []}
+                            onDelete={(id) => deleteNotificationMutation.mutate(id)}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : !isAddingProjectNotification && (
+                  <Card>
+                    <CardContent className="p-6 text-center text-muted-foreground">
+                      No project notifications configured yet
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Section 2: Stage Notifications */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Workflow className="w-5 h-5 mr-2" />
+                      Stage Notifications
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Workflow stage trigger notifications sent when projects enter or exit stages</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {isAdmin && (
+                      <AlertDialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-reschedule-notifications"
+                            disabled={rescheduleNotificationsMutation.isPending}
+                          >
+                            {rescheduleNotificationsMutation.isPending ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Rescheduling…
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-2">
+                                <RefreshCcw className="h-4 w-4" />
+                                Reschedule Notifications
+                              </span>
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reschedule all notifications?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will re-run scheduling for every existing service tied to this project type. Services with up-to-date schedules will be skipped automatically.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel data-testid="button-reschedule-cancel">Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              data-testid="button-reschedule-confirm"
+                              disabled={rescheduleNotificationsMutation.isPending}
+                              onClick={() => rescheduleNotificationsMutation.mutate()}
+                            >
+                              Confirm
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    <Button
+                      onClick={() => setIsAddingStageNotification(true)}
+                      disabled={!stages || stages.length === 0}
+                      data-testid="button-add-stage-notification"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Stage Notification
+                    </Button>
+                  </div>
+                </div>
+
+                {isAddingStageNotification && (
+                  <StageNotificationForm
+                    onCancel={() => setIsAddingStageNotification(false)}
+                    createMutation={createNotificationMutation}
+                    stages={stages || []}
+                    clientRequestTemplates={clientRequestTemplates || []}
+                  />
+                )}
+
+                {notifications?.some(n => n.category === 'stage') ? (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Trigger</TableHead>
+                          <TableHead>Content</TableHead>
+                          <TableHead>Template</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {notifications.filter(n => n.category === 'stage').map(notification => (
+                          <NotificationRow
+                            key={notification.id}
+                            notification={notification}
+                            projectTypeId={projectTypeId}
+                            stages={stages || []}
+                            clientRequestTemplates={clientRequestTemplates || []}
+                            onDelete={(id) => deleteNotificationMutation.mutate(id)}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : !isAddingStageNotification && (
+                  <Card>
+                    <CardContent className="p-6 text-center text-muted-foreground">
+                      No stage notifications configured yet
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Settings Tab */}
+            <TabsContent value="settings" className="page-container py-6 md:py-8 space-y-8">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Project Type Settings</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Configure the assignment system for this project type
+                </p>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    Service Linkage
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Current Status */}
+                  <div className="space-y-2">
+                    <Label>Current Assignment System</Label>
+                    <div className="p-4 bg-muted rounded-lg">
+                      {projectType?.serviceId ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="default">Roles-Based</Badge>
+                            <span className="text-sm text-muted-foreground">
+                              Linked to service: <strong>{allServices?.find(s => s.id === projectType.serviceId)?.name || "Unknown Service"}</strong>
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Stage assignments use work roles from the linked service. Users are assigned based on their role mappings in each client service.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="secondary">User-Based</Badge>
+                            <span className="text-sm text-muted-foreground">Not linked to any service</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Stage assignments use direct user selection. Each stage must be assigned to a specific user.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Edit Mode */}
+                  {isEditingServiceLinkage ? (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
+                          ⚠️ Important: Changing the Assignment System
+                        </h4>
+                        <ul className="text-xs text-yellow-800 dark:text-yellow-200 space-y-1 list-disc list-inside">
+                          <li>All existing stage assignments will need to be reviewed and updated</li>
+                          <li>Switching to roles-based requires configuring role assignments for each client service</li>
+                          <li>Switching to user-based requires assigning specific users to each stage</li>
+                          <li>Active projects using this project type may be affected</li>
+                        </ul>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="service-select">Link to Service (Optional)</Label>
+                        <Select
+                          value={selectedServiceId || "none"}
+                          onValueChange={(value) => setSelectedServiceId(value === "none" ? null : value)}
+                        >
+                          <SelectTrigger data-testid="select-service-linkage">
+                            <SelectValue placeholder="Select a service or choose none" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Service (User-Based Assignments)</SelectItem>
+                            {allServices
+                              ?.filter(s => !s.isStaticService && !s.isPersonalService)
+                              .map((service) => (
+                                <SelectItem key={service.id} value={service.id}>
+                                  {service.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedServiceId ? (
+                            <>Switching to <strong>roles-based</strong> assignment system using service roles</>
+                          ) : (
+                            <>Switching to <strong>user-based</strong> assignment system with direct user selection</>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsEditingServiceLinkage(false);
+                            setSelectedServiceId(null);
+                          }}
+                          data-testid="button-cancel-service-linkage"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            updateProjectTypeServiceLinkageMutation.mutate(selectedServiceId);
+                          }}
+                          disabled={updateProjectTypeServiceLinkageMutation.isPending}
+                          data-testid="button-save-service-linkage"
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          Save Changes
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsEditingServiceLinkage(true);
+                          setSelectedServiceId(projectType?.serviceId || null);
+                        }}
+                        data-testid="button-edit-service-linkage"
+                      >
+                        <Edit2 className="w-4 h-4 mr-2" />
+                        Change Assignment System
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Information Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Assignment System Guide</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Roles-Based Assignments</h4>
+                    <p className="text-xs text-muted-foreground">
+                      When a project type is linked to a service, stage assignments use work roles. For each client service:
+                    </p>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside mt-1 space-y-1 ml-2">
+                      <li>Configure which users fill each work role</li>
+                      <li>Projects automatically assign users based on role mappings</li>
+                      <li>Changes to role assignments affect all projects using that client service</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">User-Based Assignments</h4>
+                    <p className="text-xs text-muted-foreground">
+                      When a project type is not linked to a service, stage assignments use direct user selection:
+                    </p>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside mt-1 space-y-1 ml-2">
+                      <li>Each stage template must specify a user directly</li>
+                      <li>All projects inherit the same user assignments from the template</li>
+                      <li>Simpler setup but less flexible for different client needs</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>

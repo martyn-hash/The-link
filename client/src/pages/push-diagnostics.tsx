@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import TopNavigation from "@/components/top-navigation";
 import { RefreshCw, CheckCircle2, XCircle, AlertCircle, Copy, Send } from "lucide-react";
 
 interface DiagnosticInfo {
@@ -31,6 +33,7 @@ interface DiagnosticInfo {
 }
 
 export default function PushDiagnostics() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [diagnostics, setDiagnostics] = useState<DiagnosticInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -176,34 +179,43 @@ export default function PushDiagnostics() {
     diagnostics.vapid.publicKey !== null;
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Push Notification Diagnostics</h1>
-          <p className="text-muted-foreground">
-            Check your push notification configuration and troubleshoot issues
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={testPushNotification}
-            disabled={isTesting || !diagnostics?.pushManager.subscription}
-            data-testid="button-test-push"
-          >
-            <Send className={`w-4 h-4 mr-2 ${isTesting ? 'animate-pulse' : ''}`} />
-            {isTesting ? 'Sending...' : 'Test Push'}
-          </Button>
-          <Button
-            onClick={runDiagnostics}
-            disabled={isLoading}
-            variant="outline"
-            data-testid="button-refresh-diagnostics"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+    <div className="min-h-screen bg-background">
+      <TopNavigation user={user} />
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Push Notification Diagnostics</h1>
+              <p className="text-meta mt-1">
+                Check your push notification configuration and troubleshoot issues
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={testPushNotification}
+                disabled={isTesting || !diagnostics?.pushManager.subscription}
+                data-testid="button-test-push"
+              >
+                <Send className={`w-4 h-4 mr-2 ${isTesting ? 'animate-pulse' : ''}`} />
+                {isTesting ? 'Sending...' : 'Test Push'}
+              </Button>
+              <Button
+                onClick={runDiagnostics}
+                disabled={isLoading}
+                variant="outline"
+                data-testid="button-refresh-diagnostics"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8 max-w-5xl mx-auto">
 
       {/* Overall Status */}
       <Card className="mb-6" data-testid="card-overall-status">
@@ -464,6 +476,7 @@ export default function PushDiagnostics() {
           </ul>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

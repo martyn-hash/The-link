@@ -1,4 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <rect width="192" height="192" fill="#0c7cba"/>
-  <text x="96" y="120" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle">TL</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0A7BBF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#065A8F;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#76CA23;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5A9A1A;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Blue arc (top right) -->
+  <path d="M 32 6 A 26 26 0 0 1 58 32 L 32 32 Z" fill="url(#blueGradient)"/>
+  <!-- Green G shape (bottom left + middle) -->
+  <path d="M 6 32 A 26 26 0 0 1 32 6 L 32 32 L 46 32 L 46 46 L 32 46 Z" fill="url(#greenGradient)"/>
+  <!-- Leaf detail -->
+  <ellipse cx="12" cy="28" rx="4" ry="6" fill="#ffffff" opacity="0.3" transform="rotate(-30 12 28)"/>
 </svg>

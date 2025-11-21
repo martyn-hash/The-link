@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList } from "lucide-react";
+import { List, UserX, Calendar, Home, FolderOpen, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList, FileSignature, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
 import AdminDropdown from "@/components/admin-dropdown";
+import SuperAdminDropdown from "@/components/super-admin-dropdown";
 import ImpersonationPanel from "@/components/impersonation-panel";
 import MobileMenu from "@/components/mobile-menu";
 import type { User } from "@shared/schema";
@@ -27,6 +29,30 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
   const [location] = useLocation();
   const { isImpersonating } = useAuth();
   const isMobile = useIsMobile();
+
+  // Fetch unread message count
+  const { data: unreadData, isLoading: isLoadingUnread, error: unreadError } = useQuery<{ unreadCount: number }>({
+    queryKey: ['/api/project-messages/unread-count'],
+    enabled: !!user,
+    refetchInterval: 30000, // Refetch every 30 seconds
+    retry: (failureCount, error) => {
+      // Always retry on network errors (Failed to fetch)
+      if (error?.message?.includes('Failed to fetch')) {
+        return failureCount < 10; // Retry up to 10 times for fetch failures
+      }
+      // Don't retry on client errors
+      if (error?.message?.includes('400') || error?.message?.includes('403') || error?.message?.includes('404')) {
+        return false;
+      }
+      return failureCount < 3; // Default retry for other errors
+    },
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff: 1s, 2s, 4s, 8s
+      return Math.min(1000 * 2 ** attemptIndex, 8000);
+    },
+  });
+
+  const unreadCount = unreadData?.unreadCount || 0;
 
   const getUserInitials = () => {
     if (!user) return "U";
@@ -156,7 +182,7 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                       )}
                     </div>
 
-                    {/* Column 2: Messages, Client Requests, Companies, People */}
+                    {/* Column 2: Messages, Clients */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/messages" className="w-full">
@@ -166,6 +192,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Messages</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/companies" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
+                            <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
+                              <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Clients</div>
                             </div>
                           </div>
                         </Link>
@@ -182,71 +220,33 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
-                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                        <>
-                          <DropdownMenuItem asChild>
-                            <Link href="/companies" className="w-full">
-                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-companies-menu">
-                                <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
-                                  <Building className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-foreground text-sm">Companies</div>
-                                </div>
-                              </div>
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href="/people" className="w-full">
-                              <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-people-menu">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
-                                  <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-foreground text-sm">People</div>
-                                </div>
-                              </div>
-                            </Link>
-                          </DropdownMenuItem>
-                        </>
-                      )}
                     </div>
 
-                    {/* Column 3: User Profile, Sign Out */}
+                    {/* Column 3: E-Signatures, Internal Tasks */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
-                        <Link href="/profile" className="w-full">
-                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-user-profile">
-                            <Avatar className="w-8 h-8 shrink-0">
-                              <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
-                              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                                {getUserInitials()}
-                              </AvatarFallback>
-                            </Avatar>
+                        <Link href="/signature-requests" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-signature-requests-menu">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center shrink-0">
+                              <FileSignature className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                            </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground text-sm truncate">
-                                {getUserDisplayName()}
-                                {isImpersonating && (
-                                  <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
-                                )}
-                              </div>
+                              <div className="font-medium text-foreground text-sm">E-Signatures</div>
                             </div>
                           </div>
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <button 
-                          onClick={handleLogout}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors text-left"
-                          data-testid="button-logout"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
-                            <Settings className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        <Link href="/internal-tasks" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-internal-tasks-menu">
+                            <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900 flex items-center justify-center shrink-0">
+                              <List className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Internal Tasks</div>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-foreground text-sm">Sign Out</div>
-                          </div>
-                        </button>
+                        </Link>
                       </DropdownMenuItem>
                     </div>
                   </div>
@@ -277,11 +277,61 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
 
               {/* Admin Dropdown */}
               {user && <AdminDropdown user={user} />}
+              
+              {/* Super Admin Dropdown */}
+              {user && <SuperAdminDropdown user={user} />}
             </div>
           )}
 
-          {/* Right Section: Empty for desktop, Profile icon for mobile */}
-          <div className="flex items-center">
+          {/* Right Section: Unread Messages Badge + User Profile */}
+          <div className="flex items-center gap-3">
+            {/* Unread Messages Badge */}
+            {user && unreadCount > 0 && (
+              <Link href="/messages">
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="relative h-10 w-10 hover:bg-accent/50 transition-colors"
+                  data-testid="button-unread-messages"
+                >
+                  <MessageCircle className="h-5 w-5 text-muted-foreground" />
+                  <Badge 
+                    className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center bg-pink-600 hover:bg-pink-600 text-white text-xs px-1"
+                    data-testid="badge-unread-count"
+                  >
+                    {unreadCount}
+                  </Badge>
+                </Button>
+              </Link>
+            )}
+
+            {/* User Profile - Desktop */}
+            {!isMobile && user && (
+              <Link href="/profile">
+                <Button 
+                  variant="ghost" 
+                  className="flex items-center gap-2 h-10 px-3 hover:bg-accent/50 transition-colors" 
+                  data-testid="button-desktop-profile"
+                >
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={user?.profileImageUrl || ""} alt={getUserDisplayName()} />
+                    <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col items-start">
+                    <span className="text-sm font-medium text-foreground">
+                      {getUserDisplayName()}
+                      {isImpersonating && (
+                        <span className="text-orange-600 dark:text-orange-400 ml-1 text-xs">(Testing)</span>
+                      )}
+                    </span>
+                  </div>
+                </Button>
+              </Link>
+            )}
+
+            {/* User Profile - Mobile */}
             {isMobile && user && (
               <Link href="/profile">
                 <Button variant="ghost" size="icon" className="h-10 w-10" data-testid="button-mobile-profile">

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Share, PlusSquare, MoreVertical, Download } from 'lucide-react';
 import { detectDevice } from '@/lib/pwaUtils';
-import logoPath from '@assets/full_logo_transparent_600_1759469504917.png';
+import logoPath from '@assets/full_logo_transparent_600_1761924125378.png';
 
 export default function PortalInstall() {
   const [device, setDevice] = useState<'ios' | 'android' | 'other'>('other');
@@ -25,8 +25,9 @@ export default function PortalInstall() {
         <CardHeader className="text-center pb-4">
           <img src={logoPath} alt="Growth Accountants" className="mx-auto mb-6 w-48 h-auto" />
           <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
-            Client Portal App Download
+            The Link
           </CardTitle>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">Client Portal App Download</p>
         </CardHeader>
         <CardContent className="space-y-6">
 

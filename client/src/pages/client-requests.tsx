@@ -256,13 +256,19 @@ export default function ClientRequests() {
     <div className="min-h-screen bg-background">
       <TopNavigation user={user} />
       
-      <div className="container mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2" data-testid="heading-client-requests">Client Requests</h1>
-          <p className="text-muted-foreground">
-            Track and manage all client requests assigned to your clients
-          </p>
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="heading-client-requests">Client Requests</h1>
+            <p className="text-meta mt-1">
+              Track and manage all client requests assigned to your clients
+            </p>
+          </div>
         </div>
+      </div>
+
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8 space-y-8">
 
         <Card>
           <CardHeader>

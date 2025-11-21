@@ -6,6 +6,7 @@ import type { Express, RequestHandler, Request, Response, NextFunction } from "e
 import { storage } from "./storage";
 import { sendMagicLinkEmail } from "./emailService";
 import type { User } from "@shared/schema";
+import { extractSessionMetadata } from "./utils/session-tracker";
 
 // Extend express-session to include our custom session properties
 declare module "express-session" {
@@ -84,15 +85,43 @@ export async function setupAuth(app: Express) {
   app.post("/api/login", async (req, res) => {
     try {
       const { email, password } = req.body;
+      const metadata = extractSessionMetadata(req);
 
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
       }
 
       const user = await authenticateUser(email, password);
+      
+      // Log login attempt (successful or failed)
+      await storage.createLoginAttempt({
+        email: email.trim().toLowerCase(),
+        ipAddress: metadata.ipAddress,
+        success: !!user,
+        failureReason: user ? null : "invalid_credentials",
+        browser: metadata.browser,
+        os: metadata.os,
+      });
+
       if (!user) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
+
+      // Update last login timestamp
+      await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
+
+      // Create session record
+      await storage.createUserSession({
+        userId: user.id,
+        ipAddress: metadata.ipAddress,
+        city: metadata.city,
+        country: metadata.country,
+        browser: metadata.browser,
+        device: metadata.device,
+        os: metadata.os,
+        platformType: metadata.platformType,
+        pushEnabled: user.pushNotificationsEnabled || false,
+      });
 
       // Set user session
       req.session.userId = user.id;
@@ -271,6 +300,8 @@ export async function setupAuth(app: Express) {
   app.post("/api/magic-link/verify", async (req, res) => {
     try {
       const { token, code, email } = req.body;
+      const metadata = extractSessionMetadata(req);
+      const attemptEmail = email ? email.trim().toLowerCase() : '';
 
       // Rate limiting to prevent brute force attacks
       const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
@@ -298,34 +329,106 @@ export async function setupAuth(app: Express) {
         // Verify using token
         magicLinkToken = await storage.getMagicLinkTokenByToken(token);
         if (!magicLinkToken) {
+          // Log failed login attempt
+          if (attemptEmail) {
+            await storage.createLoginAttempt({
+              email: attemptEmail,
+              ipAddress: metadata.ipAddress,
+              success: false,
+              failureReason: "invalid_magic_link_token",
+              browser: metadata.browser,
+              os: metadata.os,
+            });
+          }
           return res.status(401).json({ message: "Invalid or expired magic link" });
         }
       } else if (code && email) {
         // Verify using code and email
         magicLinkToken = await storage.getMagicLinkTokenByCodeAndEmail(code, email.trim().toLowerCase());
         if (!magicLinkToken) {
+          // Log failed login attempt
+          await storage.createLoginAttempt({
+            email: attemptEmail,
+            ipAddress: metadata.ipAddress,
+            success: false,
+            failureReason: "invalid_magic_link_code",
+            browser: metadata.browser,
+            os: metadata.os,
+          });
           return res.status(401).json({ message: "Invalid or expired verification code" });
         }
       }
 
       // Ensure we have a valid magic link token
       if (!magicLinkToken) {
+        if (attemptEmail) {
+          await storage.createLoginAttempt({
+            email: attemptEmail,
+            ipAddress: metadata.ipAddress,
+            success: false,
+            failureReason: "missing_magic_link_token",
+            browser: metadata.browser,
+            os: metadata.os,
+          });
+        }
         return res.status(401).json({ message: "Invalid or expired magic link" });
       }
 
       // Get user from database
       const user = await storage.getUser(magicLinkToken.userId);
       if (!user) {
+        await storage.createLoginAttempt({
+          email: magicLinkToken.email,
+          ipAddress: metadata.ipAddress,
+          success: false,
+          failureReason: "user_not_found",
+          browser: metadata.browser,
+          os: metadata.os,
+        });
         return res.status(404).json({ message: "User not found" });
       }
+
+      // Update last login timestamp
+      await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
 
       // Mark token as used (atomic operation that will fail if already used)
       try {
         await storage.markMagicLinkTokenAsUsed(magicLinkToken.id);
       } catch (error) {
         // Token was already used or doesn't exist
+        await storage.createLoginAttempt({
+          email: user.email || magicLinkToken.email,
+          ipAddress: metadata.ipAddress,
+          success: false,
+          failureReason: "magic_link_already_used",
+          browser: metadata.browser,
+          os: metadata.os,
+        });
         return res.status(401).json({ message: "Magic link has already been used or is invalid" });
       }
+
+      // Log successful login attempt
+      await storage.createLoginAttempt({
+        email: user.email || magicLinkToken.email,
+        ipAddress: metadata.ipAddress,
+        success: true,
+        failureReason: null,
+        browser: metadata.browser,
+        os: metadata.os,
+      });
+
+      // Create session record
+      await storage.createUserSession({
+        userId: user.id,
+        ipAddress: metadata.ipAddress,
+        city: metadata.city,
+        country: metadata.country,
+        browser: metadata.browser,
+        device: metadata.device,
+        os: metadata.os,
+        platformType: metadata.platformType,
+        pushEnabled: user.pushNotificationsEnabled || false,
+      });
 
       // Set user session (same as login route)
       req.session.userId = user.id;
@@ -342,6 +445,36 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Magic link verify error:", error);
       res.status(500).json({ message: "Magic link verification failed" });
+    }
+  });
+
+  // Check if user should be prompted to set up password
+  app.get("/api/auth/should-setup-password", async (req, res) => {
+    try {
+      if (!req.session || !req.session.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // User should set up password if:
+      // 1. They don't have a password set (!passwordHash)
+      // OR
+      // 2. This is their first login (lastLoginAt is null) and they logged in via magic link
+      const shouldSetupPassword = !user.passwordHash;
+      const isFirstLogin = !user.lastLoginAt;
+
+      res.json({
+        shouldSetupPassword,
+        isFirstLogin,
+        hasPassword: !!user.passwordHash
+      });
+    } catch (error) {
+      console.error("Error checking password setup status:", error);
+      res.status(500).json({ message: "Failed to check password setup status" });
     }
   });
 }

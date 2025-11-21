@@ -55,13 +55,13 @@ export default function PortalThreadList() {
   const { data: threads, isLoading: threadsLoading } = useQuery({
     queryKey: ['/api/portal/threads', statusFilter],
     queryFn: () => portalApi.threads.list(statusFilter),
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   const { data: unreadData } = useQuery({
     queryKey: ['/api/portal/unread-count'],
     queryFn: () => portalApi.unreadCount(),
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   // Update app badge with unread count

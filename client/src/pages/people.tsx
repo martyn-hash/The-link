@@ -3,10 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Person, Client, ClientPerson, ClientPortalUser } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
+import SuperSearch from "@/components/super-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -214,8 +217,10 @@ function formatBirthDate(dateOfBirth: string | Date | null): string {
 export default function People() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -426,27 +431,16 @@ export default function People() {
     );
   }
 
-  if (!user.isAdmin && !user.canSeeAdminMenu) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-muted-foreground mb-2">Access Denied</h1>
-          <p className="text-muted-foreground">You need admin or manager privileges to access people management.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="border-b border-border bg-card">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="page-container py-6 md:py-8">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">People</h1>
-                <p className="text-muted-foreground">Manage contacts and individuals</p>
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground" data-testid="text-page-title">People</h1>
+                <p className="text-meta mt-1">Manage contacts and individuals</p>
               </div>
               <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <DialogTrigger asChild>
@@ -524,7 +518,7 @@ export default function People() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
           {peopleLoading ? (
             <Card>
               <CardContent className="p-6">
@@ -725,6 +719,15 @@ export default function People() {
           )}
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+
+      {/* Mobile Search Modal */}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
     </div>
   );
 }

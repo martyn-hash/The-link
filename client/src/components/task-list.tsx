@@ -24,6 +24,7 @@ import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
+import { normalizeChronology, normalizeDate } from "@/lib/chronology";
 import { useMemo } from "react";
 import {
   DndContext,
@@ -42,12 +43,15 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useIsMobile } from "@/hooks/use-mobile";
+import TaskListMobileView from "./task-list-mobile-view";
 
 interface TaskListProps {
   projects: ProjectWithRelations[];
   user: User;
   serviceFilter?: string;
   onSwitchToKanban?: () => void;
+  viewType?: string; // 'projects', 'my-projects', 'my-tasks'
 }
 
 // Column configuration with ID, label, and metadata
@@ -168,11 +172,12 @@ function SortableColumnHeader({ column, sortBy, sortOrder, onSort, width, onResi
   );
 }
 
-export default function TaskList({ projects, user, serviceFilter, onSwitchToKanban }: TaskListProps) {
+export default function TaskList({ projects, user, serviceFilter, onSwitchToKanban, viewType = 'projects' }: TaskListProps) {
   const [, setLocation] = useLocation();
   const [sortBy, setSortBy] = useState<string>("timeInStage");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Fetch stage configurations for all unique project types
   const uniqueProjectTypeIds = useMemo(() => {
@@ -236,49 +241,48 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   );
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
-  // Load column preferences from API
+  // Load column preferences from API with viewType
   const { data: savedPreferences } = useQuery<SavedPreferences>({
-    queryKey: ["/api/column-preferences"],
+    queryKey: ["/api/column-preferences", { viewType }],
+    queryFn: async () => {
+      const response = await fetch(`/api/column-preferences?viewType=${encodeURIComponent(viewType)}`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = "/api/login";
+        }
+        throw new Error("Failed to fetch column preferences");
+      }
+      return response.json();
+    },
   });
 
-  // Save column preferences mutation
+  // Save column preferences mutation with viewType
   const savePreferencesMutation = useMutation({
     mutationFn: async (preferences: SavedPreferences) => {
-      return await apiRequest("POST", "/api/column-preferences", preferences);
+      return await apiRequest("POST", "/api/column-preferences", { ...preferences, viewType });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/column-preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/column-preferences", { viewType }] });
     },
   });
 
   // Apply saved preferences on load
   useEffect(() => {
     if (savedPreferences) {
-      // Merge new columns from ALL_COLUMNS that don't exist in saved preferences
+      // Apply column order - just use saved order directly
       if (savedPreferences.columnOrder) {
-        const allColumnIds = ALL_COLUMNS.map(col => col.id);
-        const savedColumnIds = savedPreferences.columnOrder;
-        
-        // Find any new columns that weren't in the saved order
-        const newColumns = allColumnIds.filter(id => !savedColumnIds.includes(id));
-        
-        // Add new columns to the end of the order
-        const mergedOrder = [...savedColumnIds, ...newColumns];
-        setColumnOrder(mergedOrder);
+        setColumnOrder(savedPreferences.columnOrder);
       }
       
+      // Apply visible columns - use saved preferences directly without merging defaults
+      // This ensures user's explicit hide/show choices are respected
       if (savedPreferences.visibleColumns) {
-        // Also merge any newly added columns that should be visible by default
-        const savedVisibleIds = savedPreferences.visibleColumns;
-        const newDefaultVisibleColumns = ALL_COLUMNS
-          .filter(col => col.defaultVisible && !savedVisibleIds.includes(col.id))
-          .map(col => col.id);
-        
-        const mergedVisible = [...savedVisibleIds, ...newDefaultVisibleColumns];
-        setVisibleColumns(mergedVisible);
+        setVisibleColumns(savedPreferences.visibleColumns);
       }
       
-      if (savedPreferences.columnWidths) setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
+      if (savedPreferences.columnWidths) {
+        setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
+      }
     }
   }, [savedPreferences]);
 
@@ -321,19 +325,17 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   };
 
   const toggleColumnVisibility = (columnId: string) => {
-    setVisibleColumns((prev) => {
-      const newVisible = prev.includes(columnId)
-        ? prev.filter((id) => id !== columnId)
-        : [...prev, columnId];
-      // Save to backend after toggling
-      setTimeout(() => {
-        savePreferencesMutation.mutate({
-          columnOrder,
-          visibleColumns: newVisible,
-          columnWidths,
-        });
-      }, 100);
-      return newVisible;
+    const newVisible = visibleColumns.includes(columnId)
+      ? visibleColumns.filter((id) => id !== columnId)
+      : [...visibleColumns, columnId];
+    
+    setVisibleColumns(newVisible);
+    
+    // Save to backend immediately (no setTimeout to avoid race conditions)
+    savePreferencesMutation.mutate({
+      columnOrder,
+      visibleColumns: newVisible,
+      columnWidths,
     });
   };
 
@@ -386,28 +388,18 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     return `${hours}h`;
   };
 
-  // Calculate business hours in current stage for a project
+  // Calculate business hours in current stage for a project using shared chronology utility
   const getBusinessHoursInStage = (project: ProjectWithRelations) => {
-    const createdAt = project.createdAt 
-      ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
-      : undefined;
+    const normalizedChronology = normalizeChronology(project.chronology);
+    const createdAt = normalizeDate(project.createdAt);
     
-    const transformedChronology = (project.chronology || [])
-      .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
-        return entry.timestamp !== null && entry.timestamp !== undefined;
-      })
-      .map((entry) => ({
-        toStatus: entry.toStatus,
-        timestamp: entry.timestamp instanceof Date 
-          ? entry.timestamp.toISOString() 
-          : typeof entry.timestamp === 'string'
-          ? entry.timestamp
-          : new Date(entry.timestamp).toISOString()
-      }));
+    if (normalizedChronology.length === 0 || !createdAt) {
+      return 0;
+    }
     
     try {
       return calculateCurrentInstanceTime(
-        transformedChronology,
+        normalizedChronology,
         project.currentStatus,
         createdAt
       );
@@ -612,16 +604,8 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     }
   };
 
-  const visibleProjects = sortedProjects.filter(project => {
-    if (user.isAdmin || user.canSeeAdminMenu) {
-      return true;
-    }
-    return (
-      project.currentAssigneeId === user.id ||
-      project.clientManagerId === user.id ||
-      project.bookkeeperId === user.id
-    );
-  });
+  // All authenticated users can see all projects
+  const visibleProjects = sortedProjects;
 
   // Get columns in order and filter to visible ones
   const orderedColumns = columnOrder
@@ -826,7 +810,11 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
               <p className="text-lg font-medium mb-2">No tasks found</p>
               <p>You don't have any assigned tasks at the moment.</p>
             </div>
+          ) : isMobile ? (
+            // Mobile view: Swipeable project cards with info/messages modals
+            <TaskListMobileView projects={visibleProjects} user={user} />
           ) : (
+            // Desktop view: Table
             <div className="overflow-x-auto">
               <DndContext
                 sensors={sensors}

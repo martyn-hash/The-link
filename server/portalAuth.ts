@@ -133,15 +133,14 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
     const { sendEmail } = await import('./emailService');
     
     // Generate magic link URL
-    const magicLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/portal/verify?token=${magicToken}`;
+    const baseUrl = 'https://flow.growth.accountants';
+    const magicLink = `${baseUrl}/portal/verify?token=${magicToken}`;
     
     // Send branded email
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
-    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1759469504917.png`;
+    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
     
     await sendEmail({
       to: email,
-      from: `The Link <${process.env.FROM_EMAIL || 'link@growth-accountants.com'}>`,
       subject: 'Your Client Portal Login Link - The Link',
       html: `
         <!DOCTYPE html>
@@ -187,7 +186,10 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
             </div>
             <div class="footer">
               <p style="margin: 0 0 10px 0;">
-                <strong class="accent">The Link</strong> - Your Financial Partner
+                <strong class="accent">The Link by Growth Accountants</strong>
+              </p>
+              <p style="margin: 0 0 10px 0; font-size: 13px; color: #64748b;">
+                Your workflow management partner
               </p>
               <p style="margin: 0; font-size: 13px;">
                 If you didn't request this login link, please ignore this email and your account will remain secure.
@@ -309,12 +311,11 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
     const { sendEmail } = await import('./emailService');
     
     // Send branded email with verification code
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
-    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1759469504917.png`;
+    const baseUrl = 'https://flow.growth.accountants';
+    const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
     
     await sendEmail({
       to: email,
-      from: `The Link <${process.env.FROM_EMAIL || 'link@growth-accountants.com'}>`,
       subject: 'Your Portal Login Code - The Link',
       html: `
         <!DOCTYPE html>
@@ -359,7 +360,10 @@ export async function sendVerificationCode(email: string): Promise<{ success: bo
             </div>
             <div class="footer">
               <p style="margin: 0 0 10px 0;">
-                <strong class="accent">The Link</strong> - Your Financial Partner
+                <strong class="accent">The Link by Growth Accountants</strong>
+              </p>
+              <p style="margin: 0 0 10px 0; font-size: 13px; color: #64748b;">
+                Your workflow management partner
               </p>
               <p style="margin: 0; font-size: 13px;">
                 If you didn't request this code, please ignore this email and your account will remain secure.

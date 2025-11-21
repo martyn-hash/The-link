@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TiptapEditor } from "@/components/TiptapEditor";
 import {
   Select,
   SelectContent,
@@ -42,7 +43,9 @@ import type {
   StageApproval,
   StageApprovalField,
   InsertStageApprovalResponse,
+  StageChangeNotificationPreview,
 } from "@shared/schema";
+import { StageChangeNotificationModal } from "./stage-change-notification-modal";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -62,6 +65,7 @@ interface ChangeStatusModalProps {
   project: ProjectWithRelations;
   user: User;
   onStatusUpdated?: () => void;
+  initialNewStatus?: string; // Pre-select a status (for drag-and-drop from kanban)
 }
 
 // Helper function to format stage names for display
@@ -127,15 +131,25 @@ export default function ChangeStatusModal({
   project,
   user,
   onStatusUpdated,
+  initialNewStatus,
 }: ChangeStatusModalProps) {
   const [newStatus, setNewStatus] = useState("");
   const [changeReason, setChangeReason] = useState("");
-  const [notes, setNotes] = useState("");
+  const [notesHtml, setNotesHtml] = useState("");
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const [showApprovalForm, setShowApprovalForm] = useState(false);
+  const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Set initial new status when modal opens (for drag-and-drop)
+  useEffect(() => {
+    if (isOpen && initialNewStatus) {
+      setNewStatus(initialNewStatus);
+    }
+  }, [isOpen, initialNewStatus]);
 
   // Fetch kanban stages for this project's project type
   const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
@@ -180,19 +194,24 @@ export default function ChangeStatusModal({
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch stage approval fields for the target stage's approval
+  // Determine effective approval ID (reason-level takes precedence over stage-level)
+  const effectiveApprovalId = useMemo(() => {
+    return selectedReasonObj?.stageApprovalId || selectedStage?.stageApprovalId || null;
+  }, [selectedReasonObj, selectedStage]);
+
+  // Fetch stage approval fields for the effective approval (reason-level or stage-level)
   const { data: stageApprovalFields = [], isLoading: stageApprovalFieldsLoading } =
     useQuery<StageApprovalField[]>({
       queryKey: [`/api/config/stage-approval-fields`],
-      enabled: !!selectedStage?.stageApprovalId && isOpen,
+      enabled: !!effectiveApprovalId && isOpen,
       staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
-  // Get target stage approval and fields
+  // Get target stage approval and fields using effective approval ID
   const targetStageApproval = useMemo(() => {
-    if (!selectedStage?.stageApprovalId) return null;
-    return stageApprovals.find((a) => a.id === selectedStage.stageApprovalId) || null;
-  }, [selectedStage, stageApprovals]);
+    if (!effectiveApprovalId) return null;
+    return stageApprovals.find((a) => a.id === effectiveApprovalId) || null;
+  }, [effectiveApprovalId, stageApprovals]);
 
   const targetStageApprovalFields = useMemo(() => {
     if (!targetStageApproval) return [];
@@ -270,10 +289,10 @@ export default function ChangeStatusModal({
     defaultValues: {},
   });
 
-  // Determine if we should show approval form
+  // Determine if we should show approval form (using effective approval ID)
   useEffect(() => {
     const shouldShow =
-      !!selectedStage?.stageApprovalId &&
+      !!effectiveApprovalId &&
       !!newStatus &&
       !!changeReason &&
       !stageApprovalsLoading &&
@@ -283,7 +302,7 @@ export default function ChangeStatusModal({
 
     setShowApprovalForm(shouldShow);
   }, [
-    selectedStage,
+    effectiveApprovalId,
     newStatus,
     changeReason,
     stageApprovalsLoading,
@@ -297,7 +316,7 @@ export default function ChangeStatusModal({
     if (!isOpen) {
       setNewStatus("");
       setChangeReason("");
-      setNotes("");
+      setNotesHtml("");
       setCustomFieldResponses({});
       setShowApprovalForm(false);
       approvalForm.reset();
@@ -331,7 +350,7 @@ export default function ChangeStatusModal({
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
-        notes: notes.trim() || undefined,
+        notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
       });
     },
@@ -348,7 +367,7 @@ export default function ChangeStatusModal({
     mutationFn: async (data: {
       newStatus: string;
       changeReason: string;
-      notes?: string;
+      notesHtml?: string;
       fieldResponses?: Array<{
         customFieldId: string;
         fieldType: "number" | "short_text" | "long_text" | "multi_select";
@@ -360,19 +379,98 @@ export default function ChangeStatusModal({
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
     },
-    onSuccess: () => {
+    onMutate: async (data) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/projects"] });
+
+      // Snapshot the previous value
+      const previousProjects = queryClient.getQueryData(["/api/projects"]);
+
+      // Optimistically update the project status in cache
+      queryClient.setQueryData(["/api/projects"], (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        
+        return old.map((p: any) => 
+          p.id === project.id 
+            ? { ...p, currentStatus: data.newStatus }
+            : p
+        );
+      });
+
+      // Return context with previous data for rollback
+      return { previousProjects };
+    },
+    onSuccess: (data: any) => {
+      // Handle new response format: { project, notificationPreview }
+      const updatedProject = data.project || data;
+      const preview = data.notificationPreview;
+
+      if (preview) {
+        // Show notification approval modal
+        setNotificationPreview(preview);
+        setShowNotificationModal(true);
+      } else {
+        // No notification to send, complete the flow
+        toast({
+          title: "Success",
+          description: "Project status updated successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+        onStatusUpdated?.();
+        onClose();
+      }
+    },
+    onError: (error: any, _variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousProjects) {
+        queryClient.setQueryData(["/api/projects"], context.previousProjects);
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update project status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for sending stage change notification after user approval
+  const sendNotificationMutation = useMutation({
+    mutationFn: async (data: {
+      emailSubject: string;
+      emailBody: string;
+      pushTitle: string | null;
+      pushBody: string | null;
+      suppress: boolean;
+    }) => {
+      if (!notificationPreview) throw new Error("No notification preview available");
+      
+      return await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
+        projectId: project.id,
+        dedupeKey: notificationPreview.dedupeKey,
+        ...data,
+      });
+    },
+    onSuccess: (data: any) => {
+      const wasSent = !data.suppress && data.sent;
+      
       toast({
         title: "Success",
-        description: "Project status updated successfully",
+        description: wasSent 
+          ? "Notification sent successfully" 
+          : "Notification suppressed",
       });
+      
+      // Complete the flow: invalidate cache, call callbacks, close modals
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setShowNotificationModal(false);
+      setNotificationPreview(null);
       onStatusUpdated?.();
       onClose();
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update project status",
+        description: error.message || "Failed to send notification",
         variant: "destructive",
       });
     },
@@ -532,13 +630,12 @@ export default function ChangeStatusModal({
 
       // Submit approval responses first
       const approvalData = approvalForm.getValues();
-      const responses: InsertStageApprovalResponse[] = targetStageApprovalFields.map(
-        (field) => {
+      const responses: InsertStageApprovalResponse[] = targetStageApprovalFields
+        .map((field) => {
           const value = approvalData[field.id];
           const baseResponse = {
             projectId: project.id,
             fieldId: field.id,
-            fieldType: field.fieldType,
           };
 
           if (field.fieldType === "boolean") {
@@ -548,12 +645,22 @@ export default function ChangeStatusModal({
           } else if (field.fieldType === "long_text") {
             return { ...baseResponse, valueLongText: value as string };
           } else if (field.fieldType === "multi_select") {
-            return { ...baseResponse, valueMultiSelect: value as string[] };
+            return {
+              ...baseResponse,
+              valueMultiSelect: Array.isArray(value) && value.length > 0 ? value as string[] : undefined,
+            };
           }
 
           return baseResponse;
-        }
-      );
+        })
+        .filter((response) => {
+          // Filter out responses with no populated value field
+          if ("valueBoolean" in response && response.valueBoolean !== undefined) return true;
+          if ("valueNumber" in response && response.valueNumber !== undefined) return true;
+          if ("valueLongText" in response && response.valueLongText !== undefined && response.valueLongText !== "") return true;
+          if ("valueMultiSelect" in response && response.valueMultiSelect !== undefined && response.valueMultiSelect.length > 0) return true;
+          return false;
+        });
 
       submitApprovalResponsesMutation.mutate(responses);
     } else {
@@ -561,7 +668,7 @@ export default function ChangeStatusModal({
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
-        notes: notes.trim() || undefined,
+        notesHtml: notesHtml.trim() || undefined,
         fieldResponses: formatFieldResponses(),
       });
     }
@@ -572,8 +679,13 @@ export default function ChangeStatusModal({
     updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={showApprovalForm ? "max-w-6xl" : "max-w-2xl"} data-testid="dialog-change-status">
+      <DialogContent 
+        className={showApprovalForm ? "max-w-6xl" : "max-w-2xl"} 
+        data-testid="dialog-change-status"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Change Project Status</DialogTitle>
           <DialogDescription>
@@ -581,7 +693,7 @@ export default function ChangeStatusModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className={showApprovalForm ? "grid grid-cols-2 gap-6" : ""}>
+        <div className={`max-h-[70vh] overflow-y-auto ${showApprovalForm ? "grid grid-cols-2 gap-6" : ""}`}>
           {/* Left column: Status change form */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Status Change Details</h3>
@@ -642,12 +754,35 @@ export default function ChangeStatusModal({
                 <div className="space-y-4">
                   {customFields.map((field) => (
                     <div key={field.id} className="space-y-2">
-                      <Label htmlFor={`custom-field-${field.id}`}>
-                        {field.fieldName}
-                        {field.isRequired && (
-                          <span className="text-destructive ml-1">*</span>
+                      <div>
+                        <Label htmlFor={`custom-field-${field.id}`}>
+                          {field.fieldName}
+                          {field.isRequired && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </Label>
+                        {field.description && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {field.description}
+                          </p>
                         )}
-                      </Label>
+                      </div>
+
+                      {field.fieldType === "boolean" && (
+                        <div className="flex items-center space-x-3">
+                          <Checkbox
+                            id={`custom-field-${field.id}`}
+                            checked={customFieldResponses[field.id] || false}
+                            onCheckedChange={(checked) =>
+                              handleCustomFieldChange(field.id, checked)
+                            }
+                            data-testid={`checkbox-custom-field-${field.id}`}
+                          />
+                          <Label htmlFor={`custom-field-${field.id}`} className="font-normal">
+                            {customFieldResponses[field.id] ? "Yes" : "No"}
+                          </Label>
+                        </div>
+                      )}
 
                       {field.fieldType === "number" && (
                         <Input
@@ -731,14 +866,11 @@ export default function ChangeStatusModal({
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="notes-textarea">Notes</Label>
-              <Textarea
-                id="notes-textarea"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+              <Label>Notes</Label>
+              <TiptapEditor
+                content={notesHtml}
+                onChange={setNotesHtml}
                 placeholder="Add notes explaining the status change..."
-                rows={4}
-                data-testid="textarea-notes"
               />
             </div>
           </div>
@@ -764,12 +896,19 @@ export default function ChangeStatusModal({
                           <FormItem>
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
-                                <FormLabel className="text-base font-medium">
-                                  {field.fieldName}
-                                  {field.isRequired && (
-                                    <span className="text-destructive ml-1">*</span>
+                                <div className="flex-1">
+                                  <FormLabel className="text-base font-medium">
+                                    {field.fieldName}
+                                    {field.isRequired && (
+                                      <span className="text-destructive ml-1">*</span>
+                                    )}
+                                  </FormLabel>
+                                  {field.description && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {field.description}
+                                    </p>
                                   )}
-                                </FormLabel>
+                                </div>
                                 <Badge variant="outline" className="text-xs">
                                   {field.fieldType}
                                 </Badge>
@@ -922,5 +1061,16 @@ export default function ChangeStatusModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Stage Change Notification Approval Modal */}
+    <StageChangeNotificationModal
+      isOpen={showNotificationModal}
+      onClose={() => setShowNotificationModal(false)}
+      preview={notificationPreview}
+      onSend={async (editedData) => {
+        await sendNotificationMutation.mutateAsync(editedData);
+      }}
+    />
+    </>
   );
 }

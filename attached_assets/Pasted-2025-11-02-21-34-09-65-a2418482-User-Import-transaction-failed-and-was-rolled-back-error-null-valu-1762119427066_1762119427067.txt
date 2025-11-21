@@ -1,0 +1,116 @@
+2025-11-02 21:34:09.65
+a2418482
+User
+Import transaction failed and was rolled back: error: null value in column "id" of relation "people" violates not-null constraint
+2025-11-02 21:34:09.65
+a2418482
+User
+at cn.parseErrorMessage (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1182:6)
+2025-11-02 21:34:09.65
+a2418482
+User
+at cn.handlePacket (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1143:13)
+2025-11-02 21:34:09.65
+a2418482
+User
+at cn.parse (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1127:36)
+2025-11-02 21:34:09.65
+a2418482
+User
+at v. (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1190:16)
+2025-11-02 21:34:09.65
+a2418482
+User
+at v.emit (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:397:12)
+2025-11-02 21:34:09.65
+a2418482
+User
+at WebSocket. (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:987:80)
+2025-11-02 21:34:09.65
+a2418482
+User
+at callListener (/home/runner/workspace/node_modules/ws/lib/event-target.js:290:14)
+2025-11-02 21:34:09.65
+a2418482
+User
+at WebSocket.onMessage (/home/runner/workspace/node_modules/ws/lib/event-target.js:209:9)
+2025-11-02 21:34:09.65
+a2418482
+User
+at WebSocket.emit (node:events:524:28)
+2025-11-02 21:34:09.65
+a2418482
+User
+at Receiver.receiverOnMessage (/home/runner/workspace/node_modules/ws/lib/websocket.js:1220:20) {
+2025-11-02 21:34:09.65
+a2418482
+User
+length: 427,
+2025-11-02 21:34:09.65
+a2418482
+User
+severity: 'ERROR',
+2025-11-02 21:34:09.65
+a2418482
+User
+code: '23502',
+2025-11-02 21:34:09.65
+a2418482
+User
+detail: 'Failing row contains (null, null, Allister Lewis, null, null, null, null, null, null, null, null, null, null, null, null, null, allister@addd.io, null, null, 2025-11-02 21:34:09.533219, f, null, null, f, f, null, null, null, null, null, null, null, 7711048070, null).',
+
+2025-11-02 21:34:09.65
+a2418482
+User
+hint: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+position: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+internalPosition: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+internalQuery: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+where: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+schema: 'public',
+2025-11-02 21:34:09.65
+a2418482
+User
+table: 'people',
+2025-11-02 21:34:09.65
+a2418482
+User
+column: 'id',
+2025-11-02 21:34:09.65
+a2418482
+User
+dataType: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+constraint: undefined,
+2025-11-02 21:34:09.65
+a2418482
+User
+file: 'execMain.c',
+2025-11-02 21:34:09.65
+a2418482
+User
+line: '2021',
+2025-11-02 21:34:09.65
+a2418482
+User
+routine: 'ExecConstraints'
+2025-11-02 21:34:09.65
+a2418482
+User

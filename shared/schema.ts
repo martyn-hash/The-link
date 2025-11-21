@@ -1,4 +1,4 @@
-import { sql, relations } from 'drizzle-orm';
+import { sql, relations, SQL } from 'drizzle-orm';
 import {
   index,
   jsonb,
@@ -11,11 +11,17 @@ import {
   pgEnum,
   check,
   unique,
+  uniqueIndex,
   alias,
   AnyPgColumn,
+  real,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export function lower(column: AnyPgColumn): SQL {
+  return sql`lower(${column})`;
+}
 
 // Session storage table for Replit Auth
 export const sessions = pgTable(
@@ -72,7 +78,7 @@ export const nationalityEnum = pgEnum("nationality", [
 ]);
 
 // Custom field type enum
-export const customFieldTypeEnum = pgEnum("custom_field_type", ["number", "short_text", "long_text", "multi_select"]);
+export const customFieldTypeEnum = pgEnum("custom_field_type", ["boolean", "number", "short_text", "long_text", "multi_select"]);
 
 // Stage approval field type enum
 export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "long_text", "multi_select"]);
@@ -82,6 +88,15 @@ export const comparisonTypeEnum = pgEnum("comparison_type", ["equal_to", "less_t
 
 // UDF type enum for services
 export const udfTypeEnum = pgEnum("udf_type", ["number", "date", "boolean", "short_text"]);
+
+// Internal task status enum
+export const internalTaskStatusEnum = pgEnum("internal_task_status", ["open", "in_progress", "closed"]);
+
+// Internal task priority enum
+export const internalTaskPriorityEnum = pgEnum("internal_task_priority", ["low", "medium", "high", "urgent"]);
+
+// Inactive reason enum for client services
+export const inactiveReasonEnum = pgEnum("inactive_reason", ["created_in_error", "no_longer_required", "client_doing_work_themselves"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -93,13 +108,56 @@ export const users = pgTable("users", {
   emailSignature: text("email_signature"), // HTML email signature
   isAdmin: boolean("is_admin").default(false), // Simple admin flag
   canSeeAdminMenu: boolean("can_see_admin_menu").default(false), // Can see admin menu flag
+  superAdmin: boolean("super_admin").default(false), // Super admin flag for elevated privileges
   passwordHash: varchar("password_hash"), // Hashed password, nullable for OAuth-only users
   isFallbackUser: boolean("is_fallback_user").default(false), // Only one user can be the fallback user
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(true), // Push notifications enabled by default for staff
   notificationPreferences: jsonb("notification_preferences"), // Email, push, SMS preferences
+  canMakeServicesInactive: boolean("can_make_services_inactive").default(false), // Permission to mark services as inactive
+  canMakeProjectsInactive: boolean("can_make_projects_inactive").default(false), // Permission to mark projects as inactive
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  lastLoginAt: timestamp("last_login_at"), // Track when user last logged in for first-login detection
 });
+
+// User sessions table - tracks login sessions and activity
+export const userSessions = pgTable("user_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  loginTime: timestamp("login_time").notNull().defaultNow(),
+  lastActivity: timestamp("last_activity").notNull().defaultNow(),
+  logoutTime: timestamp("logout_time"), // Null if session is still active
+  ipAddress: varchar("ip_address"),
+  city: varchar("city"), // From IP geolocation
+  country: varchar("country"), // From IP geolocation
+  browser: varchar("browser"), // e.g., "Chrome 119"
+  device: varchar("device"), // e.g., "Desktop", "Mobile", "Tablet"
+  os: varchar("os"), // e.g., "Windows 10", "iOS 17.1"
+  platformType: varchar("platform_type"), // desktop, mobile, tablet
+  pushEnabled: boolean("push_enabled").default(false), // Push notification status at session start
+  sessionDuration: integer("session_duration"), // Duration in minutes, calculated on logout
+  isActive: boolean("is_active").default(true), // Whether session is currently active
+}, (table) => [
+  index("idx_user_sessions_user_id").on(table.userId),
+  index("idx_user_sessions_login_time").on(table.loginTime),
+  index("idx_user_sessions_is_active").on(table.isActive),
+]);
+
+// Login attempts table - tracks all login attempts for security monitoring
+export const loginAttempts = pgTable("login_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  ipAddress: varchar("ip_address"),
+  success: boolean("success").notNull(),
+  failureReason: varchar("failure_reason"), // e.g., "invalid_password", "user_not_found"
+  browser: varchar("browser"),
+  os: varchar("os"),
+}, (table) => [
+  index("idx_login_attempts_email").on(table.email),
+  index("idx_login_attempts_timestamp").on(table.timestamp),
+  index("idx_login_attempts_success").on(table.success),
+]);
 
 // User notification preferences table
 export const userNotificationPreferences = pgTable("user_notification_preferences", {
@@ -171,7 +229,8 @@ export const companyViews = pgTable("company_views", {
 // User column preferences table - Stores column visibility, order, and width settings for project list view
 export const userColumnPreferences = pgTable("user_column_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  viewType: varchar("view_type").notNull().default("projects"), // 'projects', 'my-projects', 'my-tasks'
   columnOrder: text("column_order").array().notNull(), // Array of column IDs in desired order
   visibleColumns: text("visible_columns").array().notNull(), // Array of visible column IDs
   columnWidths: jsonb("column_widths"), // JSON object mapping column ID to width in pixels
@@ -179,6 +238,7 @@ export const userColumnPreferences = pgTable("user_column_preferences", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_user_column_preferences_user_id").on(table.userId),
+  unique("unique_user_view_type").on(table.userId, table.viewType),
 ]);
 
 // Dashboards table - Stores saved dashboard configurations with visualizations
@@ -197,6 +257,33 @@ export const dashboards = pgTable("dashboards", {
   index("idx_dashboards_user_id").on(table.userId),
   index("idx_dashboards_visibility").on(table.visibility),
   index("idx_dashboards_homescreen").on(table.userId, table.isHomescreenDashboard),
+]);
+
+// Dashboard cache table - Stores pre-computed dashboard statistics for performance
+export const dashboardCache = pgTable("dashboard_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  myTasksCount: integer("my_tasks_count").notNull().default(0),
+  myProjectsCount: integer("my_projects_count").notNull().default(0),
+  overdueTasksCount: integer("overdue_tasks_count").notNull().default(0),
+  behindScheduleCount: integer("behind_schedule_count").notNull().default(0),
+  lastUpdated: timestamp("last_updated").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_dashboard_cache_user_id").on(table.userId),
+  index("idx_dashboard_cache_last_updated").on(table.lastUpdated),
+]);
+
+// User project preferences table - Stores user preferences for the projects page
+export const userProjectPreferences = pgTable("user_project_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  defaultViewId: varchar("default_view_id"), // ID of the default view (projectView or dashboard)
+  defaultViewType: varchar("default_view_type"), // 'list', 'kanban', or 'dashboard'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_user_project_preferences_user_id").on(table.userId),
 ]);
 
 // Clients table - Companies House integration (matches existing database schema)
@@ -241,7 +328,7 @@ export const clients = pgTable("clients", {
 
 // People table - matches existing database structure
 export const people = pgTable("people", {
-  id: text("id").primaryKey(), // Existing field - uses text, not varchar
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`), // Auto-generate UUID for new records
   personNumber: text("person_number"), // Existing field
   fullName: text("full_name").notNull(), // Existing field - is NOT NULL
   title: text("title"), // Existing field
@@ -275,6 +362,7 @@ export const people = pgTable("people", {
   notes: text("notes"), // Existing field
   // New fields for enhanced person data
   isMainContact: boolean("is_main_contact").default(false),
+  receiveNotifications: boolean("receive_notifications").default(true), // opt-in/opt-out flag for email/SMS notifications
   niNumber: text("ni_number"), // National Insurance Number
   personalUtrNumber: text("personal_utr_number"), // Personal UTR Number
   photoIdVerified: boolean("photo_id_verified").default(false),
@@ -310,12 +398,19 @@ export const projects = pgTable("projects", {
   dueDate: timestamp("due_date"),
   archived: boolean("archived").default(false), // to hide completed monthly cycles
   inactive: boolean("inactive").default(false), // to mark projects as inactive
+  inactiveReason: inactiveReasonEnum("inactive_reason"), // Reason for marking inactive
+  inactiveAt: timestamp("inactive_at"), // When the project was marked inactive
+  inactiveByUserId: varchar("inactive_by_user_id").references(() => users.id), // User who marked the project inactive
   completionStatus: varchar("completion_status"), // 'completed_successfully', 'completed_unsuccessfully', or null for active projects
   projectMonth: varchar("project_month"), // DD/MM/YYYY format to track which month each project belongs to
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_projects_project_owner_id").on(table.projectOwnerId),
+  index("idx_projects_current_assignee_id").on(table.currentAssigneeId),
+  index("idx_projects_project_type_id").on(table.projectTypeId),
+  index("idx_projects_archived").on(table.archived),
+  index("idx_projects_client_id").on(table.clientId),
 ]);
 
 // Project chronology table
@@ -327,7 +422,9 @@ export const projectChronology = pgTable("project_chronology", {
   assigneeId: varchar("assignee_id").references(() => users.id),
   changedById: varchar("changed_by_id").references(() => users.id), // User who made the stage change
   changeReason: varchar("change_reason"),
-  notes: text("notes"),
+  notes: text("notes"), // Plain text notes for backward compatibility
+  notesHtml: text("notes_html"), // Rich HTML notes from TiptapEditor
+  attachments: jsonb("attachments"), // Array of attachment metadata {fileName, fileSize, fileType, objectPath}
   timestamp: timestamp("timestamp").defaultNow(),
   timeInPreviousStage: integer("time_in_previous_stage"), // in minutes
   businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business minutes (for precision)
@@ -371,6 +468,7 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   stageApprovalId: varchar("stage_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
   fieldName: varchar("field_name").notNull(),
+  description: text("description"), // Optional description/help text for the field
   fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
   isRequired: boolean("is_required").default(false),
   order: integer("order").notNull(),
@@ -453,9 +551,11 @@ export const changeReasons = pgTable("change_reasons", {
   description: varchar("description"),
   showCountInProject: boolean("show_count_in_project").default(false),
   countLabel: varchar("count_label"),
+  stageApprovalId: varchar("stage_approval_id").references(() => stageApprovals.id, { onDelete: "set null" }), // Optional stage approval for this reason
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_change_reasons_project_type_id").on(table.projectTypeId),
+  index("idx_change_reasons_stage_approval_id").on(table.stageApprovalId),
   // Reason must be unique within a project type
   // unique("unique_reason_per_project_type").on(table.projectTypeId, table.reason), // Temporarily commented to unblock people table changes
 ]);
@@ -467,6 +567,7 @@ export const projectTypes: any = pgTable("project_types", {
   description: text("description"), // optional description of the project type
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }), // Optional reference to service for role inheritance
   active: boolean("active").default(true), // to enable/disable project types
+  notificationsActive: boolean("notifications_active").default(true), // master switch for all notifications for this project type
   singleProjectPerClient: boolean("single_project_per_client").default(false), // if true, only one active project of this type can exist per client
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
@@ -492,6 +593,7 @@ export const reasonCustomFields = pgTable("reason_custom_fields", {
   fieldType: customFieldTypeEnum("field_type").notNull(),
   isRequired: boolean("is_required").default(false),
   placeholder: varchar("placeholder"),
+  description: text("description"),
   options: text("options").array(), // For multi-select field options
   order: integer("order").notNull(), // for sorting in UI
   createdAt: timestamp("created_at").defaultNow(),
@@ -555,7 +657,12 @@ export const clientServices = pgTable("client_services", {
   frequency: varchar("frequency"), // monthly, quarterly, annually, etc. - nullable for static services
   nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
   nextDueDate: timestamp("next_due_date"), // Next due date for the service
+  intendedStartDay: integer("intended_start_day"), // Intended day-of-month for start date (29-31) to preserve across short months
+  intendedDueDay: integer("intended_due_day"), // Intended day-of-month for due date (29-31) to preserve across short months
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
+  inactiveReason: inactiveReasonEnum("inactive_reason"), // Reason why service was made inactive
+  inactiveAt: timestamp("inactive_at"), // Timestamp when service was made inactive
+  inactiveByUserId: varchar("inactive_by_user_id").references(() => users.id, { onDelete: "set null" }), // User who made service inactive
   udfValues: jsonb("udf_values").default(sql`'{}'::jsonb`), // User-defined field values as key-value pairs
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -563,6 +670,7 @@ export const clientServices = pgTable("client_services", {
   index("idx_client_services_service_id").on(table.serviceId),
   index("idx_client_services_service_owner_id").on(table.serviceOwnerId),
   index("idx_client_services_next_due_date").on(table.nextDueDate), // Index for scheduling queries
+  index("idx_client_services_inactive_by_user_id").on(table.inactiveByUserId),
   unique("unique_client_service").on(table.clientId, table.serviceId),
 ]);
 
@@ -575,6 +683,8 @@ export const peopleServices = pgTable("people_services", {
   frequency: varchar("frequency").notNull().default("monthly"), // monthly, quarterly, annually, etc.
   nextStartDate: timestamp("next_start_date"), // Next scheduled start date for the service
   nextDueDate: timestamp("next_due_date"), // Next due date for the service
+  intendedStartDay: integer("intended_start_day"), // Intended day-of-month for start date (29-31) to preserve across short months
+  intendedDueDay: integer("intended_due_day"), // Intended day-of-month for due date (29-31) to preserve across short months
   notes: text("notes"), // Specific notes for this person's service
   isActive: boolean("is_active").default(true), // Whether this service is active for scheduling
   createdAt: timestamp("created_at").defaultNow(),
@@ -697,6 +807,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   ownedProjects: many(projects, { relationName: "projectOwner" }),
   ownedServices: many(services, { relationName: "serviceOwner" }),
   ownedClientServices: many(clientServices, { relationName: "clientServiceOwner" }),
+  inactivatedServices: many(clientServices, { relationName: "serviceInactivator" }),
   chronologyEntries: many(projectChronology),
   clientChronologyEntries: many(clientChronology),
   magicLinkTokens: many(magicLinkTokens),
@@ -766,6 +877,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     relationName: "assignee",
   }),
   chronology: many(projectChronology),
+  stageApprovalResponses: many(stageApprovalResponses),
 }));
 
 export const projectChronologyRelations = relations(projectChronology, ({ one, many }) => ({
@@ -814,6 +926,10 @@ export const changeReasonsRelations = relations(changeReasons, ({ one, many }) =
     fields: [changeReasons.projectTypeId],
     references: [projectTypes.id],
   }),
+  stageApproval: one(stageApprovals, {
+    fields: [changeReasons.stageApprovalId],
+    references: [stageApprovals.id],
+  }),
   stageReasonMaps: many(stageReasonMaps),
   customFields: many(reasonCustomFields),
 }));
@@ -855,6 +971,7 @@ export const stageApprovalsRelations = relations(stageApprovals, ({ one, many })
   }),
   fields: many(stageApprovalFields),
   linkedStages: many(kanbanStages),
+  linkedReasons: many(changeReasons),
 }));
 
 export const stageApprovalFieldsRelations = relations(stageApprovalFields, ({ one, many }) => ({
@@ -895,6 +1012,18 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  lastLoginAt: true,
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  loginTime: true,
+  lastActivity: true,
+});
+
+export const insertLoginAttemptSchema = createInsertSchema(loginAttempts).omit({
+  id: true,
+  timestamp: true,
 });
 
 export const insertMagicLinkTokenSchema = createInsertSchema(magicLinkTokens).omit({
@@ -913,6 +1042,12 @@ export const upsertUserSchema = createInsertSchema(users).omit({
   updatedAt: true,
 });
 
+export const updateUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
   createdAt: true,
@@ -930,9 +1065,9 @@ export const insertPersonSchema = createInsertSchema(people).omit({
   // Add validation for new fields
   niNumber: z.string().regex(niNumberRegex, "Invalid National Insurance number format").optional().or(z.literal("")),
   personalUtrNumber: z.string().regex(personalUtrRegex, "Personal UTR must be 10 digits").optional().or(z.literal("")),
-  // Primary contact validation
-  primaryPhone: z.string().regex(ukMobileRegex, "Invalid UK mobile number format (must be 07xxxxxxxxx or +447xxxxxxxxx)").optional().or(z.literal("")),
-  primaryEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+  // Primary contact validation - no restrictions on format
+  primaryPhone: z.string().optional().or(z.literal("")),
+  primaryEmail: z.string().optional().or(z.literal("")),
   nationality: z.enum([
     "afghan", "albanian", "algerian", "american", "andorran", "angolan", "antiguans", "argentinean", "armenian", "australian",
     "austrian", "azerbaijani", "bahamian", "bahraini", "bangladeshi", "barbadian", "barbudans", "batswana", "belarusian", "belgian",
@@ -1230,6 +1365,28 @@ export const insertDashboardSchema = createInsertSchema(dashboards).omit({
 
 export const updateDashboardSchema = insertDashboardSchema.partial().omit({ userId: true });
 
+export const insertDashboardCacheSchema = createInsertSchema(dashboardCache).omit({
+  id: true,
+  createdAt: true,
+  lastUpdated: true,
+});
+
+export const updateDashboardCacheSchema = createInsertSchema(dashboardCache).omit({
+  id: true,
+  createdAt: true,
+  userId: true,
+}).partial();
+
+export const insertUserProjectPreferencesSchema = createInsertSchema(userProjectPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  defaultViewType: z.enum(['list', 'kanban', 'dashboard']).nullable().optional(),
+});
+
+export const updateUserProjectPreferencesSchema = insertUserProjectPreferencesSchema.partial().omit({ userId: true });
+
 // UDF definition schema
 export const udfDefinitionSchema = z.object({
   id: z.string(),
@@ -1301,8 +1458,8 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   createdAt: true,
 }).extend({
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).optional(),
-  nextStartDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
-  nextDueDate: z.union([z.string().datetime(), z.literal(""), z.null()]).optional(),
+  nextStartDate: z.union([z.date(), z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
+  nextDueDate: z.union([z.date(), z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
   udfValues: z.record(z.any()).optional(),
 });
 
@@ -1337,7 +1494,14 @@ export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
   newStatus: z.string(), // Now accepts any kanban stage name
   changeReason: z.string().min(1, "Change reason is required").max(255, "Change reason too long"),
-  notes: z.string().optional(),
+  notes: z.string().optional(), // Plain text notes for backward compatibility
+  notesHtml: z.string().optional(), // Rich HTML notes from TiptapEditor
+  attachments: z.array(z.object({
+    fileName: z.string(),
+    fileSize: z.number(),
+    fileType: z.string(),
+    objectPath: z.string(),
+  })).optional(), // Array of attachment metadata
   fieldResponses: z.array(z.object({
     customFieldId: z.string(),
     // fieldType removed - will be derived server-side from the custom field definition
@@ -1457,8 +1621,13 @@ export type User = typeof users.$inferSelect & {
 };
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type LoginAttempt = typeof loginAttempts.$inferSelect;
+export type InsertLoginAttempt = z.infer<typeof insertLoginAttemptSchema>;
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Project = typeof projects.$inferSelect;
@@ -1519,6 +1688,11 @@ export const clientServicesRelations = relations(clientServices, ({ one, many })
     fields: [clientServices.serviceOwnerId],
     references: [users.id],
     relationName: "clientServiceOwner",
+  }),
+  inactiveByUser: one(users, {
+    fields: [clientServices.inactiveByUserId],
+    references: [users.id],
+    relationName: "serviceInactivator",
   }),
   roleAssignments: many(clientServiceRoleAssignments),
   schedulingHistory: many(projectSchedulingHistory, { relationName: "clientServiceHistory" }),
@@ -1602,6 +1776,12 @@ export type UpdateUserColumnPreferences = z.infer<typeof updateUserColumnPrefere
 export type Dashboard = typeof dashboards.$inferSelect;
 export type InsertDashboard = z.infer<typeof insertDashboardSchema>;
 export type UpdateDashboard = z.infer<typeof updateDashboardSchema>;
+export type DashboardCache = typeof dashboardCache.$inferSelect;
+export type InsertDashboardCache = z.infer<typeof insertDashboardCacheSchema>;
+export type UpdateDashboardCache = z.infer<typeof updateDashboardCacheSchema>;
+export type UserProjectPreferences = typeof userProjectPreferences.$inferSelect;
+export type InsertUserProjectPreferences = z.infer<typeof insertUserProjectPreferencesSchema>;
+export type UpdateUserProjectPreferences = z.infer<typeof updateUserProjectPreferencesSchema>;
 export type InsertUserNotificationPreferences = z.infer<typeof insertUserNotificationPreferencesSchema>;
 export type UpdateUserNotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 export type UDFDefinition = z.infer<typeof udfDefinitionSchema>;
@@ -1728,6 +1908,7 @@ export const communications = pgTable("communications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   personId: varchar("person_id").references(() => people.id, { onDelete: "set null" }), // Optional - for person-specific comms
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }), // Optional - for project-specific comms (progress notes)
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Who logged/sent this
   type: communicationTypeEnum("type").notNull(),
   subject: varchar("subject"), // For emails primarily
@@ -1744,6 +1925,8 @@ export const communications = pgTable("communications", {
   clientIdLoggedAtIdx: index("communications_client_id_logged_at_idx").on(table.clientId, table.loggedAt),
   // Index for efficient person communication lookups  
   personIdLoggedAtIdx: index("communications_person_id_logged_at_idx").on(table.personId, table.loggedAt),
+  // Index for efficient project communication lookups
+  projectIdLoggedAtIdx: index("communications_project_id_logged_at_idx").on(table.projectId, table.loggedAt),
   // Index for thread lookups
   threadIdIdx: index("communications_thread_id_idx").on(table.threadId),
 }));
@@ -1889,9 +2072,11 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 
 // Push notification template type enum
 export const pushTemplateTypeEnum = pgEnum("push_template_type", [
-  "new_message",
+  "new_message_staff",
+  "new_message_client",
   "document_request", 
   "task_assigned",
+  "project_stage_change",
   "status_update",
   "reminder"
 ]);
@@ -1910,7 +2095,21 @@ export const pushNotificationTemplates = pgTable("push_notification_templates", 
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   templateTypeIdx: index("push_templates_type_idx").on(table.templateType),
-  uniqueTemplateType: unique("unique_template_type").on(table.templateType),
+}));
+
+// Notification icons table - stores uploaded icon/badge images for push notifications
+export const notificationIcons = pgTable("notification_icons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fileName: varchar("file_name").notNull(), // Original filename
+  storagePath: text("storage_path").notNull(), // Path in GCS (.private/notification-icons/{id}/{filename})
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  mimeType: varchar("mime_type").notNull(), // image/png, image/jpeg, etc.
+  width: integer("width"), // Image width in pixels
+  height: integer("height"), // Image height in pixels
+  uploadedBy: varchar("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uploadedByIdx: index("notification_icons_uploaded_by_idx").on(table.uploadedBy),
 }));
 
 // Project Message Threads - staff-to-staff messaging for project discussions
@@ -1956,6 +2155,7 @@ export const projectMessageParticipants = pgTable("project_message_participants"
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   lastReadAt: timestamp("last_read_at"), // When participant last read messages
   lastReadMessageId: varchar("last_read_message_id").references(() => projectMessages.id, { onDelete: "set null" }), // Last message they read
+  lastReminderEmailSentAt: timestamp("last_reminder_email_sent_at"), // When we last sent a reminder email about unread messages
   joinedAt: timestamp("joined_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1966,6 +2166,60 @@ export const projectMessageParticipants = pgTable("project_message_participants"
   userIdIdx: index("project_message_participants_user_id_idx").on(table.userId),
   // Unique constraint to prevent duplicate participants
   uniqueThreadUser: unique("unique_project_thread_user").on(table.threadId, table.userId),
+}));
+
+// Standalone Staff Message Threads - staff-to-staff messaging NOT tied to projects
+export const staffMessageThreads = pgTable("staff_message_threads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  topic: varchar("topic").notNull(), // Thread topic/subject
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id, { onDelete: "set null" }),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  lastMessageByUserId: varchar("last_message_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for last message sorting
+  lastMessageIdx: index("staff_message_threads_last_message_idx").on(table.lastMessageAt),
+  // Index for archived status
+  isArchivedIdx: index("staff_message_threads_is_archived_idx").on(table.isArchived),
+}));
+
+// Standalone Staff Messages - individual messages within standalone staff threads
+export const staffMessages = pgTable("staff_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => staffMessageThreads.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "set null" }), // Staff member who sent message
+  attachments: jsonb("attachments"), // Array of attachment metadata {fileName, fileSize, fileType, objectPath}
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread message lookups
+  threadIdCreatedAtIdx: index("staff_messages_thread_id_created_at_idx").on(table.threadId, table.createdAt),
+  // Index for user messages
+  userIdIdx: index("staff_messages_user_id_idx").on(table.userId),
+}));
+
+// Standalone Staff Message Participants - tracks which staff members are in each standalone thread
+export const staffMessageParticipants = pgTable("staff_message_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").notNull().references(() => staffMessageThreads.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lastReadAt: timestamp("last_read_at"), // When participant last read messages
+  lastReadMessageId: varchar("last_read_message_id").references(() => staffMessages.id, { onDelete: "set null" }), // Last message they read
+  joinedAt: timestamp("joined_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Index for thread participants
+  threadIdIdx: index("staff_message_participants_thread_id_idx").on(table.threadId),
+  // Index for user participation lookups
+  userIdIdx: index("staff_message_participants_user_id_idx").on(table.userId),
+  // Unique constraint to prevent duplicate participants
+  uniqueThreadUser: unique("unique_staff_thread_user").on(table.threadId, table.userId),
 }));
 
 // Document folders table - organizes documents into folders (batches)
@@ -1991,7 +2245,7 @@ export const documents = pgTable("documents", {
   clientPortalUserId: varchar("client_portal_user_id").references(() => clientPortalUsers.id, { onDelete: "cascade" }), // for portal uploads
   uploadName: varchar("upload_name"), // kept temporarily for migration
   source: varchar("source", {
-    enum: ['direct_upload', 'message_attachment', 'task_upload', 'portal_upload']
+    enum: ['direct_upload', 'message_attachment', 'task_upload', 'portal_upload', 'signature_request']
   }).notNull().default('direct_upload'), // source of the document
   messageId: varchar("message_id").references(() => messages.id, { onDelete: "cascade" }), // link to source message if from message attachment
   threadId: varchar("thread_id").references(() => messageThreads.id, { onDelete: "cascade" }), // link to thread if from message attachment
@@ -2013,12 +2267,448 @@ export const documents = pgTable("documents", {
   index("idx_documents_source").on(table.source),
 ]);
 
+// ============================================================
+// E-SIGNATURE SYSTEM TABLES
+// ============================================================
+
+// Signature request status enum
+export const signatureRequestStatusEnum = pgEnum("signature_request_status", [
+  "draft",
+  "pending", // sent to recipients, waiting for signatures
+  "partially_signed", // some recipients have signed
+  "completed", // all recipients have signed
+  "cancelled"
+]);
+
+// Signature field type enum
+export const signatureFieldTypeEnum = pgEnum("signature_field_type", [
+  "signature", // drawn or uploaded signature
+  "typed_name" // typed name field
+]);
+
+// Signature requests - main table for document signing workflows
+export const signatureRequests = pgTable("signature_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  friendlyName: varchar("friendly_name").notNull().default("Untitled Document"), // User-provided document name for display
+  documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }), // PDF to be signed
+  createdBy: varchar("created_by").notNull().references(() => users.id), // Staff user who created request
+  status: signatureRequestStatusEnum("status").notNull().default("draft"),
+  emailSubject: varchar("email_subject"), // Subject line for signature request email
+  emailMessage: text("email_message"), // Custom message from staff to recipients
+  redirectUrl: varchar("redirect_url"), // Optional URL to redirect signer after completion
+  reminderEnabled: boolean("reminder_enabled").notNull().default(true), // Whether to send reminders
+  reminderIntervalDays: integer("reminder_interval_days").notNull().default(3), // Days between reminders
+  remindersSentCount: integer("reminders_sent_count").notNull().default(0), // How many reminders sent
+  lastReminderSentAt: timestamp("last_reminder_sent_at"), // When last reminder was sent
+  nextReminderDate: timestamp("next_reminder_date"), // When next reminder should be sent
+  completedAt: timestamp("completed_at"), // When all signatures collected
+  cancelledAt: timestamp("cancelled_at"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancellationReason: text("cancellation_reason"), // Why request was cancelled
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_requests_client_id").on(table.clientId),
+  index("idx_signature_requests_document_id").on(table.documentId),
+  index("idx_signature_requests_status").on(table.status),
+  index("idx_signature_requests_created_by").on(table.createdBy),
+]);
+
+// Signature fields - defines where signature fields are placed on PDF
+export const signatureFields = pgTable("signature_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }),
+  recipientPersonId: text("recipient_person_id").notNull().references(() => people.id, { onDelete: "cascade" }), // Who should sign this field
+  fieldType: signatureFieldTypeEnum("field_type").notNull(),
+  pageNumber: integer("page_number").notNull(), // PDF page (0-indexed)
+  xPosition: real("x_position").notNull(), // X coordinate as percentage (0-100) with decimals
+  yPosition: real("y_position").notNull(), // Y coordinate as percentage (0-100) with decimals
+  width: real("width").notNull(), // Field width as percentage (0-100) with decimals
+  height: real("height").notNull(), // Field height as percentage (0-100) with decimals
+  label: varchar("label"), // Optional label (e.g., "Sign here", "Type your name")
+  orderIndex: integer("order_index").notNull().default(0), // Order for signing flow
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_fields_request_id").on(table.signatureRequestId),
+  index("idx_signature_fields_recipient_id").on(table.recipientPersonId),
+]);
+
+// Signature request recipients - tracks who needs to sign
+export const signatureRequestRecipients = pgTable("signature_request_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }),
+  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull(), // Email where request was sent
+  secureToken: varchar("secure_token").notNull().unique(), // Unique token for signing link
+  tokenExpiresAt: timestamp("token_expires_at").notNull().default(sql`now() + interval '30 days'`), // Token valid for 30 days
+  sentAt: timestamp("sent_at"), // When email was sent
+  sendStatus: varchar("send_status").default('pending'), // 'pending', 'sent', 'failed'
+  sendError: text("send_error"), // Error message if send failed
+  viewedAt: timestamp("viewed_at"), // When recipient first opened the link
+  signedAt: timestamp("signed_at"), // When recipient completed signing
+  reminderSentAt: timestamp("reminder_sent_at"), // Last reminder sent
+  orderIndex: integer("order_index").notNull().default(0), // Order for sequential signing
+  // Single-session protection (prevent concurrent signing, duplicate submissions)
+  activeSessionToken: varchar("active_session_token"), // Current browser session UUID
+  sessionLastActive: timestamp("session_last_active"), // Last activity for 30-min timeout
+  sessionDeviceInfo: varchar("session_device_info"), // Active session device type (Desktop, Mobile, Tablet)
+  sessionBrowserInfo: varchar("session_browser_info"), // Active session browser (Chrome 119, Safari 17, etc.)
+  sessionOsInfo: varchar("session_os_info"), // Active session OS (Windows 10, macOS 14, etc.)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_request_recipients_request_id").on(table.signatureRequestId),
+  index("idx_signature_request_recipients_person_id").on(table.personId),
+  index("idx_signature_request_recipients_token").on(table.secureToken),
+  unique("unique_request_recipient").on(table.signatureRequestId, table.personId),
+]);
+
+// Signatures - stores actual signature data for each field
+export const signatures = pgTable("signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureFieldId: varchar("signature_field_id").notNull().references(() => signatureFields.id, { onDelete: "cascade" }),
+  signatureRequestRecipientId: varchar("signature_request_recipient_id").notNull().references(() => signatureRequestRecipients.id, { onDelete: "cascade" }),
+  signatureType: varchar("signature_type").notNull(), // 'drawn', 'typed'
+  signatureData: text("signature_data").notNull(), // Base64 image data for drawn, text for typed
+  signedAt: timestamp("signed_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signatures_field_id").on(table.signatureFieldId),
+  index("idx_signatures_recipient_id").on(table.signatureRequestRecipientId),
+]);
+
+// Signature audit logs - UK eIDAS compliance audit trail
+export const signatureAuditLogs = pgTable("signature_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestRecipientId: varchar("signature_request_recipient_id").notNull().references(() => signatureRequestRecipients.id, { onDelete: "cascade" }),
+  // Event tracking
+  eventType: varchar("event_type").notNull(), // 'signature_completed', 'consent_accepted', etc.
+  eventDetails: jsonb("event_details"), // Additional event context (JSON object)
+  // Signer identity
+  signerName: varchar("signer_name").notNull(),
+  signerEmail: varchar("signer_email").notNull(),
+  // Session information
+  ipAddress: varchar("ip_address").notNull(),
+  userAgent: text("user_agent").notNull(), // Full user agent string
+  deviceInfo: varchar("device_info"), // Parsed device type (Desktop, Mobile, Tablet)
+  browserInfo: varchar("browser_info"), // Parsed browser (Chrome 119, Safari 17, etc.)
+  osInfo: varchar("os_info"), // Parsed OS (Windows 10, iOS 17, etc.)
+  // Consent tracking
+  consentAccepted: boolean("consent_accepted").notNull().default(true), // UK eIDAS consent accepted
+  consentAcceptedAt: timestamp("consent_accepted_at"), // When consent was accepted (null for non-consent events)
+  // Timestamps (UTC)
+  signedAt: timestamp("signed_at"), // When signing completed (null for non-signature events)
+  // Document integrity
+  documentHash: varchar("document_hash").notNull(), // SHA-256 hash of original PDF
+  documentVersion: varchar("document_version").notNull(), // Version identifier
+  // Authentication method
+  authMethod: varchar("auth_method").notNull().default("email_link"), // email_link, sms_code, etc.
+  // Geolocation (optional)
+  city: varchar("city"),
+  country: varchar("country"),
+  // Additional metadata
+  metadata: jsonb("metadata"), // Store any additional audit data
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signature_audit_logs_recipient_id").on(table.signatureRequestRecipientId),
+  index("idx_signature_audit_logs_signed_at").on(table.signedAt),
+]);
+
+// Signed documents - stores final signed PDFs and audit reports
+export const signedDocuments = pgTable("signed_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureRequestId: varchar("signature_request_id").notNull().references(() => signatureRequests.id, { onDelete: "cascade" }).unique(),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  signedPdfPath: text("signed_pdf_path").notNull(), // Path in object storage to signed PDF
+  originalPdfHash: varchar("original_pdf_hash").notNull(), // SHA-256 hash of original PDF (pre-signature)
+  signedPdfHash: varchar("signed_pdf_hash").notNull(), // SHA-256 hash of final signed PDF (post-signature)
+  auditTrailPdfPath: text("audit_trail_pdf_path"), // Path to audit trail PDF (certificate)
+  fileName: varchar("file_name").notNull(), // Original filename
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  emailSentAt: timestamp("email_sent_at"), // When signed doc was emailed to recipients
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_signed_documents_request_id").on(table.signatureRequestId),
+  index("idx_signed_documents_client_id").on(table.clientId),
+  index("idx_signed_documents_completed_at").on(table.completedAt),
+]);
+
+// ============================================================
+// EMAIL THREADING & DEDUPLICATION TABLES
+// ============================================================
+
+// Email direction enum
+export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outbound", "internal", "external"]);
+
+// Email client match confidence enum
+export const emailMatchConfidenceEnum = pgEnum("email_match_confidence", ["high", "medium", "low"]);
+
+// Email messages table - stores deduplicated emails with threading info
+export const emailMessages = pgTable("email_messages", {
+  // Primary deduplication key - global unique identifier from Microsoft Graph
+  internetMessageId: varchar("internet_message_id").primaryKey(), // Global unique ID from Graph
+  
+  // Thread grouping fields
+  canonicalConversationId: varchar("canonical_conversation_id").notNull().references(() => emailThreads.canonicalConversationId, { onDelete: "cascade" }), // First seen conversationId for this thread
+  conversationIdSeen: varchar("conversation_id_seen").notNull(), // Original conversationId from this copy
+  threadKey: varchar("thread_key"), // Fallback hash: hash(rootInternetMessageId + normalizedSubjectStem + participantsSet)
+  threadPosition: integer("thread_position"), // Ordinal position within thread
+  
+  // Email metadata
+  from: varchar("from").notNull(), // Normalized to lowercase
+  to: text("to").array(), // Array of normalized lowercase emails
+  cc: text("cc").array(), // Array of normalized lowercase emails
+  bcc: text("bcc").array(), // Array of normalized lowercase emails
+  subject: text("subject"),
+  subjectStem: text("subject_stem"), // Normalized subject without Re:/Fwd: for matching
+  body: text("body"), // Email body content
+  bodyPreview: text("body_preview"), // Short preview (first 150 chars)
+  
+  // Timestamps
+  receivedDateTime: timestamp("received_datetime").notNull(),
+  sentDateTime: timestamp("sent_datetime"),
+  
+  // Threading ancestry
+  inReplyTo: varchar("in_reply_to"), // internetMessageId of parent message
+  references: text("references").array(), // Array of ancestral internetMessageIds
+  
+  // Email direction and classification
+  direction: emailDirectionEnum("direction").notNull(),
+  isInternalOnly: boolean("is_internal_only").default(false), // Computed: all participants are staff
+  participantCount: integer("participant_count"), // Total unique participants (for noise detection)
+  hasAttachments: boolean("has_attachments").default(false), // Quick filter flag
+  
+  // Client association
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  clientMatchConfidence: emailMatchConfidenceEnum("client_match_confidence"), // How confident we are in the client match
+  
+  // Mailbox owner tracking
+  mailboxOwnerUserId: varchar("mailbox_owner_user_id").references(() => users.id, { onDelete: "set null" }), // Which staff mailbox this came from
+  
+  // Graph API metadata
+  graphMessageId: varchar("graph_message_id"), // The id from Graph (changes per mailbox)
+  conversationIndex: text("conversation_index"), // Graph's conversation index for ordering
+  internetMessageHeaders: jsonb("internet_message_headers"), // Store full headers if needed for debugging
+  
+  // Processing metadata
+  processedAt: timestamp("processed_at").defaultNow(),
+  errorCount: integer("error_count").default(0), // Retry tracking
+  lastError: text("last_error"), // Last processing error
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  // Threading indexes
+  index("idx_email_messages_canonical_conversation_id").on(table.canonicalConversationId),
+  index("idx_email_messages_thread_key").on(table.threadKey),
+  index("idx_email_messages_in_reply_to").on(table.inReplyTo),
+  
+  // Client association indexes
+  index("idx_email_messages_client_id").on(table.clientId),
+  index("idx_email_messages_client_id_received").on(table.clientId, table.receivedDateTime),
+  
+  // Participant search indexes
+  index("idx_email_messages_from").on(table.from),
+  
+  // Mailbox owner index
+  index("idx_email_messages_mailbox_owner").on(table.mailboxOwnerUserId),
+  
+  // Direction and classification indexes
+  index("idx_email_messages_direction").on(table.direction),
+  index("idx_email_messages_is_internal_only").on(table.isInternalOnly),
+  
+  // Date-based queries
+  index("idx_email_messages_received_datetime").on(table.receivedDateTime),
+]);
+
+// Mailbox message map - tracks which mailboxes have copies of each message
+export const mailboxMessageMap = pgTable("mailbox_message_map", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mailboxUserId: varchar("mailbox_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  mailboxMessageId: varchar("mailbox_message_id").notNull(), // The id from Graph API for this mailbox
+  internetMessageId: varchar("internet_message_id").notNull().references(() => emailMessages.internetMessageId, { onDelete: "cascade" }),
+  folderPath: varchar("folder_path"), // e.g., "Inbox", "Sent Items", "Archive/2024"
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one Graph message ID per mailbox
+  unique("unique_mailbox_graph_message").on(table.mailboxUserId, table.mailboxMessageId),
+  // Unique constraint: one global message per mailbox (prevent duplicate mapping)
+  unique("unique_mailbox_internet_message").on(table.mailboxUserId, table.internetMessageId),
+  
+  // Lookup indexes
+  index("idx_mailbox_message_map_internet_message_id").on(table.internetMessageId),
+  index("idx_mailbox_message_map_mailbox_user").on(table.mailboxUserId),
+]);
+
+// Email threads - summary information for each conversation thread
+// Note: canonicalConversationId is the primary key to ensure referential integrity
+export const emailThreads = pgTable("email_threads", {
+  canonicalConversationId: varchar("canonical_conversation_id").primaryKey(), // Canonical thread identifier
+  threadKey: varchar("thread_key").unique(), // Fallback computed hash if conversationId breaks
+  
+  // Thread summary
+  subject: text("subject"), // Subject of first message
+  participants: text("participants").array(), // All unique email addresses in thread
+  
+  // Client association
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  
+  // Timeline
+  firstMessageAt: timestamp("first_message_at").notNull(),
+  lastMessageAt: timestamp("last_message_at").notNull(),
+  messageCount: integer("message_count").default(1),
+  
+  // Latest preview for UI
+  latestPreview: text("latest_preview"), // Preview of most recent message
+  latestDirection: emailDirectionEnum("latest_direction"), // Direction of most recent message
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_email_threads_client_id").on(table.clientId),
+  index("idx_email_threads_last_message_at").on(table.lastMessageAt),
+  index("idx_email_threads_thread_key").on(table.threadKey),
+]);
+
+// Unmatched emails - quarantine for emails that don't match any client
+export const unmatchedEmails = pgTable("unmatched_emails", {
+  internetMessageId: varchar("internet_message_id").primaryKey().references(() => emailMessages.internetMessageId, { onDelete: "cascade" }),
+  
+  // Minimal fields for matching attempts
+  from: varchar("from").notNull(),
+  to: text("to").array(),
+  cc: text("cc").array(),
+  subjectStem: text("subject_stem"),
+  
+  // Ancestry for retroactive matching
+  inReplyTo: varchar("in_reply_to"),
+  references: text("references").array(),
+  
+  // Timestamps
+  receivedDateTime: timestamp("received_datetime").notNull(),
+  
+  // Processing
+  mailboxOwnerUserId: varchar("mailbox_owner_user_id").references(() => users.id, { onDelete: "set null" }),
+  direction: emailDirectionEnum("direction").notNull(),
+  retryCount: integer("retry_count").default(0),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_unmatched_emails_from").on(table.from),
+  index("idx_unmatched_emails_received_datetime").on(table.receivedDateTime),
+  index("idx_unmatched_emails_in_reply_to").on(table.inReplyTo),
+  index("idx_unmatched_emails_retry_count").on(table.retryCount),
+]);
+
+// Client email aliases - known email addresses for each client
+export const clientEmailAliases = pgTable("client_email_aliases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  emailLowercase: varchar("email_lowercase").notNull(), // Always stored in lowercase
+  isPrimary: boolean("is_primary").default(false), // Mark primary contact email
+  source: varchar("source").default('manual'), // 'manual', 'auto_discovered', 'companies_house'
+  verifiedAt: timestamp("verified_at"), // When this alias was verified (optional)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one email can only belong to one client
+  unique("unique_client_email").on(table.emailLowercase),
+  
+  index("idx_client_email_aliases_client_id").on(table.clientId),
+  index("idx_client_email_aliases_email").on(table.emailLowercase),
+]);
+
+// Client domain allowlist - auto-match emails from specific domains to clients
+export const clientDomainAllowlist = pgTable("client_domain_allowlist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  domain: varchar("domain").notNull(), // e.g., 'acmecorp.com' (always lowercase)
+  matchConfidence: emailMatchConfidenceEnum("match_confidence").default('medium'), // Domain matches are medium confidence
+  notes: text("notes"), // Why this domain is allowed
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one domain per client
+  unique("unique_client_domain").on(table.clientId, table.domain),
+  
+  index("idx_client_domain_allowlist_client_id").on(table.clientId),
+  index("idx_client_domain_allowlist_domain").on(table.domain),
+]);
+
+// Email attachments - deduplicated attachment storage
+export const emailAttachments = pgTable("email_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contentHash: varchar("content_hash").notNull().unique(), // SHA-256 hash for deduplication
+  fileName: varchar("file_name").notNull(),
+  fileSize: integer("file_size").notNull(), // in bytes
+  contentType: varchar("content_type").notNull(), // MIME type
+  objectPath: text("object_path").notNull(), // Path in object storage
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_attachments_content_hash").on(table.contentHash),
+]);
+
+// Email message attachments - junction table linking messages to attachments
+export const emailMessageAttachments = pgTable("email_message_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  internetMessageId: varchar("internet_message_id").notNull().references(() => emailMessages.internetMessageId, { onDelete: "cascade" }),
+  attachmentId: varchar("attachment_id").notNull().references(() => emailAttachments.id, { onDelete: "cascade" }),
+  attachmentIndex: integer("attachment_index"), // Order in original email
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: prevent duplicate links between same message and attachment
+  unique("unique_message_attachment").on(table.internetMessageId, table.attachmentId),
+  
+  index("idx_email_message_attachments_message_id").on(table.internetMessageId),
+  index("idx_email_message_attachments_attachment_id").on(table.attachmentId),
+]);
+
+// Graph webhook subscriptions - track active webhook subscriptions
+export const graphWebhookSubscriptions = pgTable("graph_webhook_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  subscriptionId: varchar("subscription_id").notNull().unique(), // ID from Microsoft Graph
+  resource: varchar("resource").notNull(), // e.g., "me/mailFolders('Inbox')/messages"
+  changeType: varchar("change_type").notNull(), // "created,updated"
+  expiresAt: timestamp("expires_at").notNull(),
+  clientState: varchar("client_state"), // For validation
+  isActive: boolean("is_active").default(true),
+  lastRenewedAt: timestamp("last_renewed_at"),
+  lastNotificationAt: timestamp("last_notification_at"), // Track webhook activity
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_graph_subscriptions_user_id").on(table.userId),
+  index("idx_graph_subscriptions_expires_at").on(table.expiresAt),
+  index("idx_graph_subscriptions_is_active").on(table.isActive),
+]);
+
+// Graph sync state - track delta sync tokens per mailbox
+export const graphSyncState = pgTable("graph_sync_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderPath: varchar("folder_path").notNull(), // "Inbox" or "SentItems"
+  deltaLink: text("delta_link"), // Full delta link from Graph API
+  lastSyncAt: timestamp("last_sync_at"),
+  lastMessageCount: integer("last_message_count").default(0), // Messages processed in last sync
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: one sync state per user+folder
+  unique("unique_user_folder_sync").on(table.userId, table.folderPath),
+  
+  index("idx_graph_sync_state_user_id").on(table.userId),
+  index("idx_graph_sync_state_last_sync").on(table.lastSyncAt),
+]);
+
 // Zod schemas for communications
 export const insertCommunicationSchema = createInsertSchema(communications).omit({
   id: true,
   loggedAt: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  actualContactTime: z.coerce.date(),
 });
 
 // Zod schemas for client portal and messaging
@@ -2059,6 +2749,25 @@ export const insertProjectMessageParticipantSchema = createInsertSchema(projectM
   updatedAt: true,
 });
 
+// Zod schemas for standalone staff messaging
+export const insertStaffMessageThreadSchema = createInsertSchema(staffMessageThreads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStaffMessageSchema = createInsertSchema(staffMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStaffMessageParticipantSchema = createInsertSchema(staffMessageParticipants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).omit({
   id: true,
   createdAt: true,
@@ -2082,6 +2791,11 @@ export const insertPushNotificationTemplateSchema = createInsertSchema(pushNotif
   updatedAt: true,
 });
 
+export const insertNotificationIconSchema = createInsertSchema(notificationIcons).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
   id: true,
   createdAt: true,
@@ -2091,6 +2805,98 @@ export const insertDocumentFolderSchema = createInsertSchema(documentFolders).om
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   uploadedAt: true,
+});
+
+// Zod schemas for e-signature system
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  cancelledAt: true,
+});
+
+export const insertSignatureFieldSchema = createInsertSchema(signatureFields).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSignatureRequestRecipientSchema = createInsertSchema(signatureRequestRecipients).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  viewedAt: true,
+  signedAt: true,
+  reminderSentAt: true,
+});
+
+export const insertSignatureSchema = createInsertSchema(signatures).omit({
+  id: true,
+  createdAt: true,
+  signedAt: true,
+});
+
+export const insertSignatureAuditLogSchema = createInsertSchema(signatureAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSignedDocumentSchema = createInsertSchema(signedDocuments).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+// Zod schemas for email threading
+export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
+  processedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMailboxMessageMapSchema = createInsertSchema(mailboxMessageMap).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailThreadSchema = createInsertSchema(emailThreads).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUnmatchedEmailSchema = createInsertSchema(unmatchedEmails).omit({
+  createdAt: true,
+});
+
+export const insertClientEmailAliasSchema = createInsertSchema(clientEmailAliases).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertClientDomainAllowlistSchema = createInsertSchema(clientDomainAllowlist).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailAttachmentSchema = createInsertSchema(emailAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailMessageAttachmentSchema = createInsertSchema(emailMessageAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGraphWebhookSubscriptionSchema = createInsertSchema(graphWebhookSubscriptions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGraphSyncStateSchema = createInsertSchema(graphSyncState).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Risk assessment enums
@@ -2150,7 +2956,7 @@ export const riskAssessmentResponses = pgTable("risk_assessment_responses", {
   unique("unique_assessment_question").on(table.riskAssessmentId, table.questionKey),
 ]);
 
-// Task Templates - Question type enum
+// Client Request Templates - Question type enum
 export const questionTypeEnum = pgEnum("question_type", [
   "short_text",
   "long_text", 
@@ -2164,7 +2970,7 @@ export const questionTypeEnum = pgEnum("question_type", [
   "file_upload"
 ]);
 
-// Task Templates - Instance status enum
+// Client Request Templates - Instance status enum
 export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
   "not_started",
   "in_progress",
@@ -2173,8 +2979,8 @@ export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
   "cancelled"
 ]);
 
-// Task template categories table
-export const taskTemplateCategories = pgTable("task_template_categories", {
+// Client request template categories table
+export const clientRequestTemplateCategories = pgTable("client_request_template_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
@@ -2185,10 +2991,10 @@ export const taskTemplateCategories = pgTable("task_template_categories", {
   index("idx_task_template_categories_order").on(table.order),
 ]);
 
-// Task templates table
-export const taskTemplates = pgTable("task_templates", {
+// Client request templates table
+export const clientRequestTemplates = pgTable("client_request_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  categoryId: varchar("category_id").references(() => taskTemplateCategories.id, { onDelete: "set null" }),
+  categoryId: varchar("category_id").references(() => clientRequestTemplateCategories.id, { onDelete: "set null" }),
   name: varchar("name").notNull(),
   description: text("description"),
   status: varchar("status", { enum: ["draft", "active"] }).notNull().default("draft"),
@@ -2200,10 +3006,10 @@ export const taskTemplates = pgTable("task_templates", {
   index("idx_task_templates_status").on(table.status),
 ]);
 
-// Task template sections table
-export const taskTemplateSections = pgTable("task_template_sections", {
+// Client request template sections table
+export const clientRequestTemplateSections = pgTable("client_request_template_sections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  templateId: varchar("template_id").notNull().references(() => taskTemplates.id, { onDelete: "cascade" }),
+  templateId: varchar("template_id").notNull().references(() => clientRequestTemplates.id, { onDelete: "cascade" }),
   title: varchar("title").notNull(),
   description: text("description"),
   order: integer("order").notNull().default(0),
@@ -2214,10 +3020,10 @@ export const taskTemplateSections = pgTable("task_template_sections", {
   index("idx_task_template_sections_order").on(table.templateId, table.order),
 ]);
 
-// Task template questions table
-export const taskTemplateQuestions = pgTable("task_template_questions", {
+// Client request template questions table
+export const clientRequestTemplateQuestions = pgTable("client_request_template_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  sectionId: varchar("section_id").notNull().references(() => taskTemplateSections.id, { onDelete: "cascade" }),
+  sectionId: varchar("section_id").notNull().references(() => clientRequestTemplateSections.id, { onDelete: "cascade" }),
   questionType: questionTypeEnum("question_type").notNull(),
   label: text("label").notNull(),
   helpText: text("help_text"),
@@ -2233,10 +3039,10 @@ export const taskTemplateQuestions = pgTable("task_template_questions", {
   index("idx_task_template_questions_order").on(table.sectionId, table.order),
 ]);
 
-// Task instances table - created when template is applied to a client OR from custom request
+// Task instances table - created when client request template is applied to a client OR from custom request
 export const taskInstances = pgTable("task_instances", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  templateId: varchar("template_id").references(() => taskTemplates.id), // nullable - either templateId OR customRequestId must be set
+  templateId: varchar("template_id").references(() => clientRequestTemplates.id), // nullable - either templateId OR customRequestId must be set
   customRequestId: varchar("custom_request_id").references(() => clientCustomRequests.id, { onDelete: "cascade" }), // nullable - either templateId OR customRequestId must be set
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   personId: varchar("person_id").references(() => people.id, { onDelete: "cascade" }), // related person assigned to complete the task
@@ -2258,11 +3064,11 @@ export const taskInstances = pgTable("task_instances", {
   index("idx_task_instances_status").on(table.status),
 ]);
 
-// Task instance responses table - stores answers to questions (from either templates or custom requests)
+// Task instance responses table - stores answers to questions (from either client request templates or custom requests)
 export const taskInstanceResponses = pgTable("task_instance_responses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   taskInstanceId: varchar("task_instance_id").notNull().references(() => taskInstances.id, { onDelete: "cascade" }),
-  questionId: varchar("question_id").notNull(), // references either taskTemplateQuestions.id or clientCustomRequestQuestions.id
+  questionId: varchar("question_id").notNull(), // references either clientRequestTemplateQuestions.id or clientCustomRequestQuestions.id
   responseValue: text("response_value"), // text response or JSON for complex types
   fileUrls: text("file_urls").array(), // for file_upload questions - array of object paths
   createdAt: timestamp("created_at").defaultNow(),
@@ -2319,6 +3125,333 @@ export const clientCustomRequestQuestions = pgTable("client_custom_request_quest
   index("idx_client_custom_request_questions_order").on(table.sectionId, table.order),
 ]);
 
+// ============================================
+// INTERNAL TASKS SYSTEM
+// ============================================
+
+// Task types table - admin-defined list of task types
+export const taskTypes = pgTable("task_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Internal tasks table - staff task management
+export const internalTasks = pgTable("internal_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  status: internalTaskStatusEnum("status").notNull().default("open"),
+  priority: internalTaskPriorityEnum("priority").notNull().default("low"),
+  taskTypeId: varchar("task_type_id").references(() => taskTypes.id, { onDelete: "set null" }),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  assignedTo: varchar("assigned_to").notNull().references(() => users.id),
+  dueDate: timestamp("due_date").notNull(),
+  closedAt: timestamp("closed_at"),
+  closedBy: varchar("closed_by").references(() => users.id),
+  closureNote: text("closure_note"),
+  totalTimeSpentMinutes: integer("total_time_spent_minutes").default(0),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_internal_tasks_status").on(table.status),
+  index("idx_internal_tasks_priority").on(table.priority),
+  index("idx_internal_tasks_created_by").on(table.createdBy),
+  index("idx_internal_tasks_assigned_to").on(table.assignedTo),
+  index("idx_internal_tasks_task_type_id").on(table.taskTypeId),
+  index("idx_internal_tasks_due_date").on(table.dueDate),
+  index("idx_internal_tasks_is_archived").on(table.isArchived),
+]);
+
+// Task connections table - links tasks to other entities
+export const taskConnections = pgTable("task_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  entityType: varchar("entity_type").notNull(), // 'client', 'project', 'person', 'message', 'service'
+  entityId: varchar("entity_id").notNull(), // ID of the connected entity
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_connections_task_id").on(table.taskId),
+  index("idx_task_connections_entity").on(table.entityType, table.entityId),
+]);
+
+// Task progress notes table - for tracking progress with timestamp and user
+export const taskProgressNotes = pgTable("task_progress_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_progress_notes_task_id").on(table.taskId),
+  index("idx_task_progress_notes_user_id").on(table.userId),
+  index("idx_task_progress_notes_created_at").on(table.createdAt),
+]);
+
+// Task time entries table - for time tracking
+export const taskTimeEntries = pgTable("task_time_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time"),
+  durationMinutes: integer("duration_minutes"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_time_entries_task_id").on(table.taskId),
+  index("idx_task_time_entries_user_id").on(table.userId),
+  index("idx_task_time_entries_start_time").on(table.startTime),
+]);
+
+// Task documents table - for document attachments
+export const taskDocuments = pgTable("task_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").notNull().references(() => internalTasks.id, { onDelete: "cascade" }),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  fileName: varchar("file_name").notNull(),
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  mimeType: varchar("mime_type").notNull(),
+  storagePath: varchar("storage_path").notNull(), // Path in object storage
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_task_documents_task_id").on(table.taskId),
+  index("idx_task_documents_uploaded_by").on(table.uploadedBy),
+]);
+
+// ============================================================
+// NOTIFICATION & REMINDER SYSTEM TABLES
+// ============================================================
+
+// Notification type enum - channels through which notifications can be sent
+export const notificationTypeEnum = pgEnum("notification_type", ["email", "sms", "push"]);
+
+// Notification category enum - differentiates project vs stage notifications
+export const notificationCategoryEnum = pgEnum("notification_category", ["project", "stage"]);
+
+// Date reference enum - for project notifications (start_date or due_date)
+export const dateReferenceEnum = pgEnum("date_reference", ["start_date", "due_date"]);
+
+// Date offset type enum - before, on, or after the reference date
+export const dateOffsetTypeEnum = pgEnum("date_offset_type", ["before", "on", "after"]);
+
+// Stage trigger enum - whether notification fires on entering or exiting a stage
+export const stageTriggerEnum = pgEnum("stage_trigger", ["entry", "exit"]);
+
+// Notification status enum - tracks the lifecycle of a scheduled notification
+export const notificationStatusEnum = pgEnum("notification_status", [
+  "scheduled", 
+  "sent", 
+  "failed", 
+  "cancelled"
+]);
+
+// Company settings table - global configuration for the system
+export const companySettings = pgTable("company_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  emailSenderName: varchar("email_sender_name").default("The Link Team"), // Sender name for SendGrid emails
+  firmName: varchar("firm_name").default("The Link"), // Firm name for notification templates
+  firmPhone: varchar("firm_phone"), // Firm phone number for notification templates
+  firmEmail: varchar("firm_email"), // Firm email for notification templates
+  portalUrl: varchar("portal_url"), // Base URL for client portal links (e.g., https://example.replit.app)
+  pushNotificationsEnabled: boolean("push_notifications_enabled").default(false).notNull(), // Global toggle for push notifications
+  postSignatureRedirectUrls: jsonb("post_signature_redirect_urls").default(sql`'[]'::jsonb`), // Array of {name: string, url: string} for post-signature redirects
+  logoObjectPath: varchar("logo_object_path"), // Path to company logo in object storage (for certificate header)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Project type notifications table - notification configurations for project types
+export const projectTypeNotifications = pgTable("project_type_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }),
+  
+  // Notification metadata
+  category: notificationCategoryEnum("category").notNull(), // 'project' or 'stage'
+  notificationType: notificationTypeEnum("notification_type").notNull(), // 'email', 'sms', or 'push'
+  
+  // For project notifications (category = 'project')
+  dateReference: dateReferenceEnum("date_reference"), // 'start_date' or 'due_date' (nullable for stage notifications)
+  offsetType: dateOffsetTypeEnum("offset_type"), // 'before', 'on', 'after' (nullable for stage notifications)
+  offsetDays: integer("offset_days"), // Number of days offset (nullable for stage notifications, 0 for 'on')
+  
+  // For stage notifications (category = 'stage')
+  stageId: varchar("stage_id").references(() => kanbanStages.id, { onDelete: "cascade" }), // Stage that triggers notification (nullable for project notifications)
+  stageTrigger: stageTriggerEnum("stage_trigger"), // 'entry' or 'exit' (nullable for project notifications)
+  
+  // Notification content
+  emailTitle: varchar("email_title"), // Email subject (for email type only)
+  emailBody: text("email_body"), // Email body - rich text HTML (for email type only)
+  smsContent: varchar("sms_content", { length: 160 }), // SMS message - 160 char limit (for sms type only)
+  pushTitle: varchar("push_title", { length: 50 }), // Push notification title - 50 char limit (for push type only)
+  pushBody: varchar("push_body", { length: 120 }), // Push notification body - 120 char limit (for push type only)
+  
+  // Client Request Template linking (for email and push only)
+  clientRequestTemplateId: varchar("client_request_template_id").references(() => clientRequestTemplates.id, { onDelete: "set null" }), // Links to a client request template
+  
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_project_type_notifications_project_type_id").on(table.projectTypeId),
+  index("idx_project_type_notifications_stage_id").on(table.stageId),
+  index("idx_project_type_notifications_category").on(table.category),
+  // Check constraint: project notifications must have dateReference, offsetType, offsetDays
+  check("check_project_notification_fields", sql`
+    (category != 'project' OR (date_reference IS NOT NULL AND offset_type IS NOT NULL AND offset_days IS NOT NULL))
+  `),
+  // Check constraint: stage notifications must have stageId and stageTrigger
+  check("check_stage_notification_fields", sql`
+    (category != 'stage' OR (stage_id IS NOT NULL AND stage_trigger IS NOT NULL))
+  `),
+  // Check constraint: email notifications must have emailTitle and emailBody
+  check("check_email_notification_content", sql`
+    (notification_type != 'email' OR (email_title IS NOT NULL AND email_body IS NOT NULL))
+  `),
+  // Check constraint: sms notifications must have smsContent
+  check("check_sms_notification_content", sql`
+    (notification_type != 'sms' OR sms_content IS NOT NULL)
+  `),
+  // Check constraint: push notifications must have pushTitle and pushBody
+  check("check_push_notification_content", sql`
+    (notification_type != 'push' OR (push_title IS NOT NULL AND push_body IS NOT NULL))
+  `),
+]);
+
+// Client request reminders table - reminder configurations for client request templates
+export const clientRequestReminders = pgTable("client_request_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectTypeNotificationId: varchar("project_type_notification_id").notNull().references(() => projectTypeNotifications.id, { onDelete: "cascade" }), // Parent notification that created the client request
+  
+  notificationType: notificationTypeEnum("notification_type").notNull(), // 'email', 'sms', or 'push'
+  daysAfterCreation: integer("days_after_creation").notNull(), // Days after client request was created
+  
+  // Notification content
+  emailTitle: varchar("email_title"), // Email subject (for email type only)
+  emailBody: text("email_body"), // Email body - rich text HTML (for email type only)
+  smsContent: varchar("sms_content", { length: 160 }), // SMS message - 160 char limit (for sms type only)
+  pushTitle: varchar("push_title", { length: 50 }), // Push notification title - 50 char limit (for push type only)
+  pushBody: varchar("push_body", { length: 120 }), // Push notification body - 120 char limit (for push type only)
+  
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_client_request_reminders_notification_id").on(table.projectTypeNotificationId),
+  // Check constraint: email reminders must have emailTitle and emailBody
+  check("check_email_reminder_content", sql`
+    (notification_type != 'email' OR (email_title IS NOT NULL AND email_body IS NOT NULL))
+  `),
+  // Check constraint: sms reminders must have smsContent
+  check("check_sms_reminder_content", sql`
+    (notification_type != 'sms' OR sms_content IS NOT NULL)
+  `),
+  // Check constraint: push reminders must have pushTitle and pushBody
+  check("check_push_reminder_content", sql`
+    (notification_type != 'push' OR (push_title IS NOT NULL AND push_body IS NOT NULL))
+  `),
+]);
+
+// Scheduled notifications table - actual notification instances ready to be sent
+export const scheduledNotifications = pgTable("scheduled_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Links to source configuration
+  projectTypeNotificationId: varchar("project_type_notification_id").references(() => projectTypeNotifications.id, { onDelete: "cascade" }), // For project/stage notifications
+  clientRequestReminderId: varchar("client_request_reminder_id").references(() => clientRequestReminders.id, { onDelete: "cascade" }), // For client request reminders
+  
+  // Recipient information
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  personId: varchar("person_id").references(() => people.id, { onDelete: "cascade" }), // Specific person to notify (if applicable)
+  clientServiceId: varchar("client_service_id").references(() => clientServices.id, { onDelete: "cascade" }), // Related client service
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }), // Related project (for stage notifications)
+  taskInstanceId: varchar("task_instance_id").references(() => taskInstances.id, { onDelete: "cascade" }), // Related task instance (for client request reminders)
+  
+  // Notification details
+  notificationType: notificationTypeEnum("notification_type").notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull(), // When to send the notification
+  dateReference: dateReferenceEnum("date_reference"), // 'start_date' or 'due_date' (nullable - only for project notifications)
+  
+  // Content (copied from template at scheduling time for immutability)
+  emailTitle: varchar("email_title"),
+  emailBody: text("email_body"),
+  smsContent: varchar("sms_content", { length: 160 }),
+  pushTitle: varchar("push_title", { length: 50 }),
+  pushBody: varchar("push_body", { length: 120 }),
+  
+  // Status tracking
+  status: notificationStatusEnum("status").notNull().default("scheduled"),
+  sentAt: timestamp("sent_at"),
+  failureReason: text("failure_reason"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id, { onDelete: "set null" }), // Staff user who cancelled it
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  
+  // Reminder control for client request reminders
+  stopReminders: boolean("stop_reminders").default(false), // Staff can flag to stop further reminders
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduled_notifications_project_type_notification_id").on(table.projectTypeNotificationId),
+  index("idx_scheduled_notifications_client_request_reminder_id").on(table.clientRequestReminderId),
+  index("idx_scheduled_notifications_client_id").on(table.clientId),
+  index("idx_scheduled_notifications_person_id").on(table.personId),
+  index("idx_scheduled_notifications_client_service_id").on(table.clientServiceId),
+  index("idx_scheduled_notifications_project_id").on(table.projectId),
+  index("idx_scheduled_notifications_task_instance_id").on(table.taskInstanceId),
+  index("idx_scheduled_notifications_scheduled_for").on(table.scheduledFor),
+  index("idx_scheduled_notifications_status").on(table.status),
+  // Composite indexes for notification tabs performance
+  // Active/Do Not Send tabs: client + status + scheduledFor DESC (covers WHERE client_id=X AND status=Y ORDER BY scheduled_for DESC)
+  index("idx_scheduled_notifications_client_status_scheduled").on(table.clientId, table.status, table.scheduledFor),
+  // Sent Notifications tab: client + status + sentAt DESC (covers WHERE client_id=X AND status='sent' ORDER BY sent_at DESC)
+  index("idx_scheduled_notifications_client_status_sent").on(table.clientId, table.status, table.sentAt),
+  // Check constraint: must have either projectTypeNotificationId OR clientRequestReminderId
+  check("check_notification_source", sql`
+    (project_type_notification_id IS NOT NULL AND client_request_reminder_id IS NULL) OR
+    (project_type_notification_id IS NULL AND client_request_reminder_id IS NOT NULL)
+  `),
+]);
+
+// Notification history table - audit log of all sent notifications
+export const notificationHistory = pgTable("notification_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scheduledNotificationId: varchar("scheduled_notification_id").references(() => scheduledNotifications.id, { onDelete: "set null" }),
+  
+  // Recipient details (denormalized for audit trail)
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  recipientEmail: varchar("recipient_email"),
+  recipientPhone: varchar("recipient_phone"),
+  
+  // Notification details
+  notificationType: notificationTypeEnum("notification_type").notNull(),
+  content: text("content").notNull(), // The actual content that was sent
+  
+  // Status
+  status: notificationStatusEnum("status").notNull(), // 'sent' or 'failed'
+  sentAt: timestamp("sent_at"),
+  failureReason: text("failure_reason"),
+  
+  // Metadata
+  externalId: varchar("external_id"), // ID from external service (SendGrid message ID, VoodooSMS ID, etc.)
+  metadata: jsonb("metadata"), // Additional tracking data
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_notification_history_scheduled_notification_id").on(table.scheduledNotificationId),
+  index("idx_notification_history_client_id").on(table.clientId),
+  index("idx_notification_history_sent_at").on(table.sentAt),
+  index("idx_notification_history_status").on(table.status),
+  index("idx_notification_history_notification_type").on(table.notificationType),
+]);
+
 // Zod schemas for risk assessments
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
@@ -2339,38 +3472,38 @@ export const insertRiskAssessmentResponseSchema = createInsertSchema(riskAssessm
   createdAt: true,
 });
 
-// Zod schemas for task templates
-export const insertTaskTemplateCategorySchema = createInsertSchema(taskTemplateCategories).omit({
+// Zod schemas for client request templates
+export const insertClientRequestTemplateCategorySchema = createInsertSchema(clientRequestTemplateCategories).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateCategorySchema = insertTaskTemplateCategorySchema.partial();
+export const updateClientRequestTemplateCategorySchema = insertClientRequestTemplateCategorySchema.partial();
 
-export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({
+export const insertClientRequestTemplateSchema = createInsertSchema(clientRequestTemplates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateSchema = insertTaskTemplateSchema.partial();
+export const updateClientRequestTemplateSchema = insertClientRequestTemplateSchema.partial();
 
-export const insertTaskTemplateSectionSchema = createInsertSchema(taskTemplateSections).omit({
+export const insertClientRequestTemplateSectionSchema = createInsertSchema(clientRequestTemplateSections).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateSectionSchema = insertTaskTemplateSectionSchema.partial();
+export const updateClientRequestTemplateSectionSchema = insertClientRequestTemplateSectionSchema.partial();
 
-export const insertTaskTemplateQuestionSchema = createInsertSchema(taskTemplateQuestions).omit({
+export const insertClientRequestTemplateQuestionSchema = createInsertSchema(clientRequestTemplateQuestions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTaskTemplateQuestionSchema = insertTaskTemplateQuestionSchema.partial();
+export const updateClientRequestTemplateQuestionSchema = insertClientRequestTemplateQuestionSchema.partial();
 
 const baseTaskInstanceSchema = createInsertSchema(taskInstances).omit({
   id: true,
@@ -2428,6 +3561,121 @@ export const insertClientCustomRequestQuestionSchema = createInsertSchema(client
 
 export const updateClientCustomRequestQuestionSchema = insertClientCustomRequestQuestionSchema.partial();
 
+// Zod schemas for internal tasks
+export const insertTaskTypeSchema = createInsertSchema(taskTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTaskTypeSchema = insertTaskTypeSchema.partial();
+
+export const insertInternalTaskSchema = createInsertSchema(internalTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  closedAt: true,
+  closedBy: true,
+  totalTimeSpentMinutes: true,
+}).extend({
+  dueDate: z.union([z.string(), z.date()]).optional().nullable().transform(val => {
+    if (!val) return null;
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+});
+
+export const updateInternalTaskSchema = insertInternalTaskSchema.partial();
+
+export const closeInternalTaskSchema = z.object({
+  closureNote: z.string().min(1, "Closure note is required"),
+  totalTimeSpentMinutes: z.number().int().min(0, "Time spent must be a positive number"),
+});
+
+export const insertTaskConnectionSchema = createInsertSchema(taskConnections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTaskProgressNoteSchema = createInsertSchema(taskProgressNotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTaskTimeEntrySchema = createInsertSchema(taskTimeEntries).omit({
+  id: true,
+  createdAt: true,
+  durationMinutes: true,
+}).extend({
+  startTime: z.union([z.string(), z.date()]).transform(val => {
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+  endTime: z.union([z.string(), z.date()]).optional().nullable().transform(val => {
+    if (!val) return null;
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+});
+
+export const stopTaskTimeEntrySchema = z.object({
+  note: z.string().optional(),
+});
+
+export const insertTaskDocumentSchema = createInsertSchema(taskDocuments).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Zod schemas for notification system
+export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateCompanySettingsSchema = insertCompanySettingsSchema.partial();
+
+export const insertProjectTypeNotificationSchema = createInsertSchema(projectTypeNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProjectTypeNotificationSchema = insertProjectTypeNotificationSchema.partial();
+
+export const insertClientRequestReminderSchema = createInsertSchema(clientRequestReminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientRequestReminderSchema = insertClientRequestReminderSchema.partial();
+
+export const insertScheduledNotificationSchema = createInsertSchema(scheduledNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  sentAt: true,
+});
+
+export const updateScheduledNotificationSchema = insertScheduledNotificationSchema.partial();
+
+export const insertNotificationHistorySchema = createInsertSchema(notificationHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const bulkReassignTasksSchema = z.object({
+  taskIds: z.array(z.string().uuid()),
+  assignedTo: z.string().uuid(),
+});
+
+export const bulkUpdateTaskStatusSchema = z.object({
+  taskIds: z.array(z.string().uuid()),
+  status: z.enum(["open", "in_progress", "closed"]),
+});
+
 // Type exports
 export type Communication = typeof communications.$inferSelect;
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
@@ -2443,6 +3691,12 @@ export type ProjectMessage = typeof projectMessages.$inferSelect;
 export type InsertProjectMessage = z.infer<typeof insertProjectMessageSchema>;
 export type ProjectMessageParticipant = typeof projectMessageParticipants.$inferSelect;
 export type InsertProjectMessageParticipant = z.infer<typeof insertProjectMessageParticipantSchema>;
+export type StaffMessageThread = typeof staffMessageThreads.$inferSelect;
+export type InsertStaffMessageThread = z.infer<typeof insertStaffMessageThreadSchema>;
+export type StaffMessage = typeof staffMessages.$inferSelect;
+export type InsertStaffMessage = z.infer<typeof insertStaffMessageSchema>;
+export type StaffMessageParticipant = typeof staffMessageParticipants.$inferSelect;
+export type InsertStaffMessageParticipant = z.infer<typeof insertStaffMessageParticipantSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type UserActivityTracking = typeof userActivityTracking.$inferSelect;
@@ -2453,27 +3707,41 @@ export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
 export type PushNotificationTemplate = typeof pushNotificationTemplates.$inferSelect;
 export type InsertPushNotificationTemplate = z.infer<typeof insertPushNotificationTemplateSchema>;
+export type NotificationIcon = typeof notificationIcons.$inferSelect;
+export type InsertNotificationIcon = z.infer<typeof insertNotificationIconSchema>;
 export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
+export type SignatureField = typeof signatureFields.$inferSelect;
+export type InsertSignatureField = z.infer<typeof insertSignatureFieldSchema>;
+export type SignatureRequestRecipient = typeof signatureRequestRecipients.$inferSelect;
+export type InsertSignatureRequestRecipient = z.infer<typeof insertSignatureRequestRecipientSchema>;
+export type Signature = typeof signatures.$inferSelect;
+export type InsertSignature = z.infer<typeof insertSignatureSchema>;
+export type SignatureAuditLog = typeof signatureAuditLogs.$inferSelect;
+export type InsertSignatureAuditLog = z.infer<typeof insertSignatureAuditLogSchema>;
+export type SignedDocument = typeof signedDocuments.$inferSelect;
+export type InsertSignedDocument = z.infer<typeof insertSignedDocumentSchema>;
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
 export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
 export type UpdateRiskAssessment = z.infer<typeof updateRiskAssessmentSchema>;
 export type RiskAssessmentResponse = typeof riskAssessmentResponses.$inferSelect;
 export type InsertRiskAssessmentResponse = z.infer<typeof insertRiskAssessmentResponseSchema>;
-export type TaskTemplateCategory = typeof taskTemplateCategories.$inferSelect;
-export type InsertTaskTemplateCategory = z.infer<typeof insertTaskTemplateCategorySchema>;
-export type UpdateTaskTemplateCategory = z.infer<typeof updateTaskTemplateCategorySchema>;
-export type TaskTemplate = typeof taskTemplates.$inferSelect;
-export type InsertTaskTemplate = z.infer<typeof insertTaskTemplateSchema>;
-export type UpdateTaskTemplate = z.infer<typeof updateTaskTemplateSchema>;
-export type TaskTemplateSection = typeof taskTemplateSections.$inferSelect;
-export type InsertTaskTemplateSection = z.infer<typeof insertTaskTemplateSectionSchema>;
-export type UpdateTaskTemplateSection = z.infer<typeof updateTaskTemplateSectionSchema>;
-export type TaskTemplateQuestion = typeof taskTemplateQuestions.$inferSelect;
-export type InsertTaskTemplateQuestion = z.infer<typeof insertTaskTemplateQuestionSchema>;
-export type UpdateTaskTemplateQuestion = z.infer<typeof updateTaskTemplateQuestionSchema>;
+export type ClientRequestTemplateCategory = typeof clientRequestTemplateCategories.$inferSelect;
+export type InsertClientRequestTemplateCategory = z.infer<typeof insertClientRequestTemplateCategorySchema>;
+export type UpdateClientRequestTemplateCategory = z.infer<typeof updateClientRequestTemplateCategorySchema>;
+export type ClientRequestTemplate = typeof clientRequestTemplates.$inferSelect;
+export type InsertClientRequestTemplate = z.infer<typeof insertClientRequestTemplateSchema>;
+export type UpdateClientRequestTemplate = z.infer<typeof updateClientRequestTemplateSchema>;
+export type ClientRequestTemplateSection = typeof clientRequestTemplateSections.$inferSelect;
+export type InsertClientRequestTemplateSection = z.infer<typeof insertClientRequestTemplateSectionSchema>;
+export type UpdateClientRequestTemplateSection = z.infer<typeof updateClientRequestTemplateSectionSchema>;
+export type ClientRequestTemplateQuestion = typeof clientRequestTemplateQuestions.$inferSelect;
+export type InsertClientRequestTemplateQuestion = z.infer<typeof insertClientRequestTemplateQuestionSchema>;
+export type UpdateClientRequestTemplateQuestion = z.infer<typeof updateClientRequestTemplateQuestionSchema>;
 export type TaskInstance = typeof taskInstances.$inferSelect;
 export type InsertTaskInstance = z.infer<typeof insertTaskInstanceSchema>;
 export type UpdateTaskInstance = z.infer<typeof updateTaskInstanceSchema>;
@@ -2488,6 +3756,62 @@ export type UpdateClientCustomRequestSection = z.infer<typeof updateClientCustom
 export type ClientCustomRequestQuestion = typeof clientCustomRequestQuestions.$inferSelect;
 export type InsertClientCustomRequestQuestion = z.infer<typeof insertClientCustomRequestQuestionSchema>;
 export type UpdateClientCustomRequestQuestion = z.infer<typeof updateClientCustomRequestQuestionSchema>;
+export type TaskType = typeof taskTypes.$inferSelect;
+export type InsertTaskType = z.infer<typeof insertTaskTypeSchema>;
+export type UpdateTaskType = z.infer<typeof updateTaskTypeSchema>;
+export type InternalTask = typeof internalTasks.$inferSelect;
+export type InsertInternalTask = z.infer<typeof insertInternalTaskSchema>;
+export type UpdateInternalTask = z.infer<typeof updateInternalTaskSchema>;
+export type CloseInternalTask = z.infer<typeof closeInternalTaskSchema>;
+export type TaskConnection = typeof taskConnections.$inferSelect;
+export type InsertTaskConnection = z.infer<typeof insertTaskConnectionSchema>;
+export type TaskProgressNote = typeof taskProgressNotes.$inferSelect;
+export type InsertTaskProgressNote = z.infer<typeof insertTaskProgressNoteSchema>;
+export type TaskTimeEntry = typeof taskTimeEntries.$inferSelect;
+export type InsertTaskTimeEntry = z.infer<typeof insertTaskTimeEntrySchema>;
+export type StopTaskTimeEntry = z.infer<typeof stopTaskTimeEntrySchema>;
+export type TaskDocument = typeof taskDocuments.$inferSelect;
+export type InsertTaskDocument = z.infer<typeof insertTaskDocumentSchema>;
+export type BulkReassignTasks = z.infer<typeof bulkReassignTasksSchema>;
+export type BulkUpdateTaskStatus = z.infer<typeof bulkUpdateTaskStatusSchema>;
+
+// Notification system type exports
+export type CompanySettings = typeof companySettings.$inferSelect;
+export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
+export type UpdateCompanySettings = z.infer<typeof updateCompanySettingsSchema>;
+export type ProjectTypeNotification = typeof projectTypeNotifications.$inferSelect;
+export type InsertProjectTypeNotification = z.infer<typeof insertProjectTypeNotificationSchema>;
+export type UpdateProjectTypeNotification = z.infer<typeof updateProjectTypeNotificationSchema>;
+export type ClientRequestReminder = typeof clientRequestReminders.$inferSelect;
+export type InsertClientRequestReminder = z.infer<typeof insertClientRequestReminderSchema>;
+export type UpdateClientRequestReminder = z.infer<typeof updateClientRequestReminderSchema>;
+export type ScheduledNotification = typeof scheduledNotifications.$inferSelect;
+export type InsertScheduledNotification = z.infer<typeof insertScheduledNotificationSchema>;
+export type UpdateScheduledNotification = z.infer<typeof updateScheduledNotificationSchema>;
+export type NotificationHistory = typeof notificationHistory.$inferSelect;
+export type InsertNotificationHistory = z.infer<typeof insertNotificationHistorySchema>;
+
+// Email threading type exports
+export type EmailMessage = typeof emailMessages.$inferSelect;
+export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;
+export type MailboxMessageMap = typeof mailboxMessageMap.$inferSelect;
+export type InsertMailboxMessageMap = z.infer<typeof insertMailboxMessageMapSchema>;
+export type EmailThread = typeof emailThreads.$inferSelect;
+export type InsertEmailThread = z.infer<typeof insertEmailThreadSchema>;
+export type UnmatchedEmail = typeof unmatchedEmails.$inferSelect;
+export type InsertUnmatchedEmail = z.infer<typeof insertUnmatchedEmailSchema>;
+export type ClientEmailAlias = typeof clientEmailAliases.$inferSelect;
+export type InsertClientEmailAlias = z.infer<typeof insertClientEmailAliasSchema>;
+export type ClientDomainAllowlist = typeof clientDomainAllowlist.$inferSelect;
+export type InsertClientDomainAllowlist = z.infer<typeof insertClientDomainAllowlistSchema>;
+export type EmailAttachment = typeof emailAttachments.$inferSelect;
+export type InsertEmailAttachment = z.infer<typeof insertEmailAttachmentSchema>;
+export type EmailMessageAttachment = typeof emailMessageAttachments.$inferSelect;
+export type InsertEmailMessageAttachment = z.infer<typeof insertEmailMessageAttachmentSchema>;
+export type GraphWebhookSubscription = typeof graphWebhookSubscriptions.$inferSelect;
+export type InsertGraphWebhookSubscription = z.infer<typeof insertGraphWebhookSubscriptionSchema>;
+export type GraphSyncState = typeof graphSyncState.$inferSelect;
+export type InsertGraphSyncState = z.infer<typeof insertGraphSyncStateSchema>;
 
 // Extended types with relations
 export type ProjectWithRelations = Project & {
@@ -2504,6 +3828,9 @@ export type ProjectWithRelations = Project & {
     changedBy?: User;
     fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
   })[];
+  stageApprovalResponses?: (StageApprovalResponse & { 
+    field: StageApprovalField;
+  })[];
   progressMetrics?: {
     reasonId: string;
     label: string;
@@ -2511,3 +3838,77 @@ export type ProjectWithRelations = Project & {
   }[];
   stageRoleAssignee?: User; // The user assigned to the role for the current stage
 };
+
+// Notification preview candidate schemas
+export const previewCandidateRecipientSchema = z.object({
+  personId: z.string(),
+  fullName: z.string(),
+  email: z.string().nullable(),
+  canPreview: z.boolean(),
+  ineligibleReason: z.string().optional(),
+});
+
+export const previewCandidateSchema = z.object({
+  clientId: z.string(),
+  clientName: z.string(),
+  projectId: z.string(),
+  projectName: z.string().nullable(),
+  projectDescription: z.string().nullable(),
+  stageId: z.string().nullable(),
+  stageName: z.string().nullable(),
+  dueDate: z.date().nullable(),
+  clientServiceId: z.string(),
+  clientServiceName: z.string(),
+  frequency: z.string().nullable(),
+  recipients: z.array(previewCandidateRecipientSchema),
+});
+
+export const previewCandidatesResponseSchema = z.object({
+  candidates: z.array(previewCandidateSchema),
+  hasEligibleCandidates: z.boolean(),
+  message: z.string().optional(),
+});
+
+export type PreviewCandidateRecipient = z.infer<typeof previewCandidateRecipientSchema>;
+export type PreviewCandidate = z.infer<typeof previewCandidateSchema>;
+export type PreviewCandidatesResponse = z.infer<typeof previewCandidatesResponseSchema>;
+
+// Stage change notification preview schemas
+export const stageChangeNotificationRecipientSchema = z.object({
+  userId: z.string(),
+  name: z.string(),
+  email: z.string(),
+});
+
+export const stageChangeNotificationPreviewSchema = z.object({
+  projectId: z.string(),
+  newStageName: z.string(),
+  oldStageName: z.string().optional(),
+  dedupeKey: z.string(),  // Composite key for preventing duplicate sends
+  recipients: z.array(stageChangeNotificationRecipientSchema),
+  emailSubject: z.string(),  // Pre-rendered email subject
+  emailBody: z.string(),     // Pre-rendered email body (HTML)
+  pushTitle: z.string().nullable(),  // Pre-rendered push title
+  pushBody: z.string().nullable(),   // Pre-rendered push body
+  metadata: z.object({
+    projectName: z.string(),
+    clientName: z.string(),
+    dueDate: z.string().optional(),
+    changeReason: z.string().optional(),
+    notes: z.string().optional(),
+  }),
+});
+
+export const sendStageChangeNotificationSchema = z.object({
+  projectId: z.string(),
+  dedupeKey: z.string(),
+  emailSubject: z.string(),
+  emailBody: z.string(),
+  pushTitle: z.string().nullable(),
+  pushBody: z.string().nullable(),
+  suppress: z.boolean().default(false),  // If true, don't send but mark as suppressed
+});
+
+export type StageChangeNotificationRecipient = z.infer<typeof stageChangeNotificationRecipientSchema>;
+export type StageChangeNotificationPreview = z.infer<typeof stageChangeNotificationPreviewSchema>;
+export type SendStageChangeNotification = z.infer<typeof sendStageChangeNotificationSchema>;

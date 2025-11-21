@@ -5,7 +5,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -18,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Loader2 } from "lucide-react";
 import StageApprovalModal from "@/components/StageApprovalModal";
+import { TiptapEditor } from "@/components/TiptapEditor";
 import type { 
   ProjectWithRelations, 
   User, 
@@ -63,7 +63,13 @@ const formatChangeReason = (reason: string): string => {
 export default function StatusChangeForm({ project, user, onStatusUpdated }: StatusChangeFormProps) {
   const [newStatus, setNewStatus] = useState("");
   const [changeReason, setChangeReason] = useState("");
-  const [notes, setNotes] = useState("");
+  const [notesHtml, setNotesHtml] = useState("");
+  const [attachments, setAttachments] = useState<Array<{
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    objectPath: string;
+  }>>([]);
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   
   // Stage approval modal state
@@ -73,7 +79,13 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
   const [pendingStatusChange, setPendingStatusChange] = useState<{
     newStatus: string;
     changeReason: string;
-    notes?: string;
+    notesHtml?: string;
+    attachments?: Array<{
+      fileName: string;
+      fileSize: number;
+      fileType: string;
+      objectPath: string;
+    }>;
     fieldResponses?: any[];
   } | null>(null);
   
@@ -176,7 +188,13 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     mutationFn: async (data: { 
       newStatus: string; 
       changeReason: string; 
-      notes?: string;
+      notesHtml?: string;
+      attachments?: Array<{
+        fileName: string;
+        fileSize: number;
+        fileType: string;
+        objectPath: string;
+      }>;
       fieldResponses?: Array<{
         customFieldId: string;
         fieldType: 'number' | 'short_text' | 'long_text' | 'multi_select';
@@ -188,7 +206,28 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     }) => {
       return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
     },
-    onSuccess: () => {
+    onSuccess: async (data: any) => {
+      // Handle new response format: { project, notificationPreview }
+      const preview = data.notificationPreview;
+      
+      // If there's a notification preview, automatically send it without user approval
+      if (preview) {
+        try {
+          await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
+            projectId: project.id,
+            dedupeKey: preview.dedupeKey,
+            emailSubject: preview.emailSubject,
+            emailBody: preview.emailBody,
+            pushTitle: preview.pushTitle,
+            pushBody: preview.pushBody,
+            suppress: false,
+          });
+        } catch (error) {
+          console.error("Failed to send stage change notification:", error);
+          // Don't fail the whole flow if notification fails
+        }
+      }
+      
       toast({
         title: "Success",
         description: "Project status updated successfully",
@@ -198,7 +237,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       // Reset form and pending state
       setNewStatus("");
       setChangeReason("");
-      setNotes("");
+      setNotesHtml("");
+      setAttachments([]);
       setCustomFieldResponses({});
       setPendingStatusChange(null);
       setShowApprovalModal(false);
@@ -346,7 +386,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     const statusChangeData = {
       newStatus,
       changeReason,
-      notes: notes.trim() || undefined,
+      notesHtml: notesHtml.trim() || undefined,
+      attachments: attachments.length > 0 ? attachments : undefined,
       fieldResponses,
     };
 
@@ -615,13 +656,10 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
           
           <div>
             <Label htmlFor="notes">Notes:</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes explaining the status change..."
-              className="h-20"
-              data-testid="textarea-notes"
+            <TiptapEditor
+              content={notesHtml}
+              onChange={setNotesHtml}
+              placeholder="Add notes explaining the status change (supports formatting and tables)..."
             />
           </div>
           

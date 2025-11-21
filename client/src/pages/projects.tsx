@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { type ProjectWithRelations, type User } from "@shared/schema";
+import { type ProjectWithRelations, type User, type ProjectView } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
@@ -12,6 +13,8 @@ import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
+import ViewMegaMenu from "@/components/ViewMegaMenu";
+import PullToRefresh from "react-simple-pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -50,12 +53,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type ViewMode = "kanban" | "list" | "dashboard";
 
-interface Widget {
+export interface Widget {
   id: string;
   type: "bar" | "pie" | "number" | "line";
   title: string;
@@ -63,7 +66,7 @@ interface Widget {
   metric?: string;
 }
 
-interface Dashboard {
+export interface Dashboard {
   id: string;
   userId: string;
   name: string;
@@ -78,15 +81,21 @@ interface Dashboard {
 
 // Note: Using shared month normalization utility for consistent filtering
 
+const ITEMS_PER_PAGE = 15;
+
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [location] = useLocation();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
   const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
+  const [behindScheduleOnly, setBehindScheduleOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   // Reset to list view when no service is selected for kanban
   useEffect(() => {
@@ -103,6 +112,7 @@ export default function Projects() {
     from: undefined,
     to: undefined,
   });
+  const [serviceDueDateFilter, setServiceDueDateFilter] = useState("all");
   
   // Filter panel state
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -141,6 +151,11 @@ export default function Projects() {
     from: undefined,
     to: undefined,
   });
+  const [dashboardServiceDueDateFilter, setDashboardServiceDueDateFilter] = useState("all");
+
+  // Save view modal state
+  const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
 
   // Delete confirmation state
   const [deleteViewDialogOpen, setDeleteViewDialogOpen] = useState(false);
@@ -148,11 +163,53 @@ export default function Projects() {
   const [deleteDashboardDialogOpen, setDeleteDashboardDialogOpen] = useState(false);
   const [dashboardToDelete, setDashboardToDelete] = useState<Dashboard | null>(null);
 
-  // Dashboard selector menu state
-  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
+  // Read URL query parameters and set filters on mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    const taskAssignee = searchParams.get('taskAssigneeFilter');
+    if (taskAssignee && taskAssignee !== taskAssigneeFilter) {
+      setTaskAssigneeFilter(taskAssignee);
+    }
+    
+    const serviceOwner = searchParams.get('serviceOwnerFilter');
+    if (serviceOwner && serviceOwner !== serviceOwnerFilter) {
+      setServiceOwnerFilter(serviceOwner);
+    }
+    
+    const dateFilter = searchParams.get('dynamicDateFilter');
+    if (dateFilter && (dateFilter === 'overdue' || dateFilter === 'today' || dateFilter === 'next7days' || dateFilter === 'next14days' || dateFilter === 'next30days')) {
+      setDynamicDateFilter(dateFilter as any);
+    }
+    
+    const behindSchedule = searchParams.get('behindSchedule');
+    if (behindSchedule === 'true') {
+      setBehindScheduleOnly(true);
+    }
+  }, [location]); // Only run when location changes
+
+  // Sync behindSchedule filter state to URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const currentBehindSchedule = searchParams.get('behindSchedule');
+    
+    if (behindScheduleOnly && currentBehindSchedule !== 'true') {
+      searchParams.set('behindSchedule', 'true');
+      window.history.replaceState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
+    } else if (!behindScheduleOnly && currentBehindSchedule === 'true') {
+      searchParams.delete('behindSchedule');
+      const newUrl = searchParams.toString() 
+        ? `${window.location.pathname}?${searchParams.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [behindScheduleOnly]);
 
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["/api/projects", { archived: showArchived }],
+    queryKey: ["/api/projects", { 
+      showArchived,
+      dueDate: serviceDueDateFilter !== "all" ? serviceDueDateFilter : undefined,
+    }],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -165,14 +222,14 @@ export default function Projects() {
 
   // Fetch all services (for dropdown population)
   const { data: allServices = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/services"],
+    queryKey: ["/api/services/active"],
     enabled: isAuthenticated && !!user,
     retry: false,
-    select: (data: any[]) => data.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
+    select: (data: any[]) => data.map((s: any) => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 
   // Fetch saved project views
-  const { data: savedViews = [] } = useQuery<any[]>({
+  const { data: savedViews = [] } = useQuery<ProjectView[]>({
     queryKey: ["/api/project-views"],
     enabled: isAuthenticated && !!user,
     retry: false,
@@ -184,6 +241,17 @@ export default function Projects() {
     enabled: isAuthenticated && !!user,
     retry: false,
   });
+
+  // Pull-to-refresh handler - invalidates all project-related queries
+  const handleRefresh = async () => {
+    if (!isAuthenticated || !user) return;
+    
+    await queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/services/with-active-clients"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+  };
 
   // Normalize dashboard service filter when allServices loads
   // This handles race condition where dashboard is loaded before services are available
@@ -205,7 +273,7 @@ export default function Projects() {
   }, [allServices, dashboardServiceFilter]);
 
   // Handler to load a saved view
-  const handleLoadSavedView = (view: any) => {
+  const handleLoadSavedView = (view: ProjectView) => {
     try {
       const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
       
@@ -219,6 +287,14 @@ export default function Projects() {
         from: filters.customDateRange?.from ? new Date(filters.customDateRange.from) : undefined,
         to: filters.customDateRange?.to ? new Date(filters.customDateRange.to) : undefined,
       });
+      setServiceDueDateFilter(filters.serviceDueDateFilter || "all");
+      
+      // Switch to the appropriate view mode based on the saved view
+      if (view.viewMode === "kanban") {
+        setViewMode("kanban");
+      } else if (view.viewMode === "list") {
+        setViewMode("list");
+      }
       
       toast({
         title: "View Loaded",
@@ -239,6 +315,9 @@ export default function Projects() {
       setCurrentDashboard(dashboard);
       setDashboardWidgets(dashboard.widgets || []);
       setDashboardEditMode(false);
+      
+      // Switch to dashboard view mode
+      setViewMode("dashboard");
       
       // Set description and homescreen dashboard states
       setDashboardDescription(dashboard.description || "");
@@ -276,10 +355,8 @@ export default function Projects() {
           from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
+        setDashboardServiceDueDateFilter(parsedFilters.serviceDueDateFilter || "all");
       }
-      
-      // Close the dashboard selector menu
-      setDashboardMenuOpen(false);
       
       toast({
         title: "Dashboard Loaded",
@@ -292,6 +369,90 @@ export default function Projects() {
         variant: "destructive",
       });
     }
+  };
+
+  // Handler to reset all filters and show all projects
+  const handleViewAllProjects = () => {
+    // Reset list/kanban filters to defaults
+    setServiceFilter("all");
+    setTaskAssigneeFilter("all");
+    setServiceOwnerFilter("all");
+    setUserFilter("all");
+    setShowArchived(false);
+    setDynamicDateFilter("all");
+    setCustomDateRange({ from: undefined, to: undefined });
+    setBehindScheduleOnly(false);
+    
+    // Switch to list view (default view mode)
+    setViewMode("list");
+    
+    toast({
+      title: "Filters Reset",
+      description: "Showing all projects",
+    });
+  };
+
+  // Save view mutation
+  const saveViewMutation = useMutation({
+    mutationFn: async (data: { name: string; filters: any; viewMode: "list" | "kanban" }) => {
+      return apiRequest("POST", "/api/project-views", data);
+    },
+    onSuccess: (savedView: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+      setSaveViewDialogOpen(false);
+      setNewViewName("");
+      toast({
+        title: "View saved successfully",
+        description: `"${savedView.name}" has been saved`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save view",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handler to save current view
+  const handleSaveCurrentView = () => {
+    if (!newViewName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a view name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Only save list/kanban views, dashboards use separate mutation
+    if (viewMode !== "list" && viewMode !== "kanban") {
+      toast({
+        title: "Error",
+        description: "Dashboard views must be saved using the dashboard creation dialog",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const filters = {
+      serviceFilter,
+      taskAssigneeFilter,
+      serviceOwnerFilter,
+      userFilter,
+      showArchived,
+      dynamicDateFilter,
+      customDateRange,
+      behindScheduleOnly,
+      serviceDueDateFilter,
+    };
+
+    saveViewMutation.mutate({
+      name: newViewName.trim(),
+      filters: JSON.stringify(filters),
+      viewMode,
+    });
   };
 
   // Save dashboard mutation
@@ -326,6 +487,7 @@ export default function Projects() {
           from: parsedFilters.customDateRange?.from ? new Date(parsedFilters.customDateRange.from) : undefined,
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
+        setDashboardServiceDueDateFilter(parsedFilters.serviceDueDateFilter || "all");
       }
       
       toast({
@@ -469,6 +631,7 @@ export default function Projects() {
         from: dashboardCustomDateRange.from ? dashboardCustomDateRange.from.toISOString() : undefined,
         to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
+      serviceDueDateFilter: dashboardServiceDueDateFilter,
     };
 
     saveDashboardMutation.mutate({
@@ -498,6 +661,7 @@ export default function Projects() {
         from: dashboardCustomDateRange.from ? dashboardCustomDateRange.from.toISOString() : undefined,
         to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
+      serviceDueDateFilter: dashboardServiceDueDateFilter,
     };
 
     saveDashboardMutation.mutate({
@@ -561,7 +725,7 @@ export default function Projects() {
   const taskAssignees = Array.from(
     new Map(
       (projects || [])
-        .map((p: ProjectWithRelations) => p.stageRoleAssignee)
+        .map((p: ProjectWithRelations) => p.currentAssignee)
         .filter((assignee): assignee is NonNullable<typeof assignee> => Boolean(assignee))
         .map(assignee => [assignee.id, assignee])
     ).values()
@@ -595,10 +759,10 @@ export default function Projects() {
       serviceMatch = project.projectType?.service?.id === serviceFilter;
     }
 
-    // Task Assignee filter (using stageRoleAssignee)
+    // Task Assignee filter (using currentAssigneeId)
     let taskAssigneeMatch = true;
     if (taskAssigneeFilter !== "all") {
-      taskAssigneeMatch = project.stageRoleAssignee?.id === taskAssigneeFilter;
+      taskAssigneeMatch = project.currentAssigneeId === taskAssigneeFilter;
     }
 
     // Service Owner filter
@@ -658,9 +822,79 @@ export default function Projects() {
       }
     }
 
-    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch;
+    // Behind schedule filter - check if project exceeds stage max time
+    let behindScheduleMatch = true;
+    if (behindScheduleOnly) {
+      behindScheduleMatch = false; // Default to false, only match if truly behind
+      
+      if (!project.completionStatus && project.projectType?.kanbanStages) {
+        const currentStageConfig = project.projectType.kanbanStages.find(
+          (s: any) => s.name === project.currentStatus
+        );
+        
+        if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
+          // Get time in current stage from chronology
+          const chronology = project.chronology || [];
+          const sortedChronology = [...chronology].sort((a, b) => 
+            new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+          );
+          
+          const lastEntry = sortedChronology.find((entry: any) => entry.toStatus === project.currentStatus);
+          const startTime = lastEntry?.timestamp || project.createdAt;
+          
+          if (startTime) {
+            // Simple hour calculation (not business hours, but close enough for filtering)
+            const now = new Date();
+            const start = new Date(startTime);
+            const hoursDiff = (now.getTime() - start.getTime()) / (1000 * 60 * 60);
+            
+            behindScheduleMatch = hoursDiff > currentStageConfig.maxInstanceTime;
+          }
+        }
+      }
+    }
+
+    // Archived/completed projects filter
+    // Special handling for kanban view: show completed projects regardless of showArchived
+    if (project.completionStatus) {
+      // In kanban view, always show projects with completion status (they go to completion columns)
+      if (viewMode === "kanban") {
+        // Continue to other filters - don't return early
+      } else {
+        // In list/dashboard views, only show if showArchived is true
+        return showArchived;
+      }
+    } else if (project.archived) {
+      // Archived projects without completion status: only show if showArchived is true
+      return showArchived;
+    }
+
+    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch && behindScheduleMatch;
   });
 
+  // Pagination for list view
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedProjects = useMemo(() => {
+    // Only paginate in list view
+    if (viewMode === "list") {
+      return filteredProjects.slice(startIndex, endIndex);
+    }
+    return filteredProjects;
+  }, [filteredProjects, startIndex, endIndex, viewMode]);
+
+  // Reset to page 1 when filters change or view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, customDateRange, viewMode]);
+
+  // Clamp current page if it exceeds total pages (e.g., after deletions or data refresh)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const getPageTitle = () => {
     return isManagerOrAdmin ? "All Projects" : "Projects";
@@ -678,163 +912,63 @@ export default function Projects() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center justify-between gap-2">
+        <header className="bg-card border-b border-border page-container py-6">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl md:text-2xl font-semibold text-foreground truncate" data-testid="text-page-title">
+              <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="text-page-title">
                 {getPageTitle()}
               </h2>
             </div>
             
-            <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
-              {/* Conditionally show dropdowns based on view mode */}
-              {viewMode === "list" ? (
-                // List View: Show saved views dropdown
-                savedViews.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-[200px]" data-testid="select-load-view">
-                        Load saved view...
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[250px]">
-                      {savedViews.map(view => (
-                        <DropdownMenuItem
-                          key={view.id}
-                          className="flex items-center justify-between cursor-pointer"
-                          onSelect={(e) => {
-                            e.preventDefault();
-                          }}
-                        >
-                          <span
-                            className="flex-1 cursor-pointer"
-                            onClick={() => handleLoadSavedView(view)}
-                          >
-                            {view.name}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 ml-2 hover:bg-destructive hover:text-destructive-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setViewToDelete(view);
-                              setDeleteViewDialogOpen(true);
-                            }}
-                            data-testid={`button-delete-view-${view.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )
-              ) : viewMode === "dashboard" ? (
-                // Dashboard View: Show dashboards mega-menu and create button
+            {/* Desktop View - Full buttons */}
+            <div className="hidden md:flex items-center space-x-4 flex-shrink-0">
+              {/* Unified View Mega Menu */}
+              <ViewMegaMenu
+                currentViewMode={viewMode}
+                onLoadListView={handleLoadSavedView}
+                onLoadKanbanView={handleLoadSavedView}
+                onLoadDashboard={handleLoadDashboard}
+              />
+
+              {/* Save Current View button - only show for list/kanban */}
+              {(viewMode === "list" || viewMode === "kanban") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSaveViewDialogOpen(true)}
+                  data-testid="button-save-view"
+                >
+                  Save Current View
+                </Button>
+              )}
+
+              {/* View All Projects button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleViewAllProjects}
+                data-testid="button-view-all-projects"
+              >
+                View All Projects
+              </Button>
+
+              {/* Switch to List View button - only show in kanban view */}
+              {viewMode === "kanban" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-switch-to-list-view"
+                  className="gap-2"
+                >
+                  <List className="w-4 h-4" />
+                  Switch to List View
+                </Button>
+              )}
+
+              {/* Dashboard-specific buttons */}
+              {viewMode === "dashboard" && (
                 <>
-                  {dashboards.length > 0 && (
-                    <DropdownMenu open={dashboardMenuOpen} onOpenChange={setDashboardMenuOpen}>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" data-testid="button-dashboard-selector">
-                          Select Dashboard
-                          <ChevronDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent 
-                        align="end" 
-                        className="w-[600px] p-0"
-                        onMouseLeave={() => setDashboardMenuOpen(false)}
-                      >
-                        <div className="grid grid-cols-[1fr_1px_1fr] gap-4 p-4">
-                          {/* Left Column: My Dashboards */}
-                          <div className="space-y-3">
-                            <h3 className="font-semibold text-sm text-foreground px-2">My Dashboards</h3>
-                            {dashboards.filter(d => d.visibility === "private" || d.userId === user?.id).length > 0 ? (
-                              <div className="space-y-2">
-                                {dashboards
-                                  .filter(d => d.visibility === "private" || d.userId === user?.id)
-                                  .map(dashboard => (
-                                    <Card
-                                      key={dashboard.id}
-                                      className="hover:bg-accent transition-colors cursor-pointer"
-                                      data-testid={`dashboard-item-${dashboard.id}`}
-                                    >
-                                      <CardContent className="p-3">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div
-                                            className="flex-1"
-                                            onClick={() => handleLoadDashboard(dashboard)}
-                                          >
-                                            <h4 className="font-medium text-sm text-foreground">{dashboard.name}</h4>
-                                            {dashboard.description && (
-                                              <p className="text-xs text-muted-foreground mt-1">{dashboard.description}</p>
-                                            )}
-                                          </div>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 hover:bg-destructive hover:text-destructive-foreground flex-shrink-0"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDashboardToDelete(dashboard);
-                                              setDeleteDashboardDialogOpen(true);
-                                            }}
-                                            data-testid={`button-delete-dashboard-${dashboard.id}`}
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      </CardContent>
-                                    </Card>
-                                  ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground px-2 py-4">No dashboards yet</p>
-                            )}
-                          </div>
-
-                          {/* Divider */}
-                          <div className="border-l border-border h-full" />
-
-                          {/* Right Column: Shared Dashboards */}
-                          <div className="space-y-3">
-                            <h3 className="font-semibold text-sm text-foreground px-2">Shared Dashboards</h3>
-                            {dashboards.filter(d => d.visibility === "shared" && d.userId !== user?.id).length > 0 ? (
-                              <div className="space-y-2">
-                                {dashboards
-                                  .filter(d => d.visibility === "shared" && d.userId !== user?.id)
-                                  .map(dashboard => {
-                                    const owner = users?.find(u => u.id === dashboard.userId);
-                                    return (
-                                      <Card
-                                        key={dashboard.id}
-                                        className="hover:bg-accent transition-colors cursor-pointer"
-                                        data-testid={`shared-dashboard-item-${dashboard.id}`}
-                                        onClick={() => handleLoadDashboard(dashboard)}
-                                      >
-                                        <CardContent className="p-3">
-                                          <h4 className="font-medium text-sm text-foreground">{dashboard.name}</h4>
-                                          {dashboard.description && (
-                                            <p className="text-xs text-muted-foreground mt-1">{dashboard.description}</p>
-                                          )}
-                                          <p className="text-xs text-muted-foreground mt-1">
-                                            by {owner?.email || dashboard.userId}
-                                          </p>
-                                        </CardContent>
-                                      </Card>
-                                    );
-                                  })}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground px-2 py-4">No dashboards yet</p>
-                            )}
-                          </div>
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  
                   {/* Create Dashboard button always visible */}
                   <Button
                     variant="outline"
@@ -894,7 +1028,7 @@ export default function Projects() {
                     </>
                   )}
                 </>
-              ) : null}
+              )}
 
               {/* View Mode Toggle */}
               {isManagerOrAdmin && (
@@ -904,7 +1038,7 @@ export default function Projects() {
                     size="sm"
                     onClick={() => setViewMode("list")}
                     data-testid="button-view-list"
-                    className="h-8 px-2 md:px-3"
+                    className="h-11 md:h-8 px-2 md:px-3"
                   >
                     <List className="w-4 h-4" />
                     <span className="hidden md:inline ml-2">List</span>
@@ -914,7 +1048,7 @@ export default function Projects() {
                     size="sm"
                     onClick={() => setViewMode("dashboard")}
                     data-testid="button-view-dashboard"
-                    className="h-8 px-2 md:px-3"
+                    className="h-11 md:h-8 px-2 md:px-3"
                   >
                     <BarChart3 className="w-4 h-4" />
                     <span className="hidden md:inline ml-2">Dashboard</span>
@@ -927,7 +1061,7 @@ export default function Projects() {
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
-                  className="relative h-8 px-2 md:px-4"
+                  className="relative h-11 md:h-8 px-2 md:px-4"
                   data-testid="button-open-filters"
                 >
                   <Filter className="w-4 h-4" />
@@ -944,70 +1078,320 @@ export default function Projects() {
                 </Button>
               )}
             </div>
+
+            {/* Mobile View - Compact controls only */}
+            <div className="flex md:hidden items-center gap-2 flex-shrink-0">
+              {/* Saved Views Menu */}
+              <ViewMegaMenu
+                currentViewMode={viewMode}
+                onLoadListView={handleLoadSavedView}
+                onLoadKanbanView={handleLoadSavedView}
+                onLoadDashboard={handleLoadDashboard}
+                isMobileIconOnly={true}
+              />
+
+              {/* View All Projects Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleViewAllProjects}
+                data-testid="button-view-all-projects-mobile"
+                className="h-11 px-3"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+
+              {/* Switch to List View button - only show in kanban view */}
+              {viewMode === "kanban" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-switch-to-list-view-mobile"
+                  className="h-11 px-3 gap-2"
+                >
+                  <List className="w-4 h-4" />
+                  <span className="hidden sm:inline">List View</span>
+                </Button>
+              )}
+
+              {/* View Mode Toggle */}
+              {isManagerOrAdmin && (
+                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
+                  <Button
+                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    data-testid="button-view-list"
+                    className="h-11 px-2"
+                  >
+                    <List className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "dashboard" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("dashboard")}
+                    data-testid="button-view-dashboard"
+                    className="h-11 px-2"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+              
+              {/* Filters Button - Only visible in list view */}
+              {viewMode === "list" && (
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterPanelOpen(true)}
+                  className="relative h-11 px-3"
+                  data-testid="button-open-filters"
+                >
+                  <Filter className="w-4 h-4" />
+                  {activeFilterCount() > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="ml-1.5 rounded-full px-1.5 text-xs"
+                      data-testid="badge-active-filters-count"
+                    >
+                      {activeFilterCount()}
+                    </Badge>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </header>
         
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden pb-0 md:pb-0" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
-          {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading projects...</p>
+        <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
+          {isMobile ? (
+            <PullToRefresh
+              onRefresh={handleRefresh}
+              pullingContent=""
+              refreshingContent={
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              }
+            >
+              <div>
+                {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
+                  <div className="flex items-center justify-center h-full min-h-[400px]">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-muted-foreground">Loading projects...</p>
+                    </div>
+                  </div>
+                ) : viewMode === "dashboard" ? (
+                  <DashboardBuilder
+                    filters={{
+                      serviceFilter: dashboardServiceFilter,
+                      taskAssigneeFilter: dashboardTaskAssigneeFilter,
+                      serviceOwnerFilter: dashboardServiceOwnerFilter,
+                      userFilter: dashboardUserFilter,
+                      showArchived: dashboardShowArchived,
+                      dynamicDateFilter: dashboardDynamicDateFilter,
+                      customDateRange: dashboardCustomDateRange,
+                    }}
+                    widgets={dashboardWidgets}
+                    editMode={dashboardEditMode}
+                    onAddWidget={() => {
+                      setIsCreatingDashboard(true);
+                      setCurrentDashboard(null);
+                      setNewDashboardName("");
+                      setNewDashboardWidgets([]);
+                      setCreateDashboardModalOpen(true);
+                    }}
+                    onRemoveWidget={(widgetId) => {
+                      setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
+                    }}
+                    currentDashboard={currentDashboard}
+                  />
+                ) : viewMode === "kanban" ? (
+                  <KanbanBoard 
+                    projects={paginatedProjects} 
+                    user={user}
+                  />
+                ) : (
+                  <>
+                    <TaskList 
+                      projects={paginatedProjects} 
+                      user={user} 
+                      serviceFilter={serviceFilter}
+                      onSwitchToKanban={() => setViewMode("kanban")}
+                    />
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-3 mt-4 px-4 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                            Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                          </div>
+                          <Select
+                            value={itemsPerPage.toString()}
+                            onValueChange={(value) => {
+                              setItemsPerPage(Number(value));
+                              setCurrentPage(1);
+                            }}
+                          >
+                            <SelectTrigger className="w-[100px]" data-testid="select-items-per-page">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="15">15</SelectItem>
+                              <SelectItem value="25">25</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            data-testid="button-prev-page"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm" data-testid="text-current-page">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            data-testid="button-next-page"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            </div>
-          ) : viewMode === "dashboard" ? (
-            <DashboardBuilder
-              filters={{
-                serviceFilter: dashboardServiceFilter,
-                taskAssigneeFilter: dashboardTaskAssigneeFilter,
-                serviceOwnerFilter: dashboardServiceOwnerFilter,
-                userFilter: dashboardUserFilter,
-                showArchived: dashboardShowArchived,
-                dynamicDateFilter: dashboardDynamicDateFilter,
-                customDateRange: dashboardCustomDateRange,
-              }}
-              widgets={dashboardWidgets}
-              editMode={dashboardEditMode}
-              onAddWidget={() => {
-                setIsCreatingDashboard(true);
-                setCurrentDashboard(null);
-                setNewDashboardName("");
-                setNewDashboardWidgets([]);
-                setCreateDashboardModalOpen(true);
-              }}
-              onRemoveWidget={(widgetId) => {
-                setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
-              }}
-              currentDashboard={currentDashboard}
-            />
-          ) : viewMode === "kanban" ? (
-            <KanbanBoard 
-              projects={filteredProjects} 
-              user={user}
-              onSwitchToList={() => setViewMode("list")}
-            />
+            </PullToRefresh>
           ) : (
-            <TaskList 
-              projects={filteredProjects} 
-              user={user} 
-              serviceFilter={serviceFilter}
-              onSwitchToKanban={() => setViewMode("kanban")}
-            />
+            // Desktop view - no pull-to-refresh
+            <>
+              {projectsLoading || (isManagerOrAdmin && usersLoading) ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading projects...</p>
+                  </div>
+                </div>
+              ) : viewMode === "dashboard" ? (
+                <DashboardBuilder
+                  filters={{
+                    serviceFilter: dashboardServiceFilter,
+                    taskAssigneeFilter: dashboardTaskAssigneeFilter,
+                    serviceOwnerFilter: dashboardServiceOwnerFilter,
+                    userFilter: dashboardUserFilter,
+                    showArchived: dashboardShowArchived,
+                    dynamicDateFilter: dashboardDynamicDateFilter,
+                    customDateRange: dashboardCustomDateRange,
+                  }}
+                  widgets={dashboardWidgets}
+                  editMode={dashboardEditMode}
+                  onAddWidget={() => {
+                    setIsCreatingDashboard(true);
+                    setCurrentDashboard(null);
+                    setNewDashboardName("");
+                    setNewDashboardWidgets([]);
+                    setCreateDashboardModalOpen(true);
+                  }}
+                  onRemoveWidget={(widgetId) => {
+                    setDashboardWidgets(dashboardWidgets.filter(w => w.id !== widgetId));
+                  }}
+                  currentDashboard={currentDashboard}
+                />
+              ) : viewMode === "kanban" ? (
+                <KanbanBoard 
+                  projects={paginatedProjects} 
+                  user={user}
+                />
+              ) : (
+                <>
+                  <TaskList 
+                    projects={paginatedProjects} 
+                    user={user} 
+                    serviceFilter={serviceFilter}
+                    onSwitchToKanban={() => setViewMode("kanban")}
+                  />
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-3 mt-4 px-4 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                          Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
+                        </div>
+                        <Select
+                          value={itemsPerPage.toString()}
+                          onValueChange={(value) => {
+                            setItemsPerPage(Number(value));
+                            setCurrentPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="w-[100px]" data-testid="select-items-per-page">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="15">15</SelectItem>
+                            <SelectItem value="25">25</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          data-testid="button-prev-page"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Previous
+                        </Button>
+                        <span className="text-sm" data-testid="text-current-page">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          data-testid="button-next-page"
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
         </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      {isMobile && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      {isMobile && (
-        <SuperSearch
-          isOpen={mobileSearchOpen}
-          onOpenChange={setMobileSearchOpen}
-        />
-      )}
+      <SuperSearch
+        isOpen={mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+      />
 
       {/* Filter Panel */}
       <FilterPanel
@@ -1023,10 +1407,14 @@ export default function Projects() {
         setUserFilter={setUserFilter}
         showArchived={showArchived}
         setShowArchived={setShowArchived}
+        behindScheduleOnly={behindScheduleOnly}
+        setBehindScheduleOnly={setBehindScheduleOnly}
         dynamicDateFilter={dynamicDateFilter}
         setDynamicDateFilter={setDynamicDateFilter}
         customDateRange={customDateRange}
         setCustomDateRange={setCustomDateRange}
+        serviceDueDateFilter={serviceDueDateFilter}
+        setServiceDueDateFilter={setServiceDueDateFilter}
         viewMode={viewMode}
         setViewMode={setViewMode}
         services={services}
@@ -1392,6 +1780,52 @@ export default function Projects() {
             </Button>
             <Button onClick={handleAddWidgetToNewDashboard} data-testid="button-confirm-add-new-widget">
               Add Widget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save View Dialog */}
+      <Dialog open={saveViewDialogOpen} onOpenChange={setSaveViewDialogOpen}>
+        <DialogContent data-testid="dialog-save-view">
+          <DialogHeader>
+            <DialogTitle>Save Current View</DialogTitle>
+            <DialogDescription>
+              Save your current filters and view mode for quick access later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="view-name">View Name</Label>
+              <Input
+                id="view-name"
+                value={newViewName}
+                onChange={(e) => setNewViewName(e.target.value)}
+                placeholder="e.g., My Active Projects"
+                data-testid="input-view-name"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p>Current view mode: <strong>{viewMode === "list" ? "List" : "Kanban"}</strong></p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSaveViewDialogOpen(false);
+                setNewViewName("");
+              }}
+              data-testid="button-cancel-save-view"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCurrentView}
+              disabled={saveViewMutation.isPending}
+              data-testid="button-confirm-save-view"
+            >
+              {saveViewMutation.isPending ? "Saving..." : "Save View"}
             </Button>
           </DialogFooter>
         </DialogContent>

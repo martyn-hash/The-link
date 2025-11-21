@@ -15,6 +15,27 @@
       "when": 1758222116000,
       "tag": "0001_add_time_governance_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762861540579,
+      "tag": "0002_stormy_ego",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762862060309,
+      "tag": "0003_nosy_squadron_supreme",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1763485103070,
+      "tag": "0004_add_rich_text_notes_and_attachments_to_chronology",
+      "breakpoints": true
     }
   ]
 }

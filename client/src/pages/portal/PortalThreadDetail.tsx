@@ -102,7 +102,7 @@ export default function PortalThreadDetail() {
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ['/api/portal/threads', threadId, 'messages'],
     queryFn: () => portalApi.messages.list(threadId),
-    refetchInterval: 3000,
+    refetchInterval: 10000,
   });
 
   const sendMessageMutation = useMutation({

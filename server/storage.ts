@@ -21,6 +21,7 @@ import {
   companyViews,
   userColumnPreferences,
   dashboards,
+  userProjectPreferences,
   services,
   workRoles,
   serviceRoles,
@@ -40,6 +41,8 @@ import {
   userOauthAccounts,
   userActivityTracking,
   pushSubscriptions,
+  pushNotificationTemplates,
+  notificationIcons,
   documentFolders,
   documents,
   riskAssessments,
@@ -50,18 +53,38 @@ import {
   projectMessageThreads,
   projectMessages,
   projectMessageParticipants,
-  taskTemplateCategories,
-  taskTemplates,
-  taskTemplateSections,
-  taskTemplateQuestions,
+  staffMessageThreads,
+  staffMessages,
+  staffMessageParticipants,
+  clientRequestTemplateCategories,
+  clientRequestTemplates,
+  clientRequestTemplateSections,
+  clientRequestTemplateQuestions,
   clientCustomRequests,
   clientCustomRequestSections,
   clientCustomRequestQuestions,
   taskInstances,
   taskInstanceResponses,
+  taskTypes,
+  internalTasks,
+  taskConnections,
+  taskProgressNotes,
+  taskTimeEntries,
+  taskDocuments,
+  userSessions,
+  loginAttempts,
+  projectTypeNotifications,
+  clientRequestReminders,
+  scheduledNotifications,
+  notificationHistory,
   type User,
   type UpsertUser,
   type InsertUser,
+  type UpdateUser,
+  type UserSession,
+  type InsertUserSession,
+  type LoginAttempt,
+  type InsertLoginAttempt,
   type Client,
   type InsertClient,
   type Person,
@@ -107,6 +130,9 @@ import {
   type Dashboard,
   type InsertDashboard,
   type UpdateDashboard,
+  type UserProjectPreferences,
+  type InsertUserProjectPreferences,
+  type UpdateUserProjectPreferences,
   type Service,
   type InsertService,
   type WorkRole,
@@ -145,6 +171,10 @@ import {
   type InsertUserActivityTracking,
   type PushSubscription,
   type InsertPushSubscription,
+  type PushNotificationTemplate,
+  type InsertPushNotificationTemplate,
+  type NotificationIcon,
+  type InsertNotificationIcon,
   type DocumentFolder,
   type InsertDocumentFolder,
   type Document,
@@ -165,18 +195,24 @@ import {
   type InsertProjectMessage,
   type ProjectMessageParticipant,
   type InsertProjectMessageParticipant,
-  type TaskTemplateCategory,
-  type InsertTaskTemplateCategory,
-  type UpdateTaskTemplateCategory,
-  type TaskTemplate,
-  type InsertTaskTemplate,
-  type UpdateTaskTemplate,
-  type TaskTemplateSection,
-  type InsertTaskTemplateSection,
-  type UpdateTaskTemplateSection,
-  type TaskTemplateQuestion,
-  type InsertTaskTemplateQuestion,
-  type UpdateTaskTemplateQuestion,
+  type StaffMessageThread,
+  type InsertStaffMessageThread,
+  type StaffMessage,
+  type InsertStaffMessage,
+  type StaffMessageParticipant,
+  type InsertStaffMessageParticipant,
+  type ClientRequestTemplateCategory,
+  type InsertClientRequestTemplateCategory,
+  type UpdateClientRequestTemplateCategory,
+  type ClientRequestTemplate,
+  type InsertClientRequestTemplate,
+  type UpdateClientRequestTemplate,
+  type ClientRequestTemplateSection,
+  type InsertClientRequestTemplateSection,
+  type UpdateClientRequestTemplateSection,
+  type ClientRequestTemplateQuestion,
+  type InsertClientRequestTemplateQuestion,
+  type UpdateClientRequestTemplateQuestion,
   type ClientCustomRequest,
   type InsertClientCustomRequest,
   type UpdateClientCustomRequest,
@@ -191,7 +227,68 @@ import {
   type UpdateTaskInstance,
   type TaskInstanceResponse,
   type InsertTaskInstanceResponse,
+  type TaskType,
+  type InsertTaskType,
+  type UpdateTaskType,
+  type InternalTask,
+  type InsertInternalTask,
+  type UpdateInternalTask,
+  type CloseInternalTask,
+  type TaskConnection,
+  type InsertTaskConnection,
+  type TaskProgressNote,
+  type InsertTaskProgressNote,
+  type TaskTimeEntry,
+  type InsertTaskTimeEntry,
+  type StopTaskTimeEntry,
+  type TaskDocument,
+  type InsertTaskDocument,
   insertUserOauthAccountSchema,
+  emailMessages,
+  mailboxMessageMap,
+  emailThreads,
+  unmatchedEmails,
+  clientEmailAliases,
+  clientDomainAllowlist,
+  emailAttachments,
+  emailMessageAttachments,
+  graphWebhookSubscriptions,
+  graphSyncState,
+  type EmailMessage,
+  type InsertEmailMessage,
+  type MailboxMessageMap,
+  type InsertMailboxMessageMap,
+  type EmailThread,
+  type InsertEmailThread,
+  type UnmatchedEmail,
+  type InsertUnmatchedEmail,
+  type ClientEmailAlias,
+  type InsertClientEmailAlias,
+  type ClientDomainAllowlist,
+  type InsertClientDomainAllowlist,
+  type EmailAttachment,
+  type InsertEmailAttachment,
+  type EmailMessageAttachment,
+  type InsertEmailMessageAttachment,
+  type GraphWebhookSubscription,
+  type InsertGraphWebhookSubscription,
+  type GraphSyncState,
+  type InsertGraphSyncState,
+  type ProjectTypeNotification,
+  type InsertProjectTypeNotification,
+  type UpdateProjectTypeNotification,
+  type ClientRequestReminder,
+  type InsertClientRequestReminder,
+  type UpdateClientRequestReminder,
+  type ScheduledNotification,
+  type InsertScheduledNotification,
+  type UpdateScheduledNotification,
+  type NotificationHistory,
+  type InsertNotificationHistory,
+  type StageChangeNotificationPreview,
+  companySettings,
+  type CompanySettings,
+  type UpdateCompanySettings,
 } from "@shared/schema";
 
 // Add the OAuth account types
@@ -238,7 +335,8 @@ import bcrypt from "bcrypt";
 import { calculateBusinessHours } from "@shared/businessTime";
 import { db } from "./db";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "./emailService";
-import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, ne, not } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, sum, lt, gte, lte, or, ilike, isNull, isNotNull, ne, not } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -246,7 +344,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, userData: Partial<InsertUser>): Promise<User>;
+  updateUser(id: string, userData: UpdateUser): Promise<User>;
   deleteUser(id: string): Promise<void>;
   getAllUsers(): Promise<User[]>;
   
@@ -262,6 +360,22 @@ export interface IStorage {
   // User activity tracking operations
   trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void>;
   getRecentlyViewedByUser(userId: string, limit?: number): Promise<{ entityType: string; entityId: string; viewedAt: Date; entityData?: any }[]>;
+  getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User; entityName: string | null })[]>;
+  
+  // User session operations
+  createUserSession(session: InsertUserSession): Promise<UserSession>;
+  updateUserSessionActivity(userId: string): Promise<void>;
+  getUserSessions(userId?: string, options?: { limit?: number; onlyActive?: boolean }): Promise<(UserSession & { user: User })[]>;
+  markSessionAsLoggedOut(sessionId: string): Promise<void>;
+  
+  // Login attempt operations
+  createLoginAttempt(attempt: InsertLoginAttempt): Promise<LoginAttempt>;
+  getLoginAttempts(options?: { email?: string; limit?: number }): Promise<LoginAttempt[]>;
+  
+  // Activity cleanup methods
+  cleanupOldSessions(daysToKeep: number): Promise<number>;
+  cleanupOldLoginAttempts(daysToKeep: number): Promise<number>;
+  markInactiveSessions(): Promise<number>;
   
   // Client operations
   createClient(client: InsertClient): Promise<Client>;
@@ -304,13 +418,15 @@ export interface IStorage {
   
   // Project operations
   createProject(project: InsertProject): Promise<Project>;
-  getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
-  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
-  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]>;
+  getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
+  getProjectsByClientServiceId(clientServiceId: string): Promise<ProjectWithRelations[]>;
   getProject(id: string): Promise<ProjectWithRelations | undefined>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
   updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
   getActiveProjectsByClientAndType(clientId: string, projectTypeId: string): Promise<Project[]>;
+  getUniqueDueDatesForService(serviceId: string): Promise<string[]>;
   
   // Chronology operations
   createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology>;
@@ -407,6 +523,13 @@ export interface IStorage {
   createReasonFieldResponse(response: InsertReasonFieldResponse): Promise<ReasonFieldResponse>;
   getReasonFieldResponsesByChronologyId(chronologyId: string): Promise<ReasonFieldResponse[]>;
 
+  // Project chronology operations
+  getMostRecentStageChange(projectId: string): Promise<{
+    entry: any;
+    stageApprovalResponses: any[];
+    projectTypeId: string;
+  } | undefined>;
+
   // Helper validation methods
   validateStageReasonMapping(stageId: string, reasonId: string): Promise<{ isValid: boolean; reason?: string }>;
   validateRequiredFields(reasonId: string, fieldResponses?: { customFieldId: string; fieldType: string; valueNumber?: number; valueShortText?: string; valueLongText?: string }[]): Promise<{ isValid: boolean; reason?: string; missingFields?: string[] }>;
@@ -430,8 +553,9 @@ export interface IStorage {
   updateStageApprovalField(id: string, field: Partial<InsertStageApprovalField>): Promise<StageApprovalField>;
   deleteStageApprovalField(id: string): Promise<void>;
   
-  // Stage approval responses operations  
+  // Stage approval responses operations
   createStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse>;
+  upsertStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse>;
   getStageApprovalResponsesByProjectId(projectId: string): Promise<StageApprovalResponse[]>;
   
   // Stage approval validation
@@ -463,9 +587,9 @@ export interface IStorage {
   deleteCompanyView(id: string): Promise<void>;
   
   // User column preferences operations
-  getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined>;
+  getUserColumnPreferences(userId: string, viewType?: string): Promise<UserColumnPreferences | undefined>;
   upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences>;
-  updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;
+  updateUserColumnPreferences(userId: string, viewType: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;
   
   // Dashboard operations
   createDashboard(dashboard: InsertDashboard): Promise<Dashboard>;
@@ -477,6 +601,12 @@ export interface IStorage {
   getHomescreenDashboard(userId: string): Promise<Dashboard | undefined>;
   clearHomescreenDashboards(userId: string): Promise<void>;
   
+  // User project preferences operations
+  getUserProjectPreferences(userId: string): Promise<UserProjectPreferences | undefined>;
+  upsertUserProjectPreferences(preferences: InsertUserProjectPreferences): Promise<UserProjectPreferences>;
+  deleteUserProjectPreferences(userId: string): Promise<void>;
+  clearDefaultView(userId: string): Promise<void>;
+  
   // Analytics operations
   getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]>;
   
@@ -487,6 +617,7 @@ export interface IStorage {
   getUsersByRole(role: string): Promise<User[]>;
   
   // Stage change notification operations
+  prepareStageChangeNotification(projectId: string, newStageName: string, oldStageName?: string): Promise<StageChangeNotificationPreview | null>;
   sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void>;
   
   // Services CRUD
@@ -540,6 +671,7 @@ export interface IStorage {
   // Client Service Role Assignments CRUD
   getClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]>;
   getActiveClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]>;
+  getClientServiceRoleAssignmentById(id: string): Promise<ClientServiceRoleAssignment | undefined>;
   createClientServiceRoleAssignment(assignment: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment>;
   updateClientServiceRoleAssignment(id: string, assignment: Partial<InsertClientServiceRoleAssignment>): Promise<ClientServiceRoleAssignment>;
   deactivateClientServiceRoleAssignment(id: string): Promise<ClientServiceRoleAssignment>;
@@ -624,6 +756,7 @@ export interface IStorage {
   getAllCommunications(): Promise<(Communication & { client: Client; person?: Person; user: User })[]>;
   getCommunicationsByClientId(clientId: string): Promise<(Communication & { person?: Person; user: User })[]>;
   getCommunicationsByPersonId(personId: string): Promise<(Communication & { client: Client; user: User })[]>;
+  getCommunicationsByProjectId(projectId: string): Promise<(Communication & { person?: Person; user: User })[]>;
   getCommunicationById(id: string): Promise<(Communication & { client: Client; person?: Person; user: User }) | undefined>;
   createCommunication(communication: InsertCommunication): Promise<Communication>;
   updateCommunication(id: string, communication: Partial<InsertCommunication>): Promise<Communication>;
@@ -648,6 +781,86 @@ export interface IStorage {
   getPushSubscriptionsByClientPortalUserId(clientPortalUserId: string): Promise<PushSubscription[]>;
   deletePushSubscription(endpoint: string): Promise<void>;
   deletePushSubscriptionsByUserId(userId: string): Promise<void>;
+
+  // Push notification template operations
+  getAllPushNotificationTemplates(): Promise<PushNotificationTemplate[]>;
+  getPushNotificationTemplateByType(templateType: string): Promise<PushNotificationTemplate | undefined>;
+  updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate>;
+  createPushNotificationTemplate(template: InsertPushNotificationTemplate): Promise<PushNotificationTemplate>;
+  deletePushNotificationTemplate(id: string): Promise<void>;
+
+  // Notification icon operations
+  getAllNotificationIcons(): Promise<NotificationIcon[]>;
+  getNotificationIconById(id: string): Promise<NotificationIcon | undefined>;
+  createNotificationIcon(icon: InsertNotificationIcon): Promise<NotificationIcon>;
+  deleteNotificationIcon(id: string): Promise<void>;
+
+  // Graph webhook subscription operations
+  createGraphWebhookSubscription(subscription: InsertGraphWebhookSubscription): Promise<GraphWebhookSubscription>;
+  getGraphWebhookSubscription(subscriptionId: string): Promise<GraphWebhookSubscription | undefined>;
+  updateGraphWebhookSubscription(subscriptionId: string, updates: Partial<InsertGraphWebhookSubscription>): Promise<void>;
+  getActiveGraphWebhookSubscriptions(): Promise<GraphWebhookSubscription[]>;
+  getExpiringGraphWebhookSubscriptions(hoursUntilExpiry: number): Promise<GraphWebhookSubscription[]>;
+
+  // Graph sync state operations
+  getGraphSyncState(userId: string, folderPath: string): Promise<GraphSyncState | undefined>;
+  upsertGraphSyncState(state: InsertGraphSyncState): Promise<GraphSyncState>;
+
+  // Email message operations
+  upsertEmailMessage(message: InsertEmailMessage): Promise<EmailMessage>;
+  getEmailMessageByInternetMessageId(internetMessageId: string): Promise<EmailMessage | undefined>;
+  getEmailMessageById(id: string): Promise<EmailMessage | undefined>;
+  getEmailMessagesByThreadId(threadId: string): Promise<EmailMessage[]>;
+  updateEmailMessage(id: string, updates: Partial<InsertEmailMessage>): Promise<EmailMessage>;
+
+  // Mailbox message mapping operations
+  createMailboxMessageMap(mapping: InsertMailboxMessageMap): Promise<MailboxMessageMap>;
+  getMailboxMessageMapsByUserId(userId: string): Promise<MailboxMessageMap[]>;
+  getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]>;
+  userHasAccessToMessage(userId: string, messageId: string): Promise<boolean>;
+  getUserGraphMessageId(userId: string, messageId: string): Promise<string | undefined>;
+
+  // Email thread operations
+  createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
+  getEmailThreadById(id: string): Promise<EmailThread | undefined>;
+  getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined>;
+  getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined>;
+  getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
+  getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean): Promise<EmailThread[]>;
+  getAllEmailThreads(): Promise<EmailThread[]>;
+  getThreadsWithoutClient(): Promise<EmailThread[]>;
+  updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
+  getUnthreadedMessages(): Promise<EmailMessage[]>;
+
+  // Client email alias operations
+  getAllClientEmailAliases(): Promise<ClientEmailAlias[]>;
+  createClientEmailAlias(alias: InsertClientEmailAlias): Promise<ClientEmailAlias>;
+  getClientEmailAliasesByClientId(clientId: string): Promise<ClientEmailAlias[]>;
+  getClientByEmailAlias(email: string): Promise<{ clientId: string } | undefined>;
+  deleteClientEmailAlias(id: string): Promise<void>;
+
+  // Unmatched email operations
+  createUnmatchedEmail(unmatched: InsertUnmatchedEmail): Promise<UnmatchedEmail>;
+  getUnmatchedEmails(filters?: { resolvedOnly?: boolean }): Promise<UnmatchedEmail[]>;
+  getUnmatchedEmailByMessageId(internetMessageId: string): Promise<UnmatchedEmail | undefined>;
+  updateUnmatchedEmail(internetMessageId: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail>;
+  deleteUnmatchedEmail(internetMessageId: string): Promise<void>;
+  resolveUnmatchedEmail(internetMessageId: string, clientId: string, resolvedBy: string): Promise<void>;
+
+  // Client domain allowlist operations
+  createClientDomainAllowlist(domain: InsertClientDomainAllowlist): Promise<ClientDomainAllowlist>;
+  getClientDomainAllowlist(): Promise<ClientDomainAllowlist[]>;
+  getClientByDomain(domain: string): Promise<{ clientId: string } | undefined>;
+  deleteClientDomainAllowlist(id: string): Promise<void>;
+
+  // Email attachment operations
+  createEmailAttachment(attachment: InsertEmailAttachment): Promise<EmailAttachment>;
+  getEmailAttachmentByHash(contentHash: string): Promise<EmailAttachment | undefined>;
+  getEmailAttachmentById(id: string): Promise<EmailAttachment | undefined>;
+  createEmailMessageAttachment(mapping: InsertEmailMessageAttachment): Promise<EmailMessageAttachment>;
+  getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]>;
+  checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean>;
+  getSignedUrl(objectPath: string): Promise<string>;
 
   // Document folder operations
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
@@ -713,6 +926,13 @@ export interface IStorage {
   createProjectMessageThread(thread: InsertProjectMessageThread): Promise<ProjectMessageThread>;
   getProjectMessageThreadById(id: string): Promise<ProjectMessageThread | undefined>;
   getProjectMessageThreadsByProjectId(projectId: string): Promise<ProjectMessageThread[]>;
+  getProjectMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<ProjectMessageThread & {
+    project: { id: string; description: string; clientId: string };
+    client: { id: string; name: string };
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>>;
   updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread>;
   deleteProjectMessageThread(id: string): Promise<void>;
   archiveProjectMessageThread(id: string, archivedBy: string): Promise<ProjectMessageThread>;
@@ -732,6 +952,7 @@ export interface IStorage {
   updateProjectMessageParticipant(id: string, participant: Partial<InsertProjectMessageParticipant>): Promise<ProjectMessageParticipant>;
   deleteProjectMessageParticipant(id: string): Promise<void>;
   markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void>;
+  updateParticipantReminderSent(threadId: string, userId: string): Promise<void>;
   getUnreadProjectMessagesForUser(userId: string): Promise<{ threadId: string; count: number; projectId: string }[]>;
   getProjectMessageUnreadSummaries(olderThanMinutes: number): Promise<Array<{
     userId: string;
@@ -748,43 +969,72 @@ export interface IStorage {
     }>;
   }>>;
   
+  // Standalone Staff Message Thread operations
+  createStaffMessageThread(thread: InsertStaffMessageThread): Promise<StaffMessageThread>;
+  getStaffMessageThreadById(id: string): Promise<StaffMessageThread | undefined>;
+  getStaffMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<StaffMessageThread & {
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>>;
+  updateStaffMessageThread(id: string, thread: Partial<InsertStaffMessageThread>): Promise<StaffMessageThread>;
+  deleteStaffMessageThread(id: string): Promise<void>;
+  archiveStaffMessageThread(id: string, archivedBy: string): Promise<StaffMessageThread>;
+  unarchiveStaffMessageThread(id: string): Promise<StaffMessageThread>;
+  
+  // Standalone Staff Message operations
+  createStaffMessage(message: InsertStaffMessage): Promise<StaffMessage>;
+  getStaffMessageById(id: string): Promise<StaffMessage | undefined>;
+  getStaffMessagesByThreadId(threadId: string): Promise<StaffMessage[]>;
+  updateStaffMessage(id: string, message: Partial<InsertStaffMessage>): Promise<StaffMessage>;
+  deleteStaffMessage(id: string): Promise<void>;
+  
+  // Standalone Staff Message Participant operations
+  createStaffMessageParticipant(participant: InsertStaffMessageParticipant): Promise<StaffMessageParticipant>;
+  getStaffMessageParticipantsByThreadId(threadId: string): Promise<StaffMessageParticipant[]>;
+  getStaffMessageParticipantsByUserId(userId: string): Promise<StaffMessageParticipant[]>;
+  updateStaffMessageParticipant(id: string, participant: Partial<InsertStaffMessageParticipant>): Promise<StaffMessageParticipant>;
+  deleteStaffMessageParticipant(id: string): Promise<void>;
+  markStaffMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void>;
+  getUnreadStaffMessagesForUser(userId: string): Promise<{ threadId: string; count: number }[]>;
+  
   // Client Portal Session operations (using built-in token fields)
   createClientPortalSession(data: { clientPortalUserId: string; token: string; expiresAt: Date }): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date }>;
   getClientPortalSessionByToken(token: string): Promise<{ id: string; clientPortalUserId: string; token: string; expiresAt: Date } | undefined>;
   deleteClientPortalSession(id: string): Promise<void>;
   cleanupExpiredSessions(): Promise<void>;
   
-  // Task Template Category operations
-  createTaskTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory>;
-  getTaskTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined>;
-  getAllTaskTemplateCategories(): Promise<TaskTemplateCategory[]>;
-  updateTaskTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory>;
-  deleteTaskTemplateCategory(id: string): Promise<void>;
+  // Client Request Template Category operations
+  createClientRequestTemplateCategory(category: InsertClientRequestTemplateCategory): Promise<ClientRequestTemplateCategory>;
+  getClientRequestTemplateCategoryById(id: string): Promise<ClientRequestTemplateCategory | undefined>;
+  getAllClientRequestTemplateCategories(): Promise<ClientRequestTemplateCategory[]>;
+  updateClientRequestTemplateCategory(id: string, category: UpdateClientRequestTemplateCategory): Promise<ClientRequestTemplateCategory>;
+  deleteClientRequestTemplateCategory(id: string): Promise<void>;
   
-  // Task Template operations
-  createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate>;
-  getTaskTemplateById(id: string): Promise<TaskTemplate | undefined>;
-  getAllTaskTemplates(includeInactive?: boolean): Promise<TaskTemplate[]>;
-  getTaskTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]>;
-  getActiveTaskTemplates(): Promise<TaskTemplate[]>;
-  updateTaskTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate>;
-  deleteTaskTemplate(id: string): Promise<void>;
+  // Client Request Template operations
+  createClientRequestTemplate(template: InsertClientRequestTemplate): Promise<ClientRequestTemplate>;
+  getClientRequestTemplateById(id: string): Promise<ClientRequestTemplate | undefined>;
+  getAllClientRequestTemplates(includeInactive?: boolean): Promise<ClientRequestTemplate[]>;
+  getClientRequestTemplatesByCategory(categoryId: string): Promise<ClientRequestTemplate[]>;
+  getActiveClientRequestTemplates(): Promise<ClientRequestTemplate[]>;
+  updateClientRequestTemplate(id: string, template: UpdateClientRequestTemplate): Promise<ClientRequestTemplate>;
+  deleteClientRequestTemplate(id: string): Promise<void>;
   
-  // Task Template Section operations
-  createTaskTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection>;
-  getTaskTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined>;
-  getTaskTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]>;
-  updateTaskTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection>;
-  deleteTaskTemplateSection(id: string): Promise<void>;
+  // Client Request Template Section operations
+  createClientRequestTemplateSection(section: InsertClientRequestTemplateSection): Promise<ClientRequestTemplateSection>;
+  getClientRequestTemplateSectionById(id: string): Promise<ClientRequestTemplateSection | undefined>;
+  getClientRequestTemplateSectionsByTemplateId(templateId: string): Promise<ClientRequestTemplateSection[]>;
+  updateClientRequestTemplateSection(id: string, section: UpdateClientRequestTemplateSection): Promise<ClientRequestTemplateSection>;
+  deleteClientRequestTemplateSection(id: string): Promise<void>;
   updateSectionOrders(updates: { id: string; order: number }[]): Promise<void>;
   
-  // Task Template Question operations
-  createTaskTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
-  getTaskTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined>;
-  getTaskTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]>;
-  getAllTaskTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]>;
-  updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion>;
-  deleteTaskTemplateQuestion(id: string): Promise<void>;
+  // Client Request Template Question operations
+  createClientRequestTemplateQuestion(question: InsertClientRequestTemplateQuestion): Promise<ClientRequestTemplateQuestion>;
+  getClientRequestTemplateQuestionById(id: string): Promise<ClientRequestTemplateQuestion | undefined>;
+  getClientRequestTemplateQuestionsBySectionId(sectionId: string): Promise<ClientRequestTemplateQuestion[]>;
+  getAllClientRequestTemplateQuestionsByTemplateId(templateId: string): Promise<ClientRequestTemplateQuestion[]>;
+  updateClientRequestTemplateQuestion(id: string, question: UpdateClientRequestTemplateQuestion): Promise<ClientRequestTemplateQuestion>;
+  deleteClientRequestTemplateQuestion(id: string): Promise<void>;
   updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void>;
   
   // Client Custom Request operations
@@ -814,12 +1064,12 @@ export interface IStorage {
   // Task Instance operations
   createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
   getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
-  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
-  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
-  getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
-  getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client })[]>;
-  getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
-  getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]>;
+  getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: ClientRequestTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]>;
+  getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: ClientRequestTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
+  getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string): Promise<(TaskInstance & { template?: ClientRequestTemplate; customRequest?: ClientCustomRequest; client: Client })[]>;
+  getTaskInstancesByClientPortalUserId(clientPortalUserId: string): Promise<(TaskInstance & { template: ClientRequestTemplate; client: Client })[]>;
+  getTaskInstancesByStatus(status: string): Promise<(TaskInstance & { template: ClientRequestTemplate; client: Client; person?: Person })[]>;
+  getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: ClientRequestTemplate; client: Client; person?: Person })[]>;
   updateTaskInstance(id: string, instance: UpdateTaskInstance): Promise<TaskInstance>;
   deleteTaskInstance(id: string): Promise<void>;
   getTaskInstanceWithFullData(id: string): Promise<any>;
@@ -827,10 +1077,86 @@ export interface IStorage {
   // Task Instance Response operations
   saveTaskInstanceResponse(response: InsertTaskInstanceResponse): Promise<TaskInstanceResponse>;
   getTaskInstanceResponseById(id: string): Promise<TaskInstanceResponse | undefined>;
-  getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string): Promise<(TaskInstanceResponse & { question: TaskTemplateQuestion })[]>;
+  getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string): Promise<(TaskInstanceResponse & { question: ClientRequestTemplateQuestion })[]>;
   updateTaskInstanceResponse(id: string, response: Partial<InsertTaskInstanceResponse>): Promise<TaskInstanceResponse>;
   deleteTaskInstanceResponse(id: string): Promise<void>;
   bulkSaveTaskInstanceResponses(taskInstanceId: string, responses: InsertTaskInstanceResponse[]): Promise<void>;
+  
+  // Internal Tasks - Task Type operations
+  createTaskType(taskType: InsertTaskType): Promise<TaskType>;
+  getTaskTypeById(id: string): Promise<TaskType | undefined>;
+  getAllTaskTypes(includeInactive?: boolean): Promise<TaskType[]>;
+  getActiveTaskTypes(): Promise<TaskType[]>;
+  updateTaskType(id: string, taskType: UpdateTaskType): Promise<TaskType>;
+  deleteTaskType(id: string): Promise<void>;
+  
+  // Internal Tasks - Task operations
+  createInternalTask(task: InsertInternalTask): Promise<InternalTask>;
+  getInternalTaskById(id: string): Promise<InternalTask | undefined>;
+  getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]>;
+  getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]>;
+  getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]>;
+  getInternalTasksByClient(clientId: string): Promise<InternalTask[]>;
+  getInternalTasksByProject(projectId: string): Promise<InternalTask[]>;
+  updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask>;
+  closeInternalTask(id: string, closeData: CloseInternalTask, userId: string): Promise<InternalTask>;
+  deleteInternalTask(id: string): Promise<void>;
+  bulkReassignTasks(taskIds: string[], assignedTo: string): Promise<void>;
+  bulkUpdateTaskStatus(taskIds: string[], status: string): Promise<void>;
+  
+  // Internal Tasks - Task Connection operations
+  createTaskConnection(connection: InsertTaskConnection): Promise<TaskConnection>;
+  getTaskConnectionsByTaskId(taskId: string): Promise<TaskConnection[]>;
+  deleteTaskConnection(id: string): Promise<void>;
+  
+  // Internal Tasks - Task Progress Notes operations
+  createTaskProgressNote(note: InsertTaskProgressNote): Promise<TaskProgressNote>;
+  getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { user: User })[]>;
+  deleteTaskProgressNote(id: string): Promise<void>;
+  
+  // Internal Tasks - Task Time Entry operations
+  createTaskTimeEntry(entry: InsertTaskTimeEntry): Promise<TaskTimeEntry>;
+  getTaskTimeEntriesByTaskId(taskId: string): Promise<(TaskTimeEntry & { user: User })[]>;
+  getActiveTaskTimeEntry(taskId: string, userId: string): Promise<TaskTimeEntry | undefined>;
+  stopTaskTimeEntry(id: string, stopData: StopTaskTimeEntry): Promise<TaskTimeEntry>;
+  deleteTaskTimeEntry(id: string): Promise<void>;
+  
+  // Notification System - Project Type Notification operations
+  getProjectTypeNotificationsByProjectTypeId(projectTypeId: string): Promise<ProjectTypeNotification[]>;
+  getProjectTypeNotificationById(id: string): Promise<ProjectTypeNotification | undefined>;
+  createProjectTypeNotification(notification: InsertProjectTypeNotification): Promise<ProjectTypeNotification>;
+  updateProjectTypeNotification(id: string, notification: UpdateProjectTypeNotification): Promise<ProjectTypeNotification>;
+  deleteProjectTypeNotification(id: string): Promise<void>;
+  getPreviewCandidates(projectTypeId: string, notification: ProjectTypeNotification): Promise<import("@shared/schema").PreviewCandidatesResponse>;
+  
+  // Notification System - Client Request Reminder operations
+  getClientRequestRemindersByNotificationId(notificationId: string): Promise<ClientRequestReminder[]>;
+  getClientRequestReminderById(id: string): Promise<ClientRequestReminder | undefined>;
+  createClientRequestReminder(reminder: InsertClientRequestReminder): Promise<ClientRequestReminder>;
+  updateClientRequestReminder(id: string, reminder: UpdateClientRequestReminder): Promise<ClientRequestReminder>;
+  deleteClientRequestReminder(id: string): Promise<void>;
+  
+  // Notification System - Scheduled Notification operations
+  getAllScheduledNotifications(): Promise<ScheduledNotification[]>;
+  getScheduledNotificationById(id: string): Promise<ScheduledNotification | undefined>;
+  getScheduledNotificationsForClient(clientId: string, filters?: {
+    category?: string;
+    type?: string;
+    recipientId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+  }): Promise<any[]>;
+  updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification>;
+  cancelScheduledNotificationsForProject(projectId: string, reason: string): Promise<void>;
+  
+  // Notification System - Notification History operations
+  getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]>;
+  getNotificationHistoryByProjectId(projectId: string): Promise<NotificationHistory[]>;
+  
+  // Company Settings operations
+  getCompanySettings(): Promise<CompanySettings | undefined>;
+  updateCompanySettings(settings: UpdateCompanySettings): Promise<CompanySettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1059,6 +1385,262 @@ export class DatabaseStorage implements IStorage {
     return usersWithNotifications as User[];
   }
 
+  // User session operations
+  async createUserSession(session: InsertUserSession): Promise<UserSession> {
+    const [newSession] = await db
+      .insert(userSessions)
+      .values(session)
+      .returning();
+    return newSession;
+  }
+
+  async updateUserSessionActivity(userId: string): Promise<void> {
+    await db
+      .update(userSessions)
+      .set({ lastActivity: new Date() })
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          eq(userSessions.isActive, true)
+        )
+      );
+  }
+
+  async getUserSessions(userId?: string, options?: { limit?: number; onlyActive?: boolean }): Promise<(UserSession & { user: User })[]> {
+    let query = db
+      .select({
+        id: userSessions.id,
+        userId: userSessions.userId,
+        loginTime: userSessions.loginTime,
+        lastActivity: userSessions.lastActivity,
+        logoutTime: userSessions.logoutTime,
+        ipAddress: userSessions.ipAddress,
+        city: userSessions.city,
+        country: userSessions.country,
+        browser: userSessions.browser,
+        device: userSessions.device,
+        os: userSessions.os,
+        platformType: userSessions.platformType,
+        pushEnabled: userSessions.pushEnabled,
+        sessionDuration: userSessions.sessionDuration,
+        isActive: userSessions.isActive,
+        user: users,
+      })
+      .from(userSessions)
+      .innerJoin(users, eq(userSessions.userId, users.id))
+      .orderBy(desc(userSessions.loginTime));
+
+    const conditions = [];
+    if (userId) {
+      conditions.push(eq(userSessions.userId, userId));
+    }
+    if (options?.onlyActive) {
+      conditions.push(eq(userSessions.isActive, true));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    const sessions = await query;
+    return sessions as (UserSession & { user: User })[];
+  }
+
+  async markSessionAsLoggedOut(sessionId: string): Promise<void> {
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.id, sessionId));
+
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    const now = new Date();
+    const sessionDuration = Math.floor(
+      (now.getTime() - session.loginTime.getTime()) / (1000 * 60)
+    );
+
+    await db
+      .update(userSessions)
+      .set({
+        logoutTime: now,
+        isActive: false,
+        sessionDuration,
+      })
+      .where(eq(userSessions.id, sessionId));
+  }
+
+  // Login attempt operations
+  async createLoginAttempt(attempt: InsertLoginAttempt): Promise<LoginAttempt> {
+    const [newAttempt] = await db
+      .insert(loginAttempts)
+      .values(attempt)
+      .returning();
+    return newAttempt;
+  }
+
+  async getLoginAttempts(options?: { email?: string; limit?: number }): Promise<LoginAttempt[]> {
+    let query = db
+      .select()
+      .from(loginAttempts)
+      .orderBy(desc(loginAttempts.timestamp));
+
+    if (options?.email) {
+      query = query.where(eq(loginAttempts.email, options.email)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    return await query;
+  }
+
+  async getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User; entityName: string | null })[]> {
+    let query = db
+      .select({
+        id: userActivityTracking.id,
+        userId: userActivityTracking.userId,
+        entityType: userActivityTracking.entityType,
+        entityId: userActivityTracking.entityId,
+        viewedAt: userActivityTracking.viewedAt,
+        user: users,
+        clientName: clients.name,
+        personName: sql<string>`${people.firstName} || ' ' || ${people.lastName}`,
+        projectDescription: projects.description,
+        communicationSubject: communications.subject,
+      })
+      .from(userActivityTracking)
+      .innerJoin(users, eq(userActivityTracking.userId, users.id))
+      .leftJoin(clients, and(
+        sql`entity_type = 'client'`,
+        eq(userActivityTracking.entityId, clients.id)
+      ))
+      .leftJoin(people, and(
+        sql`entity_type = 'person'`,
+        eq(userActivityTracking.entityId, people.id)
+      ))
+      .leftJoin(projects, and(
+        sql`entity_type = 'project'`,
+        eq(userActivityTracking.entityId, projects.id)
+      ))
+      .leftJoin(communications, and(
+        sql`entity_type = 'communication'`,
+        eq(userActivityTracking.entityId, communications.id)
+      ))
+      .orderBy(desc(userActivityTracking.viewedAt));
+
+    const conditions = [];
+    
+    // Always filter to only valid enum values to prevent enum parsing errors
+    conditions.push(sql`entity_type IN ('client', 'project', 'person', 'communication')`);
+    
+    if (options?.userId) {
+      conditions.push(eq(userActivityTracking.userId, options.userId));
+    }
+    
+    if (options?.entityType) {
+      conditions.push(eq(userActivityTracking.entityType, options.entityType));
+    }
+    
+    if (options?.dateFrom) {
+      const fromDate = new Date(options.dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      conditions.push(gte(userActivityTracking.viewedAt, fromDate));
+    }
+    
+    if (options?.dateTo) {
+      const toDate = new Date(options.dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(userActivityTracking.viewedAt, toDate));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    const results = await query;
+    
+    // Map results to include entityName based on entity type
+    return results.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      viewedAt: row.viewedAt,
+      user: row.user,
+      entityName: row.clientName || row.personName || row.projectDescription || row.communicationSubject || null,
+    }));
+  }
+
+  // Activity cleanup methods
+  async cleanupOldSessions(daysToKeep: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+    const result = await db
+      .delete(userSessions)
+      .where(lt(userSessions.loginTime, cutoffDate));
+
+    return result.rowCount || 0;
+  }
+
+  async cleanupOldLoginAttempts(daysToKeep: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+    const result = await db
+      .delete(loginAttempts)
+      .where(lt(loginAttempts.timestamp, cutoffDate));
+
+    return result.rowCount || 0;
+  }
+
+  async markInactiveSessions(): Promise<number> {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 24);
+
+    const sessionsToUpdate = await db
+      .select()
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.isActive, true),
+          isNull(userSessions.logoutTime),
+          lt(userSessions.lastActivity, cutoff)
+        )
+      );
+
+    if (sessionsToUpdate.length === 0) {
+      return 0;
+    }
+
+    for (const session of sessionsToUpdate) {
+      const sessionDuration = Math.floor(
+        (session.lastActivity.getTime() - session.loginTime.getTime()) / (1000 * 60)
+      );
+
+      await db
+        .update(userSessions)
+        .set({
+          isActive: false,
+          sessionDuration,
+        })
+        .where(eq(userSessions.id, session.id));
+    }
+
+    return sessionsToUpdate.length;
+  }
+
   // Project views operations (saved filter configurations)
   async createProjectView(view: InsertProjectView): Promise<ProjectView> {
     const [newView] = await db
@@ -1108,11 +1690,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User column preferences operations
-  async getUserColumnPreferences(userId: string): Promise<UserColumnPreferences | undefined> {
+  async getUserColumnPreferences(userId: string, viewType: string = 'projects'): Promise<UserColumnPreferences | undefined> {
     const [preferences] = await db
       .select()
       .from(userColumnPreferences)
-      .where(eq(userColumnPreferences.userId, userId));
+      .where(and(
+        eq(userColumnPreferences.userId, userId),
+        eq(userColumnPreferences.viewType, viewType)
+      ));
     return preferences;
   }
 
@@ -1121,7 +1706,7 @@ export class DatabaseStorage implements IStorage {
       .insert(userColumnPreferences)
       .values(preferences)
       .onConflictDoUpdate({
-        target: userColumnPreferences.userId,
+        target: [userColumnPreferences.userId, userColumnPreferences.viewType],
         set: {
           columnOrder: preferences.columnOrder,
           visibleColumns: preferences.visibleColumns,
@@ -1133,18 +1718,21 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateUserColumnPreferences(userId: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences> {
+  async updateUserColumnPreferences(userId: string, viewType: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences> {
     const [updated] = await db
       .update(userColumnPreferences)
       .set({
         ...preferences,
         updatedAt: new Date(),
       })
-      .where(eq(userColumnPreferences.userId, userId))
+      .where(and(
+        eq(userColumnPreferences.userId, userId),
+        eq(userColumnPreferences.viewType, viewType)
+      ))
       .returning();
     
     if (!updated) {
-      throw new Error(`Column preferences not found for user ${userId}`);
+      throw new Error(`Column preferences not found for user ${userId} and viewType ${viewType}`);
     }
     
     return updated;
@@ -1224,6 +1812,48 @@ export class DatabaseStorage implements IStorage {
       .update(dashboards)
       .set({ isHomescreenDashboard: false })
       .where(eq(dashboards.userId, userId));
+  }
+
+  // User project preferences operations
+  async getUserProjectPreferences(userId: string): Promise<UserProjectPreferences | undefined> {
+    const [preferences] = await db
+      .select()
+      .from(userProjectPreferences)
+      .where(eq(userProjectPreferences.userId, userId));
+    return preferences;
+  }
+
+  async upsertUserProjectPreferences(preferences: InsertUserProjectPreferences): Promise<UserProjectPreferences> {
+    const [result] = await db
+      .insert(userProjectPreferences)
+      .values(preferences)
+      .onConflictDoUpdate({
+        target: userProjectPreferences.userId,
+        set: {
+          defaultViewId: preferences.defaultViewId,
+          defaultViewType: preferences.defaultViewType,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async deleteUserProjectPreferences(userId: string): Promise<void> {
+    await db
+      .delete(userProjectPreferences)
+      .where(eq(userProjectPreferences.userId, userId));
+  }
+
+  async clearDefaultView(userId: string): Promise<void> {
+    await db
+      .update(userProjectPreferences)
+      .set({
+        defaultViewId: null,
+        defaultViewType: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(userProjectPreferences.userId, userId));
   }
 
   // Analytics operations
@@ -1663,6 +2293,13 @@ export class DatabaseStorage implements IStorage {
   // User activity tracking operations
   async trackUserActivity(userId: string, entityType: string, entityId: string): Promise<void> {
     try {
+      // Only track entity types that are in the enum
+      const validEntityTypes = ['client', 'project', 'person', 'communication'];
+      if (!validEntityTypes.includes(entityType)) {
+        // Silently skip invalid entity types - they may be legacy or not yet supported
+        return;
+      }
+
       // Insert or update activity tracking (upsert to handle duplicate views)
       await db
         .insert(userActivityTracking)
@@ -2622,24 +3259,52 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
     if (filters?.month) {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
-    // Handle archived filtering: only apply one or the other, not both
+    // Handle archived filtering: always include completed projects regardless of archived status
+    // The archived filter only applies to active (non-completed) projects
     if (filters?.archived !== undefined) {
-      whereConditions.push(eq(projects.archived, filters.archived));
-    } else if (filters?.showArchived === false) {
-      // When showArchived is false, exclude archived projects
-      whereConditions.push(eq(projects.archived, false));
+      // Explicit archived filter: match archived status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, filters.archived),
+          isNotNull(projects.completionStatus)
+        )!
+      );
+    } else if (filters?.showArchived !== true) {
+      // Default behavior (undefined or false): exclude archived projects BUT always include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, false),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
-    // When showArchived is true or undefined, don't filter by archived status (include all)
+    // When showArchived is explicitly true, don't filter by archived status (show all)
     
+    // Handle inactive filtering: always include completed projects regardless of inactive status
+    // The inactive filter only applies to active (non-completed) projects
     if (filters?.inactive !== undefined) {
-      whereConditions.push(eq(projects.inactive, filters.inactive));
+      // Explicit inactive filter: match inactive status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.inactive, filters.inactive),
+          isNotNull(projects.completionStatus)
+        )!
+      );
+    } else {
+      // Default: exclude inactive projects BUT always include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.inactive, false),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
     
     if (filters?.assigneeId) {
@@ -2672,8 +3337,19 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Dynamic date filtering
-    if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+    // Exact due date filtering (takes precedence over dynamic date filters)
+    if (filters?.dueDate) {
+      const targetDate = new Date(filters.dueDate);
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      whereConditions.push(
+        and(
+          gte(projects.dueDate, sql`${targetDate}`),
+          lt(projects.dueDate, sql`${nextDay}`)
+        )!
+      );
+    } else if (filters?.dynamicDateFilter && filters.dynamicDateFilter !== 'all') {
+      // Dynamic date filtering
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
@@ -2813,15 +3489,37 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
-    // Handle archived filtering: only apply one or the other, not both
+    // Handle archived filtering: always include completed projects regardless of archived status
+    // The archived filter only applies to active (non-completed) projects
     if (filters?.archived !== undefined) {
-      whereConditions.push(eq(projects.archived, filters.archived));
-    } else if (filters?.showArchived === false) {
-      whereConditions.push(eq(projects.archived, false));
+      // Explicit archived filter: match archived status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, filters.archived),
+          isNotNull(projects.completionStatus)
+        )!
+      );
+    } else if (filters?.showArchived !== true) {
+      // Default behavior (undefined or false): exclude archived projects BUT always include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.archived, false),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
+    // When showArchived is explicitly true, don't filter by archived status (show all)
     
+    // Handle inactive filtering: always include completed projects regardless of inactive status
+    // The inactive filter only applies to active (non-completed) projects
     if (filters?.inactive !== undefined) {
-      whereConditions.push(eq(projects.inactive, filters.inactive));
+      // Explicit inactive filter: match inactive status OR include completed projects
+      whereConditions.push(
+        or(
+          eq(projects.inactive, filters.inactive),
+          isNotNull(projects.completionStatus)
+        )!
+      );
     }
     
     if (filters?.assigneeId) {
@@ -2980,9 +3678,13 @@ export class DatabaseStorage implements IStorage {
     // Handle archived filtering: only apply one or the other, not both
     if (filters?.archived !== undefined) {
       whereConditions.push(eq(projects.archived, filters.archived));
+    } else if (filters?.showArchived === true) {
+      // When showArchived is true, show ONLY archived projects
+      whereConditions.push(eq(projects.archived, true));
     } else if (filters?.showArchived === false) {
       whereConditions.push(eq(projects.archived, false));
     }
+    // When showArchived is undefined, don't filter by archived status (include all)
     
     if (filters?.inactive !== undefined) {
       whereConditions.push(eq(projects.inactive, filters.inactive));
@@ -3134,6 +3836,75 @@ export class DatabaseStorage implements IStorage {
     return projectsWithAssignees;
   }
 
+  async getProjectsByClientServiceId(clientServiceId: string): Promise<ProjectWithRelations[]> {
+    // Query projectSchedulingHistory to find all projects created for this client service
+    const schedulingHistory = await db
+      .select({ projectId: projectSchedulingHistory.projectId })
+      .from(projectSchedulingHistory)
+      .where(
+        and(
+          eq(projectSchedulingHistory.clientServiceId, clientServiceId),
+          isNotNull(projectSchedulingHistory.projectId)
+        )
+      );
+
+    // Extract unique project IDs
+    const projectIds = Array.from(new Set(schedulingHistory.map(h => h.projectId).filter((id): id is string => id !== null)));
+
+    if (projectIds.length === 0) {
+      return [];
+    }
+
+    // Fetch the full project details for these project IDs
+    const results = await db.query.projects.findMany({
+      where: inArray(projects.id, projectIds),
+      with: {
+        client: true,
+        bookkeeper: true,
+        clientManager: true,
+        currentAssignee: true,
+        projectOwner: true,
+        projectType: {
+          with: {
+            service: true,
+          },
+        },
+        chronology: {
+          with: {
+            assignee: true,
+            changedBy: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
+          },
+          orderBy: desc(projectChronology.timestamp),
+        },
+      },
+      orderBy: [desc(projects.createdAt)],
+    });
+
+    // Convert null relations to undefined and populate stage role assignee
+    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
+      const stageRoleAssignee = await this.resolveStageRoleAssignee(project);
+      return {
+        ...project,
+        currentAssignee: project.currentAssignee || undefined,
+        projectOwner: project.projectOwner || undefined,
+        stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
+          fieldResponses: c.fieldResponses || [],
+        })),
+      };
+    }));
+
+    return projectsWithAssignees;
+  }
+
   async getProject(id: string): Promise<ProjectWithRelations | undefined> {
     const result = await db.query.projects.findFirst({
       where: eq(projects.id, id),
@@ -3160,6 +3931,11 @@ export class DatabaseStorage implements IStorage {
           },
           orderBy: desc(projectChronology.timestamp),
         },
+        stageApprovalResponses: {
+          with: {
+            field: true,
+          },
+        },
       },
     });
     
@@ -3177,12 +3953,78 @@ export class DatabaseStorage implements IStorage {
       chronology: result.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
+        changedBy: c.changedBy || undefined,
         fieldResponses: c.fieldResponses || [],
       })),
+      stageApprovalResponses: result.stageApprovalResponses || [],
+    };
+  }
+
+  async getMostRecentStageChange(projectId: string): Promise<{
+    entry: any;
+    stageApprovalResponses: any[];
+    projectTypeId: string;
+  } | undefined> {
+    // Fetch the most recent chronology entry that is a stage change
+    // Stage changes have both fromStatus and toStatus populated
+    const result = await db.query.projectChronology.findFirst({
+      where: and(
+        eq(projectChronology.projectId, projectId),
+        isNotNull(projectChronology.fromStatus),
+        isNotNull(projectChronology.toStatus)
+      ),
+      with: {
+        assignee: true,
+        changedBy: true,
+        fieldResponses: {
+          with: {
+            customField: true,
+          },
+        },
+      },
+      orderBy: desc(projectChronology.timestamp),
+    });
+
+    if (!result) return undefined;
+
+    // Fetch the project's stage approval responses and projectTypeId
+    // The client-side modal will filter these based on the stage change's approval requirements
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      with: {
+        stageApprovalResponses: {
+          with: {
+            field: true,
+          },
+        },
+      },
+    });
+
+    if (!project) return undefined;
+
+    // Return the chronology entry, stage approval responses, and projectTypeId
+    // This allows the client-side filtering logic to work unchanged
+    return {
+      entry: {
+        ...result,
+        assignee: result.assignee || undefined,
+        changedBy: result.changedBy || undefined,
+        fieldResponses: result.fieldResponses || [],
+      },
+      stageApprovalResponses: project.stageApprovalResponses || [],
+      projectTypeId: project.projectTypeId,
     };
   }
 
   async updateProject(id: string, updateData: Partial<InsertProject>): Promise<Project> {
+    // Get the current project to detect changes
+    const currentProject = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+    const oldProject = currentProject[0];
+    
+    if (!oldProject) {
+      throw new Error("Project not found");
+    }
+
     const [updatedProject] = await db
       .update(projects)
       .set({
@@ -3194,6 +4036,93 @@ export class DatabaseStorage implements IStorage {
 
     if (!updatedProject) {
       throw new Error("Project not found");
+    }
+
+    // Handle notification scheduling/rescheduling/cancellation when dueDate changes
+    const oldDueDate = oldProject.dueDate;
+    const newDueDate = updateData.dueDate !== undefined ? updateData.dueDate : oldDueDate;
+    
+    // Case 1: Setting an initial due date (null → date)
+    if (!oldDueDate && newDueDate) {
+      console.log(`[Storage] Project ${id} gained a due date (${newDueDate.toISOString()}), scheduling notifications`);
+      
+      const { scheduleProjectDueDateNotifications } = await import("./notification-scheduler");
+      
+      try {
+        // Fetch peopleIds for this client
+        const allRelatedPeople = await this.getClientPeopleByClientId(oldProject.clientId);
+        const peopleIds = allRelatedPeople.map(p => p.person.id);
+        
+        await scheduleProjectDueDateNotifications({
+          projectId: id,
+          clientServiceId: oldProject.clientServiceId || '',
+          clientId: oldProject.clientId,
+          projectTypeId: oldProject.projectTypeId,
+          dueDate: newDueDate,
+          relatedPeople: peopleIds,
+        });
+      } catch (error) {
+        console.error(`[Storage] Failed to schedule notifications for project ${id}:`, error);
+      }
+    }
+    // Case 2: Changing an existing due date (date → different date)
+    else if (oldDueDate && newDueDate && oldDueDate.getTime() !== newDueDate.getTime()) {
+      console.log(`[Storage] Project ${id} dueDate changed from ${oldDueDate.toISOString()} to ${newDueDate.toISOString()}, re-scheduling notifications`);
+      
+      const { scheduleProjectDueDateNotifications } = await import("./notification-scheduler");
+      
+      try {
+        // Fetch peopleIds for this client
+        const allRelatedPeople = await this.getClientPeopleByClientId(oldProject.clientId);
+        const peopleIds = allRelatedPeople.map(p => p.person.id);
+        
+        await scheduleProjectDueDateNotifications({
+          projectId: id,
+          clientServiceId: oldProject.clientServiceId || '',
+          clientId: oldProject.clientId,
+          projectTypeId: oldProject.projectTypeId,
+          dueDate: newDueDate,
+          relatedPeople: peopleIds,
+        });
+      } catch (error) {
+        console.error(`[Storage] Failed to re-schedule notifications for project ${id}:`, error);
+      }
+    }
+    // Case 3: Clearing a due date (date → null)
+    else if (oldDueDate && updateData.dueDate === null) {
+      console.log(`[Storage] Project ${id} due date cleared, cancelling due_date notifications`);
+      
+      const { cancelProjectDueDateNotifications, SYSTEM_USER_ID } = await import("./notification-scheduler");
+      
+      try {
+        await cancelProjectDueDateNotifications(id, SYSTEM_USER_ID, "Due date removed from project");
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
+      }
+    }
+
+    // Handle notification cancellation when project is archived or made inactive
+    if ((updateData.archived === true && !oldProject.archived) || (updateData.inactive === true && !oldProject.inactive)) {
+      console.log(`[Storage] Project ${id} archived/inactive, cancelling due_date notifications`);
+      
+      const { cancelProjectDueDateNotifications, SYSTEM_USER_ID } = await import("./notification-scheduler");
+      
+      try {
+        await cancelProjectDueDateNotifications(id, SYSTEM_USER_ID, updateData.archived ? 'Project archived' : 'Project marked inactive');
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for project ${id}:`, error);
+      }
+    }
+
+    // Auto-cancel remaining notifications when project is completed
+    if (updateData.completionStatus && !oldProject.completionStatus) {
+      console.log(`[Storage] Project ${id} completed, cancelling all remaining notifications`);
+      
+      try {
+        await this.cancelScheduledNotificationsForProject(id, 'Project completed');
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for completed project ${id}:`, error);
+      }
     }
 
     return updatedProject;
@@ -3216,6 +4145,39 @@ export class DatabaseStorage implements IStorage {
     return activeProjects;
   }
 
+  async getUniqueDueDatesForService(serviceId: string): Promise<string[]> {
+    // Find all project types for this service
+    const serviceProjectTypes = await db
+      .select({ id: projectTypes.id })
+      .from(projectTypes)
+      .where(eq(projectTypes.serviceId, serviceId));
+    
+    const projectTypeIds = serviceProjectTypes.map(pt => pt.id);
+    
+    if (projectTypeIds.length === 0) {
+      return [];
+    }
+
+    // Get unique due dates for projects with these project types
+    const dueDates = await db
+      .selectDistinct({ dueDate: projects.dueDate })
+      .from(projects)
+      .where(
+        and(
+          inArray(projects.projectTypeId, projectTypeIds),
+          isNotNull(projects.dueDate),
+          eq(projects.inactive, false) // Exclude inactive projects
+        )
+      )
+      .orderBy(projects.dueDate);
+
+    // Convert dates to ISO strings and filter out nulls
+    return dueDates
+      .map(d => d.dueDate)
+      .filter((date): date is Date => date !== null)
+      .map(date => date.toISOString().split('T')[0]); // Return YYYY-MM-DD format
+  }
+
   async updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project> {
     const project = await this.getProject(update.projectId);
     if (!project) {
@@ -3231,10 +4193,15 @@ export class DatabaseStorage implements IStorage {
       throw new Error(validation.reason || "Invalid project status");
     }
 
-    // Look up the kanban stage to get the assigned role
-    const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.name, update.newStatus));
+    // Look up the kanban stage to get the assigned role - MUST scope by project type to avoid name collisions
+    const [stage] = await db.select().from(kanbanStages).where(
+      and(
+        eq(kanbanStages.name, update.newStatus),
+        eq(kanbanStages.projectTypeId, project.projectTypeId)
+      )
+    );
     if (!stage) {
-      throw new Error(`Kanban stage '${update.newStatus}' not found`);
+      throw new Error(`Kanban stage '${update.newStatus}' not found for this project type`);
     }
 
     // Look up the change reason scoped to the project's project type to avoid name collisions
@@ -3374,7 +4341,25 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Use a transaction to ensure chronology and field responses are created atomically
+    // Capture chronologyEntry for use outside transaction (for thread creation)
+    let chronologyEntryId: string | undefined;
+    
     const updatedProject = await db.transaction(async (tx) => {
+      // Backfill plain text notes from HTML for backward compatibility
+      let notesText = update.notes;
+      if (!notesText && update.notesHtml) {
+        // Strip HTML tags to create plain text version for legacy consumers
+        notesText = update.notesHtml
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+          .replace(/&amp;/g, '&') // Decode HTML entities
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .trim();
+      }
+      
       // Create chronology entry
       const [chronologyEntry] = await tx.insert(projectChronology).values({
         projectId: update.projectId,
@@ -3383,10 +4368,15 @@ export class DatabaseStorage implements IStorage {
         assigneeId: newAssigneeId,
         changedById: userId,
         changeReason: update.changeReason,
-        notes: update.notes,
+        notes: notesText,
+        notesHtml: update.notesHtml,
+        attachments: update.attachments,
         timeInPreviousStage,
         businessHoursInPreviousStage,
       }).returning();
+
+      // Capture the chronology entry ID for thread creation
+      chronologyEntryId = chronologyEntry.id;
 
       // Create field responses if provided
       if (update.fieldResponses && update.fieldResponses.length > 0) {
@@ -3428,6 +4418,67 @@ export class DatabaseStorage implements IStorage {
     // CRITICAL FIX: Use captured oldStatus instead of project.currentStatus to avoid scope issues
     await this.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
 
+    // Auto-create message thread if person changing stage differs from person responsible for new stage
+    // Only create if both users are defined (new stage has an assignee)
+    if (userId && newAssigneeId && userId !== newAssigneeId && chronologyEntryId) {
+      try {
+        // Create unique thread topic with timestamp for each stage change
+        // Include chronology ID suffix to guarantee uniqueness even for rapid consecutive changes
+        const timestamp = new Date().toLocaleString('en-GB', { 
+          day: '2-digit', 
+          month: 'short', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        const shortId = chronologyEntryId.substring(0, 8); // First 8 chars for readability
+        const threadTopic = `${oldStatus} to ${update.newStatus} - ${timestamp} (${shortId})`;
+        
+        // Create the message thread (no duplicate check - create new thread every time)
+        const newThread = await this.createProjectMessageThread({
+          projectId: update.projectId,
+          topic: threadTopic,
+          createdByUserId: userId,
+        });
+        
+        // Add both users as participants
+        await this.createProjectMessageParticipant({
+          threadId: newThread.id,
+          userId: userId,
+        });
+        
+        await this.createProjectMessageParticipant({
+          threadId: newThread.id,
+          userId: newAssigneeId,
+        });
+        
+        // Create initial message with stage change notes if provided
+        if (update.notesHtml && update.notesHtml.trim()) {
+          await this.createProjectMessage({
+            threadId: newThread.id,
+            content: update.notesHtml,
+            userId: userId,
+          });
+        }
+        
+        console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}`);
+      } catch (error) {
+        console.error(`[Storage] Failed to create message thread for project ${update.projectId}:`, error);
+        // Don't throw - thread creation failure shouldn't block the status update
+      }
+    }
+
+    // Auto-cancel remaining notifications when project moves to a final stage
+    // (stages that can be final stages are intended as completion points)
+    if (stage.canBeFinalStage && oldStatus !== update.newStatus) {
+      console.log(`[Storage] Project ${update.projectId} moved to final stage '${update.newStatus}', cancelling all remaining notifications`);
+      
+      try {
+        await this.cancelScheduledNotificationsForProject(update.projectId, `Project moved to final stage: ${update.newStatus}`);
+      } catch (error) {
+        console.error(`[Storage] Failed to cancel notifications for project ${update.projectId}:`, error);
+      }
+    }
+
     return updatedProject;
   }
 
@@ -3435,6 +4486,66 @@ export class DatabaseStorage implements IStorage {
   async createChronologyEntry(entry: InsertProjectChronology): Promise<ProjectChronology> {
     const [chronology] = await db.insert(projectChronology).values(entry).returning();
     return chronology;
+  }
+
+  // Helper function to log task activities to project chronology
+  async logTaskActivityToProject(
+    taskId: string,
+    activity: 'created' | 'updated' | 'note_added' | 'completed',
+    details: string,
+    userId: string
+  ): Promise<void> {
+    // Get project connection for this task
+    const [connection] = await db
+      .select()
+      .from(taskConnections)
+      .where(
+        and(
+          eq(taskConnections.taskId, taskId),
+          eq(taskConnections.entityType, 'project')
+        )
+      );
+
+    if (!connection) {
+      // Task is not connected to a project, skip logging
+      return;
+    }
+
+    // Get task details
+    const [task] = await db
+      .select()
+      .from(internalTasks)
+      .where(eq(internalTasks.id, taskId));
+
+    if (!task) return;
+
+    // Create appropriate chronology message based on activity
+    let message = '';
+    switch (activity) {
+      case 'created':
+        message = `Task created: ${task.title}`;
+        break;
+      case 'updated':
+        message = `Task updated: ${task.title} - ${details}`;
+        break;
+      case 'note_added':
+        message = `Progress note added to task "${task.title}": ${details}`;
+        break;
+      case 'completed':
+        message = `Task completed: ${task.title} - ${details}`;
+        break;
+    }
+
+    // Create chronology entry
+    await db.insert(projectChronology).values({
+      projectId: connection.entityId,
+      fromStatus: null,
+      toStatus: 'no_change',
+      assigneeId: task.assignedTo,
+      changedById: userId,
+      notes: message,
+      timestamp: new Date(),
+    });
   }
 
   async getProjectChronology(projectId: string): Promise<(ProjectChronology & { assignee?: User; changedBy?: User; fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[] })[]> {
@@ -4795,6 +5906,30 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async upsertStageApprovalResponse(response: InsertStageApprovalResponse): Promise<StageApprovalResponse> {
+    try {
+      const [upsertedResponse] = await db
+        .insert(stageApprovalResponses)
+        .values(response)
+        .onConflictDoUpdate({
+          target: [stageApprovalResponses.projectId, stageApprovalResponses.fieldId],
+          set: {
+            valueBoolean: response.valueBoolean,
+            valueNumber: response.valueNumber,
+            valueLongText: response.valueLongText,
+            valueMultiSelect: response.valueMultiSelect,
+          }
+        })
+        .returning();
+      return upsertedResponse;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('check_single_value_column')) {
+        throw new Error(`Invalid field value: only one value column should be populated based on field type`);
+      }
+      throw error;
+    }
+  }
+
   async getStageApprovalResponsesByProjectId(projectId: string): Promise<StageApprovalResponse[]> {
     return await db.query.stageApprovalResponses.findMany({
       where: eq(stageApprovalResponses.projectId, projectId),
@@ -4847,14 +5982,17 @@ export class DatabaseStorage implements IStorage {
       const hasBoolean = response.valueBoolean !== undefined && response.valueBoolean !== null;
       const hasNumber = response.valueNumber !== undefined && response.valueNumber !== null;
       const hasLongText = response.valueLongText !== undefined && response.valueLongText !== null && response.valueLongText !== '';
+      const hasMultiSelect = response.valueMultiSelect !== undefined && response.valueMultiSelect !== null && Array.isArray(response.valueMultiSelect);
       
       let validFieldMatch = false;
       if (field.fieldType === 'boolean') {
-        validFieldMatch = hasBoolean && !hasNumber && !hasLongText;
+        validFieldMatch = hasBoolean && !hasNumber && !hasLongText && !hasMultiSelect;
       } else if (field.fieldType === 'number') {
-        validFieldMatch = !hasBoolean && hasNumber && !hasLongText;
+        validFieldMatch = !hasBoolean && hasNumber && !hasLongText && !hasMultiSelect;
       } else if (field.fieldType === 'long_text') {
-        validFieldMatch = !hasBoolean && !hasNumber && hasLongText;
+        validFieldMatch = !hasBoolean && !hasNumber && hasLongText && !hasMultiSelect;
+      } else if (field.fieldType === 'multi_select') {
+        validFieldMatch = !hasBoolean && !hasNumber && !hasLongText && hasMultiSelect;
       }
       
       if (!validFieldMatch) {
@@ -4897,6 +6035,17 @@ export class DatabaseStorage implements IStorage {
         // For long_text fields: just check not empty if required
         if (field.isRequired && (!response.valueLongText || response.valueLongText.trim() === '')) {
           failedFields.push(field.fieldName);
+        }
+      } else if (field.fieldType === 'multi_select') {
+        // For multi_select fields: validate against configured options if present
+        if (field.isRequired && (!response.valueMultiSelect || response.valueMultiSelect.length === 0)) {
+          failedFields.push(field.fieldName);
+        } else if (field.options && field.options.length > 0 && response.valueMultiSelect) {
+          // Validate that all selected values are in the configured options
+          const invalidOptions = response.valueMultiSelect.filter(value => !field.options?.includes(value));
+          if (invalidOptions.length > 0) {
+            failedFields.push(`${field.fieldName}: invalid options selected`);
+          }
         }
       }
     }
@@ -5012,6 +6161,246 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
+  async prepareStageChangeNotification(
+    projectId: string, 
+    newStageName: string, 
+    oldStageName?: string
+  ): Promise<StageChangeNotificationPreview | null> {
+    try {
+      // Only prepare notifications if the stage actually changed
+      if (oldStageName && oldStageName === newStageName) {
+        return null;
+      }
+
+      // Get the project with all related data
+      const project = await this.getProject(projectId);
+      if (!project) {
+        console.warn(`Project ${projectId} not found for stage change notification preview`);
+        return null;
+      }
+
+      // Check if notifications are enabled for this project type
+      const [projectType] = await db
+        .select({ notificationsActive: projectTypes.notificationsActive })
+        .from(projectTypes)
+        .where(eq(projectTypes.id, project.projectTypeId));
+
+      if (projectType && projectType.notificationsActive === false) {
+        console.log(`Notifications disabled for project type ${project.projectTypeId}, skipping notification preview`);
+        return null;
+      }
+
+      // Get the new kanban stage to find the assigned role
+      const [newStage] = await db
+        .select()
+        .from(kanbanStages)
+        .where(eq(kanbanStages.name, newStageName));
+
+      if (!newStage) {
+        console.warn(`Kanban stage '${newStageName}' not found for notification preview`);
+        return null;
+      }
+
+      // Determine which users to notify based on the stage assignment
+      let usersToNotify: User[] = [];
+      
+      if (newStage.assignedUserId) {
+        // Direct user assignment - notify specific user
+        const assignedUser = await this.getUser(newStage.assignedUserId);
+        if (assignedUser) {
+          usersToNotify = [assignedUser];
+        }
+      } else if (newStage.assignedWorkRoleId) {
+        // Work role assignment - notify users assigned to this role for the client
+        const workRole = await this.getWorkRoleById(newStage.assignedWorkRoleId);
+        if (workRole) {
+          const roleAssignment = await this.resolveRoleAssigneeForClient(
+            project.clientId, 
+            project.projectTypeId, 
+            workRole.name
+          );
+          if (roleAssignment) {
+            usersToNotify = [roleAssignment];
+          }
+        }
+      }
+
+      if (usersToNotify.length === 0) {
+        console.log(`No users to notify for stage '${newStageName}', skipping notification preview`);
+        return null;
+      }
+
+      // Get project with client information and chronology for email
+      const projectWithClient = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+        with: {
+          client: true,
+          chronology: {
+            orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+            with: {
+              fieldResponses: {
+                with: {
+                  customField: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!projectWithClient) {
+        console.warn(`Project with client data not found for ${projectId}`);
+        return null;
+      }
+      
+      // Get the most recent chronology entry (the current stage change)
+      const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
+        ? projectWithClient.chronology[0] 
+        : null;
+      
+      // Extract change reason and notes from the most recent entry
+      const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
+      const notes = mostRecentChronologyEntry?.notes || undefined;
+
+      // PERFORMANCE FIX: Batch-load notification preferences for all users at once
+      const userIds = usersToNotify.map(user => user.id);
+      const allPreferences = await db
+        .select()
+        .from(userNotificationPreferences)
+        .where(inArray(userNotificationPreferences.userId, userIds));
+      
+      // Create a map for quick preference lookup
+      const preferencesMap = new Map<string, UserNotificationPreferences>();
+      allPreferences.forEach(pref => {
+        preferencesMap.set(pref.userId, pref);
+      });
+
+      // Filter users who need notifications and validate their data
+      const finalUsersToNotify = usersToNotify.filter(user => {
+        // Get preferences or use defaults
+        const preferences = preferencesMap.get(user.id);
+        const notifyStageChanges = preferences?.notifyStageChanges ?? true; // Default to true
+        
+        if (!notifyStageChanges) {
+          console.log(`User ${user.email} has stage change notifications disabled, skipping`);
+          return false;
+        }
+
+        // Validate user has required fields for email
+        if (!user.email || !user.firstName) {
+          console.warn(`User ${user.id} missing email or name, skipping notification`);
+          return false;
+        }
+
+        return true;
+      });
+
+      if (finalUsersToNotify.length === 0) {
+        console.log(`No eligible users to notify for project ${projectId} stage change to ${newStageName}`);
+        return null;
+      }
+
+      // Prepare chronology data for email (only need toStatus and timestamp)
+      const chronologyForEmail = (projectWithClient.chronology || []).map(entry => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
+      }));
+
+      // Prepare stage config for email
+      const stageConfigForEmail = {
+        maxInstanceTime: newStage.maxInstanceTime,
+      };
+
+      // Calculate due date
+      let formattedDueDate: string | undefined = undefined;
+      
+      if (chronologyForEmail && chronologyForEmail.length > 0 && stageConfigForEmail.maxInstanceTime) {
+        const { addBusinessHours } = await import('@shared/businessTime');
+        
+        // Find when project entered current stage
+        const sortedChronology = [...chronologyForEmail].sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        const stageEntry = sortedChronology.find(entry => entry.toStatus === newStageName);
+        
+        let assignedTimestamp: string | null = null;
+        if (stageEntry) {
+          assignedTimestamp = stageEntry.timestamp;
+        } else if (projectWithClient.createdAt) {
+          assignedTimestamp = projectWithClient.createdAt instanceof Date 
+            ? projectWithClient.createdAt.toISOString() 
+            : projectWithClient.createdAt;
+        }
+        
+        // Calculate due date if we have max time and assignment timestamp
+        if (assignedTimestamp && stageConfigForEmail.maxInstanceTime > 0) {
+          const deadlineDate = addBusinessHours(assignedTimestamp, stageConfigForEmail.maxInstanceTime);
+          formattedDueDate = deadlineDate.toLocaleString('en-GB', { 
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+          });
+        }
+      }
+
+      // Generate deduplication key
+      const recipientIds = finalUsersToNotify.map(u => u.id).sort().join(',');
+      const dedupeKey = `${projectId}:${newStageName}:${changeReason || 'none'}:${recipientIds}`;
+
+      // Pre-render email subject and body
+      const emailSubject = `Project Stage Update: ${projectWithClient.description} - ${newStageName}`;
+      
+      // Build email body (simplified version - actual implementation would use email template service)
+      const emailBody = `
+        <p>Hello,</p>
+        <p>The project "${projectWithClient.description}" for ${projectWithClient.client.name} has been moved to stage: <strong>${newStageName}</strong></p>
+        ${oldStageName ? `<p>Previous stage: ${oldStageName}</p>` : ''}
+        ${changeReason ? `<p>Change reason: ${changeReason}</p>` : ''}
+        ${notes ? `<p>Notes: ${notes}</p>` : ''}
+        ${formattedDueDate ? `<p>Due date: ${formattedDueDate}</p>` : ''}
+        <p>Please log into The Link system to review the project and take the necessary action.</p>
+        <p>Best regards,<br/>The Link Team</p>
+      `.trim();
+
+      // Pre-render push notification title and body
+      const pushTitle = `${newStageName}: ${projectWithClient.description}`;
+      const pushBody = `${projectWithClient.client.name}${formattedDueDate ? ` | Due: ${formattedDueDate}` : ''}`;
+
+      // Build recipients array
+      const recipients = finalUsersToNotify.map(user => ({
+        userId: user.id,
+        name: `${user.firstName} ${user.lastName || ''}`.trim(),
+        email: user.email!,
+      }));
+
+      return {
+        projectId,
+        newStageName,
+        oldStageName,
+        dedupeKey,
+        recipients,
+        emailSubject,
+        emailBody,
+        pushTitle,
+        pushBody,
+        metadata: {
+          projectName: projectWithClient.description,
+          clientName: projectWithClient.client.name,
+          dueDate: formattedDueDate,
+          changeReason,
+          notes,
+        },
+      };
+    } catch (error) {
+      console.error(`Error preparing stage change notification for project ${projectId}:`, error);
+      return null;
+    }
+  }
+
   async sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void> {
     try {
       // Only send notifications if the stage actually changed
@@ -5051,6 +6440,17 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
+      // Check if notifications are enabled for this project type
+      const [projectType] = await db
+        .select({ notificationsActive: projectTypes.notificationsActive })
+        .from(projectTypes)
+        .where(eq(projectTypes.id, project.projectTypeId));
+
+      if (projectType && projectType.notificationsActive === false) {
+        console.log(`Notifications disabled for project type ${project.projectTypeId}, skipping notifications`);
+        return;
+      }
+
       // Get the new kanban stage to find the assigned role
       const [newStage] = await db
         .select()
@@ -5087,11 +6487,21 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
-      // Get project with client information for email
+      // Get project with client information and chronology for email
       const projectWithClient = await db.query.projects.findFirst({
         where: eq(projects.id, projectId),
         with: {
           client: true,
+          chronology: {
+            orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+            with: {
+              fieldResponses: {
+                with: {
+                  customField: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -5099,6 +6509,24 @@ export class DatabaseStorage implements IStorage {
         console.warn(`Project with client data not found for ${projectId}`);
         return;
       }
+      
+      // Get the most recent chronology entry (the current stage change)
+      const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
+        ? projectWithClient.chronology[0] 
+        : null;
+      
+      // Extract change reason, notes, and field responses from the most recent entry
+      const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
+      const notes = mostRecentChronologyEntry?.notesHtml || mostRecentChronologyEntry?.notes || undefined;
+      const fieldResponses = mostRecentChronologyEntry?.fieldResponses?.map((fr: any) => ({
+        fieldName: fr.customField.fieldName,
+        fieldType: fr.fieldType,
+        value: fr.fieldType === 'number' 
+          ? fr.valueNumber!
+          : fr.fieldType === 'multi_select' 
+            ? (fr.valueMultiSelect || [])
+            : (fr.valueLongText || '')
+      })) || undefined;
 
       // PERFORMANCE FIX: Batch-load notification preferences for all users at once
       const userIds = usersToNotify.map(user => user.id);
@@ -5138,6 +6566,17 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
+      // Prepare chronology data for email (only need toStatus and timestamp)
+      const chronologyForEmail = (projectWithClient.chronology || []).map(entry => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
+      }));
+
+      // Prepare stage config for email
+      const stageConfigForEmail = {
+        maxInstanceTime: newStage.maxInstanceTime,
+      };
+
       // PERFORMANCE FIX: Send emails concurrently using Promise.allSettled for better error handling
       const emailPromises = usersToNotify.map(async (user) => {
         try {
@@ -5149,7 +6588,13 @@ export class DatabaseStorage implements IStorage {
             projectWithClient.client.name,
             newStageName,
             oldStageName,
-            projectId  // URL FIX: Pass projectId for deep linking
+            projectId,  // URL FIX: Pass projectId for deep linking
+            stageConfigForEmail,  // Pass stage configuration with timing info
+            chronologyForEmail,  // Pass chronology for assignment timestamp calculation
+            projectWithClient.createdAt instanceof Date ? projectWithClient.createdAt.toISOString() : projectWithClient.createdAt,  // Pass project creation timestamp
+            changeReason,  // Pass change reason from most recent chronology entry
+            notes,  // Pass notes from most recent chronology entry
+            fieldResponses  // Pass field responses from most recent chronology entry
           );
 
           if (emailSent) {
@@ -5172,6 +6617,69 @@ export class DatabaseStorage implements IStorage {
       const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
       const failed = results.length - successful;
       console.log(`Stage change notifications for project ${projectId}: ${successful} successful, ${failed} failed`);
+
+      // Send push notifications to users with active subscriptions
+      try {
+        const { sendProjectStageChangeNotification } = await import('./notification-template-service');
+        
+        // Calculate due date for push notifications (same logic as email)
+        let formattedDueDate: string | undefined = undefined;
+        
+        if (chronologyForEmail && chronologyForEmail.length > 0) {
+          const { addBusinessHours } = await import('@shared/businessTime');
+          
+          // Find when project entered current stage
+          const sortedChronology = [...chronologyForEmail].sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          const stageEntry = sortedChronology.find(entry => entry.toStatus === newStageName);
+          
+          let assignedTimestamp: string | null = null;
+          if (stageEntry) {
+            assignedTimestamp = stageEntry.timestamp;
+          } else if (projectWithClient.createdAt) {
+            assignedTimestamp = projectWithClient.createdAt instanceof Date 
+              ? projectWithClient.createdAt.toISOString() 
+              : projectWithClient.createdAt;
+          }
+          
+          // Calculate due date if we have max time and assignment timestamp
+          if (assignedTimestamp && stageConfigForEmail.maxInstanceTime && stageConfigForEmail.maxInstanceTime > 0) {
+            const deadlineDate = addBusinessHours(assignedTimestamp, stageConfigForEmail.maxInstanceTime);
+            // Format date for push notification: "Fri, 15 Mar 2025, 14:30 GMT"
+            formattedDueDate = deadlineDate.toLocaleString('en-GB', { 
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZoneName: 'short'
+            });
+          }
+        }
+        
+        for (const user of finalUsersToNotify) {
+          try {
+            await sendProjectStageChangeNotification(
+              projectId,
+              projectWithClient.description,
+              projectWithClient.client.name,
+              oldStageName || 'Unknown',
+              newStageName,
+              user.id,
+              `${user.firstName} ${user.lastName || ''}`.trim(),
+              formattedDueDate
+            );
+          } catch (pushError) {
+            console.error(`Failed to send push notification to user ${user.id}:`, pushError);
+            // Continue with other users even if one fails
+          }
+        }
+      } catch (error) {
+        console.error(`Error sending push notifications for project ${projectId}:`, error);
+        // Don't throw - push notification failures shouldn't break the flow
+      }
       
     } catch (error) {
       console.error(`Error in sendStageChangeNotifications for project ${projectId}:`, error);
@@ -5941,7 +7449,12 @@ export class DatabaseStorage implements IStorage {
         frequency: cs.frequency,
         nextStartDate: cs.nextStartDate,
         nextDueDate: cs.nextDueDate,
+        intendedStartDay: cs.intendedStartDay,
+        intendedDueDay: cs.intendedDueDay,
         isActive: cs.isActive,
+        inactiveReason: cs.inactiveReason,
+        inactiveAt: cs.inactiveAt,
+        inactiveByUserId: cs.inactiveByUserId,
         udfValues: cs.udfValues,
         createdAt: cs.createdAt,
         client: {
@@ -6468,6 +7981,15 @@ export class DatabaseStorage implements IStorage {
     console.log(`[DEBUG] Successfully processed ${validRoleAssignments.length} valid role assignments`);
     
     return validRoleAssignments;
+  }
+
+  async getClientServiceRoleAssignmentById(id: string): Promise<ClientServiceRoleAssignment | undefined> {
+    const [assignment] = await db
+      .select()
+      .from(clientServiceRoleAssignments)
+      .where(eq(clientServiceRoleAssignments.id, id));
+    
+    return assignment;
   }
 
   async createClientServiceRoleAssignment(assignmentData: InsertClientServiceRoleAssignment): Promise<ClientServiceRoleAssignment> {
@@ -7810,6 +9332,26 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getCommunicationsByProjectId(projectId: string): Promise<(Communication & { person?: Person; user: User })[]> {
+    const results = await db
+      .select({
+        communication: communications,
+        person: people,
+        user: users,
+      })
+      .from(communications)
+      .leftJoin(people, eq(communications.personId, people.id))
+      .innerJoin(users, eq(communications.userId, users.id))
+      .where(eq(communications.projectId, projectId))
+      .orderBy(desc(communications.loggedAt));
+
+    return results.map(result => ({
+      ...result.communication,
+      person: result.person || undefined,
+      user: result.user,
+    }));
+  }
+
   async getCommunicationById(id: string): Promise<(Communication & { client: Client; person?: Person; user: User }) | undefined> {
     const [result] = await db
       .select({
@@ -7996,6 +9538,675 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionsByUserId(userId: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  }
+
+  // Push notification template operations
+  async getAllPushNotificationTemplates(): Promise<PushNotificationTemplate[]> {
+    return await db
+      .select()
+      .from(pushNotificationTemplates)
+      .orderBy(pushNotificationTemplates.templateType);
+  }
+
+  async getPushNotificationTemplateByType(templateType: string): Promise<PushNotificationTemplate | undefined> {
+    // Get all active templates of this type
+    const results = await db
+      .select()
+      .from(pushNotificationTemplates)
+      .where(and(
+        eq(pushNotificationTemplates.templateType, templateType),
+        eq(pushNotificationTemplates.isActive, true)
+      ));
+    
+    // If no templates found, return undefined
+    if (results.length === 0) return undefined;
+    
+    // Return a random template from the active templates
+    const randomIndex = Math.floor(Math.random() * results.length);
+    return results[randomIndex];
+  }
+
+  async updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate> {
+    const [updated] = await db
+      .update(pushNotificationTemplates)
+      .set({
+        ...template,
+        updatedAt: new Date(),
+      })
+      .where(eq(pushNotificationTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createPushNotificationTemplate(template: InsertPushNotificationTemplate): Promise<PushNotificationTemplate> {
+    const [newTemplate] = await db
+      .insert(pushNotificationTemplates)
+      .values(template)
+      .returning();
+    return newTemplate;
+  }
+
+  async deletePushNotificationTemplate(id: string): Promise<void> {
+    await db.delete(pushNotificationTemplates).where(eq(pushNotificationTemplates.id, id));
+  }
+
+  // Notification icon operations
+  async getAllNotificationIcons(): Promise<NotificationIcon[]> {
+    return await db
+      .select()
+      .from(notificationIcons)
+      .orderBy(notificationIcons.createdAt);
+  }
+
+  async getNotificationIconById(id: string): Promise<NotificationIcon | undefined> {
+    const result = await db
+      .select()
+      .from(notificationIcons)
+      .where(eq(notificationIcons.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createNotificationIcon(icon: InsertNotificationIcon): Promise<NotificationIcon> {
+    const [newIcon] = await db
+      .insert(notificationIcons)
+      .values(icon)
+      .returning();
+    return newIcon;
+  }
+
+  async deleteNotificationIcon(id: string): Promise<void> {
+    await db.delete(notificationIcons).where(eq(notificationIcons.id, id));
+  }
+
+  // Graph webhook subscription operations
+  async createGraphWebhookSubscription(subscription: InsertGraphWebhookSubscription): Promise<GraphWebhookSubscription> {
+    const [newSubscription] = await db
+      .insert(graphWebhookSubscriptions)
+      .values(subscription)
+      .returning();
+    return newSubscription;
+  }
+
+  async getGraphWebhookSubscription(subscriptionId: string): Promise<GraphWebhookSubscription | undefined> {
+    const result = await db
+      .select()
+      .from(graphWebhookSubscriptions)
+      .where(eq(graphWebhookSubscriptions.subscriptionId, subscriptionId))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateGraphWebhookSubscription(subscriptionId: string, updates: Partial<InsertGraphWebhookSubscription>): Promise<void> {
+    await db
+      .update(graphWebhookSubscriptions)
+      .set(updates)
+      .where(eq(graphWebhookSubscriptions.subscriptionId, subscriptionId));
+  }
+
+  async getActiveGraphWebhookSubscriptions(): Promise<GraphWebhookSubscription[]> {
+    return await db
+      .select()
+      .from(graphWebhookSubscriptions)
+      .where(eq(graphWebhookSubscriptions.isActive, true))
+      .orderBy(graphWebhookSubscriptions.expiresAt);
+  }
+
+  async getExpiringGraphWebhookSubscriptions(hoursUntilExpiry: number): Promise<GraphWebhookSubscription[]> {
+    const expiryThreshold = new Date();
+    expiryThreshold.setHours(expiryThreshold.getHours() + hoursUntilExpiry);
+    
+    return await db
+      .select()
+      .from(graphWebhookSubscriptions)
+      .where(
+        and(
+          eq(graphWebhookSubscriptions.isActive, true),
+          lt(graphWebhookSubscriptions.expiresAt, expiryThreshold)
+        )
+      )
+      .orderBy(graphWebhookSubscriptions.expiresAt);
+  }
+
+  // Graph sync state operations
+  async getGraphSyncState(userId: string, folderPath: string): Promise<GraphSyncState | undefined> {
+    const result = await db
+      .select()
+      .from(graphSyncState)
+      .where(
+        and(
+          eq(graphSyncState.userId, userId),
+          eq(graphSyncState.folderPath, folderPath)
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertGraphSyncState(state: InsertGraphSyncState): Promise<GraphSyncState> {
+    const existing = await this.getGraphSyncState(state.userId, state.folderPath);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(graphSyncState)
+        .set({
+          ...state,
+          updatedAt: new Date()
+        })
+        .where(eq(graphSyncState.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(graphSyncState)
+        .values(state)
+        .returning();
+      return created;
+    }
+  }
+
+  // Email message operations
+  async upsertEmailMessage(message: InsertEmailMessage): Promise<EmailMessage> {
+    // Check if message already exists by internetMessageId
+    const existing = await this.getEmailMessageByInternetMessageId(message.internetMessageId);
+    
+    if (existing) {
+      // Update existing message, but preserve enriched fields (threadId, clientId, matchConfidence)
+      // Only update basic message fields that might have changed (e.g., isRead, isDraft)
+      const updatePayload: Partial<InsertEmailMessage> = {};
+      
+      // Update fields that can change between syncs
+      if (message.isRead !== undefined) updatePayload.isRead = message.isRead;
+      if (message.isDraft !== undefined) updatePayload.isDraft = message.isDraft;
+      if (message.importance !== undefined) updatePayload.importance = message.importance;
+      if (message.hasAttachments !== undefined) updatePayload.hasAttachments = message.hasAttachments;
+      
+      // Preserve enriched fields that are set in later phases
+      // Only update if explicitly provided AND existing is null
+      if (message.threadId && !existing.threadId) updatePayload.threadId = message.threadId;
+      if (message.clientId && !existing.clientId) updatePayload.clientId = message.clientId;
+      if (message.matchConfidence && !existing.matchConfidence) updatePayload.matchConfidence = message.matchConfidence;
+      
+      const [updated] = await db
+        .update(emailMessages)
+        .set({
+          ...updatePayload,
+          updatedAt: new Date()
+        })
+        .where(eq(emailMessages.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new message
+      const [created] = await db
+        .insert(emailMessages)
+        .values(message)
+        .returning();
+      return created;
+    }
+  }
+
+  async getEmailMessageByInternetMessageId(internetMessageId: string): Promise<EmailMessage | undefined> {
+    const result = await db
+      .select()
+      .from(emailMessages)
+      .where(eq(emailMessages.internetMessageId, internetMessageId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailMessageById(id: string): Promise<EmailMessage | undefined> {
+    const result = await db
+      .select()
+      .from(emailMessages)
+      .where(eq(emailMessages.internetMessageId, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailMessagesByThreadId(threadId: string): Promise<EmailMessage[]> {
+    return await db
+      .select()
+      .from(emailMessages)
+      .where(eq(emailMessages.threadId, threadId))
+      .orderBy(emailMessages.sentAt);
+  }
+
+  async updateEmailMessage(id: string, updates: Partial<InsertEmailMessage>): Promise<EmailMessage> {
+    const [updated] = await db
+      .update(emailMessages)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(emailMessages.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Mailbox message mapping operations
+  async createMailboxMessageMap(mapping: InsertMailboxMessageMap): Promise<MailboxMessageMap> {
+    const [created] = await db
+      .insert(mailboxMessageMap)
+      .values(mapping)
+      .returning();
+    return created;
+  }
+
+  async getMailboxMessageMapsByUserId(userId: string): Promise<MailboxMessageMap[]> {
+    return await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(eq(mailboxMessageMap.mailboxUserId, userId))
+      .orderBy(mailboxMessageMap.createdAt);
+  }
+
+  async getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]> {
+    // Get the message to find its internetMessageId
+    const message = await this.getEmailMessageById(messageId);
+    if (!message) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(eq(mailboxMessageMap.internetMessageId, message.internetMessageId));
+  }
+
+  async userHasAccessToMessage(userId: string, internetMessageId: string): Promise<boolean> {
+    // Check if user has this message in their mailbox
+    const result = await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(
+        and(
+          eq(mailboxMessageMap.mailboxUserId, userId),
+          eq(mailboxMessageMap.internetMessageId, internetMessageId)
+        )
+      )
+      .limit(1);
+
+    return result.length > 0;
+  }
+
+  async getUserGraphMessageId(userId: string, internetMessageId: string): Promise<string | undefined> {
+    // Get the mailbox mapping for this user and message
+    const result = await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(
+        and(
+          eq(mailboxMessageMap.mailboxUserId, userId),
+          eq(mailboxMessageMap.internetMessageId, internetMessageId)
+        )
+      )
+      .limit(1);
+
+    return result[0]?.mailboxMessageId;
+  }
+
+  // Email thread operations
+  async createEmailThread(thread: InsertEmailThread): Promise<EmailThread> {
+    const [created] = await db
+      .insert(emailThreads)
+      .values(thread)
+      .returning();
+    return created;
+  }
+
+  async getEmailThreadById(id: string): Promise<EmailThread | undefined> {
+    const result = await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.canonicalConversationId, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined> {
+    const result = await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.conversationId, conversationId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailThreadByThreadKey(threadKey: string): Promise<EmailThread | undefined> {
+    const result = await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.threadKey, threadKey))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.clientId, clientId))
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
+  async getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean): Promise<EmailThread[]> {
+    if (myEmailsOnly) {
+      // Get user's email address
+      const user = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      
+      if (!user || user.length === 0 || !user[0].email) {
+        return [];
+      }
+      
+      const userEmail = user[0].email.toLowerCase();
+      
+      // Single query: get threads where user is in from/to/cc fields
+      const results = await db
+        .selectDistinctOn([emailThreads.canonicalConversationId], {
+          canonicalConversationId: emailThreads.canonicalConversationId,
+          threadKey: emailThreads.threadKey,
+          subject: emailThreads.subject,
+          participants: emailThreads.participants,
+          clientId: emailThreads.clientId,
+          firstMessageAt: emailThreads.firstMessageAt,
+          lastMessageAt: emailThreads.lastMessageAt,
+          messageCount: emailThreads.messageCount,
+          latestPreview: emailThreads.latestPreview,
+          latestDirection: emailThreads.latestDirection,
+          createdAt: emailThreads.createdAt,
+          updatedAt: emailThreads.updatedAt,
+        })
+        .from(emailThreads)
+        .innerJoin(
+          emailMessages,
+          eq(emailMessages.canonicalConversationId, emailThreads.canonicalConversationId)
+        )
+        .where(
+          or(
+            eq(emailMessages.from, userEmail),
+            sql`${userEmail} = ANY(${emailMessages.to})`,
+            sql`${userEmail} = ANY(${emailMessages.cc})`
+          )
+        )
+        .orderBy(emailThreads.canonicalConversationId, desc(emailThreads.lastMessageAt));
+      
+      return results;
+    } else {
+      // Single query: get threads where user's mailbox has any message
+      const results = await db
+        .selectDistinctOn([emailThreads.canonicalConversationId], {
+          canonicalConversationId: emailThreads.canonicalConversationId,
+          threadKey: emailThreads.threadKey,
+          subject: emailThreads.subject,
+          participants: emailThreads.participants,
+          clientId: emailThreads.clientId,
+          firstMessageAt: emailThreads.firstMessageAt,
+          lastMessageAt: emailThreads.lastMessageAt,
+          messageCount: emailThreads.messageCount,
+          latestPreview: emailThreads.latestPreview,
+          latestDirection: emailThreads.latestDirection,
+          createdAt: emailThreads.createdAt,
+          updatedAt: emailThreads.updatedAt,
+        })
+        .from(emailThreads)
+        .innerJoin(
+          emailMessages,
+          eq(emailMessages.canonicalConversationId, emailThreads.canonicalConversationId)
+        )
+        .innerJoin(
+          mailboxMessageMap,
+          eq(mailboxMessageMap.internetMessageId, emailMessages.internetMessageId)
+        )
+        .where(eq(mailboxMessageMap.mailboxUserId, userId))
+        .orderBy(emailThreads.canonicalConversationId, desc(emailThreads.lastMessageAt));
+      
+      return results;
+    }
+  }
+
+  async getAllEmailThreads(): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
+  async getThreadsWithoutClient(): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .where(isNull(emailThreads.clientId))
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
+  async updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread> {
+    const [updated] = await db
+      .update(emailThreads)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(emailThreads.canonicalConversationId, id))
+      .returning();
+    return updated;
+  }
+
+  async getUnthreadedMessages(): Promise<EmailMessage[]> {
+    return await db
+      .select()
+      .from(emailMessages)
+      .where(isNull(emailMessages.threadId))
+      .orderBy(emailMessages.sentAt);
+  }
+
+  // Client email alias operations
+  async getAllClientEmailAliases(): Promise<ClientEmailAlias[]> {
+    return await db
+      .select()
+      .from(clientEmailAliases)
+      .orderBy(clientEmailAliases.createdAt);
+  }
+
+  async createClientEmailAlias(alias: InsertClientEmailAlias): Promise<ClientEmailAlias> {
+    const [created] = await db
+      .insert(clientEmailAliases)
+      .values(alias)
+      .returning();
+    return created;
+  }
+
+  async getClientEmailAliasesByClientId(clientId: string): Promise<ClientEmailAlias[]> {
+    return await db
+      .select()
+      .from(clientEmailAliases)
+      .where(eq(clientEmailAliases.clientId, clientId))
+      .orderBy(clientEmailAliases.createdAt);
+  }
+
+  async getClientByEmailAlias(email: string): Promise<{ clientId: string } | undefined> {
+    const result = await db
+      .select({ clientId: clientEmailAliases.clientId })
+      .from(clientEmailAliases)
+      .where(eq(clientEmailAliases.email, email.toLowerCase()))
+      .limit(1);
+    return result[0];
+  }
+
+  async deleteClientEmailAlias(id: string): Promise<void> {
+    await db.delete(clientEmailAliases).where(eq(clientEmailAliases.id, id));
+  }
+
+  // Unmatched email operations
+  async createUnmatchedEmail(unmatched: InsertUnmatchedEmail): Promise<UnmatchedEmail> {
+    const [created] = await db
+      .insert(unmatchedEmails)
+      .values(unmatched)
+      .returning();
+    return created;
+  }
+
+  async getUnmatchedEmails(filters?: { resolvedOnly?: boolean }): Promise<UnmatchedEmail[]> {
+    return await db
+      .select()
+      .from(unmatchedEmails)
+      .orderBy(desc(unmatchedEmails.receivedDateTime));
+  }
+
+  async getUnmatchedEmailByMessageId(internetMessageId: string): Promise<UnmatchedEmail | undefined> {
+    const result = await db
+      .select()
+      .from(unmatchedEmails)
+      .where(eq(unmatchedEmails.internetMessageId, internetMessageId))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateUnmatchedEmail(internetMessageId: string, updates: Partial<InsertUnmatchedEmail>): Promise<UnmatchedEmail> {
+    const [updated] = await db
+      .update(unmatchedEmails)
+      .set(updates)
+      .where(eq(unmatchedEmails.internetMessageId, internetMessageId))
+      .returning();
+    return updated;
+  }
+
+  async deleteUnmatchedEmail(internetMessageId: string): Promise<void> {
+    await db.delete(unmatchedEmails).where(eq(unmatchedEmails.internetMessageId, internetMessageId));
+  }
+
+  async resolveUnmatchedEmail(internetMessageId: string, clientId: string, resolvedBy: string): Promise<void> {
+    // Remove from quarantine once resolved
+    await this.deleteUnmatchedEmail(internetMessageId);
+  }
+
+  // Client domain allowlist operations
+  async createClientDomainAllowlist(domain: InsertClientDomainAllowlist): Promise<ClientDomainAllowlist> {
+    const [created] = await db
+      .insert(clientDomainAllowlist)
+      .values(domain)
+      .returning();
+    return created;
+  }
+
+  async getClientDomainAllowlist(): Promise<ClientDomainAllowlist[]> {
+    return await db
+      .select()
+      .from(clientDomainAllowlist)
+      .orderBy(clientDomainAllowlist.domain);
+  }
+
+  async getClientByDomain(domain: string): Promise<{ clientId: string } | undefined> {
+    const result = await db
+      .select({ clientId: clientDomainAllowlist.clientId })
+      .from(clientDomainAllowlist)
+      .where(eq(clientDomainAllowlist.domain, domain.toLowerCase()))
+      .limit(1);
+    return result[0];
+  }
+
+  async deleteClientDomainAllowlist(id: string): Promise<void> {
+    await db.delete(clientDomainAllowlist).where(eq(clientDomainAllowlist.id, id));
+  }
+
+  // Email attachment operations
+  async createEmailAttachment(attachment: InsertEmailAttachment): Promise<EmailAttachment> {
+    const [created] = await db
+      .insert(emailAttachments)
+      .values(attachment)
+      .returning();
+    return created;
+  }
+
+  async getEmailAttachmentByHash(contentHash: string): Promise<EmailAttachment | undefined> {
+    const result = await db
+      .select()
+      .from(emailAttachments)
+      .where(eq(emailAttachments.contentHash, contentHash))
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailAttachmentById(id: string): Promise<EmailAttachment | undefined> {
+    const result = await db
+      .select()
+      .from(emailAttachments)
+      .where(eq(emailAttachments.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createEmailMessageAttachment(mapping: InsertEmailMessageAttachment): Promise<EmailMessageAttachment> {
+    const [created] = await db
+      .insert(emailMessageAttachments)
+      .values(mapping)
+      .returning();
+    return created;
+  }
+
+  async getEmailMessageAttachmentByAttachmentId(attachmentId: string): Promise<EmailMessageAttachment[]> {
+    return await db
+      .select()
+      .from(emailMessageAttachments)
+      .where(eq(emailMessageAttachments.attachmentId, attachmentId));
+  }
+
+  async getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]> {
+    const result = await db
+      .select({
+        id: emailAttachments.id,
+        contentHash: emailAttachments.contentHash,
+        fileName: emailAttachments.fileName,
+        fileSize: emailAttachments.fileSize,
+        contentType: emailAttachments.contentType,
+        objectPath: emailAttachments.objectPath,
+        createdAt: emailAttachments.createdAt,
+      })
+      .from(emailMessageAttachments)
+      .innerJoin(emailAttachments, eq(emailMessageAttachments.attachmentId, emailAttachments.id))
+      .where(eq(emailMessageAttachments.internetMessageId, internetMessageId))
+      .orderBy(emailMessageAttachments.attachmentIndex);
+    
+    return result;
+  }
+
+  async checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean> {
+    const result = await db
+      .select()
+      .from(emailMessageAttachments)
+      .where(
+        and(
+          eq(emailMessageAttachments.internetMessageId, internetMessageId),
+          eq(emailMessageAttachments.attachmentId, attachmentId)
+        )
+      )
+      .limit(1);
+    
+    return result.length > 0;
+  }
+
+  async getSignedUrl(objectPath: string): Promise<string> {
+    const { objectStorageClient } = await import('./objectStorage');
+    const bucketName = process.env.GCS_BUCKET_NAME;
+    
+    if (!bucketName) {
+      throw new Error('GCS_BUCKET_NAME environment variable not set');
+    }
+    
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectPath);
+    
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+    });
+    
+    return url;
   }
 
   // Document folder operations
@@ -8590,6 +10801,103 @@ export class DatabaseStorage implements IStorage {
     return threads;
   }
 
+  async getProjectMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<ProjectMessageThread & {
+    project: { id: string; description: string; clientId: string };
+    client: { id: string; name: string };
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>> {
+    const participantRecords = await db
+      .select({
+        threadId: projectMessageParticipants.threadId,
+        lastReadAt: projectMessageParticipants.lastReadAt,
+      })
+      .from(projectMessageParticipants)
+      .where(eq(projectMessageParticipants.userId, userId));
+
+    const threadIds = participantRecords.map(p => p.threadId);
+    
+    if (threadIds.length === 0) {
+      return [];
+    }
+
+    let whereConditions = [inArray(projectMessageThreads.id, threadIds)];
+    
+    if (!filters?.includeArchived) {
+      whereConditions.push(eq(projectMessageThreads.isArchived, false));
+    }
+
+    const threadsData = await db
+      .select({
+        thread: projectMessageThreads,
+        project: projects,
+        client: clients,
+      })
+      .from(projectMessageThreads)
+      .innerJoin(projects, eq(projectMessageThreads.projectId, projects.id))
+      .innerJoin(clients, eq(projects.clientId, clients.id))
+      .where(and(...whereConditions))
+      .orderBy(desc(projectMessageThreads.lastMessageAt));
+
+    const enrichedThreads = await Promise.all(threadsData.map(async (row) => {
+      const participantRecord = participantRecords.find(p => p.threadId === row.thread.id);
+      
+      const unreadCountResult = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(projectMessages)
+        .where(and(
+          eq(projectMessages.threadId, row.thread.id),
+          ne(projectMessages.userId, userId),
+          participantRecord?.lastReadAt 
+            ? sql`${projectMessages.createdAt} > ${participantRecord.lastReadAt}`
+            : sql`true`
+        ));
+      
+      const lastMessageResult = await db
+        .select({
+          content: projectMessages.content,
+          createdAt: projectMessages.createdAt,
+          userId: projectMessages.userId,
+        })
+        .from(projectMessages)
+        .where(eq(projectMessages.threadId, row.thread.id))
+        .orderBy(desc(projectMessages.createdAt))
+        .limit(1);
+
+      const threadParticipants = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(projectMessageParticipants)
+        .innerJoin(users, eq(projectMessageParticipants.userId, users.id))
+        .where(eq(projectMessageParticipants.threadId, row.thread.id));
+
+      return {
+        ...row.thread,
+        project: {
+          id: row.project.id,
+          description: row.project.description,
+          clientId: row.project.clientId,
+        },
+        client: {
+          id: row.client.id,
+          name: row.client.name,
+        },
+        unreadCount: unreadCountResult[0]?.count || 0,
+        lastMessage: lastMessageResult[0] || null,
+        participants: threadParticipants,
+      };
+    }));
+
+    return enrichedThreads;
+  }
+
   async updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread> {
     const [updated] = await db
       .update(projectMessageThreads)
@@ -8753,6 +11061,30 @@ export class DatabaseStorage implements IStorage {
       .where(eq(projectMessageParticipants.id, participant.id));
   }
 
+  async updateParticipantReminderSent(threadId: string, userId: string): Promise<void> {
+    // Find the participant record for this thread and user
+    const [participant] = await db
+      .select()
+      .from(projectMessageParticipants)
+      .where(and(
+        eq(projectMessageParticipants.threadId, threadId),
+        eq(projectMessageParticipants.userId, userId)
+      ));
+    
+    if (!participant) {
+      throw new Error(`Participant not found for thread ${threadId} and user ${userId}`);
+    }
+    
+    // Update the participant's last reminder email timestamp
+    await db
+      .update(projectMessageParticipants)
+      .set({ 
+        lastReminderEmailSentAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(projectMessageParticipants.id, participant.id));
+  }
+
   async getUnreadProjectMessagesForUser(userId: string): Promise<{ threadId: string; count: number; projectId: string }[]> {
     // Get all threads the user is participating in
     const participantRecords = await db
@@ -8818,6 +11150,7 @@ export class DatabaseStorage implements IStorage {
         userId: projectMessageParticipants.userId,
         threadId: projectMessageParticipants.threadId,
         lastReadAt: projectMessageParticipants.lastReadAt,
+        lastReminderEmailSentAt: projectMessageParticipants.lastReminderEmailSentAt,
         topic: projectMessageThreads.topic,
         projectId: projectMessageThreads.projectId,
       })
@@ -8847,7 +11180,9 @@ export class DatabaseStorage implements IStorage {
     }>();
     
     for (const participant of participantsWithUnread) {
-      // Get unread messages in this thread
+      // Get unread messages in this thread that are:
+      // 1. Older than the cutoff time (10 minutes)
+      // 2. NEW since we last sent a reminder email (if we've sent one before)
       const unreadMessages = await db
         .select({
           id: projectMessages.id,
@@ -8860,7 +11195,12 @@ export class DatabaseStorage implements IStorage {
           participant.lastReadAt 
             ? sql`${projectMessages.createdAt} > ${participant.lastReadAt}`
             : sql`true`, // If never read, count all messages from others
-          sql`${projectMessages.createdAt} < ${cutoffTime}` // Only messages older than cutoff
+          sql`${projectMessages.createdAt} < ${cutoffTime}`, // Only messages older than cutoff
+          // Critical: Only include messages created AFTER the last reminder email was sent
+          // This prevents re-sending reminders for the same old unread messages
+          participant.lastReminderEmailSentAt
+            ? sql`${projectMessages.createdAt} > ${participant.lastReminderEmailSentAt}`
+            : sql`true` // If we've never sent a reminder, include all unread messages
         ))
         .orderBy(projectMessages.createdAt);
       
@@ -8896,6 +11236,295 @@ export class DatabaseStorage implements IStorage {
     }
     
     return Array.from(userMap.values()).filter(u => u.threads.length > 0);
+  }
+
+  // ========== Standalone Staff Message Thread operations ==========
+  async createStaffMessageThread(thread: InsertStaffMessageThread): Promise<StaffMessageThread> {
+    const [newThread] = await db
+      .insert(staffMessageThreads)
+      .values(thread)
+      .returning();
+    return newThread;
+  }
+
+  async getStaffMessageThreadById(id: string): Promise<StaffMessageThread | undefined> {
+    const [thread] = await db
+      .select()
+      .from(staffMessageThreads)
+      .where(eq(staffMessageThreads.id, id));
+    return thread;
+  }
+
+  async getStaffMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }): Promise<Array<StaffMessageThread & {
+    unreadCount: number;
+    lastMessage: { content: string; createdAt: Date; userId: string | null } | null;
+    participants: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+  }>> {
+    // Get all threads where user is a participant
+    const participantRecords = await db
+      .select({ threadId: staffMessageParticipants.threadId })
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.userId, userId));
+    
+    if (participantRecords.length === 0) {
+      return [];
+    }
+    
+    const threadIds = participantRecords.map(p => p.threadId);
+    
+    // Get threads
+    let query = db
+      .select()
+      .from(staffMessageThreads)
+      .where(inArray(staffMessageThreads.id, threadIds));
+    
+    // Apply archive filter
+    if (!filters?.includeArchived) {
+      query = query.where(eq(staffMessageThreads.isArchived, false)) as any;
+    }
+    
+    const threads = await query.orderBy(desc(staffMessageThreads.lastMessageAt));
+    
+    // Enrich each thread with participants, last message, and unread count
+    const enrichedThreads = await Promise.all(threads.map(async (thread) => {
+      // Get participants
+      const participantRecords = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(staffMessageParticipants)
+        .innerJoin(users, eq(staffMessageParticipants.userId, users.id))
+        .where(eq(staffMessageParticipants.threadId, thread.id));
+      
+      // Get last message
+      const [lastMsg] = await db
+        .select({
+          content: staffMessages.content,
+          createdAt: staffMessages.createdAt,
+          userId: staffMessages.userId,
+        })
+        .from(staffMessages)
+        .where(eq(staffMessages.threadId, thread.id))
+        .orderBy(desc(staffMessages.createdAt))
+        .limit(1);
+      
+      // Get unread count for this user
+      const [participant] = await db
+        .select()
+        .from(staffMessageParticipants)
+        .where(and(
+          eq(staffMessageParticipants.threadId, thread.id),
+          eq(staffMessageParticipants.userId, userId)
+        ));
+      
+      let unreadCount = 0;
+      if (participant) {
+        const unreadMessages = await db
+          .select()
+          .from(staffMessages)
+          .where(and(
+            eq(staffMessages.threadId, thread.id),
+            ne(staffMessages.userId, userId), // Exclude user's own messages
+            participant.lastReadAt 
+              ? sql`${staffMessages.createdAt} > ${participant.lastReadAt}`
+              : sql`true` // If never read, count all messages from others
+          ));
+        unreadCount = unreadMessages.length;
+      }
+      
+      return {
+        ...thread,
+        unreadCount,
+        lastMessage: lastMsg || null,
+        participants: participantRecords,
+      };
+    }));
+    
+    return enrichedThreads;
+  }
+
+  async updateStaffMessageThread(id: string, thread: Partial<InsertStaffMessageThread>): Promise<StaffMessageThread> {
+    const [updated] = await db
+      .update(staffMessageThreads)
+      .set({ ...thread, updatedAt: new Date() })
+      .where(eq(staffMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMessageThread(id: string): Promise<void> {
+    await db.delete(staffMessageThreads).where(eq(staffMessageThreads.id, id));
+  }
+
+  async archiveStaffMessageThread(id: string, archivedBy: string): Promise<StaffMessageThread> {
+    const [updated] = await db
+      .update(staffMessageThreads)
+      .set({ 
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedBy,
+        updatedAt: new Date()
+      })
+      .where(eq(staffMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async unarchiveStaffMessageThread(id: string): Promise<StaffMessageThread> {
+    const [updated] = await db
+      .update(staffMessageThreads)
+      .set({ 
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date()
+      })
+      .where(eq(staffMessageThreads.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ========== Standalone Staff Message operations ==========
+  async createStaffMessage(message: InsertStaffMessage): Promise<StaffMessage> {
+    const [newMessage] = await db
+      .insert(staffMessages)
+      .values(message)
+      .returning();
+    
+    // Update thread's lastMessageAt and lastMessageByUserId
+    await db
+      .update(staffMessageThreads)
+      .set({ 
+        lastMessageAt: new Date(),
+        lastMessageByUserId: message.userId
+      })
+      .where(eq(staffMessageThreads.id, message.threadId));
+    
+    return newMessage;
+  }
+
+  async getStaffMessageById(id: string): Promise<StaffMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(staffMessages)
+      .where(eq(staffMessages.id, id));
+    return message;
+  }
+
+  async getStaffMessagesByThreadId(threadId: string): Promise<StaffMessage[]> {
+    const messages = await db
+      .select()
+      .from(staffMessages)
+      .where(eq(staffMessages.threadId, threadId))
+      .orderBy(staffMessages.createdAt);
+    return messages;
+  }
+
+  async updateStaffMessage(id: string, message: Partial<InsertStaffMessage>): Promise<StaffMessage> {
+    const [updated] = await db
+      .update(staffMessages)
+      .set({ ...message, updatedAt: new Date() })
+      .where(eq(staffMessages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMessage(id: string): Promise<void> {
+    await db.delete(staffMessages).where(eq(staffMessages.id, id));
+  }
+
+  // ========== Standalone Staff Message Participant operations ==========
+  async createStaffMessageParticipant(participant: InsertStaffMessageParticipant): Promise<StaffMessageParticipant> {
+    const [newParticipant] = await db
+      .insert(staffMessageParticipants)
+      .values(participant)
+      .returning();
+    return newParticipant;
+  }
+
+  async getStaffMessageParticipantsByThreadId(threadId: string): Promise<StaffMessageParticipant[]> {
+    const participants = await db
+      .select()
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.threadId, threadId))
+      .orderBy(staffMessageParticipants.joinedAt);
+    return participants;
+  }
+
+  async getStaffMessageParticipantsByUserId(userId: string): Promise<StaffMessageParticipant[]> {
+    const participants = await db
+      .select()
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.userId, userId))
+      .orderBy(desc(staffMessageParticipants.joinedAt));
+    return participants;
+  }
+
+  async updateStaffMessageParticipant(id: string, participant: Partial<InsertStaffMessageParticipant>): Promise<StaffMessageParticipant> {
+    const [updated] = await db
+      .update(staffMessageParticipants)
+      .set({ ...participant, updatedAt: new Date() })
+      .where(eq(staffMessageParticipants.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStaffMessageParticipant(id: string): Promise<void> {
+    await db.delete(staffMessageParticipants).where(eq(staffMessageParticipants.id, id));
+  }
+
+  async markStaffMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string): Promise<void> {
+    await db
+      .update(staffMessageParticipants)
+      .set({ 
+        lastReadAt: new Date(),
+        lastReadMessageId,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(staffMessageParticipants.threadId, threadId),
+        eq(staffMessageParticipants.userId, userId)
+      ));
+  }
+
+  async getUnreadStaffMessagesForUser(userId: string): Promise<{ threadId: string; count: number }[]> {
+    // Get all threads the user is participating in
+    const participantRecords = await db
+      .select({
+        threadId: staffMessageParticipants.threadId,
+        lastReadMessageId: staffMessageParticipants.lastReadMessageId,
+        lastReadAt: staffMessageParticipants.lastReadAt,
+      })
+      .from(staffMessageParticipants)
+      .where(eq(staffMessageParticipants.userId, userId));
+    
+    const unreadCounts: { threadId: string; count: number }[] = [];
+    
+    for (const participant of participantRecords) {
+      // Count unread messages (messages after lastReadAt, excluding user's own messages)
+      const unreadMessages = await db
+        .select()
+        .from(staffMessages)
+        .where(and(
+          eq(staffMessages.threadId, participant.threadId),
+          ne(staffMessages.userId, userId), // Exclude user's own messages
+          participant.lastReadAt 
+            ? sql`${staffMessages.createdAt} > ${participant.lastReadAt}`
+            : sql`true` // If never read, count all messages from others
+        ));
+      
+      if (unreadMessages.length > 0) {
+        unreadCounts.push({
+          threadId: participant.threadId,
+          count: unreadMessages.length,
+        });
+      }
+    }
+    
+    return unreadCounts;
   }
 
   // Client Portal Session operations - using built-in token fields
@@ -8959,227 +11588,227 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Task Template Category operations
-  async createTaskTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory> {
+  async createClientRequestTemplateCategory(category: InsertTaskTemplateCategory): Promise<TaskTemplateCategory> {
     const [created] = await db
-      .insert(taskTemplateCategories)
+      .insert(clientRequestTemplateCategories)
       .values(category)
       .returning();
     return created;
   }
 
-  async getTaskTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined> {
+  async getClientRequestTemplateCategoryById(id: string): Promise<TaskTemplateCategory | undefined> {
     const [category] = await db
       .select()
-      .from(taskTemplateCategories)
-      .where(eq(taskTemplateCategories.id, id));
+      .from(clientRequestTemplateCategories)
+      .where(eq(clientRequestTemplateCategories.id, id));
     return category;
   }
 
-  async getAllTaskTemplateCategories(): Promise<TaskTemplateCategory[]> {
+  async getAllClientRequestTemplateCategories(): Promise<TaskTemplateCategory[]> {
     return await db
       .select()
-      .from(taskTemplateCategories)
-      .orderBy(taskTemplateCategories.order);
+      .from(clientRequestTemplateCategories)
+      .orderBy(clientRequestTemplateCategories.order);
   }
 
-  async updateTaskTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory> {
+  async updateClientRequestTemplateCategory(id: string, category: UpdateTaskTemplateCategory): Promise<TaskTemplateCategory> {
     const [updated] = await db
-      .update(taskTemplateCategories)
+      .update(clientRequestTemplateCategories)
       .set({ ...category, updatedAt: new Date() })
-      .where(eq(taskTemplateCategories.id, id))
+      .where(eq(clientRequestTemplateCategories.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplateCategory(id: string): Promise<void> {
+  async deleteClientRequestTemplateCategory(id: string): Promise<void> {
     await db
-      .delete(taskTemplateCategories)
-      .where(eq(taskTemplateCategories.id, id));
+      .delete(clientRequestTemplateCategories)
+      .where(eq(clientRequestTemplateCategories.id, id));
   }
 
   // Task Template operations
-  async createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate> {
+  async createClientRequestTemplate(template: InsertTaskTemplate): Promise<TaskTemplate> {
     const [created] = await db
-      .insert(taskTemplates)
+      .insert(clientRequestTemplates)
       .values(template)
       .returning();
     return created;
   }
 
-  async getTaskTemplateById(id: string): Promise<TaskTemplate | undefined> {
+  async getClientRequestTemplateById(id: string): Promise<TaskTemplate | undefined> {
     const [template] = await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.id, id));
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.id, id));
     return template;
   }
 
-  async getAllTaskTemplates(includeInactive: boolean = false): Promise<TaskTemplate[]> {
+  async getAllClientRequestTemplates(includeInactive: boolean = false): Promise<TaskTemplate[]> {
     if (includeInactive) {
       return await db
         .select()
-        .from(taskTemplates)
-        .orderBy(taskTemplates.createdAt);
+        .from(clientRequestTemplates)
+        .orderBy(clientRequestTemplates.createdAt);
     }
     
     return await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.status, "active"))
-      .orderBy(taskTemplates.createdAt);
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.status, "active"))
+      .orderBy(clientRequestTemplates.createdAt);
   }
 
-  async getTaskTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]> {
+  async getClientRequestTemplatesByCategory(categoryId: string): Promise<TaskTemplate[]> {
     return await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.categoryId, categoryId))
-      .orderBy(taskTemplates.createdAt);
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.categoryId, categoryId))
+      .orderBy(clientRequestTemplates.createdAt);
   }
 
-  async getActiveTaskTemplates(): Promise<TaskTemplate[]> {
+  async getActiveClientRequestTemplates(): Promise<TaskTemplate[]> {
     return await db
       .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.status, "active"))
-      .orderBy(taskTemplates.createdAt);
+      .from(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.status, "active"))
+      .orderBy(clientRequestTemplates.createdAt);
   }
 
-  async updateTaskTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate> {
+  async updateClientRequestTemplate(id: string, template: UpdateTaskTemplate): Promise<TaskTemplate> {
     const [updated] = await db
-      .update(taskTemplates)
+      .update(clientRequestTemplates)
       .set({ ...template, updatedAt: new Date() })
-      .where(eq(taskTemplates.id, id))
+      .where(eq(clientRequestTemplates.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplate(id: string): Promise<void> {
+  async deleteClientRequestTemplate(id: string): Promise<void> {
     await db
-      .delete(taskTemplates)
-      .where(eq(taskTemplates.id, id));
+      .delete(clientRequestTemplates)
+      .where(eq(clientRequestTemplates.id, id));
   }
 
   // Task Template Section operations
-  async createTaskTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection> {
+  async createClientRequestTemplateSection(section: InsertTaskTemplateSection): Promise<TaskTemplateSection> {
     const [created] = await db
-      .insert(taskTemplateSections)
+      .insert(clientRequestTemplateSections)
       .values(section)
       .returning();
     return created;
   }
 
-  async getTaskTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined> {
+  async getClientRequestTemplateSectionById(id: string): Promise<TaskTemplateSection | undefined> {
     const [section] = await db
       .select()
-      .from(taskTemplateSections)
-      .where(eq(taskTemplateSections.id, id));
+      .from(clientRequestTemplateSections)
+      .where(eq(clientRequestTemplateSections.id, id));
     return section;
   }
 
-  async getTaskTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]> {
+  async getClientRequestTemplateSectionsByTemplateId(templateId: string): Promise<TaskTemplateSection[]> {
     return await db
       .select()
-      .from(taskTemplateSections)
-      .where(eq(taskTemplateSections.templateId, templateId))
-      .orderBy(taskTemplateSections.order);
+      .from(clientRequestTemplateSections)
+      .where(eq(clientRequestTemplateSections.templateId, templateId))
+      .orderBy(clientRequestTemplateSections.order);
   }
 
-  async updateTaskTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection> {
+  async updateClientRequestTemplateSection(id: string, section: UpdateTaskTemplateSection): Promise<TaskTemplateSection> {
     const [updated] = await db
-      .update(taskTemplateSections)
+      .update(clientRequestTemplateSections)
       .set({ ...section, updatedAt: new Date() })
-      .where(eq(taskTemplateSections.id, id))
+      .where(eq(clientRequestTemplateSections.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplateSection(id: string): Promise<void> {
+  async deleteClientRequestTemplateSection(id: string): Promise<void> {
     await db
-      .delete(taskTemplateSections)
-      .where(eq(taskTemplateSections.id, id));
+      .delete(clientRequestTemplateSections)
+      .where(eq(clientRequestTemplateSections.id, id));
   }
 
   async updateSectionOrders(updates: { id: string; order: number }[]): Promise<void> {
     await db.transaction(async (tx) => {
       for (const update of updates) {
         await tx
-          .update(taskTemplateSections)
+          .update(clientRequestTemplateSections)
           .set({ order: update.order, updatedAt: new Date() })
-          .where(eq(taskTemplateSections.id, update.id));
+          .where(eq(clientRequestTemplateSections.id, update.id));
       }
     });
   }
 
   // Task Template Question operations
-  async createTaskTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
+  async createClientRequestTemplateQuestion(question: InsertTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
     const [created] = await db
-      .insert(taskTemplateQuestions)
+      .insert(clientRequestTemplateQuestions)
       .values(question)
       .returning();
     return created;
   }
 
-  async getTaskTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined> {
+  async getClientRequestTemplateQuestionById(id: string): Promise<TaskTemplateQuestion | undefined> {
     const [question] = await db
       .select()
-      .from(taskTemplateQuestions)
-      .where(eq(taskTemplateQuestions.id, id));
+      .from(clientRequestTemplateQuestions)
+      .where(eq(clientRequestTemplateQuestions.id, id));
     return question;
   }
 
-  async getTaskTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]> {
+  async getClientRequestTemplateQuestionsBySectionId(sectionId: string): Promise<TaskTemplateQuestion[]> {
     return await db
       .select()
-      .from(taskTemplateQuestions)
-      .where(eq(taskTemplateQuestions.sectionId, sectionId))
-      .orderBy(taskTemplateQuestions.order);
+      .from(clientRequestTemplateQuestions)
+      .where(eq(clientRequestTemplateQuestions.sectionId, sectionId))
+      .orderBy(clientRequestTemplateQuestions.order);
   }
 
-  async getAllTaskTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]> {
+  async getAllClientRequestTemplateQuestionsByTemplateId(templateId: string): Promise<TaskTemplateQuestion[]> {
     return await db
       .select({
-        id: taskTemplateQuestions.id,
-        sectionId: taskTemplateQuestions.sectionId,
-        questionType: taskTemplateQuestions.questionType,
-        label: taskTemplateQuestions.label,
-        helpText: taskTemplateQuestions.helpText,
-        isRequired: taskTemplateQuestions.isRequired,
-        order: taskTemplateQuestions.order,
-        validationRules: taskTemplateQuestions.validationRules,
-        options: taskTemplateQuestions.options,
-        conditionalLogic: taskTemplateQuestions.conditionalLogic,
-        createdAt: taskTemplateQuestions.createdAt,
-        updatedAt: taskTemplateQuestions.updatedAt,
+        id: clientRequestTemplateQuestions.id,
+        sectionId: clientRequestTemplateQuestions.sectionId,
+        questionType: clientRequestTemplateQuestions.questionType,
+        label: clientRequestTemplateQuestions.label,
+        helpText: clientRequestTemplateQuestions.helpText,
+        isRequired: clientRequestTemplateQuestions.isRequired,
+        order: clientRequestTemplateQuestions.order,
+        validationRules: clientRequestTemplateQuestions.validationRules,
+        options: clientRequestTemplateQuestions.options,
+        conditionalLogic: clientRequestTemplateQuestions.conditionalLogic,
+        createdAt: clientRequestTemplateQuestions.createdAt,
+        updatedAt: clientRequestTemplateQuestions.updatedAt,
       })
-      .from(taskTemplateQuestions)
-      .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
-      .where(eq(taskTemplateSections.templateId, templateId))
-      .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+      .from(clientRequestTemplateQuestions)
+      .innerJoin(clientRequestTemplateSections, eq(clientRequestTemplateQuestions.sectionId, clientRequestTemplateSections.id))
+      .where(eq(clientRequestTemplateSections.templateId, templateId))
+      .orderBy(clientRequestTemplateSections.order, clientRequestTemplateQuestions.order);
   }
 
-  async updateTaskTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
+  async updateClientRequestTemplateQuestion(id: string, question: UpdateTaskTemplateQuestion): Promise<TaskTemplateQuestion> {
     const [updated] = await db
-      .update(taskTemplateQuestions)
+      .update(clientRequestTemplateQuestions)
       .set({ ...question, updatedAt: new Date() })
-      .where(eq(taskTemplateQuestions.id, id))
+      .where(eq(clientRequestTemplateQuestions.id, id))
       .returning();
     return updated;
   }
 
-  async deleteTaskTemplateQuestion(id: string): Promise<void> {
+  async deleteClientRequestTemplateQuestion(id: string): Promise<void> {
     await db
-      .delete(taskTemplateQuestions)
-      .where(eq(taskTemplateQuestions.id, id));
+      .delete(clientRequestTemplateQuestions)
+      .where(eq(clientRequestTemplateQuestions.id, id));
   }
 
   async updateQuestionOrders(updates: { id: string; order: number }[]): Promise<void> {
     await db.transaction(async (tx) => {
       for (const update of updates) {
         await tx
-          .update(taskTemplateQuestions)
+          .update(clientRequestTemplateQuestions)
           .set({ order: update.order, updatedAt: new Date() })
-          .where(eq(taskTemplateQuestions.id, update.id));
+          .where(eq(clientRequestTemplateQuestions.id, update.id));
       }
     });
   }
@@ -9379,13 +12008,13 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         person: people,
         portalUser: clientPortalUsers,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .leftJoin(clientPortalUsers, eq(taskInstances.clientPortalUserId, clientPortalUsers.id))
@@ -9430,11 +12059,11 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         client: clients,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(eq(taskInstances.clientPortalUserId, clientPortalUserId))
       .orderBy(desc(taskInstances.createdAt));
@@ -9475,12 +12104,12 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(eq(taskInstances.personId, personId))
@@ -9524,12 +12153,12 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .where(and(
@@ -9575,12 +12204,12 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .innerJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .innerJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
       .where(eq(taskInstances.status, status as any))
@@ -9633,13 +12262,13 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
@@ -9700,13 +12329,13 @@ export class DatabaseStorage implements IStorage {
         approvedBy: taskInstances.approvedBy,
         createdAt: taskInstances.createdAt,
         updatedAt: taskInstances.updatedAt,
-        template: taskTemplates,
+        template: clientRequestTemplates,
         customRequest: clientCustomRequests,
         client: clients,
         person: people,
       })
       .from(taskInstances)
-      .leftJoin(taskTemplates, eq(taskInstances.templateId, taskTemplates.id))
+      .leftJoin(clientRequestTemplates, eq(taskInstances.templateId, clientRequestTemplates.id))
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
       .innerJoin(clients, eq(taskInstances.clientId, clients.id))
       .leftJoin(people, eq(taskInstances.personId, people.id))
@@ -9724,20 +12353,20 @@ export class DatabaseStorage implements IStorage {
       // Get all sections for the template
       sections = await db
         .select()
-        .from(taskTemplateSections)
-        .where(eq(taskTemplateSections.templateId, instanceData.templateId))
-        .orderBy(taskTemplateSections.order);
+        .from(clientRequestTemplateSections)
+        .where(eq(clientRequestTemplateSections.templateId, instanceData.templateId))
+        .orderBy(clientRequestTemplateSections.order);
 
       // Get all questions for the template
       allQuestions = await db
         .select({
-          question: taskTemplateQuestions,
-          section: taskTemplateSections,
+          question: clientRequestTemplateQuestions,
+          section: clientRequestTemplateSections,
         })
-        .from(taskTemplateQuestions)
-        .innerJoin(taskTemplateSections, eq(taskTemplateQuestions.sectionId, taskTemplateSections.id))
-        .where(eq(taskTemplateSections.templateId, instanceData.templateId))
-        .orderBy(taskTemplateSections.order, taskTemplateQuestions.order);
+        .from(clientRequestTemplateQuestions)
+        .innerJoin(clientRequestTemplateSections, eq(clientRequestTemplateQuestions.sectionId, clientRequestTemplateSections.id))
+        .where(eq(clientRequestTemplateSections.templateId, instanceData.templateId))
+        .orderBy(clientRequestTemplateSections.order, clientRequestTemplateQuestions.order);
     }
     // If this is a custom request-based instance
     else if (instanceData.customRequestId) {
@@ -9849,11 +12478,11 @@ export class DatabaseStorage implements IStorage {
         fileUrls: taskInstanceResponses.fileUrls,
         createdAt: taskInstanceResponses.createdAt,
         updatedAt: taskInstanceResponses.updatedAt,
-        templateQuestion: taskTemplateQuestions,
+        templateQuestion: clientRequestTemplateQuestions,
         customQuestion: clientCustomRequestQuestions,
       })
       .from(taskInstanceResponses)
-      .leftJoin(taskTemplateQuestions, eq(taskInstanceResponses.questionId, taskTemplateQuestions.id))
+      .leftJoin(clientRequestTemplateQuestions, eq(taskInstanceResponses.questionId, clientRequestTemplateQuestions.id))
       .leftJoin(clientCustomRequestQuestions, eq(taskInstanceResponses.questionId, clientCustomRequestQuestions.id))
       .where(eq(taskInstanceResponses.taskInstanceId, taskInstanceId));
 
@@ -9906,6 +12535,1114 @@ export class DatabaseStorage implements IStorage {
       }
     });
   }
+
+  // ============================================
+  // INTERNAL TASKS - Task Type operations
+  // ============================================
+
+  async createTaskType(taskType: InsertTaskType): Promise<TaskType> {
+    const [created] = await db
+      .insert(taskTypes)
+      .values(taskType)
+      .returning();
+    return created;
+  }
+
+  async getTaskTypeById(id: string): Promise<TaskType | undefined> {
+    const [taskType] = await db
+      .select()
+      .from(taskTypes)
+      .where(eq(taskTypes.id, id));
+    return taskType;
+  }
+
+  async getAllTaskTypes(includeInactive = false): Promise<TaskType[]> {
+    const conditions = includeInactive ? [] : [eq(taskTypes.isActive, true)];
+    return await db
+      .select()
+      .from(taskTypes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(taskTypes.name);
+  }
+
+  async getActiveTaskTypes(): Promise<TaskType[]> {
+    return await db
+      .select()
+      .from(taskTypes)
+      .where(eq(taskTypes.isActive, true))
+      .orderBy(taskTypes.name);
+  }
+
+  async updateTaskType(id: string, taskType: UpdateTaskType): Promise<TaskType> {
+    const [updated] = await db
+      .update(taskTypes)
+      .set({ ...taskType, updatedAt: new Date() })
+      .where(eq(taskTypes.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task type not found");
+    }
+    return updated;
+  }
+
+  async deleteTaskType(id: string): Promise<void> {
+    await db.delete(taskTypes).where(eq(taskTypes.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task operations
+  // ============================================
+
+  async createInternalTask(task: InsertInternalTask): Promise<InternalTask> {
+    const [created] = await db
+      .insert(internalTasks)
+      .values(task)
+      .returning();
+    return created;
+  }
+
+  async getInternalTaskById(id: string): Promise<InternalTask | undefined> {
+    const [task] = await db
+      .select()
+      .from(internalTasks)
+      .where(eq(internalTasks.id, id));
+    return task;
+  }
+
+  async getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
+    const conditions = [eq(internalTasks.assignedTo, assigneeId)];
+    if (filters?.status) {
+      conditions.push(eq(internalTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(internalTasks.priority, filters.priority));
+    }
+    
+    const assigneeAlias = alias(users, 'assignee');
+    const creatorAlias = alias(users, 'creator');
+    
+    const results = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+        assignee: assigneeAlias,
+        creator: creatorAlias,
+      })
+      .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
+      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
+      .where(and(...conditions))
+      .orderBy(desc(internalTasks.createdAt));
+    
+    return results.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.assignee || undefined,
+      creator: row.creator || undefined,
+    })) as any;
+  }
+
+  async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
+    const conditions = [eq(internalTasks.createdBy, creatorId)];
+    if (filters?.status) {
+      conditions.push(eq(internalTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(internalTasks.priority, filters.priority));
+    }
+    
+    const assigneeAlias = alias(users, 'assignee');
+    const creatorAlias = alias(users, 'creator');
+    
+    const results = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+        assignee: assigneeAlias,
+        creator: creatorAlias,
+      })
+      .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
+      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
+      .where(and(...conditions))
+      .orderBy(desc(internalTasks.createdAt));
+    
+    return results.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.assignee || undefined,
+      creator: row.creator || undefined,
+    })) as any;
+  }
+
+  async getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]> {
+    const conditions = [];
+    if (filters?.status) {
+      conditions.push(eq(internalTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(internalTasks.priority, filters.priority));
+    }
+    if (filters?.assigneeId) {
+      conditions.push(eq(internalTasks.assignedTo, filters.assigneeId));
+    }
+    if (filters?.creatorId) {
+      conditions.push(eq(internalTasks.createdBy, filters.creatorId));
+    }
+    
+    const assigneeAlias = alias(users, 'assignee');
+    const creatorAlias = alias(users, 'creator');
+    
+    const results = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+        assignee: assigneeAlias,
+        creator: creatorAlias,
+      })
+      .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .leftJoin(assigneeAlias, eq(internalTasks.assignedTo, assigneeAlias.id))
+      .leftJoin(creatorAlias, eq(internalTasks.createdBy, creatorAlias.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(internalTasks.createdAt));
+    
+    return results.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.assignee || undefined,
+      creator: row.creator || undefined,
+    })) as any;
+  }
+
+  async getInternalTasksByClient(clientId: string): Promise<InternalTask[]> {
+    const connections = await db
+      .select()
+      .from(taskConnections)
+      .where(
+        and(
+          eq(taskConnections.entityType, 'client'),
+          eq(taskConnections.entityId, clientId)
+        )
+      );
+    
+    if (connections.length === 0) {
+      return [];
+    }
+
+    const taskIds = connections.map(c => c.taskId);
+    
+    const tasksWithTypes = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+      })
+      .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .where(inArray(internalTasks.id, taskIds))
+      .orderBy(desc(internalTasks.createdAt));
+    
+    const allUserIds = new Set<string>();
+    tasksWithTypes.forEach(row => {
+      if (row.task.assignedTo) allUserIds.add(row.task.assignedTo);
+      if (row.task.createdBy) allUserIds.add(row.task.createdBy);
+      if (row.task.completedBy) allUserIds.add(row.task.completedBy);
+    });
+    
+    const usersList = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, Array.from(allUserIds)));
+    
+    const usersMap = new Map(usersList.map(u => [u.id, u]));
+    
+    return tasksWithTypes.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.task.assignedTo ? usersMap.get(row.task.assignedTo) : undefined,
+      creator: row.task.createdBy ? usersMap.get(row.task.createdBy) : undefined,
+      completedBy: row.task.completedBy ? usersMap.get(row.task.completedBy) : undefined,
+    })) as any;
+  }
+
+  async getInternalTasksByProject(projectId: string): Promise<InternalTask[]> {
+    const connections = await db
+      .select()
+      .from(taskConnections)
+      .where(
+        and(
+          eq(taskConnections.entityType, 'project'),
+          eq(taskConnections.entityId, projectId)
+        )
+      );
+    
+    if (connections.length === 0) {
+      return [];
+    }
+
+    const taskIds = connections.map(c => c.taskId);
+    
+    const tasksWithTypes = await db
+      .select({
+        task: internalTasks,
+        taskType: taskTypes,
+      })
+      .from(internalTasks)
+      .leftJoin(taskTypes, eq(internalTasks.taskTypeId, taskTypes.id))
+      .where(inArray(internalTasks.id, taskIds))
+      .orderBy(desc(internalTasks.createdAt));
+    
+    const allUserIds = new Set<string>();
+    tasksWithTypes.forEach(row => {
+      if (row.task.assignedTo) allUserIds.add(row.task.assignedTo);
+      if (row.task.createdBy) allUserIds.add(row.task.createdBy);
+      if (row.task.completedBy) allUserIds.add(row.task.completedBy);
+    });
+    
+    const usersList = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, Array.from(allUserIds)));
+    
+    const usersMap = new Map(usersList.map(u => [u.id, u]));
+    
+    return tasksWithTypes.map(row => ({
+      ...row.task,
+      taskType: row.taskType || undefined,
+      assignee: row.task.assignedTo ? usersMap.get(row.task.assignedTo) : undefined,
+      creator: row.task.createdBy ? usersMap.get(row.task.createdBy) : undefined,
+      completedBy: row.task.completedBy ? usersMap.get(row.task.completedBy) : undefined,
+    })) as any;
+  }
+
+  async updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({ ...task, updatedAt: new Date() })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async closeInternalTask(id: string, closeData: CloseInternalTask, userId: string): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({
+        status: 'closed',
+        closedAt: new Date(),
+        closedBy: userId,
+        closureNote: closeData.closureNote,
+        totalTimeSpentMinutes: closeData.totalTimeSpentMinutes,
+        updatedAt: new Date(),
+      })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async deleteInternalTask(id: string): Promise<void> {
+    await db.delete(internalTasks).where(eq(internalTasks.id, id));
+  }
+
+  async archiveInternalTask(id: string, userId: string): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async unarchiveInternalTask(id: string): Promise<InternalTask> {
+    const [updated] = await db
+      .update(internalTasks)
+      .set({
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(internalTasks.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error("Task not found");
+    }
+    return updated;
+  }
+
+  async bulkReassignTasks(taskIds: string[], assignedTo: string): Promise<void> {
+    if (taskIds.length === 0) return;
+    await db
+      .update(internalTasks)
+      .set({ assignedTo, updatedAt: new Date() })
+      .where(inArray(internalTasks.id, taskIds));
+  }
+
+  async bulkUpdateTaskStatus(taskIds: string[], status: string): Promise<void> {
+    if (taskIds.length === 0) return;
+    await db
+      .update(internalTasks)
+      .set({ status: status as any, updatedAt: new Date() })
+      .where(inArray(internalTasks.id, taskIds));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Connection operations
+  // ============================================
+
+  async createTaskConnection(connection: InsertTaskConnection): Promise<TaskConnection> {
+    const [created] = await db
+      .insert(taskConnections)
+      .values(connection)
+      .returning();
+    return created;
+  }
+
+  async getTaskConnectionsByTaskId(taskId: string): Promise<TaskConnection[]> {
+    return await db
+      .select()
+      .from(taskConnections)
+      .where(eq(taskConnections.taskId, taskId));
+  }
+
+  async deleteTaskConnection(id: string): Promise<void> {
+    await db.delete(taskConnections).where(eq(taskConnections.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Progress Notes operations
+  // ============================================
+
+  async createTaskProgressNote(note: InsertTaskProgressNote): Promise<TaskProgressNote> {
+    const [created] = await db
+      .insert(taskProgressNotes)
+      .values(note)
+      .returning();
+    return created;
+  }
+
+  async getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { user: User })[]> {
+    return await db
+      .select({
+        id: taskProgressNotes.id,
+        taskId: taskProgressNotes.taskId,
+        userId: taskProgressNotes.userId,
+        content: taskProgressNotes.content,
+        createdAt: taskProgressNotes.createdAt,
+        user: users,
+      })
+      .from(taskProgressNotes)
+      .leftJoin(users, eq(taskProgressNotes.userId, users.id))
+      .where(eq(taskProgressNotes.taskId, taskId))
+      .orderBy(desc(taskProgressNotes.createdAt));
+  }
+
+  async deleteTaskProgressNote(id: string): Promise<void> {
+    await db.delete(taskProgressNotes).where(eq(taskProgressNotes.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Time Entry operations
+  // ============================================
+
+  async createTaskTimeEntry(entry: InsertTaskTimeEntry): Promise<TaskTimeEntry> {
+    const [created] = await db
+      .insert(taskTimeEntries)
+      .values(entry)
+      .returning();
+    return created;
+  }
+
+  async getTaskTimeEntriesByTaskId(taskId: string): Promise<(TaskTimeEntry & { user: User })[]> {
+    return await db
+      .select({
+        id: taskTimeEntries.id,
+        taskId: taskTimeEntries.taskId,
+        userId: taskTimeEntries.userId,
+        startTime: taskTimeEntries.startTime,
+        endTime: taskTimeEntries.endTime,
+        durationMinutes: taskTimeEntries.durationMinutes,
+        note: taskTimeEntries.note,
+        createdAt: taskTimeEntries.createdAt,
+        user: users,
+      })
+      .from(taskTimeEntries)
+      .leftJoin(users, eq(taskTimeEntries.userId, users.id))
+      .where(eq(taskTimeEntries.taskId, taskId))
+      .orderBy(desc(taskTimeEntries.startTime));
+  }
+
+  async getActiveTaskTimeEntry(taskId: string, userId: string): Promise<TaskTimeEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(taskTimeEntries)
+      .where(
+        and(
+          eq(taskTimeEntries.taskId, taskId),
+          eq(taskTimeEntries.userId, userId),
+          isNull(taskTimeEntries.endTime)
+        )
+      )
+      .orderBy(desc(taskTimeEntries.startTime))
+      .limit(1);
+    return entry;
+  }
+
+  async stopTaskTimeEntry(id: string, stopData: StopTaskTimeEntry): Promise<TaskTimeEntry> {
+    const [entry] = await db
+      .select()
+      .from(taskTimeEntries)
+      .where(eq(taskTimeEntries.id, id));
+    
+    if (!entry) {
+      throw new Error("Time entry not found");
+    }
+
+    const endTime = new Date();
+    const durationMinutes = Math.floor((endTime.getTime() - new Date(entry.startTime).getTime()) / 1000 / 60);
+
+    const [updated] = await db
+      .update(taskTimeEntries)
+      .set({
+        endTime,
+        durationMinutes,
+        note: stopData.note || entry.note,
+      })
+      .where(eq(taskTimeEntries.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteTaskTimeEntry(id: string): Promise<void> {
+    await db.delete(taskTimeEntries).where(eq(taskTimeEntries.id, id));
+  }
+
+  // ============================================
+  // INTERNAL TASKS - Task Document operations
+  // ============================================
+
+  async createTaskDocument(document: InsertTaskDocument): Promise<TaskDocument> {
+    const [created] = await db
+      .insert(taskDocuments)
+      .values(document)
+      .returning();
+    return created;
+  }
+
+  async getTaskDocument(id: string): Promise<TaskDocument | undefined> {
+    const [document] = await db
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.id, id));
+    return document;
+  }
+
+  async getTaskDocuments(taskId: string): Promise<(TaskDocument & { uploader: User })[]> {
+    return await db
+      .select({
+        id: taskDocuments.id,
+        taskId: taskDocuments.taskId,
+        uploadedBy: taskDocuments.uploadedBy,
+        fileName: taskDocuments.fileName,
+        fileSize: taskDocuments.fileSize,
+        mimeType: taskDocuments.mimeType,
+        storagePath: taskDocuments.storagePath,
+        createdAt: taskDocuments.createdAt,
+        uploader: users,
+      })
+      .from(taskDocuments)
+      .leftJoin(users, eq(taskDocuments.uploadedBy, users.id))
+      .where(eq(taskDocuments.taskId, taskId))
+      .orderBy(desc(taskDocuments.createdAt));
+  }
+
+  async deleteTaskDocument(id: string): Promise<void> {
+    await db.delete(taskDocuments).where(eq(taskDocuments.id, id));
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Project Type Notification operations
+  // ============================================
+
+  async getProjectTypeNotificationsByProjectTypeId(projectTypeId: string): Promise<ProjectTypeNotification[]> {
+    return await db
+      .select()
+      .from(projectTypeNotifications)
+      .where(eq(projectTypeNotifications.projectTypeId, projectTypeId))
+      .orderBy(desc(projectTypeNotifications.createdAt));
+  }
+
+  async getProjectTypeNotificationById(id: string): Promise<ProjectTypeNotification | undefined> {
+    const [notification] = await db
+      .select()
+      .from(projectTypeNotifications)
+      .where(eq(projectTypeNotifications.id, id));
+    return notification;
+  }
+
+  async createProjectTypeNotification(notification: InsertProjectTypeNotification): Promise<ProjectTypeNotification> {
+    const [created] = await db
+      .insert(projectTypeNotifications)
+      .values(notification)
+      .returning();
+    return created;
+  }
+
+  async updateProjectTypeNotification(id: string, notification: UpdateProjectTypeNotification): Promise<ProjectTypeNotification> {
+    const [updated] = await db
+      .update(projectTypeNotifications)
+      .set(notification)
+      .where(eq(projectTypeNotifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectTypeNotification(id: string): Promise<void> {
+    await db.delete(projectTypeNotifications).where(eq(projectTypeNotifications.id, id));
+  }
+
+  // Helper function to validate E.164 phone number format
+  // E.164 format: +[country code][subscriber number]
+  // Example: +447441392660 (UK number)
+  // Must start with +, followed by 1-15 digits total
+  private isValidE164PhoneNumber(phoneNumber: string | null | undefined): boolean {
+    if (!phoneNumber) return false;
+    // E.164 regex: Must start with +, then 1-15 digits (no spaces, dashes, etc.)
+    const e164Regex = /^\+[1-9]\d{1,14}$/;
+    return e164Regex.test(phoneNumber);
+  }
+
+  async getPreviewCandidates(projectTypeId: string, notification: ProjectTypeNotification): Promise<import("@shared/schema").PreviewCandidatesResponse> {
+    console.log(`[PreviewCandidates] Starting preview candidate search for project type ${projectTypeId}, notification type: ${notification.notificationType}`);
+    
+    // Step 1: Get the service for this project type
+    const service = await this.getServiceByProjectTypeId(projectTypeId);
+    if (!service) {
+      console.log(`[PreviewCandidates] No service mapped to project type ${projectTypeId}`);
+      return {
+        candidates: [],
+        hasEligibleCandidates: false,
+        message: "No service mapped to this project type. Preview is not available."
+      };
+    }
+    console.log(`[PreviewCandidates] Found service: ${service.name} (${service.id})`);
+
+    // Step 2: Get active client services (pre-filter in SQL)
+    const allClientServices = await db
+      .select({
+        clientService: clientServices,
+        client: clients
+      })
+      .from(clientServices)
+      .innerJoin(clients, eq(clientServices.clientId, clients.id))
+      .where(
+        and(
+          eq(clientServices.serviceId, service.id),
+          eq(clientServices.isActive, true),
+          not(eq(clientServices.frequency, 'one_time_only'))
+        )
+      );
+
+    console.log(`[PreviewCandidates] Found ${allClientServices.length} active client service(s)`);
+    if (allClientServices.length === 0) {
+      return {
+        candidates: [],
+        hasEligibleCandidates: false,
+        message: "No active client services found for this project type. Preview is not available."
+      };
+    }
+
+    // Step 3: Batch fetch projects for all clients
+    const clientIds = allClientServices.map(cs => cs.clientService.clientId);
+    
+    // Build query conditions
+    const projectConditions = [
+      inArray(projects.clientId, clientIds),
+      eq(projects.projectTypeId, projectTypeId),
+      eq(projects.archived, false),
+      eq(projects.inactive, false)
+    ];
+
+    // Filter by stage if this is a stage notification
+    if (notification.category === 'stage' && notification.stageId) {
+      const stage = await this.getStageById(notification.stageId);
+      if (!stage) {
+        return {
+          candidates: [],
+          hasEligibleCandidates: false,
+          message: "Stage not found. Preview is not available."
+        };
+      }
+      projectConditions.push(eq(projects.currentStatus, stage.name));
+    }
+
+    const allProjects = await db
+      .select()
+      .from(projects)
+      .where(and(...projectConditions));
+
+    console.log(`[PreviewCandidates] Found ${allProjects.length} active project(s) for this project type`);
+    if (allProjects.length === 0) {
+      const message = notification.category === 'stage' 
+        ? "No active projects found in the specified stage. Preview is not available."
+        : "No active projects found for this project type. Preview is not available.";
+      console.log(`[PreviewCandidates] ${message}`);
+      return {
+        candidates: [],
+        hasEligibleCandidates: false,
+        message
+      };
+    }
+
+    // Step 4: Batch fetch people for all clients
+    const allClientPeopleData = await db
+      .select({
+        clientPerson: clientPeople,
+        person: people
+      })
+      .from(clientPeople)
+      .innerJoin(people, eq(clientPeople.personId, people.id))
+      .where(inArray(clientPeople.clientId, clientIds));
+    
+    console.log(`[PreviewCandidates] Found ${allClientPeopleData.length} people across all clients`);
+
+    // Group data by client
+    const clientProjectsMap = new Map<string, Project[]>();
+    allProjects.forEach(project => {
+      const existing = clientProjectsMap.get(project.clientId) || [];
+      existing.push(project);
+      clientProjectsMap.set(project.clientId, existing);
+    });
+
+    const clientPeopleMap = new Map<string, (typeof allClientPeopleData[0])[]>();
+    allClientPeopleData.forEach(row => {
+      const existing = clientPeopleMap.get(row.clientPerson.clientId) || [];
+      existing.push(row);
+      clientPeopleMap.set(row.clientPerson.clientId, existing);
+    });
+
+    // Step 5: Build candidates - one per (client, project) combination
+    const candidates: import("@shared/schema").PreviewCandidate[] = [];
+
+    for (const { clientService, client } of allClientServices) {
+      const clientProjects = clientProjectsMap.get(client.id) || [];
+      if (clientProjects.length === 0) continue;
+
+      const relatedPeople = clientPeopleMap.get(client.id) || [];
+      
+      // Create a candidate for EACH project (not just one per client)
+      for (const project of clientProjects) {
+        // Build recipients with eligibility checks
+        const recipients: import("@shared/schema").PreviewCandidateRecipient[] = relatedPeople.map(({ person }) => {
+          let canPreview = true;
+          let ineligibleReason: string | undefined;
+
+          // Check receive notifications flag
+          if (!person.receiveNotifications) {
+            canPreview = false;
+            ineligibleReason = "Notifications disabled for this contact";
+          }
+          // Check channel-specific requirements
+          else if (notification.notificationType === 'email' && !person.primaryEmail) {
+            canPreview = false;
+            ineligibleReason = "No email address on file";
+          }
+          else if (notification.notificationType === 'sms') {
+            if (!person.primaryPhone) {
+              canPreview = false;
+              ineligibleReason = "No mobile number on file";
+            } else if (!this.isValidE164PhoneNumber(person.primaryPhone)) {
+              canPreview = false;
+              ineligibleReason = `Phone number must be in E.164 format (e.g., +447441392660). Current format: ${person.primaryPhone}`;
+            }
+          }
+          // Note: Channel-specific opt-ins (receiveEmailNotifications, receivePushNotifications) 
+          // are not currently in the schema. We only check the general receiveNotifications flag above.
+
+          return {
+            personId: person.id,
+            fullName: person.fullName,
+            email: person.primaryEmail,
+            canPreview,
+            ineligibleReason
+          };
+        });
+
+        // Only add candidate if there's at least one person (even if ineligible)
+        if (recipients.length > 0) {
+          // Get stage info if applicable
+          let stageName: string | null = null;
+          if (project.currentStatus) {
+            stageName = project.currentStatus;
+          }
+
+          candidates.push({
+            clientId: client.id,
+            clientName: client.name,
+            projectId: project.id,
+            projectName: project.name,
+            projectDescription: project.description,
+            stageId: notification.stageId,
+            stageName,
+            dueDate: project.dueDate,
+            clientServiceId: clientService.id,
+            clientServiceName: service.name,
+            frequency: clientService.frequency,
+            recipients
+          });
+        }
+      }
+    }
+
+    const hasEligibleCandidates = candidates.some(c => 
+      c.recipients.some(r => r.canPreview)
+    );
+
+    return {
+      candidates,
+      hasEligibleCandidates,
+      message: !hasEligibleCandidates 
+        ? "Clients found but no eligible contacts. Contacts need notifications enabled and appropriate contact details (email/mobile)."
+        : undefined
+    };
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Client Request Reminder operations
+  // ============================================
+
+  async getClientRequestRemindersByNotificationId(notificationId: string): Promise<ClientRequestReminder[]> {
+    return await db
+      .select()
+      .from(clientRequestReminders)
+      .where(eq(clientRequestReminders.projectTypeNotificationId, notificationId))
+      .orderBy(desc(clientRequestReminders.createdAt));
+  }
+
+  async getClientRequestReminderById(id: string): Promise<ClientRequestReminder | undefined> {
+    const [reminder] = await db
+      .select()
+      .from(clientRequestReminders)
+      .where(eq(clientRequestReminders.id, id));
+    return reminder;
+  }
+
+  async createClientRequestReminder(reminder: InsertClientRequestReminder): Promise<ClientRequestReminder> {
+    const [created] = await db
+      .insert(clientRequestReminders)
+      .values(reminder)
+      .returning();
+    return created;
+  }
+
+  async updateClientRequestReminder(id: string, reminder: UpdateClientRequestReminder): Promise<ClientRequestReminder> {
+    const [updated] = await db
+      .update(clientRequestReminders)
+      .set(reminder)
+      .where(eq(clientRequestReminders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientRequestReminder(id: string): Promise<void> {
+    await db.delete(clientRequestReminders).where(eq(clientRequestReminders.id, id));
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Scheduled Notification operations
+  // ============================================
+
+  async getAllScheduledNotifications(): Promise<ScheduledNotification[]> {
+    return await db
+      .select()
+      .from(scheduledNotifications)
+      .orderBy(desc(scheduledNotifications.scheduledFor));
+  }
+
+  async getScheduledNotificationById(id: string): Promise<ScheduledNotification | undefined> {
+    const [notification] = await db
+      .select()
+      .from(scheduledNotifications)
+      .where(eq(scheduledNotifications.id, id));
+    return notification;
+  }
+
+  async getScheduledNotificationsForClient(clientId: string, filters?: {
+    category?: string;
+    type?: string;
+    recipientId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+  }): Promise<any[]> {
+    // Build base query with joins
+    const result = await db
+      .select({
+        notification: scheduledNotifications,
+        recipient: people,
+        projectTypeNotification: projectTypeNotifications,
+        projectType: projectTypes,
+        clientRequestReminder: clientRequestReminders,
+      })
+      .from(scheduledNotifications)
+      .leftJoin(people, eq(scheduledNotifications.personId, people.id))
+      .leftJoin(projectTypeNotifications, eq(scheduledNotifications.projectTypeNotificationId, projectTypeNotifications.id))
+      .leftJoin(projectTypes, eq(projectTypeNotifications.projectTypeId, projectTypes.id))
+      .leftJoin(clientRequestReminders, eq(scheduledNotifications.clientRequestReminderId, clientRequestReminders.id))
+      .where(
+        and(
+          eq(scheduledNotifications.clientId, clientId),
+          filters?.status ? eq(scheduledNotifications.status, filters.status) : undefined,
+          filters?.recipientId ? eq(scheduledNotifications.personId, filters.recipientId) : undefined,
+          filters?.dateFrom ? gte(scheduledNotifications.scheduledFor, new Date(filters.dateFrom)) : undefined,
+          filters?.dateTo ? lte(scheduledNotifications.scheduledFor, new Date(filters.dateTo)) : undefined,
+          filters?.category === 'project_notification' ? isNotNull(scheduledNotifications.projectTypeNotificationId) : undefined,
+          filters?.category === 'client_request_reminder' ? isNotNull(scheduledNotifications.clientRequestReminderId) : undefined
+        )
+      )
+      .orderBy(filters?.status === 'sent' ? desc(scheduledNotifications.sentAt) : desc(scheduledNotifications.scheduledFor));
+    
+    // Map to enriched format
+    return result.map(row => {
+      // Determine category
+      const category = row.notification.projectTypeNotificationId 
+        ? 'project_notification' 
+        : row.notification.clientRequestReminderId 
+        ? 'client_request_reminder' 
+        : 'unknown';
+      
+      // Build notification type label
+      let notificationTypeLabel = 'Unknown';
+      if (row.projectTypeNotification) {
+        // Project notification type
+        if (row.projectTypeNotification.category === 'stage') {
+          notificationTypeLabel = `Stage: ${row.projectTypeNotification.stageName || 'Unknown'}`;
+        } else {
+          // Date-based notification
+          const ref = row.projectTypeNotification.dateReference;
+          const offset = row.projectTypeNotification.daysOffset || 0;
+          if (offset === 0) {
+            notificationTypeLabel = ref === 'start_date' ? 'Service Start Date' : 'Project Due Date';
+          } else if (offset > 0) {
+            notificationTypeLabel = `${offset} day${offset > 1 ? 's' : ''} after ${ref === 'start_date' ? 'start' : 'due date'}`;
+          } else {
+            notificationTypeLabel = `${Math.abs(offset)} day${Math.abs(offset) > 1 ? 's' : ''} before ${ref === 'start_date' ? 'start' : 'due date'}`;
+          }
+        }
+      } else if (row.clientRequestReminder) {
+        // Client request reminder type
+        const interval = row.clientRequestReminder.intervalDays;
+        const sequence = row.clientRequestReminder.sequenceOrder;
+        notificationTypeLabel = `Reminder ${sequence} (${interval} days)`;
+      }
+      
+      return {
+        ...row.notification,
+        category,
+        notificationTypeLabel,
+        recipient: row.recipient ? {
+          id: row.recipient.id,
+          fullName: row.recipient.fullName,
+          primaryEmail: row.recipient.primaryEmail,
+          primaryPhone: row.recipient.primaryPhone,
+        } : null,
+        projectType: row.projectType ? {
+          id: row.projectType.id,
+          name: row.projectType.name,
+        } : null,
+      };
+    });
+  }
+
+  async updateScheduledNotification(id: string, notification: UpdateScheduledNotification): Promise<ScheduledNotification> {
+    const [updated] = await db
+      .update(scheduledNotifications)
+      .set(notification)
+      .where(eq(scheduledNotifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async cancelScheduledNotificationsForProject(projectId: string, reason: string): Promise<void> {
+    await db
+      .update(scheduledNotifications)
+      .set({
+        status: 'cancelled',
+        cancelReason: reason,
+        cancelledBy: null, // System-initiated cancellation (no specific user)
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(scheduledNotifications.projectId, projectId),
+          eq(scheduledNotifications.status, 'scheduled')
+        )
+      );
+  }
+
+  // ============================================
+  // NOTIFICATION SYSTEM - Notification History operations
+  // ============================================
+
+  async getNotificationHistoryByClientId(clientId: string): Promise<NotificationHistory[]> {
+    return await db
+      .select()
+      .from(notificationHistory)
+      .where(eq(notificationHistory.clientId, clientId))
+      .orderBy(desc(notificationHistory.createdAt));
+  }
+
+  async getNotificationHistoryByProjectId(projectId: string): Promise<NotificationHistory[]> {
+    return await db
+      .select()
+      .from(notificationHistory)
+      .where(eq(notificationHistory.projectId, projectId))
+      .orderBy(desc(notificationHistory.createdAt));
+  }
+  
+  // Company Settings operations
+  async getCompanySettings(): Promise<CompanySettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(companySettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateCompanySettings(settings: UpdateCompanySettings): Promise<CompanySettings> {
+    const { nanoid } = await import('nanoid');
+    
+    // Get existing settings
+    const existing = await this.getCompanySettings();
+    
+    if (existing) {
+      // Update existing settings
+      const [updated] = await db
+        .update(companySettings)
+        .set({
+          ...settings,
+          updatedAt: new Date(),
+        })
+        .where(eq(companySettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new settings with default values
+      const [created] = await db
+        .insert(companySettings)
+        .values({
+          id: nanoid(),
+          emailSenderName: settings.emailSenderName || "The Link Team",
+        })
+        .returning();
+      return created;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
+
+// Initialize default notification templates
+export async function initializeDefaultNotificationTemplates(): Promise<void> {
+  try {
+    const existingTemplates = await storage.getAllPushNotificationTemplates();
+    
+    // Only initialize if there are no templates yet
+    if (existingTemplates.length > 0) {
+      console.log('[Templates] Default notification templates already initialized');
+      return;
+    }
+
+    const defaultTemplates: InsertPushNotificationTemplate[] = [
+      {
+        templateType: 'new_message_staff',
+        name: 'New Message from Staff',
+        titleTemplate: 'New Team Message',
+        bodyTemplate: '{staffName} sent you a message',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'new_message_client',
+        name: 'New Message from Client',
+        titleTemplate: 'New Client Message',
+        bodyTemplate: '{clientName} sent you a message',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'document_request',
+        name: 'Document Request',
+        titleTemplate: 'Document Request',
+        bodyTemplate: 'A document has been requested',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'task_assigned',
+        name: 'Task Assigned',
+        titleTemplate: 'New Task Assigned',
+        bodyTemplate: '{creatorName} assigned you a task: {taskTitle}',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'status_update',
+        name: 'Status Update',
+        titleTemplate: 'Status Update',
+        bodyTemplate: 'Status has been updated',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'reminder',
+        name: 'Reminder',
+        titleTemplate: 'Reminder',
+        bodyTemplate: 'You have a reminder',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'project_stage_change',
+        name: 'Project Stage Change',
+        titleTemplate: '{projectName} Stage Updated',
+        bodyTemplate: '{clientName} - {projectName} moved from {oldStage} to {newStage}',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+    ];
+
+    for (const template of defaultTemplates) {
+      await storage.createPushNotificationTemplate(template);
+    }
+
+    console.log('[Templates] Default notification templates initialized successfully');
+  } catch (error) {
+    console.error('[Templates] Error initializing default notification templates:', error);
+  }
+}

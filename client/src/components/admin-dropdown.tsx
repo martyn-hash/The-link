@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Settings2, Users, ChevronDown, FileCheck, Tags, Calendar, Building, ClipboardList } from "lucide-react";
+import { Settings, Settings2, ChevronDown, FileCheck, Tags, Calendar, ClipboardList, FolderTree } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface AdminDropdownProps {
@@ -48,14 +48,14 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       icon: Tags,
     },
     {
-      label: "Task Templates",
-      href: "/task-templates",
-      icon: ClipboardList,
+      label: "Task Categories",
+      href: "/admin/task-types",
+      icon: FolderTree,
     },
     {
-      label: "User Management",
-      href: "/users",
-      icon: Users,
+      label: "Client Request Templates",
+      href: "/request-templates",
+      icon: ClipboardList,
     },
   ];
 

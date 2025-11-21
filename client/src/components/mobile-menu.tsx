@@ -12,7 +12,9 @@ import {
   User as UserIcon, 
   LogOut,
   X,
-  MessageCircle
+  MessageCircle,
+  Building,
+  Users
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
@@ -56,12 +58,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
     { href: "/", label: "Dashboard", icon: Home, show: true },
     { href: "/projects", label: "Projects", icon: FolderOpen, show: true },
     { href: "/messages", label: "Messages", icon: MessageCircle, show: true },
-    { 
-      href: "/scheduled-services", 
-      label: "Services", 
-      icon: Calendar, 
-      show: user?.isAdmin || user?.canSeeAdminMenu 
-    },
+    { href: "/companies", label: "Clients", icon: Building, show: true },
   ];
 
   return (

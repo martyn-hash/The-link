@@ -14,6 +14,7 @@
 
 import { storage } from "../storage";
 import { normalizeProjectMonth } from "@shared/schema";
+import { scheduleProjectDueDateNotifications } from "../notification-scheduler";
 import type {
   ClientService,
   PeopleService,
@@ -303,6 +304,26 @@ export async function createProjectFromDueService(
   
   // 7. Log in scheduling history
   await logSchedulingAction(dueService, project.id, 'project_created', scheduledDate);
+  
+  // 8. Schedule due_date notifications for this project
+  try {
+    // Fetch all related people for the client
+    const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
+    const peopleIds = allRelatedPeople.map(p => p.person.id);
+    
+    await scheduleProjectDueDateNotifications({
+      projectId: project.id,
+      clientServiceId: dueService.id,
+      clientId: project.clientId,
+      projectTypeId: project.projectTypeId,
+      dueDate: project.dueDate!,
+      relatedPeople: peopleIds
+    });
+    console.log(`[Project Creator] Scheduled due_date notifications for project ${project.id} with ${peopleIds.length} related people`);
+  } catch (notifError) {
+    console.error(`[Project Creator] Failed to schedule due_date notifications for project ${project.id}:`, notifError);
+    // Don't fail project creation if notifications fail
+  }
   
   console.log(`[Project Creator] Created project ${project.id} for service ${dueService.service.name}`);
   

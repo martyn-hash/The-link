@@ -11,6 +11,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 // Components
 import TopNavigation from "@/components/top-navigation";
+import BottomNav from "@/components/bottom-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +33,7 @@ import {
 
 // Icons
 import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3, Phone } from "lucide-react";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 // Zod schemas
 const profileUpdateSchema = insertUserSchema.pick({
@@ -496,10 +496,17 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
+      
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="page-container py-6 md:py-8">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="heading-user-profile">Profile</h1>
+        </div>
+      </div>
+
       <div className="flex-1">
-        <div className="container mx-auto py-8 px-4">
+        <div className="page-container py-6 md:py-8 space-y-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8" data-testid="heading-user-profile">Profile</h1>
         
         {/* Profile Header */}
         <Card className="mb-8">
@@ -1004,29 +1011,12 @@ export default function Profile() {
                 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Signature Content</Label>
-                  <div className="border rounded-md" data-testid="editor-email-signature">
-                    <ReactQuill
-                      value={emailSignature}
+                  <div data-testid="editor-email-signature">
+                    <TiptapEditor
+                      content={emailSignature}
                       onChange={setEmailSignature}
-                      theme="snow"
                       placeholder="Enter your email signature..."
-                      style={{ minHeight: '200px' }}
-                      modules={{
-                        toolbar: [
-                          [{ 'header': [1, 2, 3, false] }],
-                          ['bold', 'italic', 'underline'],
-                          [{ 'color': [] }, { 'background': [] }],
-                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                          [{ 'align': [] }],
-                          ['link', 'image'],
-                          ['clean']
-                        ],
-                      }}
-                      formats={[
-                        'header', 'bold', 'italic', 'underline',
-                        'color', 'background', 'list', 'bullet',
-                        'align', 'link', 'image'
-                      ]}
+                      editorHeight="200px"
                     />
                   </div>
                 </div>
@@ -1063,6 +1053,7 @@ export default function Profile() {
         </div>
       </div>
     </div>
+    <BottomNav user={user} onSearchClick={() => {}} />
     </div>
   );
 }
