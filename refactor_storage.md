@@ -1,5 +1,13 @@
 # Storage.ts Refactoring Plan - Stage by Stage
 
+## Testing Notes
+**IMPORTANT**: When running browser tests:
+1. Login via root page (/) → password tab → use credentials: `admin@example.com` | `admin123`
+2. **Known Bug**: Projects page sometimes doesn't load properly. If this happens:
+   - Refresh the browser
+   - Restart the test from the beginning
+3. Always check these notes before starting any browser testing session
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.
