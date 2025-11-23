@@ -105,17 +105,206 @@ server/storage/
 
 ---
 
+## Critical Continuity Points
+
+**IMPORTANT:** These architectural elements must remain stable and accessible throughout ALL stages (0-14) to ensure zero breaking changes.
+
+### 1. IStorage Interface Management
+
+**The Challenge:**  
+The `IStorage` interface defines ~300+ methods. It must remain complete and accessible at all times, even as we extract methods into separate modules.
+
+**The Solution:**
+
+**Stages 0-14 (During Migration):**
+```typescript
+// OLD: server/storage.ts
+export interface IStorage {
+  // ALL ~300+ methods remain defined here
+  getUser(id: string): Promise<User | undefined>;
+  createClient(client: InsertClient): Promise<Client>;
+  // ... all other methods
+}
+
+export class DatabaseStorage implements IStorage {
+  // Implementation (will remain here until Stage 15)
+}
+```
+
+```typescript
+// NEW: server/storage/index.ts (facade pattern)
+import { IStorage, DatabaseStorage as OldDatabaseStorage } from '../storage';
+import { UserStorage } from './users/userStorage';
+
+// Re-export the interface (critical!)
+export { IStorage };
+
+// Create composite storage that delegates to both old and new
+export class DatabaseStorage implements IStorage {
+  private oldStorage: OldDatabaseStorage;
+  private userStorage: UserStorage;
+  // ... other module storage instances
+  
+  constructor() {
+    this.oldStorage = new OldDatabaseStorage();
+    this.userStorage = new UserStorage();
+  }
+  
+  // Delegate user methods to new UserStorage
+  async getUser(id: string) {
+    return this.userStorage.getUser(id);
+  }
+  
+  // Delegate all non-migrated methods to old storage
+  async createClient(client: InsertClient) {
+    return this.oldStorage.createClient(client);
+  }
+  
+  // ... gradually replace old delegation with new modules
+}
+```
+
+**Stage 15 (Final Cleanup):**
+```typescript
+// NEW: server/storage/base/IStorage.ts
+export interface IStorage {
+  // Full interface moved here
+}
+
+// NEW: server/storage/index.ts (final state)
+export { IStorage } from './base/IStorage';
+
+export class DatabaseStorage implements IStorage {
+  // No more oldStorage - all methods delegated to domain modules
+  private userStorage: UserStorage;
+  private clientStorage: ClientStorage;
+  // ... all domain modules
+}
+```
+
+**Result:**  
+External code using `import { IStorage, DatabaseStorage } from './storage'` works identically throughout all stages.
+
+### 2. Database Connection Consistency
+
+**The Guarantee:**  
+All storage modules (old and new) use the same database connection.
+
+```typescript
+// Every storage module imports the same db instance
+import { db } from "../../db";  // or appropriate relative path
+
+export class UserStorage {
+  async getUser(id: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+}
+```
+
+**No changes to:**
+- `server/db.ts` - Database connection setup
+- `drizzle.config.ts` - Drizzle configuration
+- Connection pooling or transaction logic
+
+### 3. Schema Imports
+
+**The Guarantee:**  
+All modules import types directly from `@shared/schema` - no intermediate layers.
+
+```typescript
+// Each storage module imports only what it needs
+import {
+  users,
+  userSessions,
+  loginAttempts,
+  type User,
+  type InsertUser,
+  type UserSession,
+} from "@shared/schema";
+```
+
+**Benefits:**
+- Changes to schema automatically propagate to all modules
+- No duplicate type definitions
+- TypeScript catches type mismatches immediately
+- Each module is self-contained
+
+### 4. Type Safety Throughout Migration
+
+**The Guarantee:**  
+TypeScript compilation succeeds after every stage.
+
+**Enforcement:**
+- [ ] After each stage, run `npm run build` or `tsc --noEmit`
+- [ ] Fix any TypeScript errors before proceeding
+- [ ] Verify all method signatures match the IStorage interface exactly
+- [ ] Ensure no `any` types introduced during extraction
+
+### 5. Route/Consumer Code Stability
+
+**The Guarantee:**  
+All routes and services continue to work without modification.
+
+**Before refactoring (current state):**
+```typescript
+// server/routes/auth.ts
+import { IStorage, DatabaseStorage } from '../storage';
+
+const storage: IStorage = new DatabaseStorage();
+
+app.post('/login', async (req, res) => {
+  const user = await storage.getUserByEmail(req.body.email);
+  // ... rest of login logic
+});
+```
+
+**After Stage 0:**
+```typescript
+// server/routes/auth.ts
+import { IStorage, DatabaseStorage } from '../storage/index';  // Updated import path
+
+const storage: IStorage = new DatabaseStorage();  // Same usage!
+
+app.post('/login', async (req, res) => {
+  const user = await storage.getUserByEmail(req.body.email);  // Same method call!
+  // ... rest of login logic
+});
+```
+
+**After Stage 1 (Users extracted):**
+```typescript
+// Still identical! The delegation pattern makes it transparent
+const storage: IStorage = new DatabaseStorage();
+const user = await storage.getUserByEmail(req.body.email);  // Now calls UserStorage internally
+```
+
+**After Stage 15 (Complete):**
+```typescript
+// STILL identical! Zero changes to route code
+const storage: IStorage = new DatabaseStorage();
+const user = await storage.getUserByEmail(req.body.email);
+```
+
+**Result:**  
+Routes never need to know about the internal refactoring. The `IStorage` interface contract remains stable.
+
+---
+
 ## Refactoring Stages
 
 ### **STAGE 0: Foundation Setup**
 **Estimated Time:** 2-3 hours  
 **Risk Level:** LOW
 
+> **📌 Critical:** Review the "Critical Continuity Points" section above before starting. This stage establishes the foundation for maintaining backward compatibility throughout the entire refactoring.
+
 #### Objectives:
 1. Create the `server/storage/` directory structure
 2. Create `server/storage/base/types.ts` with shared types and utilities
-3. Create `server/storage/index.ts` as the main aggregator (initially re-exporting from `storage.ts`)
+3. Create `server/storage/index.ts` as the main aggregator (facade pattern)
 4. Update all imports throughout the codebase to use `./storage/index` instead of `./storage`
+5. **CRITICAL:** Establish the IStorage interface re-export pattern that will maintain compatibility through all stages
 
 #### Detailed Steps:
 1. **Create Directory Structure:**
@@ -135,33 +324,95 @@ server/storage/
    - Export all shared utility types
 
 3. **Create `server/storage/index.ts`:**
+   
+   **CRITICAL:** This file establishes the facade pattern that enables safe incremental migration.
+   
    ```typescript
-   // Temporary facade - will be replaced in later stages
+   // ============================================================================
+   // STAGE 0: Foundation - Simple re-export (temporary)
+   // ============================================================================
+   // This is a temporary facade that maintains compatibility while we build
+   // the new modular structure. It will evolve through stages 1-14 and be
+   // finalized in stage 15.
+   
+   // IMPORTANT: The IStorage interface MUST be re-exported at all times
+   // This ensures routes/services can continue using the same import:
+   // import { IStorage, DatabaseStorage } from './storage'
    export { IStorage, DatabaseStorage } from '../storage';
+   
+   // Export shared types (new modular architecture)
    export * from './base/types';
+   
+   // ============================================================================
+   // EVOLUTION ACROSS STAGES:
+   // ============================================================================
+   // Stage 1+: Import new domain storage classes and create composite DatabaseStorage
+   // Stage 15: Move IStorage to ./base/IStorage.ts and fully remove old storage.ts
+   // ============================================================================
    ```
+   
+   **Why this works:**
+   - All existing code imports from `./storage` → we update to `./storage/index`
+   - The IStorage interface remains accessible with the same import path
+   - DatabaseStorage continues to work (initially as a pass-through)
+   - As we extract domains, we'll modify this file to delegate to new modules
+   - External code never needs to change after Stage 0
 
 4. **Update All Import Statements:**
-   - Find all files importing from `./storage` or `../storage`
-   - Update to import from `./storage/index` or `../storage/index`
-   - Test that application still compiles and runs
+   - Find all files importing from `./storage` or `../storage`:
+     ```bash
+     # Search for imports
+     grep -r "from ['\"].*\/storage['\"]" server/routes/
+     grep -r "from ['\"].*\/storage['\"]" server/*.ts
+     ```
+   - Update each to import from `./storage/index` or `../storage/index`:
+     ```typescript
+     // BEFORE:
+     import { IStorage, DatabaseStorage } from '../storage';
+     
+     // AFTER:
+     import { IStorage, DatabaseStorage } from '../storage/index';
+     ```
+   - Compile and test after each batch of updates
+   - **CRITICAL:** Verify no imports still point directly to the old `../storage` path
 
 #### Testing Requirements:
 - [ ] Application compiles without TypeScript errors
 - [ ] Application starts successfully
 - [ ] All routes respond correctly
 - [ ] No broken imports
+- [ ] **CRITICAL:** Verify IStorage interface is accessible:
+  ```typescript
+  // This should compile without errors in any route file
+  import { IStorage, DatabaseStorage } from './storage/index';
+  const storage: IStorage = new DatabaseStorage();
+  ```
+- [ ] All existing storage method calls still work (e.g., `storage.getUser()`, `storage.createClient()`)
+- [ ] Run a quick smoke test of key features (login, view clients, create project)
 
 #### Review Point:
 ✅ **Architect Review Required**
-- Verify all imports are updated correctly
+- Verify all imports are updated correctly to use `./storage/index`
+- Confirm IStorage interface is re-exported and accessible
 - Confirm no functionality is broken
 - Check that directory structure matches plan
+- Verify old `server/storage.ts` still exists and is untouched (we need it for stages 1-14)
 
 #### Success Criteria:
 - All imports updated to use new storage/index.ts
+- IStorage interface accessible via the new path
 - Application runs without errors
 - Foundation ready for domain extraction
+- Old storage.ts remains as source of truth (for now)
+
+#### What Happens in Later Stages:
+After Stage 0, the migration pattern for each domain (Stages 1-14) will be:
+1. Create new domain storage class (e.g., `UserStorage`)
+2. Update `server/storage/index.ts` to import the new class
+3. Modify `DatabaseStorage` in index.ts to delegate methods to the new class
+4. Methods gradually shift from old storage.ts to new modules
+5. Old storage.ts continues to handle non-migrated methods
+6. In Stage 15, we'll remove old storage.ts entirely
 
 ---
 
