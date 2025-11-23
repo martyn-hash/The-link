@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import { db } from "./db";
 import { dashboardCache, users } from "@shared/schema";
 import { eq } from "drizzle-orm";

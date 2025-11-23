@@ -3,7 +3,7 @@ import crypto from "crypto";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express, RequestHandler, Request, Response, NextFunction } from "express";
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import { sendMagicLinkEmail } from "./emailService";
 import type { User } from "@shared/schema";
 import { extractSessionMetadata } from "./utils/session-tracker";

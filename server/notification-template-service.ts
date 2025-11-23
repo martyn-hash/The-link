@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import { sendPushNotificationToMultiple, type PushNotificationPayload } from "./push-service";
 import type { PushSubscriptionData } from "./push-service";
 

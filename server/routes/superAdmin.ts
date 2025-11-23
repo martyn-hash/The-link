@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { updateCompanySettingsSchema } from "@shared/schema";
 import multer from "multer";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "../objectStorage";

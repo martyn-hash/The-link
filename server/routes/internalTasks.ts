@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import multer from "multer";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { objectStorageClient } from "../objectStorage";
 import {
   insertTaskTypeSchema,

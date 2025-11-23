@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import fetch from 'node-fetch';
 import multer from 'multer';
 import sharp from 'sharp';

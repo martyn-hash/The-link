@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { createReplyToMessage, createReplyAllToMessage } from "../utils/userOutlookClient";
 import { z } from "zod";
 

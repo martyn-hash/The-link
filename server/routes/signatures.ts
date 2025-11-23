@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { 
   signatureRequests, 
   signatureFields, 

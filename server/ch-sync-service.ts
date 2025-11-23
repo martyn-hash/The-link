@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import { companiesHouseService } from "./companies-house-service";
 import type { Client, ChChangeRequest } from "../shared/schema";
 

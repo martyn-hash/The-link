@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import Papa from "papaparse";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { z } from "zod";
 import {
   insertProjectViewSchema,

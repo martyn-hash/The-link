@@ -7,7 +7,7 @@ import { runProjectScheduling } from "./project-scheduler";
 import { sendSchedulingSummaryEmail } from "./emailService";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
-import { storage, initializeDefaultNotificationTemplates } from "./storage";
+import { storage, initializeDefaultNotificationTemplates } from "./storage/index";
 import { seedTaskTypes } from "./seedData";
 import { runSchemaMigrations } from "./utils/schemaMigrations";
 import { startNotificationCron } from "./notification-cron";

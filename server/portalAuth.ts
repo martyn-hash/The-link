@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import { storage } from './storage';
+import { storage } from './storage/index';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'portal-jwt-secret-change-in-production';
 const MAGIC_LINK_EXPIRY = 15 * 60 * 1000; // 15 minutes

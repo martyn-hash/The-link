@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "../objectStorage";
 import { sendPushNotificationToMultiple, type PushNotificationPayload } from "../push-service";

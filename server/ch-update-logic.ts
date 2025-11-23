@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import { db } from "./db";
 import { clients, clientServices, projects, chChangeRequests } from "../shared/schema";
 import { eq, and, sql } from "drizzle-orm";

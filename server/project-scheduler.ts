@@ -3,7 +3,7 @@
  * Core service that creates projects from due services
  */
 
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import { 
   calculateNextServiceDates, 
   isServiceDueToday, 

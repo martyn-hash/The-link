@@ -1,5 +1,5 @@
 import multer from "multer";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { z } from "zod";
 
 // Email sending schema

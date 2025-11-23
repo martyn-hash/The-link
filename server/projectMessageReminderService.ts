@@ -1,4 +1,4 @@
-import { storage } from './storage';
+import { storage } from './storage/index';
 import { sendProjectMessageReminderEmail } from './sendgridService';
 
 export async function sendProjectMessageReminders(): Promise<{

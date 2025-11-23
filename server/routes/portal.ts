@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
 import { validateFileUpload, MAX_FILE_SIZE } from "../utils/fileValidation";
 import { createDocumentsFromAttachments } from "../utils/documentHelpers";

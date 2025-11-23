@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth, isAuthenticated } from "./auth";
 import { verifyMessageAttachmentAccess, verifyThreadAccess } from "./middleware/attachmentAccess";
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 
 // Import route helpers (middleware and utilities)
 import {

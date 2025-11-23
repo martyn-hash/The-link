@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import type { InsertTaskType } from "@shared/schema";
 
 export async function seedTaskTypes() {

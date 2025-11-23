@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
 import { ObjectPermission } from "../objectAcl";
 import { companiesHouseService } from "../companies-house-service";

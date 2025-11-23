@@ -8,9 +8,9 @@
 // IMPORTANT: The IStorage interface MUST be re-exported at all times
 // This ensures routes/services can continue using the same import:
 // import { IStorage, DatabaseStorage } from './storage'
-import { IStorage, DatabaseStorage, storage, initializeDefaultNotificationTemplates } from '../storage';
 
-export { IStorage, DatabaseStorage, storage, initializeDefaultNotificationTemplates };
+// Re-export everything from the original storage module
+export * from '../storage.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types';
