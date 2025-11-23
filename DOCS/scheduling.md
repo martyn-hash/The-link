@@ -24,7 +24,7 @@ Your scheduling system is already quite sophisticated with these key components:
 - **People Services**: Links individuals to personal services with scheduling data
 - **Project Scheduling History**: Complete audit trail of all scheduling actions
 - **Scheduling Run Logs**: Tracks each nightly run with metrics and error details
-
+join
 #### 3. **Current Admin Interface**
 - **Services Management**: Available at `/services` (Admin dropdown)
 - **Project Scheduling Dashboard**: Available at `/admin` 
