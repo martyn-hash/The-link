@@ -1,5 +1,5 @@
-import { BaseStorage } from '../base/BaseStorage';
-import { db } from '../../db';
+import { BaseStorage } from '../base/BaseStorage.js';
+import { db } from '../../db.js';
 import {
   clients,
   clientPeople,
@@ -9,9 +9,9 @@ import {
   clientTagAssignments,
   clientEmailAliases,
   clientDomainAllowlist,
-} from '../../db/schema';
+} from '@shared/schema';
 import { eq, and, or, ilike, desc } from 'drizzle-orm';
-import {
+import type {
   Client,
   ClientPerson,
   Person,
@@ -28,7 +28,7 @@ import {
   ClientDomainAllowlist,
   InsertClientDomainAllowlist,
   User,
-} from '../../db/schema';
+} from '@shared/schema';
 
 /**
  * Storage class for client CRUD operations, relationships, chronology, tags, 

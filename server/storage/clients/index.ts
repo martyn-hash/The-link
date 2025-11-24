@@ -11,6 +11,6 @@
  * - Super search functionality across domains
  */
 
-export { ClientStorage } from './clientStorage';
-export { CompaniesHouseStorage } from './companiesHouseStorage';
-export { SearchStorage } from './searchStorage';
+export { ClientStorage } from './clientStorage.js';
+export { CompaniesHouseStorage } from './companiesHouseStorage.js';
+export { SearchStorage } from './searchStorage.js';

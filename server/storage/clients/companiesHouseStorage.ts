@@ -1,8 +1,8 @@
-import { BaseStorage } from '../base/BaseStorage';
-import { db } from '../../db';
-import { clients } from '../../db/schema';
+import { BaseStorage } from '../base/BaseStorage.js';
+import { db } from '../../db.js';
+import { clients } from '@shared/schema';
 import { eq } from 'drizzle-orm';
-import { Client, InsertClient } from '../../db/schema';
+import type { Client, InsertClient } from '@shared/schema';
 
 /**
  * Storage class for Companies House integration operations.

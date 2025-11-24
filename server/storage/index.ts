@@ -13,12 +13,12 @@ import {
 } from '../storage.js';
 
 // Import new domain storage classes
-import { UserStorage } from './users/userStorage';
-import { UserActivityStorage } from './users/userActivityStorage';
-import { ClientStorage, CompaniesHouseStorage, SearchStorage } from './clients';
+import { UserStorage } from './users/userStorage.js';
+import { UserActivityStorage } from './users/userActivityStorage.js';
+import { ClientStorage, CompaniesHouseStorage, SearchStorage } from './clients/index.js';
 
 // Export shared types (new modular architecture)
-export * from './base/types';
+export * from './base/types.js';
 
 // Re-export the IStorage interface (critical for backward compatibility)
 export type IStorage = OriginalIStorage;

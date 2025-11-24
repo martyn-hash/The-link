@@ -1,8 +1,8 @@
-import { BaseStorage } from '../base/BaseStorage';
-import { db } from '../../db';
-import { clients, people, clientPeople, projects, communications } from '../../db/schema';
+import { BaseStorage } from '../base/BaseStorage.js';
+import { db } from '../../db.js';
+import { clients, people, clientPeople, projects, communications } from '@shared/schema';
 import { eq, or, and, ilike, inArray, desc, sql } from 'drizzle-orm';
-import { SearchResult, SuperSearchResults } from '../base/types';
+import type { SearchResult, SuperSearchResults } from '../base/types.js';
 
 /**
  * Storage class for cross-domain search operations.
