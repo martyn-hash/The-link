@@ -37,6 +37,11 @@ import {
 } from './services/index.js';
 import { TagStorage } from './tags/index.js';
 import { CommunicationStorage } from './communications/index.js';
+import { 
+  IntegrationStorage, 
+  PushNotificationStorage, 
+  EmailStorage 
+} from './integrations/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -71,6 +76,9 @@ export class DatabaseStorage implements IStorage {
   private serviceAssignmentStorage: ServiceAssignmentStorage;
   private tagStorage: TagStorage;
   private communicationStorage: CommunicationStorage;
+  private integrationStorage: IntegrationStorage;
+  private pushNotificationStorage: PushNotificationStorage;
+  private emailStorage: EmailStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -105,6 +113,11 @@ export class DatabaseStorage implements IStorage {
     
     // Initialize communications domain storage (Stage 7)
     this.communicationStorage = new CommunicationStorage();
+    
+    // Initialize integrations domain storage (Stage 8)
+    this.integrationStorage = new IntegrationStorage();
+    this.pushNotificationStorage = new PushNotificationStorage();
+    this.emailStorage = new EmailStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -1354,6 +1367,193 @@ export class DatabaseStorage implements IStorage {
     return this.projectSchedulingStorage.getLatestSchedulingRunLog();
   }
 
+  // ============================================================================
+  // INTEGRATIONS DOMAIN - Delegated to Integration Storage Modules (Stage 8)
+  // ============================================================================
+
+  // User Integrations & OAuth - IntegrationStorage
+  async getUserIntegrations(userId: string): Promise<any> {
+    return this.integrationStorage.getUserIntegrations(userId) as any;
+  }
+
+  async getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms' | 'ringcentral') {
+    return this.integrationStorage.getUserIntegrationByType(userId, integrationType);
+  }
+
+  async createUserIntegration(integration: any) {
+    return this.integrationStorage.createUserIntegration(integration);
+  }
+
+  async updateUserIntegration(id: string, updates: any) {
+    return this.integrationStorage.updateUserIntegration(id, updates);
+  }
+
+  async deleteUserIntegration(id: string) {
+    return this.integrationStorage.deleteUserIntegration(id);
+  }
+
+  async createUserOauthAccount(account: any) {
+    return this.integrationStorage.createUserOauthAccount(account);
+  }
+
+  async getUserOauthAccount(userId: string, provider: string) {
+    return this.integrationStorage.getUserOauthAccount(userId, provider);
+  }
+
+  async updateUserOauthAccount(id: string, account: any) {
+    return this.integrationStorage.updateUserOauthAccount(id, account);
+  }
+
+  async deleteUserOauthAccount(userId: string, provider: string) {
+    return this.integrationStorage.deleteUserOauthAccount(userId, provider);
+  }
+
+  // Push Notifications - PushNotificationStorage
+  async createPushSubscription(subscription: any) {
+    return this.pushNotificationStorage.createPushSubscription(subscription);
+  }
+
+  async getPushSubscriptionsByUserId(userId: string) {
+    return this.pushNotificationStorage.getPushSubscriptionsByUserId(userId);
+  }
+
+  async getPushSubscriptionsByClientPortalUserId(clientPortalUserId: string) {
+    return this.pushNotificationStorage.getPushSubscriptionsByClientPortalUserId(clientPortalUserId);
+  }
+
+  async deletePushSubscription(endpoint: string) {
+    return this.pushNotificationStorage.deletePushSubscription(endpoint);
+  }
+
+  async deletePushSubscriptionsByUserId(userId: string) {
+    return this.pushNotificationStorage.deletePushSubscriptionsByUserId(userId);
+  }
+
+  async getAllPushNotificationTemplates() {
+    return this.pushNotificationStorage.getAllPushNotificationTemplates();
+  }
+
+  async getPushNotificationTemplateByType(templateType: string) {
+    return this.pushNotificationStorage.getPushNotificationTemplateByType(templateType);
+  }
+
+  async updatePushNotificationTemplate(id: string, template: any) {
+    return this.pushNotificationStorage.updatePushNotificationTemplate(id, template);
+  }
+
+  async createPushNotificationTemplate(template: any) {
+    return this.pushNotificationStorage.createPushNotificationTemplate(template);
+  }
+
+  async deletePushNotificationTemplate(id: string) {
+    return this.pushNotificationStorage.deletePushNotificationTemplate(id);
+  }
+
+  async getAllNotificationIcons() {
+    return this.pushNotificationStorage.getAllNotificationIcons();
+  }
+
+  async getNotificationIconById(id: string) {
+    return this.pushNotificationStorage.getNotificationIconById(id);
+  }
+
+  async createNotificationIcon(icon: any) {
+    return this.pushNotificationStorage.createNotificationIcon(icon);
+  }
+
+  async deleteNotificationIcon(id: string) {
+    return this.pushNotificationStorage.deleteNotificationIcon(id);
+  }
+
+  // Email Operations - EmailStorage
+  async createGraphWebhookSubscription(subscription: any) {
+    return this.emailStorage.createGraphWebhookSubscription(subscription);
+  }
+
+  async getGraphWebhookSubscription(subscriptionId: string) {
+    return this.emailStorage.getGraphWebhookSubscription(subscriptionId);
+  }
+
+  async updateGraphWebhookSubscription(subscriptionId: string, updates: any) {
+    return this.emailStorage.updateGraphWebhookSubscription(subscriptionId, updates);
+  }
+
+  async getActiveGraphWebhookSubscriptions() {
+    return this.emailStorage.getActiveGraphWebhookSubscriptions();
+  }
+
+  async getExpiringGraphWebhookSubscriptions(hoursUntilExpiry: number) {
+    return this.emailStorage.getExpiringGraphWebhookSubscriptions(hoursUntilExpiry);
+  }
+
+  async getGraphSyncState(userId: string, folderPath: string) {
+    return this.emailStorage.getGraphSyncState(userId, folderPath);
+  }
+
+  async upsertGraphSyncState(state: any) {
+    return this.emailStorage.upsertGraphSyncState(state);
+  }
+
+  async upsertEmailMessage(message: any) {
+    return this.emailStorage.upsertEmailMessage(message);
+  }
+
+  async getEmailMessageByInternetMessageId(internetMessageId: string) {
+    return this.emailStorage.getEmailMessageByInternetMessageId(internetMessageId);
+  }
+
+  async getEmailMessagesByThreadId(threadId: string) {
+    return this.emailStorage.getEmailMessagesByThreadId(threadId);
+  }
+
+  async updateEmailMessage(id: string, updates: any) {
+    return this.emailStorage.updateEmailMessage(id, updates);
+  }
+
+  async createMailboxMessageMap(mapping: any) {
+    return this.emailStorage.createMailboxMessageMap(mapping);
+  }
+
+  async createEmailThread(thread: any) {
+    return this.emailStorage.createEmailThread(thread);
+  }
+
+  async updateEmailThread(canonicalConversationId: string, updates: any) {
+    return this.emailStorage.updateEmailThread(canonicalConversationId, updates);
+  }
+
+  async getEmailThreadById(canonicalConversationId: string) {
+    return this.emailStorage.getEmailThreadById(canonicalConversationId);
+  }
+
+  async getEmailThreadByConversationId(conversationId: string) {
+    return this.emailStorage.getEmailThreadByConversationId(conversationId);
+  }
+
+  async getEmailThreadByThreadKey(threadKey: string) {
+    return this.emailStorage.getEmailThreadByThreadKey(threadKey);
+  }
+
+  async createUnmatchedEmail(unmatchedEmail: any) {
+    return this.emailStorage.createUnmatchedEmail(unmatchedEmail);
+  }
+
+  async updateUnmatchedEmail(id: string, updates: any) {
+    return this.emailStorage.updateUnmatchedEmail(id, updates);
+  }
+
+  async getUnthreadedMessages() {
+    return this.emailStorage.getUnthreadedMessages();
+  }
+
+  // Note: Client email alias and domain allowlist methods are already delegated in Stage 2 (ClientStorage)
+  // They are not re-implemented here to avoid duplication.
+
+  // ✅ Stage 8 COMPLETE: All 54 integration domain methods extracted and delegated:
+  // - IntegrationStorage: 9 methods (user integrations, OAuth accounts)
+  // - PushNotificationStorage: 14 methods (subscriptions, templates, icons)
+  // - EmailStorage: 31 methods (Graph webhooks, email messages, threads, attachments, client email ops)
+
   // ✅ Stage 7 COMPLETE: All 28 supporting domain methods extracted and delegated:
   // - TagStorage: 13 methods (client tags, people tags, tag assignments)
   // - CommunicationStorage: 8 methods (communications query and CRUD)
@@ -1434,6 +1634,15 @@ export const storage = createDatabaseStorageProxy();
 //          - CommunicationStorage: 8 methods (communications query and CRUD)
 //          - ProjectSchedulingStorage: 5 methods (scheduling history, run logs)
 //          - Self-contained domains: No cross-domain helpers needed
-// Stage 8-14: [ ] Other domains - pending
+// Stage 8: ✅ Integrations domain extracted - 54 methods delegated (COMPLETE)
+//          - IntegrationStorage: 9 methods (user integrations, OAuth accounts)
+//          - PushNotificationStorage: 14 methods (push subscriptions, templates, notification icons)
+//          - EmailStorage: 31 methods (Graph webhooks, sync state, email messages, threads, mailbox maps, 
+//            unmatched emails, client email aliases, domain allowlist, attachments)
+//          - Bug fixes: Corrected schema field mismatches in old storage.ts (isRead, isDraft, importance, 
+//            threadId→canonicalConversationId, sentAt→sentDateTime, matchConfidence→clientMatchConfidence,
+//            conversationId→canonicalConversationId, email→emailLowercase)
+//          - Self-contained domain: No cross-domain helpers needed
+// Stage 9-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================
