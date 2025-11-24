@@ -15,6 +15,7 @@ import {
 // Import new domain storage classes
 import { UserStorage } from './users/userStorage';
 import { UserActivityStorage } from './users/userActivityStorage';
+import { ClientStorage, CompaniesHouseStorage, SearchStorage } from './clients';
 
 // Export shared types (new modular architecture)
 export * from './base/types';
@@ -33,12 +34,58 @@ export class DatabaseStorage implements IStorage {
   // New domain storage instances
   private userStorage: UserStorage;
   private userActivityStorage: UserActivityStorage;
+  private clientStorage: ClientStorage;
+  private companiesHouseStorage: CompaniesHouseStorage;
+  private searchStorage: SearchStorage;
 
   constructor() {
     // Initialize all storage instances
     this.oldStorage = new OldDatabaseStorage();
     this.userStorage = new UserStorage();
     this.userActivityStorage = new UserActivityStorage(this.oldStorage);
+    
+    // Initialize client domain storages
+    this.clientStorage = new ClientStorage();
+    this.companiesHouseStorage = new CompaniesHouseStorage();
+    this.searchStorage = new SearchStorage();
+    
+    // Register cross-domain helpers for client storage
+    this.registerClientHelpers();
+  }
+
+  /**
+   * Register helpers for cross-domain dependencies in client storage
+   */
+  private registerClientHelpers() {
+    // ClientStorage needs helpers from projects and services domains
+    this.clientStorage.registerHelpers({
+      // Check if client has projects (for deletion)
+      checkClientProjects: async (clientId: string) => {
+        const projects = await this.oldStorage.getProjectsByClientId(clientId);
+        return projects && projects.length > 0;
+      },
+      // Delete client services and role assignments (for deletion cascade)
+      deleteClientServices: async (clientId: string) => {
+        const services = await this.oldStorage.getClientServicesByClientId(clientId);
+        for (const service of services) {
+          // Delete role assignments first
+          const assignments = await this.oldStorage.getClientServiceRoleAssignmentsByServiceId(service.id);
+          for (const assignment of assignments) {
+            await this.oldStorage.deleteClientServiceRoleAssignment(assignment.id);
+          }
+          // Delete the service
+          await this.oldStorage.deleteClientService(service.id);
+        }
+      },
+      // Get person by ID (for conversion operations)
+      getPersonById: (personId: string) => this.oldStorage.getPersonById(personId),
+    });
+    
+    // CompaniesHouseStorage needs helpers for client CRUD
+    this.companiesHouseStorage.registerHelpers({
+      createClient: (clientData: any) => this.clientStorage.createClient(clientData),
+      updateClient: (id: string, clientData: any) => this.clientStorage.updateClient(id, clientData),
+    });
   }
 
   // ============================================================================
@@ -291,37 +338,150 @@ export class DatabaseStorage implements IStorage {
     return this.oldStorage.updateUserProjectPreferences(userId, projectId, preferences);
   }
 
-  // Delegate all other methods to old storage
-  // (This is a catch-all for the remaining ~270 methods)
+  // ============================================================================
+  // CLIENT DOMAIN - Delegated to ClientStorage
+  // ============================================================================
   
-  // Client operations
+  // Client CRUD operations
   async createClient(clientData: any) {
-    return this.oldStorage.createClient(clientData);
+    return this.clientStorage.createClient(clientData);
   }
 
   async getClientById(id: string) {
-    return this.oldStorage.getClientById(id);
+    return this.clientStorage.getClientById(id);
   }
 
   async getClientByName(name: string) {
-    return this.oldStorage.getClientByName(name);
+    return this.clientStorage.getClientByName(name);
   }
 
   async getAllClients(search?: string) {
-    return this.oldStorage.getAllClients(search);
+    return this.clientStorage.getAllClients(search);
   }
 
   async updateClient(id: string, clientData: any) {
-    return this.oldStorage.updateClient(id, clientData);
+    return this.clientStorage.updateClient(id, clientData);
   }
 
   async deleteClient(id: string) {
-    return this.oldStorage.deleteClient(id);
+    return this.clientStorage.deleteClient(id);
   }
 
-  async superSearch(query: string, limit?: number) {
-    return this.oldStorage.superSearch(query, limit);
+  // Client-Person relationships
+  async unlinkPersonFromClient(clientId: string, personId: string) {
+    return this.clientStorage.unlinkPersonFromClient(clientId, personId);
   }
+
+  async convertIndividualToCompanyClient(personId: string, companyData: any, oldIndividualClientId?: string) {
+    return this.clientStorage.convertIndividualToCompanyClient(personId, companyData, oldIndividualClientId);
+  }
+
+  async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean) {
+    return this.clientStorage.linkPersonToClient(clientId, personId, officerRole, isPrimaryContact);
+  }
+
+  async getClientWithPeople(clientId: string) {
+    return this.clientStorage.getClientWithPeople(clientId);
+  }
+
+  // Client Chronology
+  async createClientChronologyEntry(entry: any) {
+    return this.clientStorage.createClientChronologyEntry(entry);
+  }
+
+  async getClientChronology(clientId: string) {
+    return this.clientStorage.getClientChronology(clientId);
+  }
+
+  // Client Tags
+  async getAllClientTags() {
+    return this.clientStorage.getAllClientTags();
+  }
+
+  async createClientTag(tag: any) {
+    return this.clientStorage.createClientTag(tag);
+  }
+
+  async deleteClientTag(id: string) {
+    return this.clientStorage.deleteClientTag(id);
+  }
+
+  async getAllClientTagAssignments() {
+    return this.clientStorage.getAllClientTagAssignments();
+  }
+
+  async getClientTags(clientId: string) {
+    return this.clientStorage.getClientTags(clientId);
+  }
+
+  async assignClientTag(assignment: any) {
+    return this.clientStorage.assignClientTag(assignment);
+  }
+
+  async unassignClientTag(clientId: string, tagId: string) {
+    return this.clientStorage.unassignClientTag(clientId, tagId);
+  }
+
+  // Client Email Aliases
+  async getAllClientEmailAliases() {
+    return this.clientStorage.getAllClientEmailAliases();
+  }
+
+  async createClientEmailAlias(alias: any) {
+    return this.clientStorage.createClientEmailAlias(alias);
+  }
+
+  async getClientEmailAliasesByClientId(clientId: string) {
+    return this.clientStorage.getClientEmailAliasesByClientId(clientId);
+  }
+
+  async getClientByEmailAlias(email: string) {
+    return this.clientStorage.getClientByEmailAlias(email);
+  }
+
+  async deleteClientEmailAlias(id: string) {
+    return this.clientStorage.deleteClientEmailAlias(id);
+  }
+
+  // Client Domain Allowlisting
+  async createClientDomainAllowlist(domain: any) {
+    return this.clientStorage.createClientDomainAllowlist(domain);
+  }
+
+  async getClientDomainAllowlist() {
+    return this.clientStorage.getClientDomainAllowlist();
+  }
+
+  async getClientByDomain(domain: string) {
+    return this.clientStorage.getClientByDomain(domain);
+  }
+
+  async deleteClientDomainAllowlist(id: string) {
+    return this.clientStorage.deleteClientDomainAllowlist(id);
+  }
+
+  // ============================================================================
+  // COMPANIES HOUSE DOMAIN - Delegated to CompaniesHouseStorage
+  // ============================================================================
+  
+  async getClientByCompanyNumber(companyNumber: string) {
+    return this.companiesHouseStorage.getClientByCompanyNumber(companyNumber);
+  }
+
+  async upsertClientFromCH(clientData: any) {
+    return this.companiesHouseStorage.upsertClientFromCH(clientData);
+  }
+
+  // ============================================================================
+  // SEARCH DOMAIN - Delegated to SearchStorage
+  // ============================================================================
+  
+  async superSearch(query: string, limit?: number) {
+    return this.searchStorage.superSearch(query, limit);
+  }
+
+  // Delegate all other methods to old storage
+  // (This is a catch-all for the remaining ~240 methods)
 
   // Add proxy for all other methods using Proxy pattern for complete coverage
   // This ensures any method not explicitly delegated above goes to oldStorage
@@ -360,8 +520,11 @@ export const storage = createDatabaseStorageProxy();
 // EVOLUTION TRACKING:
 // ============================================================================
 // Stage 0: ✅ Foundation complete - facade with wildcard re-export
-// Stage 1: ✅ Users domain extracted - 31 methods delegated
-// Stage 2: [ ] Clients domain - pending
+// Stage 1: ✅ Users domain extracted - 31 methods delegated  
+// Stage 2: ✅ Clients domain extracted - 31 methods delegated
+//          - ClientStorage: 27 methods (CRUD, relationships, chronology, tags, aliases, domains)
+//          - CompaniesHouseStorage: 2 methods (CH integration)
+//          - SearchStorage: 1 method (super search)
 // Stage 3-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================
