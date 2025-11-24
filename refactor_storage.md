@@ -322,6 +322,40 @@ Before each browser test:
 - **Key Achievement:** Successfully extracted all task subsystems (instances, responses, types, internal tasks, time entries) with proper consolidation of related functionality
 - **Ready for:** Stage 13 (Notifications Domain) can now proceed
 
+### Stage 13: Notifications Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 21 methods into 5 modules (ProjectTypeNotificationStorage 6, ClientReminderStorage 5, ScheduledNotificationStorage 5, NotificationHistoryStorage 2, StageChangeNotificationStorage 3)
+- **Pattern:** Notification-focused modules with cross-domain helper injection for user lookup, project retrieval, and role assignment resolution
+- **Modules Created:**
+  - `server/storage/notifications/projectTypeNotificationStorage.ts` - Project type notification CRUD, preview candidates with complex client/project filtering (6 methods)
+  - `server/storage/notifications/clientReminderStorage.ts` - Client request reminder CRUD operations (5 methods)
+  - `server/storage/notifications/scheduledNotificationStorage.ts` - Scheduled notification management with complex filtering and enrichment (5 methods)
+  - `server/storage/notifications/notificationHistoryStorage.ts` - History queries by client and project (2 methods)
+  - `server/storage/notifications/stageChangeNotificationStorage.ts` - Stage change email/push notifications, bulk project assignment notifications (3 methods)
+- **Key Implementation Details:**
+  - StageChangeNotificationStorage requires helpers: getUser, getProject, getWorkRoleById, resolveRoleAssigneeForClient
+  - ProjectTypeNotificationStorage requires helpers: getServiceByProjectTypeId, getStageById
+  - Used type assertions in ScheduledNotificationStorage for backward compatibility with pre-existing schema mismatches (stageName, daysOffset, intervalDays, sequenceOrder)
+  - Updated registerProjectHelpers() to use new notification storages instead of oldStorage
+  - sendBulkProjectAssignmentNotifications moved from ProjectStorage delegation to StageChangeNotificationStorage
+  - Push notification templates (9 methods) were already extracted in Stage 8 Integrations
+- **Cross-Domain Dependencies:**
+  - User lookup via UserStorage.getUser()
+  - Project retrieval via ProjectStorage.getProject()
+  - Work role resolution via WorkRoleStorage.getWorkRoleById()
+  - Role assignment resolution via ServiceAssignmentStorage.resolveRoleAssigneeForClient()
+  - Service lookup via ServiceStorage.getServiceByProjectTypeId()
+  - Stage lookup via ProjectStagesStorage.getStageById()
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, all schema migrations run
+  - **API endpoints:** Verified server responds to requests successfully
+  - No runtime errors, clean delegation through facade
+- **LSP Analysis:**
+  - Total diagnostics: 7 (all pre-existing in facade, none from Stage 13)
+  - Stage 13-specific errors: 0 errors
+  - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
+- **Key Achievement:** Successfully extracted all notification subsystems with proper cross-domain helper injection maintaining email and push notification delivery
+- **Ready for:** Stage 14 (E-Signatures Domain) can now proceed
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.
