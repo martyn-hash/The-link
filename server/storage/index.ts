@@ -81,8 +81,9 @@ export class DatabaseStorage implements IStorage {
    * Register helpers for cross-domain dependencies in project storage
    */
   private registerProjectHelpers() {
-    // ProjectStorage needs helpers from configuration and services domains
+    // ProjectStorage needs helpers from configuration, services, notifications, and messaging domains
     this.projectStorage.registerHelpers({
+      // Stage 4 Part 1 helpers
       getDefaultStage: () => this.oldStorage.getDefaultStage(),
       validateProjectStatus: (status: string) => this.oldStorage.validateProjectStatus(status),
       getServiceByProjectTypeId: (projectTypeId: string) => this.oldStorage.getServiceByProjectTypeId(projectTypeId),
@@ -93,6 +94,25 @@ export class DatabaseStorage implements IStorage {
       resolveServiceOwner: (clientId: string, projectTypeId: string) => 
         this.oldStorage.resolveServiceOwner(clientId, projectTypeId),
       resolveStageRoleAssignee: (project: any) => this.oldStorage.resolveStageRoleAssignee(project),
+      
+      // Stage 4 Part 2 helpers (for complex methods)
+      validateStageReasonMapping: (stageId: string, reasonId: string) => 
+        this.oldStorage.validateStageReasonMapping(stageId, reasonId),
+      validateRequiredFields: (reasonId: string, fieldResponses: any[]) => 
+        this.oldStorage.validateRequiredFields(reasonId, fieldResponses),
+      getWorkRoleById: (workRoleId: string) => this.oldStorage.getWorkRoleById(workRoleId),
+      resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
+        this.oldStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
+      sendStageChangeNotifications: (projectId: string, newStatus: string, oldStatus: string) => 
+        this.oldStorage.sendStageChangeNotifications(projectId, newStatus, oldStatus),
+      createProjectMessageThread: (data: any) => this.oldStorage.createProjectMessageThread(data),
+      createProjectMessageParticipant: (data: any) => this.oldStorage.createProjectMessageParticipant(data),
+      createProjectMessage: (data: any) => this.oldStorage.createProjectMessage(data),
+      cancelScheduledNotificationsForProject: (projectId: string, reason: string) => 
+        this.oldStorage.cancelScheduledNotificationsForProject(projectId, reason),
+      getProjectTypeByName: (name: string) => this.oldStorage.getProjectTypeByName(name),
+      getClientByName: (name: string) => this.oldStorage.getClientByName(name),
+      getUserByEmail: (email: string) => this.userStorage.getUserByEmail(email), // Delegate to UserStorage
     });
   }
 
@@ -620,6 +640,39 @@ export class DatabaseStorage implements IStorage {
     return this.projectStorage.getUniqueDueDatesForService(serviceId);
   }
 
+  // Stage 4 Part 2: Complex project methods (8 methods)
+  async getAllProjects(filters?: any) {
+    return this.projectStorage.getAllProjects(filters);
+  }
+
+  async getProjectsByUser(userId: string, roleFilter?: string, statusFilter?: string) {
+    return this.projectStorage.getProjectsByUser(userId, roleFilter, statusFilter);
+  }
+
+  async getProjectsByClient(clientId: string) {
+    return this.projectStorage.getProjectsByClient(clientId);
+  }
+
+  async getProjectsByClientServiceId(clientServiceId: string) {
+    return this.projectStorage.getProjectsByClientServiceId(clientServiceId);
+  }
+
+  async updateProjectStatus(update: any, userId: string) {
+    return this.projectStorage.updateProjectStatus(update, userId);
+  }
+
+  async getProjectAnalytics(filters: any, groupBy: string, metric?: string) {
+    return this.projectStorage.getProjectAnalytics(filters, groupBy, metric);
+  }
+
+  async sendBulkProjectAssignmentNotifications(createdProjects: any[]) {
+    return this.projectStorage.sendBulkProjectAssignmentNotifications(createdProjects);
+  }
+
+  async createProjectsFromCSV(projectsData: any[]) {
+    return this.projectStorage.createProjectsFromCSV(projectsData);
+  }
+
   // ProjectChronologyStorage methods
   async createChronologyEntry(entry: any) {
     return this.projectChronologyStorage.createChronologyEntry(entry);
@@ -640,16 +693,16 @@ export class DatabaseStorage implements IStorage {
   // NOTE: createClientChronologyEntry and getClientChronology are part of Stage 2 (Clients domain)
   // and are already delegated to clientStorage above (lines 431-436)
 
-  // TODO Stage 4 Part 2: Extract these complex methods (8 remaining)
-  // - getAllProjects (200+ lines with complex filtering)
-  // - getProjectsByUser (delegates to getAllProjects with role-based filtering)
-  // - getProjectsByClient (similar filtering logic)
-  // - getProjectsByClientServiceId (uses scheduling history)
-  // - updateProjectStatus (300+ lines with validation, chronology, notifications)
-  // - getProjectAnalytics (complex aggregation and grouping)
-  // - createProjectsFromCSV (bulk import with validation)
-  // - sendBulkProjectAssignmentNotifications (bulk notification sending)
-  // These currently pass through to oldStorage via Proxy
+  // ✅ Stage 4 Part 2 COMPLETE: All 8 complex project methods extracted and delegated:
+  // - getAllProjects (~200 lines with complex filtering)
+  // - getProjectsByUser (~200 lines, delegates to getAllProjects with role-based filtering)
+  // - getProjectsByClient (~160 lines, similar filtering logic)
+  // - getProjectsByClientServiceId (~70 lines, uses scheduling history)
+  // - updateProjectStatus (~300 lines with validation, chronology, notifications)
+  // - getProjectAnalytics (~230 lines, complex aggregation and grouping)
+  // - sendBulkProjectAssignmentNotifications (~160 lines, bulk notification sending)
+  // - createProjectsFromCSV (~300 lines, bulk import with validation)
+  // Total: ~1620 lines extracted from oldStorage to ProjectStorage
 
   // Delegate all other methods to old storage
   // (This is a catch-all for the remaining ~214 methods)
@@ -700,11 +753,13 @@ export const storage = createDatabaseStorageProxy();
 //          - PeopleStorage: 10 methods (CRUD, portal status, CH sync, duplicate detection)
 //          - ClientPeopleStorage: 5 methods (relationship CRUD)
 //          Note: linkPersonToClient, unlinkPersonFromClient already in ClientStorage from Stage 2
-// Stage 4: 🔄 Projects domain extracted (Part 1) - 9 methods delegated
-//          - ProjectStorage: 5 methods (createProject, getProject, updateProject, getActiveProjectsByClientAndType, getUniqueDueDatesForService)
+// Stage 4: ✅ Projects domain extracted - 17 methods delegated (Part 1 + Part 2 COMPLETE)
+//          - ProjectStorage: 13 methods total
+//            * Part 1 (5 methods): createProject, getProject, updateProject, getActiveProjectsByClientAndType, getUniqueDueDatesForService
+//            * Part 2 (8 methods): getAllProjects, getProjectsByUser, getProjectsByClient, getProjectsByClientServiceId, updateProjectStatus, getProjectAnalytics, sendBulkProjectAssignmentNotifications, createProjectsFromCSV
 //          - ProjectChronologyStorage: 4 methods (createChronologyEntry, getProjectChronology, getMostRecentStageChange, getProjectProgressMetrics)
 //          - Note: Client chronology methods (createClientChronologyEntry, getClientChronology) already in Stage 2 Clients domain
-//          - 8 complex methods remain in oldStorage for Stage 4 Part 2 (getAllProjects, getProjectsByUser, getProjectsByClient, getProjectsByClientServiceId, updateProjectStatus, getProjectAnalytics, createProjectsFromCSV, sendBulkProjectAssignmentNotifications)
+//          - Helper injection: 18 cross-domain helpers registered for configuration, services, notifications, and messaging dependencies
 // Stage 5-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================

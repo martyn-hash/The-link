@@ -25,9 +25,9 @@ import type {
   User,
 } from '@shared/schema';
 import { BaseStorage } from '../base/BaseStorage.js';
-import { calculateBusinessHours } from '../../services/businessHours.js';
-import { normalizeProjectMonth } from '../../utils/dateHelpers.js';
-import { sendBulkProjectAssignmentSummaryEmail } from '../../services/notificationService.js';
+import { calculateBusinessHours } from '@shared/businessTime';
+import { normalizeProjectMonth } from '@shared/schema';
+import { sendBulkProjectAssignmentSummaryEmail } from '../../emailService.js';
 
 /**
  * Storage class for core project operations.
