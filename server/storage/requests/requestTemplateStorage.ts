@@ -234,4 +234,15 @@ export class RequestTemplateStorage {
       }
     });
   }
+
+  async updateSectionOrders(updates: { id: string; order: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .update(clientRequestTemplateSections)
+          .set({ order: update.order, updatedAt: new Date() })
+          .where(eq(clientRequestTemplateSections.id, update.id));
+      }
+    });
+  }
 }

@@ -491,4 +491,28 @@ export class UserStorage {
       .where(eq(users.isFallbackUser, true));
     return user;
   }
+
+  // Set fallback user (removes flag from all other users first)
+  async setFallbackUser(userId: string): Promise<User> {
+    return await db.transaction(async (tx) => {
+      // Remove fallback flag from all users
+      await tx
+        .update(users)
+        .set({ isFallbackUser: false })
+        .where(eq(users.isFallbackUser, true));
+
+      // Set the new fallback user
+      const [user] = await tx
+        .update(users)
+        .set({ isFallbackUser: true })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      if (!user) {
+        throw new Error(`User not found: ${userId}`);
+      }
+
+      return user;
+    });
+  }
 }

@@ -13,6 +13,7 @@ import {
   serviceRoles,
   clientPeople,
   projects,
+  kanbanStages,
 } from '@shared/schema';
 import { eq, and, or, desc, ilike, ne, inArray, sql } from 'drizzle-orm';
 import type { 
@@ -1491,5 +1492,59 @@ export class ServiceAssignmentStorage extends BaseStorage {
       usedFallback,
       fallbackRoles,
     };
+  }
+
+  /**
+   * Resolve the stage role assignee for a project based on kanban stage and client service role assignments
+   */
+  async resolveStageRoleAssignee(project: any): Promise<User | undefined> {
+    try {
+      // If no current status, project type, or service, we can't resolve the assignee
+      if (!project.currentStatus || !project.projectType?.id || !project.projectType?.serviceId) {
+        return undefined;
+      }
+
+      // Find the kanban stage that matches the project's current status
+      const stage = await db.query.kanbanStages.findFirst({
+        where: and(
+          eq(kanbanStages.projectTypeId, project.projectType.id),
+          eq(kanbanStages.name, project.currentStatus)
+        ),
+      });
+
+      // If no stage found or no role assigned to the stage, return undefined
+      if (!stage || !stage.assignedWorkRoleId) {
+        return undefined;
+      }
+
+      // Find the client service for this project's client and service
+      const clientService = await db.query.clientServices.findFirst({
+        where: and(
+          eq(clientServices.clientId, project.clientId),
+          eq(clientServices.serviceId, project.projectType.serviceId)
+        ),
+      });
+
+      if (!clientService) {
+        return undefined;
+      }
+
+      // Find the role assignment for this client service and work role
+      const roleAssignment = await db.query.clientServiceRoleAssignments.findFirst({
+        where: and(
+          eq(clientServiceRoleAssignments.clientServiceId, clientService.id),
+          eq(clientServiceRoleAssignments.workRoleId, stage.assignedWorkRoleId),
+          eq(clientServiceRoleAssignments.isActive, true)
+        ),
+        with: {
+          user: true,
+        },
+      });
+
+      return (roleAssignment?.user as User) || undefined;
+    } catch (error) {
+      console.error('[Storage] Error resolving stage role assignee:', error);
+      return undefined;
+    }
   }
 }

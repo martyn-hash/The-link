@@ -13,10 +13,14 @@ import {
 } from "@shared/schema";
 
 export class UserActivityStorage {
-  // Reference to storage for entity fetching (will be injected)
+  // Reference to storage facade for entity fetching (will be injected after construction)
   private storage: any;
 
-  constructor(storage?: any) {
+  constructor() {
+    // Storage reference will be set via setStorage after facade is constructed
+  }
+
+  setStorage(storage: any) {
     this.storage = storage;
   }
 

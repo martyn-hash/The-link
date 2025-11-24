@@ -87,17 +87,33 @@ async getUsersWithSchedulingNotifications(): Promise<User[]> {
 
 ---
 
-## Phase 3: Remove oldStorage Dependency - IN PROGRESS
+## Phase 3: Remove oldStorage Dependency ✅ COMPLETED
 
-### Current oldStorage Usage After Fix
-After Phase 1 and 2, the only remaining `oldStorage` references should be in the Proxy fallback pattern.
+### Completed Migrations
+1. **resolveStageRoleAssignee** - Migrated from oldStorage to ServiceAssignmentStorage
+2. **Messaging helpers** - Updated to use modular ProjectMessageThreadStorage, ProjectMessageStorage, ProjectMessageParticipantStorage
+3. **UserActivityStorage** - Removed oldStorage dependency, now uses setStorage() callback pattern
+4. **Email methods** - Added 20 missing delegations (getEmailMessageById, getMailboxMessageMapsByUserId, etc.)
+5. **logTaskActivityToProject** - Added delegation to ProjectChronologyStorage
+6. **setFallbackUser** - Migrated to UserStorage
+7. **updateSectionOrders** - Migrated to RequestTemplateStorage
 
-### Steps to Remove
-1. Remove `oldStorage` instance field from DatabaseStorage class
-2. Remove `new OldDatabaseStorage()` from constructor
-3. Remove the Proxy pattern wrapper
-4. Remove import of `DatabaseStorage as OldDatabaseStorage` from '../storage.js'
-5. Verify TypeScript compiles without errors
+### Current Status
+- **536 methods** in oldStorage
+- **535 methods** explicitly delegated in facade
+- **1 method remaining** (`clearTestData`) - unused development utility, handled by Proxy fallback
+
+### oldStorage References Remaining
+- Declaration/initialization (lines 101, 159) - for Proxy fallback only
+- Proxy fallback pattern (lines 2692-2716) - catches the 1 remaining method
+
+### Steps to Fully Remove (Optional)
+The Proxy fallback is safe to keep as it only handles `clearTestData`. To remove completely:
+1. Extract `clearTestData` to a test utilities module
+2. Remove `oldStorage` instance field from DatabaseStorage class
+3. Remove `new OldDatabaseStorage()` from constructor
+4. Remove the Proxy pattern wrapper
+5. Remove import of `DatabaseStorage as OldDatabaseStorage` from '../storage.js'
 
 ---
 

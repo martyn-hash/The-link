@@ -158,7 +158,7 @@ export class DatabaseStorage implements IStorage {
     // Initialize all storage instances
     this.oldStorage = new OldDatabaseStorage();
     this.userStorage = new UserStorage();
-    this.userActivityStorage = new UserActivityStorage(this.oldStorage);
+    this.userActivityStorage = new UserActivityStorage(); // Will set storage reference after facade is constructed
     
     // Initialize client domain storages
     this.clientStorage = new ClientStorage();
@@ -253,6 +253,9 @@ export class DatabaseStorage implements IStorage {
     this.registerProjectHelpers();
     this.registerServiceHelpers();
     this.registerMessageHelpers();
+    
+    // Set storage reference for UserActivityStorage (needs facade for entity enrichment)
+    this.userActivityStorage.setStorage(this);
   }
 
   /**
@@ -306,7 +309,7 @@ export class DatabaseStorage implements IStorage {
         this.serviceAssignmentStorage.resolveProjectAssignments(clientId, projectTypeId),
       resolveServiceOwner: (clientId: string, projectTypeId: string) => 
         this.serviceAssignmentStorage.resolveServiceOwner(clientId, projectTypeId),
-      resolveStageRoleAssignee: (project: any) => this.oldStorage.resolveStageRoleAssignee(project),
+      resolveStageRoleAssignee: (project: any) => this.serviceAssignmentStorage.resolveStageRoleAssignee(project),
       getWorkRoleById: (workRoleId: string) => this.workRoleStorage.getWorkRoleById(workRoleId),
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
         this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
@@ -317,10 +320,10 @@ export class DatabaseStorage implements IStorage {
       cancelScheduledNotificationsForProject: (projectId: string, reason: string) => 
         this.scheduledNotificationStorage.cancelScheduledNotificationsForProject(projectId, reason),
       
-      // Messaging domain (still in oldStorage - will be extracted in future stage)
-      createProjectMessageThread: (data: any) => this.oldStorage.createProjectMessageThread(data),
-      createProjectMessageParticipant: (data: any) => this.oldStorage.createProjectMessageParticipant(data),
-      createProjectMessage: (data: any) => this.oldStorage.createProjectMessage(data),
+      // Messaging domain - now delegated to modular messaging storage (Stage 10)
+      createProjectMessageThread: (data: any) => this.projectMessageThreadStorage.createProjectMessageThread(data),
+      createProjectMessageParticipant: (data: any) => this.projectMessageParticipantStorage.createProjectMessageParticipant(data),
+      createProjectMessage: (data: any) => this.projectMessageStorage.createProjectMessage(data),
       
       // Client domain - delegate to ClientStorage
       getClientByName: (name: string) => this.clientStorage.getClientByName(name),
@@ -387,6 +390,10 @@ export class DatabaseStorage implements IStorage {
 
   async getFallbackUser() {
     return this.userStorage.getFallbackUser();
+  }
+
+  async setFallbackUser(userId: string) {
+    return this.userStorage.setFallbackUser(userId);
   }
 
   async upsertUser(userData: any) {
@@ -779,6 +786,10 @@ export class DatabaseStorage implements IStorage {
 
   async getProjectProgressMetrics(projectId: string) {
     return this.projectChronologyStorage.getProjectProgressMetrics(projectId);
+  }
+
+  async logTaskActivityToProject(projectId: string, taskType: string, taskDescription: string, userId?: string) {
+    return this.projectChronologyStorage.logTaskActivityToProject(projectId, taskType, taskDescription, userId);
   }
 
   // NOTE: createClientChronologyEntry and getClientChronology are part of Stage 2 (Clients domain)
@@ -1577,6 +1588,86 @@ export class DatabaseStorage implements IStorage {
     return this.emailStorage.getUnthreadedMessages();
   }
 
+  async getEmailMessageById(id: string) {
+    return this.emailStorage.getEmailMessageById(id);
+  }
+
+  async getMailboxMessageMapsByUserId(userId: string) {
+    return this.emailStorage.getMailboxMessageMapsByUserId(userId);
+  }
+
+  async getMailboxMessageMapsByMessageId(messageId: string) {
+    return this.emailStorage.getMailboxMessageMapsByMessageId(messageId);
+  }
+
+  async userHasAccessToMessage(userId: string, internetMessageId: string) {
+    return this.emailStorage.userHasAccessToMessage(userId, internetMessageId);
+  }
+
+  async getUserGraphMessageId(userId: string, internetMessageId: string) {
+    return this.emailStorage.getUserGraphMessageId(userId, internetMessageId);
+  }
+
+  async getEmailThreadsByClientId(clientId: string) {
+    return this.emailStorage.getEmailThreadsByClientId(clientId);
+  }
+
+  async getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean) {
+    return this.emailStorage.getEmailThreadsByUserId(userId, myEmailsOnly);
+  }
+
+  async getAllEmailThreads() {
+    return this.emailStorage.getAllEmailThreads();
+  }
+
+  async getThreadsWithoutClient() {
+    return this.emailStorage.getThreadsWithoutClient();
+  }
+
+  async getUnmatchedEmails(filters?: { resolvedOnly?: boolean }) {
+    return this.emailStorage.getUnmatchedEmails(filters);
+  }
+
+  async getUnmatchedEmailByMessageId(internetMessageId: string) {
+    return this.emailStorage.getUnmatchedEmailByMessageId(internetMessageId);
+  }
+
+  async deleteUnmatchedEmail(internetMessageId: string) {
+    return this.emailStorage.deleteUnmatchedEmail(internetMessageId);
+  }
+
+  async resolveUnmatchedEmail(internetMessageId: string, clientId: string, resolvedBy: string) {
+    return this.emailStorage.resolveUnmatchedEmail(internetMessageId, clientId, resolvedBy);
+  }
+
+  async createEmailAttachment(attachment: any) {
+    return this.emailStorage.createEmailAttachment(attachment);
+  }
+
+  async getEmailAttachmentByHash(contentHash: string) {
+    return this.emailStorage.getEmailAttachmentByHash(contentHash);
+  }
+
+  async getEmailAttachmentById(id: string) {
+    return this.emailStorage.getEmailAttachmentById(id);
+  }
+
+  async createEmailMessageAttachment(mapping: any) {
+    return this.emailStorage.createEmailMessageAttachment(mapping);
+  }
+
+  async getEmailMessageAttachmentByAttachmentId(attachmentId: string) {
+    return this.emailStorage.getEmailMessageAttachmentByAttachmentId(attachmentId);
+  }
+
+  async getAttachmentsByMessageId(internetMessageId: string) {
+    return this.emailStorage.getAttachmentsByMessageId(internetMessageId);
+  }
+
+  async checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string) {
+    return this.emailStorage.checkEmailMessageAttachmentExists(internetMessageId, attachmentId);
+  }
+
   // Note: Client email alias and domain allowlist methods are already delegated in Stage 2 (ClientStorage)
   // They are not re-implemented here to avoid duplication.
 
@@ -2116,6 +2207,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateQuestionOrders(updates: { id: string; order: number }[]) {
     return this.requestTemplateStorage.updateQuestionOrders(updates);
+  }
+
+  async updateSectionOrders(updates: { id: string; order: number }[]) {
+    return this.requestTemplateStorage.updateSectionOrders(updates);
   }
 
   // Custom Requests (5 methods) - CustomRequestStorage
