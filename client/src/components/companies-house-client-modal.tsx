@@ -313,8 +313,7 @@ export function CompaniesHouseClientModal({
   // Individual client creation mutation
   const createIndividualClientMutation = useMutation({
     mutationFn: async (data: IndividualClientData) => {
-      const response = await apiRequest("POST", "/api/clients/individual", data);
-      const result = await response.json() as { client: Client; person: any };
+      const result = await apiRequest("POST", "/api/clients/individual", data) as { client: Client; person: any };
       return result;
     },
     onSuccess: (result) => {
