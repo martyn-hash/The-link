@@ -1,0 +1,44 @@
+Please complete Stage 1 of the storage refactoring: Extract Users Domain.
+
+CONTEXT:
+- Stage 0 is complete with facade pattern working using wildcard re-export
+- Application is fully functional with all 28 imports using server/storage/index
+- Need to extract 31 user-related methods from storage.ts (lines ~1200-2800)
+
+TASK:
+1. Create server/storage/users/userStorage.ts with 28 methods for:
+   - User CRUD (getUser, upsertUser, getUserByEmail, createUser, updateUser, deleteUser, getAllUsers, getUsersByRole)
+   - Admin (createAdminIfNone)
+   - Impersonation (startImpersonation, stopImpersonation, getImpersonationState, getEffectiveUser)
+   - Sessions (createUserSession, updateUserSessionActivity, getUserSessions, markSessionAsLoggedOut, cleanupOldSessions, markInactiveSessions)
+   - Login attempts (createLoginAttempt, getLoginAttempts, cleanupOldLoginAttempts)
+   - Magic links (createMagicLinkToken, getMagicLinkTokenByToken, getMagicLinkTokenByCodeAndEmail, markMagicLinkTokenAsUsed, cleanupExpiredMagicLinkTokens, getValidMagicLinkTokensForUser)
+
+2. Create server/storage/users/userActivityStorage.ts with 3 methods:
+   - trackUserActivity, getRecentlyViewedByUser, getUserActivityTracking
+
+3. Create server/storage/users/index.ts to export both classes
+
+4. Update server/storage/index.ts to:
+   - Import UserStorage and UserActivityStorage
+   - Create composite DatabaseStorage class implementing IStorage
+   - Delegate user methods to new classes
+   - Use OldDatabaseStorage for unmigrated methods
+
+5. Test thoroughly:
+   - Login flow (admin@example.com | admin123)
+   - Session management
+   - User operations
+   - Activity tracking
+
+CONSTRAINTS:
+- Must maintain 100% backward compatibility
+- Cannot modify IStorage interface yet
+- All existing routes must work unchanged
+- Use exact method signatures from original storage.ts
+
+SUCCESS CRITERIA:
+- All 31 user methods extracted and working
+- Zero breaking changes
+- Login/auth flows fully functional
+- Clean delegation pattern established
