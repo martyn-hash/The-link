@@ -349,7 +349,7 @@ export default function TaskTemplatesPage() {
               </p>
             </div>
             <div className="flex space-x-2">
-              <Link href="/task-template-categories">
+              <Link href="/request-template-categories">
                 <Button variant="outline" data-testid="button-manage-categories">
                   <Settings className="w-4 h-4 mr-2" />
                   Manage Categories
