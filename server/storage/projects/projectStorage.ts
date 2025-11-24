@@ -220,6 +220,21 @@ export class ProjectStorage extends BaseStorage {
         bookkeeper: true,
         clientManager: true,
         projectOwner: true,
+        chronology: {
+          with: {
+            assignee: true,
+            changedBy: true,
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
+          },
+          orderBy: desc(projectChronology.timestamp),
+        },
+        stageApprovalResponses: {
+          orderBy: (stageApprovalResponses, { asc }) => [asc(stageApprovalResponses.createdAt)],
+        },
       },
     });
 
@@ -234,6 +249,12 @@ export class ProjectStorage extends BaseStorage {
 
     return {
       ...project,
+      chronology: project.chronology.map(c => ({
+        ...c,
+        assignee: c.assignee || undefined,
+        changedBy: c.changedBy || undefined,
+        fieldResponses: c.fieldResponses || [],
+      })),
       stageRoleAssignee,
     } as ProjectWithRelations;
   }
