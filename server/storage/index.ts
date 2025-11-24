@@ -285,6 +285,7 @@ export class DatabaseStorage implements IStorage {
    */
   private registerMessageHelpers() {
     // ProjectMessageParticipantStorage needs helpers for user and project lookups
+    // Use modular delegates instead of oldStorage to maintain domain isolation
     this.projectMessageParticipantStorage.registerHelpers({
       getUser: (userId: string) => this.userStorage.getUser(userId),
       getProject: (projectId: string) => this.projectStorage.getProject(projectId),
