@@ -229,6 +229,39 @@ Before each browser test:
 - **Key Achievement:** Successfully extracted all document and portal operations while maintaining GCS integration and access controls
 - **Ready for:** Stage 10 (Messages Domain) can now proceed
 
+### Stage 10: Messages Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 59 methods into MessageThreadStorage (9), MessageStorage (9), ProjectMessageThreadStorage (8), ProjectMessageStorage (5), ProjectMessageParticipantStorage (9), StaffMessageThreadStorage (7), StaffMessageStorage (5), StaffMessageParticipantStorage (7)
+- **Pattern:** Three message subsystems (client messages, project messages, staff messages) with participant tracking and unread management
+- **Modules Created:**
+  - `server/storage/messages/messageThreadStorage.ts` - Client message threads with unread tracking (9 methods)
+  - `server/storage/messages/messageStorage.ts` - Client messages with read status management (9 methods)
+  - `server/storage/messages/projectMessageThreadStorage.ts` - Project-specific threads with archival (8 methods)
+  - `server/storage/messages/projectMessageStorage.ts` - Project messages with thread updates (5 methods)
+  - `server/storage/messages/projectMessageParticipantStorage.ts` - Participants, read tracking, reminder summaries (9 methods)
+  - `server/storage/messages/staffMessageThreadStorage.ts` - Staff-to-staff threads with archival (7 methods)
+  - `server/storage/messages/staffMessageStorage.ts` - Staff messages with thread updates (5 methods)
+  - `server/storage/messages/staffMessageParticipantStorage.ts` - Staff participants, unread counts (7 methods)
+- **Cross-Domain Dependencies:**
+  - ProjectMessageParticipantStorage.getProjectMessageUnreadSummaries() requires getUser() and getProject() helpers
+  - Helpers properly injected via registerMessageHelpers() using modular delegates (userStorage, projectStorage) instead of oldStorage
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, all schema migrations run
+  - **Cron jobs:** All 9 schedulers initialize correctly including Project Message Reminders (every 10 minutes)
+  - **API endpoints:** Verified server responds to requests successfully
+  - No runtime errors, clean delegation through facade
+- **LSP Analysis:**
+  - Total diagnostics: 151 (144 in old storage.ts + 7 in facade)
+  - Stage 10-specific errors: 0 errors
+  - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
+- **Architect Approval:** Received - PASS rating
+  - All 59 methods properly extracted and delegated
+  - Helper injection correctly uses modular delegates (userStorage.getUser, projectStorage.getProject)
+  - No reliance on oldStorage for cross-domain calls - domain boundary preserved
+  - Backward compatibility maintained
+  - Server boots cleanly with no Stage 10-related errors
+- **Key Achievement:** Successfully extracted all three message subsystems (client, project, staff) while maintaining proper domain isolation through modular helper injection
+- **Ready for:** Stage 11 (Requests Domain) can now proceed
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.
